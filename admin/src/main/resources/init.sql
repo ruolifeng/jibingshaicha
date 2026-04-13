@@ -432,28 +432,29 @@ INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VAL
 -- 系统管理子菜单
 (60, 'system:users',            '用户管理',     1, 6, 1),
 (61, 'system:permissions',      '权限管理',     1, 6, 2),
--- 筛查操作按钮
-(100, 'screening:upload',       '上传筛查数据', 2, 0, 1),
--- 潜伏感染操作按钮
-(110, 'latent:track',           '追踪',         2, 0, 2),
-(111, 'latent:referral',        '转诊',         2, 0, 3),
-(112, 'latent:sendNotice',      '发送潜伏者通知单', 2, 0, 4),
-(113, 'latent:confirmNotice',   '确认接收通知单',   2, 0, 5),
-(114, 'latent:supervision',     '填写督导表',       2, 0, 6),
--- 患者管理操作按钮
-(120, 'patient:importEpidemic', '导入大疫情表',     2, 0, 7),
-(121, 'patient:sendNotice',     '发送患者通知单',   2, 0, 8),
-(122, 'patient:confirmNotice',  '确认接收患者通知单', 2, 0, 9),
-(123, 'patient:firstVisit',     '首次随访',         2, 0, 10),
-(124, 'patient:followUp',       '后续随访',         2, 0, 11),
-(125, 'patient:medication',     '服药管理',         2, 0, 12),
--- 统计操作
-(130, 'statistics:export',      '导出统计',         2, 0, 13),
--- 用户管理操作
-(140, 'user:create',            '创建用户',         2, 0, 14),
-(141, 'user:edit',              '编辑用户',         2, 0, 15),
-(142, 'user:delete',            '删除用户',         2, 0, 16),
-(143, 'permission:assign',      '分配权限',         2, 0, 17);
+-- 筛查操作按钮（挂在 school:screening=10 下，三条主线共用此权限）
+(100, 'screening:upload',       '上传筛查数据',       2, 10, 1),
+-- 潜伏感染操作按钮（挂在 school:latent=11 下，三条主线共用）
+(110, 'latent:track',           '追踪',               2, 11, 1),
+(111, 'latent:referral',        '转诊',               2, 11, 2),
+(112, 'latent:sendNotice',      '发送潜伏者通知单',   2, 11, 3),
+(113, 'latent:confirmNotice',   '确认接收通知单',     2, 11, 4),
+(114, 'latent:supervision',     '填写督导表',         2, 11, 5),
+-- 患者管理操作按钮（挂在 school:patient=12 下，三条主线共用）
+(120, 'patient:importEpidemic', '导入大疫情表',       2, 12, 1),
+(121, 'patient:sendNotice',     '发送患者通知单',     2, 12, 2),
+(122, 'patient:confirmNotice',  '确认接收患者通知单', 2, 12, 3),
+(123, 'patient:firstVisit',     '首次随访',           2, 12, 4),
+(124, 'patient:followUp',       '后续随访',           2, 12, 5),
+(125, 'patient:medication',     '服药管理',           2, 12, 6),
+-- 统计操作（挂在 statistics=4 下）
+(130, 'statistics:export',      '导出统计',           2, 4,  1),
+-- 用户管理操作（挂在 system:users=60 下）
+(140, 'user:create',            '创建用户',           2, 60, 1),
+(141, 'user:edit',              '编辑用户',           2, 60, 2),
+(142, 'user:delete',            '删除用户',           2, 60, 3),
+-- 权限管理操作（挂在 system:permissions=61 下）
+(143, 'permission:assign',      '分配权限',           2, 61, 1);
 
 -- ==================== 默认角色权限分配 ====================
 -- 超级管理员(1)：全部权限
@@ -492,3 +493,12 @@ SELECT 6, `id` FROM `permission` WHERE `code` IN (
   'closeContact:screening','closeContact:latent','closeContact:patient','closeContact:history',
   'latent:confirmNotice','latent:supervision','patient:confirmNotice','patient:firstVisit','patient:followUp','patient:medication'
 );
+
+-- ==================== 修复操作按钮 parent_id（数据库已存在时执行） ====================
+-- 若数据库已初始化，运行以下语句将操作权限挂到正确的父菜单下
+UPDATE `permission` SET `parent_id` = 10 WHERE `code` = 'screening:upload';
+UPDATE `permission` SET `parent_id` = 11 WHERE `code` IN ('latent:track','latent:referral','latent:sendNotice','latent:confirmNotice','latent:supervision');
+UPDATE `permission` SET `parent_id` = 12 WHERE `code` IN ('patient:importEpidemic','patient:sendNotice','patient:confirmNotice','patient:firstVisit','patient:followUp','patient:medication');
+UPDATE `permission` SET `parent_id` = 4  WHERE `code` = 'statistics:export';
+UPDATE `permission` SET `parent_id` = 60 WHERE `code` IN ('user:create','user:edit','user:delete');
+UPDATE `permission` SET `parent_id` = 61 WHERE `code` = 'permission:assign';

@@ -1,11 +1,7 @@
 <script lang="ts" setup>
-import { useSettingsStore } from "@/pinia/stores/settings"
 import { useTagsViewStore } from "@/pinia/stores/tags-view"
-import { Footer } from "../index"
 
 const tagsViewStore = useTagsViewStore()
-
-const settingsStore = useSettingsStore()
 </script>
 
 <template>
@@ -19,8 +15,6 @@ const settingsStore = useSettingsStore()
           </keep-alive>
         </transition>
       </router-view>
-      <!-- 页脚 -->
-      <Footer v-if="settingsStore.showFooter" />
     </div>
     <!-- 返回顶部 -->
     <el-backtop />
