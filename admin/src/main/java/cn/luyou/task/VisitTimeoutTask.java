@@ -34,6 +34,7 @@ public class VisitTimeoutTask {
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Notice::getStatus, 2)
                 .eq(Notice::getNoticeType, "patient")
+                .eq(Notice::getVisitTimeoutNotified, 0)   // 只处理未发过提醒的
                 .le(Notice::getConfirmedTime, threshold);
 
         List<Notice> notices = noticeService.list(wrapper);
@@ -50,6 +51,9 @@ public class VisitTimeoutTask {
                         "visit_timeout",
                         notice.getBizId()
                 );
+                // 标记已提醒，防止重复推送
+                notice.setVisitTimeoutNotified(1);
+                noticeService.updateById(notice);
             }
         }
     }

@@ -80,6 +80,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        // 必须追踪到位（trackingStatus=1）才允许转诊
+        if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请先完成追踪到位操作后再进行转诊");
+        }
+        // 已有转诊结果则不允许重复操作
+        if (StrUtil.isNotBlank(entity.getReferralResult())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已完成转诊，不可重复操作");
+        }
 
         entity.setReferralResult(result);
         entity.setReferralRemark(remark);

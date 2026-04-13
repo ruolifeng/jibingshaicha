@@ -62,22 +62,22 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="content" label="内容" min-width="300" />
-        <el-table-column prop="type" label="类型" width="140">
+        <el-table-column prop="type" label="类型">
           <template #default="{ row }">
             <el-tag size="small" :type="row.type === 'notice_timeout' ? 'danger' : 'warning'">
               {{ { notice_timeout: "通知单超时", supervision_timeout: "督导表超时", visit_timeout: "随访超时" }[row.type as string] || row.type }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="80">
+        <el-table-column label="状态">
           <template #default="{ row }">
             <el-tag :type="row.isRead ? 'info' : 'success'" size="small">
               {{ row.isRead ? "已读" : "未读" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="时间" width="180" />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column prop="createTime" label="时间" />
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button v-if="!row.isRead" type="primary" size="small" link @click="handleMarkRead(row)">
               标为已读

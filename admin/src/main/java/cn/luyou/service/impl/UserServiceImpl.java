@@ -15,6 +15,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private final JwtUtil jwtUtil;
     private final PermissionService permissionService;
+    private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
 
     private static final Map<Integer, String> ROLE_NAME_MAP = Map.of(
             1, "超级管理员",
@@ -47,7 +49,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new ServiceException(StatusEnum.UNAUTHORIZED, "用户名或密码错误");
         }
 
-        if (!StrUtil.equals(user.getPassword(), password)) {
+        if (!PASSWORD_ENCODER.matches(password, user.getPassword())) {
             throw new ServiceException(StatusEnum.UNAUTHORIZED, "用户名或密码错误");
         }
 
@@ -80,9 +82,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (count > 0) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "用户名已存在");
         }
+        if (StrUtil.isBlank(user.getPassword())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "密码不能为空");
+        }
         if (user.getRole() == null) {
             user.setRole(6);
         }
+        user.setPassword(PASSWORD_ENCODER.encode(user.getPassword()));
         save(user);
     }
 
@@ -97,6 +103,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             if (count > 0) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "用户名已存在");
             }
+        }
+        // 仅当传入了新密码时才重新加密，否则保持原密码不变
+        if (StrUtil.isNotBlank(user.getPassword())) {
+            user.setPassword(PASSWORD_ENCODER.encode(user.getPassword()));
+        } else {
+            user.setPassword(null);
         }
         updateById(user);
     }

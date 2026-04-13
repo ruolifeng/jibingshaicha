@@ -6,6 +6,20 @@ import {
   saveFollowUpApi, getFollowUpListApi, saveMedicationApi, getMedicationApi, completeMedicationApi
 } from "./apis"
 import { sendNoticeApi, confirmNoticeApi, getNoticeListByBizApi } from "@/pages/school/latent/apis"
+import { getLevel5UsersApi } from "@@/apis/users"
+import { useUserStore } from "@/pinia/stores/user"
+
+const userStore = useUserStore()
+const level5Users = ref<any[]>([])
+
+async function loadLevel5Users() {
+  try {
+    const { data } = await getLevel5UsersApi()
+    level5Users.value = data || []
+  } catch { /* handled */ }
+}
+
+onMounted(() => { loadLevel5Users() })
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -57,7 +71,8 @@ const noticeRow = ref<any>(null)
 const noticeForm = reactive({
   currentAddress: "", householdAddress: "", idNumber: "", gender: "",
   birthDate: "", age: null as number | null, ethnicity: "",
-  crowdCategory: "", treatmentPlan: "", customPlanDetail: ""
+  crowdCategory: "", treatmentPlan: "", customPlanDetail: "",
+  receiverOrgId: null as number | null
 })
 
 function openNoticeDialog(row: any) {
@@ -68,7 +83,8 @@ function openNoticeDialog(row: any) {
     idNumber: row.idNumber || "",
     gender: row.gender || "",
     birthDate: "", age: row.age || null, ethnicity: row.ethnicity || "",
-    crowdCategory: "", treatmentPlan: "", customPlanDetail: ""
+    crowdCategory: "", treatmentPlan: "", customPlanDetail: "",
+    receiverOrgId: null
   })
   noticeDialogVisible.value = true
 }
@@ -82,12 +98,24 @@ async function handleSendNotice() {
       patientName: noticeRow.value.name,
       ...noticeForm,
       treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
-      senderId: 0
+      senderId: userStore.userId,
+      receiverOrgId: noticeForm.receiverOrgId
     })
     ElMessage.success("患者通知单发送成功")
     noticeDialogVisible.value = false
     fetchData()
   } catch { /* handled */ }
+}
+
+// ==================== 确认接收患者通知单 ====================
+async function handleConfirmNotice(noticeId: number) {
+  try {
+    await ElMessageBox.confirm("确认接收此患者通知单吗？", "提示", { type: "info" })
+    await confirmNoticeApi(noticeId)
+    ElMessage.success("已确认接收")
+    noticeDetailVisible.value = false
+    fetchData()
+  } catch { /* cancelled or handled */ }
 }
 
 // ==================== 通知单查看 ====================
@@ -248,7 +276,11 @@ function openMedicationDialog(row: any) {
       medicationForm.supervisor = data.supervisor || ""
       medicationForm.sputumResult = data.sputumResult || ""
       medicationForm.stopDate = data.stopDate || ""
-      medicationForm.checkedDates = data.medicationRecords ? data.medicationRecords.split(",") : []
+      medicationForm.checkedDates = data.medicationRecords
+        ? (typeof data.medicationRecords === "string"
+          ? JSON.parse(data.medicationRecords)
+          : data.medicationRecords)
+        : []
     }
   }).catch(() => { /* 首次填写 */ })
   medicationDialogVisible.value = true
@@ -263,7 +295,7 @@ async function handleSaveMedication() {
       supervisor: medicationForm.supervisor,
       sputumResult: medicationForm.sputumResult,
       stopDate: medicationForm.stopDate,
-      medicationRecords: medicationForm.checkedDates.sort().join(",")
+      medicationRecords: JSON.stringify([...medicationForm.checkedDates].sort())
     }
     if (medicationForm.stopDate) {
       await completeMedicationApi(saveData)
@@ -313,32 +345,32 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" width="90" fixed />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="180" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="100" />
-        <el-table-column prop="source" label="来源" width="100">
+        <el-table-column prop="name" label="姓名" fixed />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="source" label="来源">
           <template #default="{ row }">
             <el-tag :type="row.source === 'confirmed' ? 'danger' : 'warning'" size="small">
               {{ row.source === "confirmed" ? "转诊确诊" : "大疫情导入" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="患者通知单" width="130">
+        <el-table-column label="患者通知单">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewNotice(row)">
               {{ row.name }}通知单
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="首次随访" width="110">
+        <el-table-column label="首次随访">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewFirstVisit(row)">查看</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="360" fixed="right">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'patient:sendNotice'" type="primary" size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
             <el-button v-permission="'patient:firstVisit'" type="success" size="small" @click="openFirstVisitDialog(row)">首次随访</el-button>
@@ -369,7 +401,7 @@ watch(
         <el-form-item label="户籍地址"><el-input v-model="noticeForm.householdAddress" /></el-form-item>
         <el-form-item label="身份证"><el-input v-model="noticeForm.idNumber" /></el-form-item>
         <el-form-item label="性别">
-          <el-select v-model="noticeForm.gender"><el-option label="男" value="男" /><el-option label="女" value="女" /></el-select>
+          <el-select v-model="noticeForm.gender" style="width: 100%"><el-option label="男" value="男" /><el-option label="女" value="女" /></el-select>
         </el-form-item>
         <el-form-item label="出生日期">
           <el-date-picker v-model="noticeForm.birthDate" type="date" value-format="YYYY-MM-DD" />
@@ -377,17 +409,22 @@ watch(
         <el-form-item label="年龄"><el-input-number v-model="noticeForm.age" :min="0" :max="150" /></el-form-item>
         <el-form-item label="民族"><el-input v-model="noticeForm.ethnicity" /></el-form-item>
         <el-form-item label="人群分类">
-          <el-select v-model="noticeForm.crowdCategory">
+          <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
             <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="治疗方案">
-          <el-select v-model="noticeForm.treatmentPlan">
+          <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
           <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="接收单位">
+          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
+            <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -410,7 +447,20 @@ watch(
             {{ NOTICE_STATUS_MAP[noticeDetailData.status] }}
           </el-tag>
         </el-descriptions-item>
+        <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="确认时间">
+          {{ noticeDetailData.confirmedTime }}
+        </el-descriptions-item>
       </el-descriptions>
+      <template #footer>
+        <el-button
+          v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6"
+          v-permission="'patient:confirmNotice'"
+          type="primary"
+          @click="handleConfirmNotice(noticeDetailData.id)"
+        >
+          确认接收
+        </el-button>
+      </template>
     </el-dialog>
 
     <!-- 首次随访弹窗 -->
@@ -457,10 +507,10 @@ watch(
     <!-- 后续随访记录列表 -->
     <el-dialog v-model="followUpListVisible" title="后续随访记录列表" width="700px">
       <el-table :data="followUpListData" border stripe>
-        <el-table-column type="index" label="序号" width="60" />
-        <el-table-column prop="visitDate" label="随访日期" width="120" />
+        <el-table-column type="index" label="序号" />
+        <el-table-column prop="visitDate" label="随访日期" />
         <el-table-column prop="visitContent" label="随访内容" />
-        <el-table-column prop="createTime" label="填写时间" width="180" />
+        <el-table-column prop="createTime" label="填写时间" />
       </el-table>
     </el-dialog>
 
@@ -497,17 +547,17 @@ watch(
           </div>
         </el-form-item>
         <el-form-item label="管理方式">
-          <el-select v-model="medicationForm.managementMethod" placeholder="请选择">
+          <el-select v-model="medicationForm.managementMethod" placeholder="请选择" style="width: 100%">
             <el-option v-for="item in MANAGEMENT_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="督导人员">
-          <el-select v-model="medicationForm.supervisor" placeholder="请选择">
+          <el-select v-model="medicationForm.supervisor" placeholder="请选择" style="width: 100%">
             <el-option v-for="item in SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="治疗前痰菌检查">
-          <el-select v-model="medicationForm.sputumResult" placeholder="请选择">
+          <el-select v-model="medicationForm.sputumResult" placeholder="请选择" style="width: 100%">
             <el-option v-for="item in SPUTUM_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>

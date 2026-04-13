@@ -40,5 +40,10 @@ public class Notice extends BaseEntity {
     private Integer status;
     private LocalDateTime sentTime;
     private LocalDateTime confirmedTime;
+    /** 是否已发送通知单48h超时提醒（0否 1是） */
     private Integer timeoutNotified;
+    /** 是否已发送督导表72h超时提醒（0否 1是） */
+    private Integer supervisionTimeoutNotified;
+    /** 是否已发送首次随访72h超时提醒（0否 1是） */
+    private Integer visitTimeoutNotified;
 }

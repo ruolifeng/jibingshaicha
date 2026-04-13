@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +58,20 @@ public class StatisticsServiceImpl implements StatisticsService {
         return result;
     }
 
+    @Override
+    public List<String> getDistrictOptions() {
+        return screeningSchoolMapper.selectList(
+                Wrappers.<ScreeningSchool>lambdaQuery()
+                        .select(ScreeningSchool::getDistrict)
+                        .isNotNull(ScreeningSchool::getDistrict)
+                        .groupBy(ScreeningSchool::getDistrict)
+                        .orderByAsc(ScreeningSchool::getDistrict)
+        ).stream()
+                .map(ScreeningSchool::getDistrict)
+                .filter(StrUtil::isNotBlank)
+                .collect(Collectors.toList());
+    }
+
     private List<ScreeningSchool> queryRecords(String year, String district) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(year), ScreeningSchool::getYear, year)
@@ -64,46 +80,68 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     private SchoolStatisticsVO buildSchoolVO(String district, String schoolName, List<ScreeningSchool> list) {
+        long ppd1 = countScreenResult(list, "PPD+", true);
+        long ppd2 = countScreenResult(list, "PPD++", true);
+        long ppd3 = countScreenResult(list, "PPD+++", false);
+        // 汇总各记录备注，去重去空后以"；"连接
+        String remark = list.stream()
+                .map(ScreeningSchool::getRemark)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .collect(Collectors.joining("；"));
         return SchoolStatisticsVO.builder()
                 .district(district)
                 .schoolName(schoolName)
+                // 上传记录总数即应筛查人数；实际进行感染筛查（"是"）的为实际筛查人数
                 .shouldScreenCount((long) list.size())
-                .actualScreenCount((long) list.size())
+                .actualScreenCount(countEquals(list, ScreeningSchool::getHasInfectionScreen, "是"))
                 .closeContactCount(countContains(list, ScreeningSchool::getCloseContactHistory, "有"))
                 .suspiciousSymptomCount(countContains(list, ScreeningSchool::getSuspiciousSymptoms, "有"))
                 .chestXrayCount(countEquals(list, ScreeningSchool::getHasChestXray, "是"))
                 .chestXrayAbnormalCount(countContains(list, ScreeningSchool::getChestXrayResult, "异常"))
                 .ppdTestCount(countContains(list, ScreeningSchool::getScreenMethod, "PPD"))
-                .ppdPositive1(countScreenResult(list, "PPD+", true))
-                .ppdPositive2(countScreenResult(list, "PPD++", true))
-                .ppdPositive3(countScreenResult(list, "PPD+++", false))
-                .ppdPositiveTotal(countContains(list, ScreeningSchool::getInfectionResult, "PPD+"))
+                .ppdPositive1(ppd1)
+                .ppdPositive2(ppd2)
+                .ppdPositive3(ppd3)
+                // 合计 = 三个等级之和，避免字符串模糊匹配偏差
+                .ppdPositiveTotal(ppd1 + ppd2 + ppd3)
                 .ecNegative(countContains(list, ScreeningSchool::getInfectionResult, "EC阴性"))
                 .ecPositive(countContains(list, ScreeningSchool::getInfectionResult, "EC阳性"))
                 .igraPositive(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阳性"))
                 .igraNegative(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阴性"))
+                // "肺结核/疑似肺结核"：诊断结果含"肺结核"（"疑似肺结核"亦包含该子串）
                 .tbPatientCount(countContains(list, ScreeningSchool::getDiagnosisResult, "肺结核"))
+                .remark(StrUtil.blankToDefault(remark, null))
                 .build();
     }
 
     private DistrictStatisticsVO buildDistrictVO(String district, List<ScreeningSchool> list) {
+        long ppd1 = countScreenResult(list, "PPD+", true);
+        long ppd2 = countScreenResult(list, "PPD++", true);
+        long ppd3 = countScreenResult(list, "PPD+++", false);
+        String remark = list.stream()
+                .map(ScreeningSchool::getRemark)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .collect(Collectors.joining("；"));
         return DistrictStatisticsVO.builder()
                 .district(district)
-                .actualScreenCount((long) list.size())
+                .actualScreenCount(countEquals(list, ScreeningSchool::getHasInfectionScreen, "是"))
                 .closeContactCount(countContains(list, ScreeningSchool::getCloseContactHistory, "有"))
                 .suspiciousSymptomCount(countContains(list, ScreeningSchool::getSuspiciousSymptoms, "有"))
                 .chestXrayCount(countEquals(list, ScreeningSchool::getHasChestXray, "是"))
                 .chestXrayAbnormalCount(countContains(list, ScreeningSchool::getChestXrayResult, "异常"))
                 .ppdTestCount(countContains(list, ScreeningSchool::getScreenMethod, "PPD"))
-                .ppdPositive1(countScreenResult(list, "PPD+", true))
-                .ppdPositive2(countScreenResult(list, "PPD++", true))
-                .ppdPositive3(countScreenResult(list, "PPD+++", false))
-                .ppdPositiveTotal(countContains(list, ScreeningSchool::getInfectionResult, "PPD+"))
+                .ppdPositive1(ppd1)
+                .ppdPositive2(ppd2)
+                .ppdPositive3(ppd3)
+                .ppdPositiveTotal(ppd1 + ppd2 + ppd3)
                 .ecNegative(countContains(list, ScreeningSchool::getInfectionResult, "EC阴性"))
                 .ecPositive(countContains(list, ScreeningSchool::getInfectionResult, "EC阳性"))
                 .igraPositive(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阳性"))
                 .igraNegative(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阴性"))
                 .tbPatientCount(countContains(list, ScreeningSchool::getDiagnosisResult, "肺结核"))
+                .remark(StrUtil.blankToDefault(remark, null))
                 .build();
     }
 

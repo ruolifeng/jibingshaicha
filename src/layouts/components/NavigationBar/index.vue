@@ -5,12 +5,11 @@ import SearchMenu from "@@/components/SearchMenu/index.vue"
 import ThemeSwitch from "@@/components/ThemeSwitch/index.vue"
 import { useDevice } from "@@/composables/useDevice"
 import { useLayoutMode } from "@@/composables/useLayoutMode"
-import { UserFilled, Bell } from "@element-plus/icons-vue"
+import { UserFilled } from "@element-plus/icons-vue"
 import { useAppStore } from "@/pinia/stores/app"
 import { useSettingsStore } from "@/pinia/stores/settings"
 import { useUserStore } from "@/pinia/stores/user"
 import { Breadcrumb, Hamburger, Sidebar } from "../index"
-import { getUnreadCountApi } from "@/pages/message/apis"
 
 const { isMobile } = useDevice()
 
@@ -25,26 +24,6 @@ const userStore = useUserStore()
 const settingsStore = useSettingsStore()
 
 const { showNotify, showThemeSwitch, showScreenfull, showSearchMenu } = storeToRefs(settingsStore)
-
-const unreadCount = ref(0)
-
-async function loadUnreadCount() {
-  try {
-    const { data } = await getUnreadCountApi()
-    unreadCount.value = data || 0
-  } catch { /* ignore */ }
-}
-
-function goMessage() {
-  router.push("/message")
-}
-
-let unreadTimer: ReturnType<typeof setInterval> | null = null
-onMounted(() => {
-  loadUnreadCount()
-  unreadTimer = setInterval(loadUnreadCount, 60_000)
-})
-onUnmounted(() => { if (unreadTimer) clearInterval(unreadTimer) })
 
 /** 切换侧边栏 */
 function toggleSidebar() {
@@ -73,9 +52,6 @@ function logout() {
       <Screenfull v-if="showScreenfull" class="right-menu-item" />
       <ThemeSwitch v-if="showThemeSwitch" class="right-menu-item" />
       <Notify v-if="showNotify" class="right-menu-item" />
-      <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99" class="right-menu-item message-badge" @click="goMessage">
-        <el-icon :size="20"><Bell /></el-icon>
-      </el-badge>
       <el-dropdown>
         <div class="right-menu-item user">
           <el-avatar :icon="UserFilled" :size="30" />
@@ -144,11 +120,6 @@ function logout() {
       &:last-child {
         margin-left: 20px;
       }
-    }
-    .message-badge {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
     }
     .ml-2 { margin-left: 8px; }
     .user {

@@ -1,5 +1,13 @@
 import { request } from "@/http/axios"
 
+/** 获取区县选项列表（从实际数据动态获取） */
+export function getDistrictOptionsApi() {
+  return request<ApiResponseData<string[]>>({
+    url: "statistics/district-options",
+    method: "get"
+  })
+}
+
 /** 学校人群统计总表 */
 export function getSchoolStatisticsApi(params: {
   year?: string

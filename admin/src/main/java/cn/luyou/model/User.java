@@ -1,6 +1,7 @@
 package cn.luyou.model;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,6 +26,8 @@ public class User implements Serializable {
 
     private String username;
 
+    /** 密码（BCrypt加密存储，响应时不输出） */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     /** 真实姓名 */

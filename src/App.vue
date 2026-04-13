@@ -17,11 +17,11 @@ initTheme()
 initGreyAndColorWeakness()
 
 // #region 初始化通知
-initStarNotification()
+// initStarNotification()
 
-initStoreNotification()
+// initStoreNotification()
 
-initMobileNotification()
+// initMobileNotification()
 // #endregion
 </script>
 

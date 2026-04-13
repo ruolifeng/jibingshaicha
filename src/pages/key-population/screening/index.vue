@@ -83,7 +83,7 @@ watch(
           <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
         </el-form-item>
         <el-form-item label="判定结果">
-          <el-select v-model="searchForm.isLatent" placeholder="全部" clearable>
+          <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
             <el-option label="潜伏管理者" :value="1" />
             <el-option label="非潜伏管理者" :value="0" />
           </el-select>
@@ -113,43 +113,43 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" width="90" fixed />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="180" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="district" label="区县" width="100" />
-        <el-table-column prop="ethnicity" label="民族" width="70" />
-        <el-table-column prop="crowdCategory" label="人群分类" width="120" />
-        <el-table-column prop="hasSuspiciousSymptoms" label="可疑症状" width="100" />
-        <el-table-column prop="cough" label="咳嗽咳痰" width="90" />
-        <el-table-column prop="hemoptysis" label="咯血或血痰" width="110" />
-        <el-table-column prop="fever" label="发热" width="70" />
-        <el-table-column prop="chestPain" label="胸痛" width="70" />
-        <el-table-column prop="nightSweats" label="夜间盗汗" width="90" />
-        <el-table-column prop="appetiteLoss" label="食欲不振" width="90" />
-        <el-table-column prop="fatigue" label="乏力" width="70" />
-        <el-table-column prop="weightLoss" label="体重减轻" width="90" />
-        <el-table-column prop="hasInfectionScreen" label="是否感染筛" width="100" />
-        <el-table-column prop="screenMethod" label="筛查方法" width="100" />
-        <el-table-column prop="screenResult" label="筛查结果" width="150" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" width="150" />
-        <el-table-column prop="hasChestXray" label="胸片检查" width="90" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" width="120" />
-        <el-table-column prop="resultJudgment" label="结果判定" width="100" />
-        <el-table-column prop="isReferred" label="是否转诊" width="90" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="120" />
-        <el-table-column prop="isEligibleForPrevention" label="符合预防性治疗" width="130" />
-        <el-table-column prop="hasPreventiveTreatment" label="是否预防性治疗" width="130" />
-        <el-table-column prop="preventionCompleted" label="规范完成" width="90" />
-        <el-table-column label="潜伏判定" width="110" fixed="right">
+        <el-table-column prop="name" label="姓名" fixed />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="district" label="区县" />
+        <el-table-column prop="ethnicity" label="民族" />
+        <el-table-column prop="crowdCategory" label="人群分类" />
+        <el-table-column prop="hasSuspiciousSymptoms" label="可疑症状" />
+        <el-table-column prop="cough" label="咳嗽咳痰" />
+        <el-table-column prop="hemoptysis" label="咯血或血痰" />
+        <el-table-column prop="fever" label="发热" />
+        <el-table-column prop="chestPain" label="胸痛" />
+        <el-table-column prop="nightSweats" label="夜间盗汗" />
+        <el-table-column prop="appetiteLoss" label="食欲不振" />
+        <el-table-column prop="fatigue" label="乏力" />
+        <el-table-column prop="weightLoss" label="体重减轻" />
+        <el-table-column prop="hasInfectionScreen" label="是否感染筛" />
+        <el-table-column prop="screenMethod" label="筛查方法" />
+        <el-table-column prop="screenResult" label="筛查结果" />
+        <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column prop="hasChestXray" label="胸片检查" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" />
+        <el-table-column prop="resultJudgment" label="结果判定" />
+        <el-table-column prop="isReferred" label="是否转诊" />
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="isEligibleForPrevention" label="符合预防性治疗" />
+        <el-table-column prop="hasPreventiveTreatment" label="是否预防性治疗" />
+        <el-table-column prop="preventionCompleted" label="规范完成" />
+        <el-table-column label="潜伏判定" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
               {{ row.isLatent === 1 ? "潜伏管理者" : "正常" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" width="150" />
+        <el-table-column prop="remark" label="备注" />
       </el-table>
 
       <!-- 分页 -->

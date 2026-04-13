@@ -51,4 +51,5 @@ public class SysMessageServiceImpl extends ServiceImpl<SysMessageMapper, SysMess
                 .eq(SysMessage::getIsRead, 0);
         return count(wrapper);
     }
+
 }

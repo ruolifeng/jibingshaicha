@@ -55,25 +55,50 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Transactional(rollbackFor = Exception.class)
     public int importEpidemic(MultipartFile file, String populationType) {
         String batchId = IdUtil.fastSimpleUUID();
-        List<Map<Integer, String>> rawRows = new ArrayList<>();
-
+        // headRowNumber(0) 使首行（表头）也作为数据行读入，以便构建列索引映射
+        List<Map<Integer, String>> allRows = new ArrayList<>();
         try {
             EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
                 @Override
                 public void invoke(Map<Integer, String> data, AnalysisContext context) {
-                    rawRows.add(data);
+                    allRows.add(new LinkedHashMap<>(data));
                 }
                 @Override
                 public void doAfterAllAnalysed(AnalysisContext context) {
-                    log.info("大疫情表解析完成，共 {} 条", rawRows.size());
+                    log.info("大疫情表解析完成，共 {} 行（含表头）", allRows.size());
                 }
-            }).sheet().doRead();
+            }).sheet().headRowNumber(0).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel读取失败");
         }
 
+        if (allRows.size() < 2) {
+            log.warn("大疫情表无数据行，跳过导入");
+            return 0;
+        }
+
+        // 解析第一行表头，构建 字段名 -> 列索引 映射
+        Map<Integer, String> headerRow = allRows.get(0);
+        Map<String, Integer> headerIndex = new LinkedHashMap<>();
+        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
+            if (StrUtil.isNotBlank(entry.getValue())) {
+                headerIndex.put(entry.getValue().trim(), entry.getKey());
+            }
+        }
+        log.info("大疫情表表头解析：{}", headerIndex.keySet());
+
+        List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
+
         int matchCount = 0;
-        for (Map<Integer, String> row : rawRows) {
+        for (Map<Integer, String> row : dataRows) {
+            String nameVal = getFieldByHeader(row, headerIndex, "姓名");
+            String idNumberVal = getFieldByHeader(row, headerIndex, "证件号", "身份证号", "身份证");
+
+            // 跳过姓名和证件号均为空的空行
+            if (StrUtil.isBlank(nameVal) && StrUtil.isBlank(idNumberVal)) {
+                continue;
+            }
+
             String rawJson;
             try {
                 rawJson = objectMapper.writeValueAsString(row);
@@ -81,10 +106,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 rawJson = row.toString();
             }
 
-            // 尝试模糊匹配（按姓名 + 证件号）
-            String nameVal = extractField(row, "姓名");
-            String idNumberVal = extractField(row, "证件号", "身份证");
-
+            // 优先按证件号精确匹配，再按姓名模糊匹配
             Patient matched = null;
             if (StrUtil.isNotBlank(idNumberVal)) {
                 matched = lambdaQuery()
@@ -114,7 +136,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 report.setMatched(1);
                 matchCount++;
             } else {
-                // 未匹配则新增为患者
                 Patient newPatient = Patient.builder()
                         .populationType(populationType)
                         .name(nameVal)
@@ -131,8 +152,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             epidemicReportService.save(report);
         }
 
-        log.info("大疫情导入完成：共 {} 条，匹配 {} 条", rawRows.size(), matchCount);
-        return rawRows.size();
+        log.info("大疫情导入完成：共 {} 条数据，匹配 {} 条", dataRows.size(), matchCount);
+        return dataRows.size();
     }
 
     @Override
@@ -159,19 +180,30 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     /**
-     * 从 Map<Integer, String> 中按列序号简单提取（大疫情表列序未知，采用值匹配）
+     * 根据表头名称从数据行中提取字段值。
+     * 支持多个候选字段名，先精确匹配，再按"表头包含关键字"模糊匹配。
      */
-    private String extractField(Map<Integer, String> row, String... possibleNames) {
-        for (String val : row.values()) {
-            if (val != null && !val.isBlank()) {
-                for (String name : possibleNames) {
-                    if (val.contains(name)) {
-                        return val;
+    private String getFieldByHeader(Map<Integer, String> row, Map<String, Integer> headerIndex,
+                                    String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            // 精确匹配
+            Integer idx = headerIndex.get(fieldName);
+            if (idx != null) {
+                String val = row.get(idx);
+                if (StrUtil.isNotBlank(val)) {
+                    return val.trim();
+                }
+            }
+            // 模糊匹配（表头中包含目标字段名）
+            for (Map.Entry<String, Integer> entry : headerIndex.entrySet()) {
+                if (entry.getKey().contains(fieldName)) {
+                    String val = row.get(entry.getValue());
+                    if (StrUtil.isNotBlank(val)) {
+                        return val.trim();
                     }
                 }
             }
         }
-        // 退化：返回前几个非空值作为尝试（表头匹配）
-        return row.values().stream().filter(v -> v != null && !v.isBlank()).findFirst().orElse(null);
+        return null;
     }
 }

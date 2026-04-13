@@ -30,7 +30,14 @@ export function registerNavigationGuard(router: Router) {
     // 如果已经登录，并准备进入 Login 页面，则重定向到主页
     if (to.path === LOGIN_PATH) return "/"
     // 如果用户已经获得其权限角色
-    if (userStore.roles.length !== 0) return true
+    if (userStore.roles.length !== 0) {
+      // 校验页面访问权限：若路由声明了 meta.permission，则检查用户是否拥有
+      const permCode = to.meta.permission as string | undefined
+      if (permCode && !userStore.hasPermission(permCode)) {
+        return "/403"
+      }
+      return true
+    }
     // 否则要重新获取权限角色
     try {
       await userStore.getInfo()

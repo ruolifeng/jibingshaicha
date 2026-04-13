@@ -9,6 +9,7 @@ public interface SysMessageService extends IService<SysMessage> {
     /** 发送系统消息 */
     void sendMessage(Long receiverId, String title, String content, String type, Long bizId);
 
+
     /** 查询用户消息列表 */
     IPage<SysMessage> queryPage(Long receiverId, int page, int size, Integer isRead);
 

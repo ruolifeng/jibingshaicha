@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { getSchoolStatisticsApi, getDistrictStatisticsApi, exportSchoolStatisticsApi, exportDistrictStatisticsApi } from "./apis"
+import { getSchoolStatisticsApi, getDistrictStatisticsApi, exportSchoolStatisticsApi, exportDistrictStatisticsApi, getDistrictOptionsApi } from "./apis"
 
 defineOptions({ name: "Statistics" })
 
@@ -11,8 +11,15 @@ const filterForm = reactive({
   district: ""
 })
 
-const districtOptions = ["自流井区", "高新区", "荣县", "富顺县", "贡井区", "大安区", "沿滩区"]
+const districtOptions = ref<string[]>([])
 const yearOptions = Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() - i))
+
+async function loadDistrictOptions() {
+  try {
+    const { data } = await getDistrictOptionsApi()
+    districtOptions.value = data || []
+  } catch { /* ignore */ }
+}
 
 // ==================== 学校人群统计 ====================
 const schoolLoading = ref(false)
@@ -100,7 +107,7 @@ async function handleExportDistrict() {
 }
 
 // ==================== Tab 切换时自动加载数据 ====================
-function handleTabChange(tab: string) {
+function handleTabChange(tab: string | number) {
   if (tab === "school") {
     fetchSchoolStatistics()
   } else {
@@ -109,6 +116,7 @@ function handleTabChange(tab: string) {
 }
 
 onMounted(() => {
+  loadDistrictOptions()
   fetchSchoolStatistics()
 })
 </script>
@@ -119,12 +127,12 @@ onMounted(() => {
     <el-card shadow="never" class="mb-4">
       <el-form :model="filterForm" inline>
         <el-form-item label="年份">
-          <el-select v-model="filterForm.year" placeholder="选择年份" clearable>
+          <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">
             <el-option v-for="y in yearOptions" :key="y" :label="y" :value="y" />
           </el-select>
         </el-form-item>
         <el-form-item label="区县">
-          <el-select v-model="filterForm.district" placeholder="全部区县" clearable>
+          <el-select v-model="filterForm.district" placeholder="全部区县" clearable style="width: 160px">
             <el-option v-for="d in districtOptions" :key="d" :label="d" :value="d" />
           </el-select>
         </el-form-item>
@@ -144,25 +152,25 @@ onMounted(() => {
             <el-button type="success" v-permission="'statistics:export'" @click="handleExportSchool">导出 Excel</el-button>
           </div>
           <el-table v-loading="schoolLoading" :data="schoolData" border stripe max-height="600" show-summary>
-            <el-table-column prop="district" label="区县" width="100" fixed />
-            <el-table-column prop="schoolName" label="学校名称" width="180" />
-            <el-table-column prop="shouldScreenCount" label="应筛查人数" width="110" />
-            <el-table-column prop="actualScreenCount" label="实际筛查人数" width="120" />
-            <el-table-column prop="closeContactCount" label="密切接触人数" width="120" />
-            <el-table-column prop="suspiciousSymptomCount" label="可疑症状人数" width="120" />
-            <el-table-column prop="chestXrayCount" label="胸片检查人数" width="120" />
-            <el-table-column prop="chestXrayAbnormalCount" label="胸片异常人数" width="120" />
-            <el-table-column prop="ppdTestCount" label="结核菌素检测人数" width="140" />
-            <el-table-column prop="ppdPositive1" label="PPD+" width="80" />
-            <el-table-column prop="ppdPositive2" label="PPD++" width="80" />
-            <el-table-column prop="ppdPositive3" label="PPD+++" width="90" />
-            <el-table-column prop="ppdPositiveTotal" label="PPD阳性合计" width="120" />
-            <el-table-column prop="ecNegative" label="EC阴性" width="90" />
-            <el-table-column prop="ecPositive" label="EC阳性" width="90" />
-            <el-table-column prop="igraPositive" label="IGRA阳性" width="100" />
-            <el-table-column prop="igraNegative" label="IGRA阴性" width="100" />
-            <el-table-column prop="tbPatientCount" label="肺结核/疑似患者" width="130" />
-            <el-table-column prop="remark" label="备注" width="150" />
+            <el-table-column prop="district" label="区县" fixed />
+            <el-table-column prop="schoolName" label="学校名称" />
+            <el-table-column prop="shouldScreenCount" label="应筛查人数" />
+            <el-table-column prop="actualScreenCount" label="实际筛查人数" />
+            <el-table-column prop="closeContactCount" label="密切接触人数" />
+            <el-table-column prop="suspiciousSymptomCount" label="可疑症状人数" />
+            <el-table-column prop="chestXrayCount" label="胸片检查人数" />
+            <el-table-column prop="chestXrayAbnormalCount" label="胸片异常人数" />
+            <el-table-column prop="ppdTestCount" label="结核菌素检测人数" />
+            <el-table-column prop="ppdPositive1" label="PPD+" />
+            <el-table-column prop="ppdPositive2" label="PPD++" />
+            <el-table-column prop="ppdPositive3" label="PPD+++" />
+            <el-table-column prop="ppdPositiveTotal" label="PPD阳性合计" />
+            <el-table-column prop="ecNegative" label="EC阴性" />
+            <el-table-column prop="ecPositive" label="EC阳性" />
+            <el-table-column prop="igraPositive" label="IGRA阳性" />
+            <el-table-column prop="igraNegative" label="IGRA阴性" />
+            <el-table-column prop="tbPatientCount" label="肺结核/疑似患者" />
+            <el-table-column prop="remark" label="备注" />
           </el-table>
         </el-tab-pane>
 
@@ -172,23 +180,23 @@ onMounted(() => {
             <el-button type="success" v-permission="'statistics:export'" @click="handleExportDistrict">导出 Excel</el-button>
           </div>
           <el-table v-loading="districtLoading" :data="districtData" border stripe max-height="600" show-summary>
-            <el-table-column prop="district" label="区/县" width="100" fixed />
-            <el-table-column prop="actualScreenCount" label="实际筛查人数" width="120" />
-            <el-table-column prop="closeContactCount" label="密切接触人数" width="120" />
-            <el-table-column prop="suspiciousSymptomCount" label="可疑症状人数" width="120" />
-            <el-table-column prop="chestXrayCount" label="胸片检查人数" width="120" />
-            <el-table-column prop="chestXrayAbnormalCount" label="胸片异常人数" width="120" />
-            <el-table-column prop="ppdTestCount" label="结核菌素检测人数" width="140" />
-            <el-table-column prop="ppdPositive1" label="PPD+" width="80" />
-            <el-table-column prop="ppdPositive2" label="PPD++" width="80" />
-            <el-table-column prop="ppdPositive3" label="PPD+++" width="90" />
-            <el-table-column prop="ppdPositiveTotal" label="PPD阳性合计" width="120" />
-            <el-table-column prop="ecNegative" label="EC阴性" width="90" />
-            <el-table-column prop="ecPositive" label="EC阳性" width="90" />
-            <el-table-column prop="igraPositive" label="IGRA阳性" width="100" />
-            <el-table-column prop="igraNegative" label="IGRA阴性" width="100" />
-            <el-table-column prop="tbPatientCount" label="肺结核/疑似患者" width="130" />
-            <el-table-column prop="remark" label="备注" width="150" />
+            <el-table-column prop="district" label="区/县" fixed />
+            <el-table-column prop="actualScreenCount" label="实际筛查人数" />
+            <el-table-column prop="closeContactCount" label="密切接触人数" />
+            <el-table-column prop="suspiciousSymptomCount" label="可疑症状人数" />
+            <el-table-column prop="chestXrayCount" label="胸片检查人数" />
+            <el-table-column prop="chestXrayAbnormalCount" label="胸片异常人数" />
+            <el-table-column prop="ppdTestCount" label="结核菌素检测人数" />
+            <el-table-column prop="ppdPositive1" label="PPD+" />
+            <el-table-column prop="ppdPositive2" label="PPD++" />
+            <el-table-column prop="ppdPositive3" label="PPD+++" />
+            <el-table-column prop="ppdPositiveTotal" label="PPD阳性合计" />
+            <el-table-column prop="ecNegative" label="EC阴性" />
+            <el-table-column prop="ecPositive" label="EC阳性" />
+            <el-table-column prop="igraPositive" label="IGRA阳性" />
+            <el-table-column prop="igraNegative" label="IGRA阴性" />
+            <el-table-column prop="tbPatientCount" label="肺结核/疑似患者" />
+            <el-table-column prop="remark" label="备注" />
           </el-table>
         </el-tab-pane>
       </el-tabs>

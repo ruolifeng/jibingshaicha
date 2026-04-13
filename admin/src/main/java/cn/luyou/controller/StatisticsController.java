@@ -25,6 +25,12 @@ public class StatisticsController {
 
     private final StatisticsService statisticsService;
 
+    @Operation(summary = "获取区县选项列表")
+    @GetMapping("/district-options")
+    public ResultResponse<List<String>> districtOptions() {
+        return ResultRes.success(statisticsService.getDistrictOptions());
+    }
+
     @Operation(summary = "学校人群统计总表")
     @GetMapping("/school")
     public ResultResponse<List<SchoolStatisticsVO>> schoolStatistics(

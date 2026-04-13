@@ -100,19 +100,19 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" width="90" />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="180" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="120" />
-        <el-table-column prop="source" label="来源" width="100">
+        <el-table-column prop="name" label="姓名" />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="source" label="来源">
           <template #default="{ row }">
             {{ row.source === "confirmed" ? "转诊确诊" : "大疫情导入" }}
           </template>
         </el-table-column>
-        <el-table-column prop="archivedTime" label="归档时间" width="180" />
-        <el-table-column prop="createTime" label="创建时间" width="180" />
+        <el-table-column prop="archivedTime" label="归档时间" />
+        <el-table-column prop="createTime" label="创建时间" />
       </el-table>
 
       <div class="mt-4 flex justify-end">

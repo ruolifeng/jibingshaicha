@@ -119,7 +119,7 @@ watch(
           <el-input v-model="searchForm.username" placeholder="请输入用户名" clearable />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="searchForm.role" placeholder="全部" clearable>
+          <el-select v-model="searchForm.role" placeholder="全部" clearable style="width: 120px">
             <el-option v-for="item in ROLE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
@@ -139,19 +139,19 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="username" label="用户名" width="140" />
-        <el-table-column prop="realName" label="真实姓名" width="120" />
-        <el-table-column label="角色" width="120">
+        <el-table-column prop="id" label="ID" />
+        <el-table-column prop="username" label="用户名" />
+        <el-table-column prop="realName" label="真实姓名" />
+        <el-table-column label="角色">
           <template #default="{ row }">
             <el-tag :type="row.role === 1 ? 'danger' : row.role <= 4 ? 'warning' : 'primary'" size="small">
               {{ ROLE_MAP[row.role] || "未知" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="orgName" label="所属机构" width="200" />
-        <el-table-column prop="createTime" label="创建时间" width="180" />
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column prop="orgName" label="所属机构" />
+        <el-table-column prop="createTime" label="创建时间" />
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button v-permission="'user:delete'" type="danger" size="small" :disabled="row.role === 1" @click="handleDelete(row)">删除</el-button>
@@ -185,7 +185,7 @@ watch(
           <el-input v-model="formData.realName" placeholder="请输入真实姓名" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="formData.role" placeholder="请选择角色">
+          <el-select v-model="formData.role" placeholder="请选择角色" style="width: 100%">
             <el-option v-for="item in ROLE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>

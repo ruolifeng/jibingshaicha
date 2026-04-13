@@ -24,10 +24,11 @@ CREATE TABLE IF NOT EXISTS `user` (
     UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
 
+-- 初始密码均为 123456，已使用 BCrypt(strength=10) 加密
 INSERT INTO `user` (`username`, `password`, `real_name`, `role`, `org_name`) VALUES
-('admin', '123456', '超级管理员', 1, '市疾控中心'),
-('level4user', '123456', '四级操作员', 5, '区疾控中心'),
-('level5user', '123456', '五级操作员', 6, '社区卫生服务中心');
+('admin',     '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '超级管理员', 1, '市疾控中心'),
+('level4user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '四级操作员', 5, '区疾控中心'),
+('level5user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '五级操作员', 6, '社区卫生服务中心');
 
 CREATE TABLE IF NOT EXISTS `sys_message` (
     `id`           BIGINT       NOT NULL AUTO_INCREMENT,
@@ -253,7 +254,9 @@ CREATE TABLE IF NOT EXISTS `notice` (
     `status`              TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1已发送 2已确认',
     `sent_time`           DATETIME     DEFAULT NULL COMMENT '发送时间',
     `confirmed_time`      DATETIME     DEFAULT NULL COMMENT '确认接收时间',
-    `timeout_notified`    TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已发送超时提醒',
+    `timeout_notified`              TINYINT NOT NULL DEFAULT 0 COMMENT '是否已发送通知单48h超时提醒',
+    `supervision_timeout_notified`  TINYINT NOT NULL DEFAULT 0 COMMENT '是否已发送督导表72h超时提醒',
+    `visit_timeout_notified`        TINYINT NOT NULL DEFAULT 0 COMMENT '是否已发送首次随访72h超时提醒',
     `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`             TINYINT      NOT NULL DEFAULT 0,

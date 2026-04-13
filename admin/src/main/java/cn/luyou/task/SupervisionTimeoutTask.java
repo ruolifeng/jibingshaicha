@@ -31,10 +31,11 @@ public class SupervisionTimeoutTask {
     public void checkSupervisionTimeout() {
         LocalDateTime threshold = LocalDateTime.now().minusHours(72);
 
-        // 查找已确认但超过72h的潜伏者通知单
+        // 查找已确认但超过72h、且尚未发过督导超时提醒的潜伏者通知单
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Notice::getStatus, 2) // 已确认
                 .eq(Notice::getNoticeType, "latent")
+                .eq(Notice::getSupervisionTimeoutNotified, 0) // 防止重复发送
                 .le(Notice::getConfirmedTime, threshold);
 
         List<Notice> confirmedNotices = noticeService.list(wrapper);
@@ -53,6 +54,9 @@ public class SupervisionTimeoutTask {
                         "supervision_timeout",
                         notice.getBizId()
                 );
+                // 标记已提醒，防止重复推送
+                notice.setSupervisionTimeoutNotified(1);
+                noticeService.updateById(notice);
             }
         }
     }

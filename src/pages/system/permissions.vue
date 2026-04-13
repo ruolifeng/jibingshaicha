@@ -75,8 +75,8 @@ onMounted(async () => {
 function getTypeTag(type: number) {
   return type === 1 ? "菜单" : "操作"
 }
-function getTypeColor(type: number) {
-  return type === 1 ? "" : "warning"
+function getTypeColor(type: number): "primary" | "warning" {
+  return type === 1 ? "primary" : "warning"
 }
 </script>
 

@@ -62,6 +62,8 @@ export const useUserStore = defineStore("user", () => {
     removeToken()
     token.value = ""
     roles.value = []
+    permissions.value = []
+    userRole.value = 0
     resetRouter()
     resetTagsView()
   }
@@ -71,6 +73,8 @@ export const useUserStore = defineStore("user", () => {
     removeToken()
     token.value = ""
     roles.value = []
+    permissions.value = []
+    userRole.value = 0
   }
 
   // 重置 Visited Views 和 Cached Views

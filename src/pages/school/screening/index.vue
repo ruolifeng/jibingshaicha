@@ -88,7 +88,7 @@ watch(
           <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
         </el-form-item>
         <el-form-item label="判定结果">
-          <el-select v-model="searchForm.isLatent" placeholder="全部" clearable>
+          <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
             <el-option label="潜伏管理者" :value="1" />
             <el-option label="非潜伏管理者" :value="0" />
           </el-select>
@@ -118,37 +118,37 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" width="90" fixed />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="180" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="district" label="区县" width="100" />
-        <el-table-column prop="schoolName" label="学校名称" width="160" />
-        <el-table-column prop="className" label="班级" width="120" />
-        <el-table-column prop="schoolType" label="学校类型" width="100" />
-        <el-table-column prop="ethnicity" label="民族" width="70" />
-        <el-table-column prop="tbHistory" label="既往结核病史" width="120" />
-        <el-table-column prop="closeContactHistory" label="密切接触史" width="100" />
-        <el-table-column prop="suspiciousSymptoms" label="可疑症状" width="100" />
-        <el-table-column prop="hasInfectionScreen" label="是否感染筛" width="100" />
-        <el-table-column prop="screenMethod" label="筛查方法" width="100" />
-        <el-table-column prop="screenResult" label="筛查结果" width="150" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" width="150" />
-        <el-table-column prop="hasChestXray" label="胸片检查" width="90" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" width="120" />
-        <el-table-column prop="sputumSmear" label="痰涂片" width="90" />
-        <el-table-column prop="molecularBiology" label="分子生物学" width="100" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="120" />
-        <el-table-column prop="preventiveTreatment" label="预防性治疗" width="150" />
-        <el-table-column label="潜伏判定" width="110" fixed="right">
+        <el-table-column prop="name" label="姓名" fixed />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="district" label="区县" />
+        <el-table-column prop="schoolName" label="学校名称" />
+        <el-table-column prop="className" label="班级" />
+        <el-table-column prop="schoolType" label="学校类型" />
+        <el-table-column prop="ethnicity" label="民族" />
+        <el-table-column prop="tbHistory" label="既往结核病史" />
+        <el-table-column prop="closeContactHistory" label="密切接触史" />
+        <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
+        <el-table-column prop="hasInfectionScreen" label="是否感染筛" />
+        <el-table-column prop="screenMethod" label="筛查方法" />
+        <el-table-column prop="screenResult" label="筛查结果" />
+        <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column prop="hasChestXray" label="胸片检查" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" />
+        <el-table-column prop="sputumSmear" label="痰涂片" />
+        <el-table-column prop="molecularBiology" label="分子生物学" />
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="preventiveTreatment" label="预防性治疗" />
+        <el-table-column label="潜伏判定" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
               {{ row.isLatent === 1 ? "潜伏管理者" : "正常" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" width="150" />
+        <el-table-column prop="remark" label="备注" />
       </el-table>
 
       <!-- 分页 -->

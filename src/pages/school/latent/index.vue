@@ -119,7 +119,7 @@ const noticeForm = reactive({
   crowdCategory: "",
   treatmentPlan: "",
   customPlanDetail: "",
-  receiverOrgId: null as number | null
+  receiverOrgId: undefined as number | undefined
 })
 
 function openNoticeDialog(row: any) {
@@ -134,7 +134,7 @@ function openNoticeDialog(row: any) {
   noticeForm.crowdCategory = ""
   noticeForm.treatmentPlan = ""
   noticeForm.customPlanDetail = ""
-  noticeForm.receiverOrgId = null
+  noticeForm.receiverOrgId = undefined
   noticeDialogVisible.value = true
 }
 
@@ -266,12 +266,12 @@ watch(
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
         <el-form-item label="追踪状态">
-          <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable>
+          <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width: 120px">
             <el-option v-for="(label, key) in TRACKING_STATUS_MAP" :key="key" :label="label" :value="Number(key)" />
           </el-select>
         </el-form-item>
         <el-form-item label="归档状态">
-          <el-select v-model="searchForm.archived" placeholder="全部" clearable>
+          <el-select v-model="searchForm.archived" placeholder="全部" clearable style="width: 120px">
             <el-option label="未归档" :value="0" />
             <el-option label="已归档" :value="1" />
           </el-select>
@@ -290,28 +290,28 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" width="90" fixed />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="180" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" width="150" />
-        <el-table-column label="追踪状态" width="100">
+        <el-table-column prop="name" label="姓名" fixed />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column label="追踪状态">
           <template #default="{ row }">
             <el-tag :type="getTrackingStatusType(row.trackingStatus)" size="small">
               {{ TRACKING_STATUS_MAP[row.trackingStatus] }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="notInPlaceCount" label="未到位次数" width="100" />
-        <el-table-column prop="trackingRemark" label="追踪备注" width="150" />
-        <el-table-column prop="referralResult" label="转诊结果" width="100">
+        <el-table-column prop="notInPlaceCount" label="未到位次数" />
+        <el-table-column prop="trackingRemark" label="追踪备注" />
+        <el-table-column prop="referralResult" label="转诊结果">
           <template #default="{ row }">
             {{ REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)?.label || row.referralResult || "-" }}
           </template>
         </el-table-column>
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="100" />
-        <el-table-column label="通知单" width="120">
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column label="通知单">
           <template #default="{ row }">
             <el-button v-if="row.referralResult === 'latent'" type="primary" link size="small" @click="viewNotice(row)">
               {{ row.name }}通知单
@@ -319,14 +319,14 @@ watch(
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="归档" width="70">
+        <el-table-column label="归档">
           <template #default="{ row }">
             <el-tag :type="row.archived ? 'info' : 'success'" size="small">
               {{ row.archived ? "已归档" : "进行中" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.trackingStatus === 0 || row.trackingStatus === 2"
@@ -444,7 +444,7 @@ watch(
           <el-input v-model="noticeForm.idNumber" placeholder="请输入" />
         </el-form-item>
         <el-form-item label="性别">
-          <el-select v-model="noticeForm.gender" placeholder="请选择">
+          <el-select v-model="noticeForm.gender" placeholder="请选择" style="width: 100%">
             <el-option label="男" value="男" />
             <el-option label="女" value="女" />
           </el-select>
@@ -459,12 +459,12 @@ watch(
           <el-input v-model="noticeForm.ethnicity" placeholder="请输入" />
         </el-form-item>
         <el-form-item label="人群分类">
-          <el-select v-model="noticeForm.crowdCategory" placeholder="请选择">
+          <el-select v-model="noticeForm.crowdCategory" placeholder="请选择" style="width: 100%">
             <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="治疗方案">
-          <el-select v-model="noticeForm.treatmentPlan" placeholder="请选择">
+          <el-select v-model="noticeForm.treatmentPlan" placeholder="请选择" style="width: 100%">
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
@@ -472,7 +472,7 @@ watch(
           <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
         </el-form-item>
         <el-form-item label="接收单位">
-          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable>
+          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
             <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
           </el-select>
         </el-form-item>
@@ -524,7 +524,7 @@ watch(
           <el-date-picker v-model="supervisionForm.treatmentStartDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item label="治疗方案">
-          <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择">
+          <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" style="width: 100%">
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
