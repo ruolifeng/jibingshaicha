@@ -1,0 +1,491 @@
+-- ======================================================
+-- 疾病监控系统 初始化 SQL
+-- ======================================================
+
+CREATE DATABASE IF NOT EXISTS `disease_monitor`
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE `disease_monitor`;
+
+-- ==================== 系统表 ====================
+
+CREATE TABLE IF NOT EXISTS `user` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `username`    VARCHAR(64)  NOT NULL COMMENT '用户名',
+    `password`    VARCHAR(128) NOT NULL COMMENT '密码',
+    `real_name`   VARCHAR(64)  DEFAULT NULL COMMENT '真实姓名',
+    `role`        TINYINT      NOT NULL DEFAULT 6 COMMENT '角色：1=超级管理员 2=一级 3=二级 4=三级 5=四级 6=五级',
+    `org_name`    VARCHAR(128) DEFAULT NULL COMMENT '所属机构名称',
+    `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`     TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+INSERT INTO `user` (`username`, `password`, `real_name`, `role`, `org_name`) VALUES
+('admin', '123456', '超级管理员', 1, '市疾控中心'),
+('level4user', '123456', '四级操作员', 5, '区疾控中心'),
+('level5user', '123456', '五级操作员', 6, '社区卫生服务中心');
+
+CREATE TABLE IF NOT EXISTS `sys_message` (
+    `id`           BIGINT       NOT NULL AUTO_INCREMENT,
+    `sender_id`    BIGINT       DEFAULT NULL COMMENT '发送人ID（系统消息为空）',
+    `receiver_id`  BIGINT       NOT NULL COMMENT '接收人ID',
+    `title`        VARCHAR(256) NOT NULL COMMENT '消息标题',
+    `content`      TEXT         DEFAULT NULL COMMENT '消息内容',
+    `type`         VARCHAR(32)  NOT NULL COMMENT '消息类型：notice_timeout/supervision_timeout/visit_timeout',
+    `biz_id`       BIGINT       DEFAULT NULL COMMENT '关联业务ID',
+    `is_read`      TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已读：0未读 1已读',
+    `create_time`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`      TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_receiver` (`receiver_id`, `is_read`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统消息表';
+
+-- ==================== 学校人群筛查表 ====================
+
+CREATE TABLE IF NOT EXISTS `screening_school` (
+    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `year`                  VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `city`                  VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
+    `district`              VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
+    `name`                  VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
+    `gender`                VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`            DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                   INT          DEFAULT NULL COMMENT '年龄',
+    `id_type`               VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
+    `id_number`             VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
+    `ethnicity`             VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `phone`                 VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `household_address`     VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
+    `current_address`       VARCHAR(256) DEFAULT NULL COMMENT '现地址',
+    `school_type`           VARCHAR(64)  DEFAULT NULL COMMENT '学校类型',
+    `school_name`           VARCHAR(128) DEFAULT NULL COMMENT '学校名称',
+    `class_name`            VARCHAR(128) DEFAULT NULL COMMENT '班级（院系）',
+    `tb_history`            VARCHAR(64)  DEFAULT NULL COMMENT '既往结核病史',
+    `close_contact_history` VARCHAR(64)  DEFAULT NULL COMMENT '密切接触史',
+    `suspicious_symptoms`   VARCHAR(128) DEFAULT NULL COMMENT '结核病可疑症状',
+    `has_infection_screen`  VARCHAR(10)  DEFAULT NULL COMMENT '是否进行感染筛',
+    `screen_date`           DATE         DEFAULT NULL COMMENT '感染筛查日期',
+    `screen_method`         VARCHAR(64)  DEFAULT NULL COMMENT '方法',
+    `screen_result`         VARCHAR(128) DEFAULT NULL COMMENT '结果（PPD/EC/IGRA）',
+    `infection_result`      VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
+    `has_chest_xray`        VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
+    `chest_xray_date`       DATE         DEFAULT NULL COMMENT '胸片检查日期',
+    `chest_xray_result`     VARCHAR(128) DEFAULT NULL COMMENT '胸片结果',
+    `sputum_smear`          VARCHAR(64)  DEFAULT NULL COMMENT '痰涂片',
+    `molecular_biology`     VARCHAR(64)  DEFAULT NULL COMMENT '分子生物学',
+    `diagnosis_result`      VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
+    `preventive_treatment`  VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗（方案或原因）',
+    `remark`                TEXT         DEFAULT NULL COMMENT '备注',
+    `is_latent`             TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
+    `upload_batch`          VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `create_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`               TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_id_number` (`id_number`),
+    KEY `idx_school` (`school_name`, `district`),
+    KEY `idx_latent` (`is_latent`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学校人群筛查数据表';
+
+-- ==================== 重点人群筛查表 ====================
+
+CREATE TABLE IF NOT EXISTS `screening_key_population` (
+    `id`                       BIGINT       NOT NULL AUTO_INCREMENT,
+    `year`                     VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `city`                     VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
+    `district`                 VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
+    `name`                     VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
+    `gender`                   VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`               DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                      INT          DEFAULT NULL COMMENT '年龄',
+    `id_type`                  VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
+    `id_number`                VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
+    `ethnicity`                VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `phone`                    VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `household_address`        VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
+    `current_address`          VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `crowd_category`           VARCHAR(256) DEFAULT NULL COMMENT '人群分类（可多选，逗号分隔）',
+    `has_suspicious_symptoms`  VARCHAR(10)  DEFAULT NULL COMMENT '是否有可疑症状',
+    `cough`                    VARCHAR(10)  DEFAULT NULL COMMENT '咳嗽咳痰',
+    `hemoptysis`               VARCHAR(10)  DEFAULT NULL COMMENT '咯血或血痰',
+    `fever`                    VARCHAR(10)  DEFAULT NULL COMMENT '发热',
+    `chest_pain`               VARCHAR(10)  DEFAULT NULL COMMENT '胸痛',
+    `night_sweats`             VARCHAR(10)  DEFAULT NULL COMMENT '夜间盗汗',
+    `appetite_loss`            VARCHAR(10)  DEFAULT NULL COMMENT '食欲不振',
+    `fatigue`                  VARCHAR(10)  DEFAULT NULL COMMENT '乏力',
+    `weight_loss`              VARCHAR(10)  DEFAULT NULL COMMENT '体重减轻',
+    `has_infection_screen`     VARCHAR(10)  DEFAULT NULL COMMENT '是否进行感染筛',
+    `screen_date`              DATE         DEFAULT NULL COMMENT '感染筛查日期',
+    `screen_method1`           VARCHAR(64)  DEFAULT NULL COMMENT '方法1',
+    `screen_method2`           VARCHAR(64)  DEFAULT NULL COMMENT '方法2',
+    `screen_result`            VARCHAR(128) DEFAULT NULL COMMENT '结果（PPD/EC/IGRA）',
+    `infection_result`         VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
+    `has_chest_xray`           VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
+    `chest_xray_date`          DATE         DEFAULT NULL COMMENT '胸片检查日期',
+    `chest_xray_result`        VARCHAR(128) DEFAULT NULL COMMENT '胸片结果',
+    `result_judgment`          VARCHAR(128) DEFAULT NULL COMMENT '结果判定',
+    `is_referred`              VARCHAR(10)  DEFAULT NULL COMMENT '是否转诊到定点医疗机构',
+    `diagnosis_result`         VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
+    `is_eligible_preventive`   VARCHAR(10)  DEFAULT NULL COMMENT '是否符合预防性治疗',
+    `has_preventive_treatment` VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
+    `completed_preventive`     VARCHAR(10)  DEFAULT NULL COMMENT '是否规范完成预防性治疗',
+    `remark`                   TEXT         DEFAULT NULL COMMENT '备注',
+    `is_latent`                TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者',
+    `upload_batch`             VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `create_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                  TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_id_number` (`id_number`),
+    KEY `idx_latent` (`is_latent`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='重点人群筛查数据表';
+
+-- ==================== 密接人群筛查表 ====================
+
+CREATE TABLE IF NOT EXISTS `screening_close_contact` (
+    `id`                          BIGINT       NOT NULL AUTO_INCREMENT,
+    `year`                        VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `city`                        VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
+    `district`                    VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
+    `name`                        VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
+    `gender`                      VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`                  DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                         INT          DEFAULT NULL COMMENT '年龄',
+    `id_type`                     VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
+    `id_number`                   VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
+    `ethnicity`                   VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `occupation`                  VARCHAR(64)  DEFAULT NULL COMMENT '职业',
+    `phone`                       VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `household_address`           VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
+    `current_address`             VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `contact_type`                VARCHAR(32)  DEFAULT NULL COMMENT '接触类型：家庭内/家庭外',
+    `source_patient_name`         VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
+    `source_patient_confirm_date` DATE         DEFAULT NULL COMMENT '原患者确诊日期',
+    `source_patient_id_number`    VARCHAR(64)  DEFAULT NULL COMMENT '原患者身份证号',
+    `first_screen_date`           DATE         DEFAULT NULL COMMENT '首次筛查日期',
+    `first_symptom_result`        VARCHAR(128) DEFAULT NULL COMMENT '首次症状筛查结果',
+    `half_year_screen_date`       DATE         DEFAULT NULL COMMENT '半年后筛查日期',
+    `half_year_symptom_result`    VARCHAR(128) DEFAULT NULL COMMENT '半年后症状筛查结果',
+    `one_year_screen_date`        DATE         DEFAULT NULL COMMENT '一年后筛查日期',
+    `one_year_symptom_result`     VARCHAR(128) DEFAULT NULL COMMENT '一年后症状筛查结果',
+    `infection_screen_date`       DATE         DEFAULT NULL COMMENT '感染检查筛查日期',
+    `infection_method`            VARCHAR(64)  DEFAULT NULL COMMENT '感染检查方法',
+    `screen_result`               VARCHAR(128) DEFAULT NULL COMMENT '结果（PPD/EC/IGRA）',
+    `infection_result`            VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
+    `has_chest_xray`              VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
+    `chest_xray_date`             DATE         DEFAULT NULL COMMENT '胸片检查日期',
+    `chest_xray_result`           VARCHAR(128) DEFAULT NULL COMMENT '胸片检查结果',
+    `first_screening_result`      VARCHAR(128) DEFAULT NULL COMMENT '筛查结果-首次',
+    `half_year_screening_result`  VARCHAR(128) DEFAULT NULL COMMENT '筛查结果-半年后',
+    `one_year_screening_result`   VARCHAR(128) DEFAULT NULL COMMENT '筛查结果-一年后',
+    `diagnosis_result`            VARCHAR(128) DEFAULT NULL COMMENT '定点医疗机构诊断结果',
+    `has_preventive_treatment`    VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
+    `preventive_plan`             VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
+    `preventive_start_date`       DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
+    `preventive_end_date`         DATE         DEFAULT NULL COMMENT '预防性治疗完成时间',
+    `preventive_result`           VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗结果',
+    `preventive_manager`          VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗期间随访管理人员',
+    `benefit_method`              VARCHAR(64)  DEFAULT NULL COMMENT '惠民方式',
+    `remark`                      TEXT         DEFAULT NULL COMMENT '备注',
+    `is_latent`                   TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者',
+    `upload_batch`                VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `create_time`                 DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`                 DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                     TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_id_number` (`id_number`),
+    KEY `idx_latent` (`is_latent`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接人群筛查数据表';
+
+-- ==================== 潜伏感染管理表 ====================
+
+CREATE TABLE IF NOT EXISTS `latent_infection` (
+    `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
+    `screening_id`        BIGINT       NOT NULL COMMENT '关联筛查数据ID',
+    `population_type`     VARCHAR(32)  NOT NULL COMMENT '人群类型：school/keyPopulation/closeContact',
+    `name`                VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
+    `id_number`           VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
+    `gender`              VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `age`                 INT          DEFAULT NULL COMMENT '年龄',
+    `phone`               VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `infection_result`    VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
+    `tracking_status`     TINYINT      NOT NULL DEFAULT 0 COMMENT '追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束',
+    `not_in_place_count`  INT          NOT NULL DEFAULT 0 COMMENT '未到位次数',
+    `tracking_remark`     TEXT         DEFAULT NULL COMMENT '追踪备注原因',
+    `referral_result`     VARCHAR(32)  DEFAULT NULL COMMENT '转诊结果：excluded/other/confirmed/latent',
+    `referral_remark`     TEXT         DEFAULT NULL COMMENT '转诊备注',
+    `diagnosis_result`    VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果列值',
+    `archived`            TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已归档：0否 1是',
+    `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`             TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_screening` (`screening_id`),
+    KEY `idx_population` (`population_type`),
+    KEY `idx_tracking` (`tracking_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='潜伏感染管理表';
+
+-- ==================== 通知单表（潜伏者/患者通用） ====================
+
+CREATE TABLE IF NOT EXISTS `notice` (
+    `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
+    `notice_type`         VARCHAR(16)  NOT NULL COMMENT '通知单类型：latent=潜伏者通知单 patient=患者通知单',
+    `population_type`     VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `biz_id`              BIGINT       NOT NULL COMMENT '关联业务ID（latent_infection.id 或 patient.id）',
+    `patient_name`        VARCHAR(64)  DEFAULT NULL COMMENT '患者/潜伏者姓名',
+    `current_address`     VARCHAR(256) DEFAULT NULL COMMENT '现居住地址',
+    `household_address`   VARCHAR(256) DEFAULT NULL COMMENT '户籍地址',
+    `id_number`           VARCHAR(64)  DEFAULT NULL COMMENT '身份证',
+    `gender`              VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`          DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                 INT          DEFAULT NULL COMMENT '年龄',
+    `ethnicity`           VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `crowd_category`      VARCHAR(128) DEFAULT NULL COMMENT '人群分类',
+    `treatment_plan`      VARCHAR(256) DEFAULT NULL COMMENT '治疗方案',
+    `custom_plan_detail`  TEXT         DEFAULT NULL COMMENT '个体化方案详情',
+    `sender_id`           BIGINT       NOT NULL COMMENT '发送人ID（4级）',
+    `receiver_org_id`     BIGINT       DEFAULT NULL COMMENT '接收单位ID（5级）',
+    `status`              TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1已发送 2已确认',
+    `sent_time`           DATETIME     DEFAULT NULL COMMENT '发送时间',
+    `confirmed_time`      DATETIME     DEFAULT NULL COMMENT '确认接收时间',
+    `timeout_notified`    TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已发送超时提醒',
+    `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`             TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_biz` (`biz_id`, `notice_type`),
+    KEY `idx_status` (`status`, `sent_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知单表';
+
+-- ==================== 督导表 ====================
+
+CREATE TABLE IF NOT EXISTS `supervision_form` (
+    `id`                     BIGINT       NOT NULL AUTO_INCREMENT,
+    `latent_infection_id`    BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
+    `population_type`        VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `patient_name`           VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
+    `treatment_start_date`   DATE         DEFAULT NULL COMMENT '治疗开始日期',
+    `treatment_plan`         VARCHAR(256) DEFAULT NULL COMMENT '治疗方案',
+    `supervision_content`    TEXT         DEFAULT NULL COMMENT '督导内容（JSON格式存储表单数据）',
+    `filled_by`              BIGINT       DEFAULT NULL COMMENT '填写人ID',
+    `status`                 TINYINT      NOT NULL DEFAULT 0 COMMENT '状态：0未填写 1已填写 2已归档',
+    `archived_time`          DATETIME     DEFAULT NULL COMMENT '归档时间',
+    `create_time`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_latent` (`latent_infection_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性治疗督导表';
+
+-- ==================== 患者管理表 ====================
+
+CREATE TABLE IF NOT EXISTS `patient` (
+    `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
+    `screening_id`        BIGINT       DEFAULT NULL COMMENT '关联筛查数据ID',
+    `latent_infection_id` BIGINT       DEFAULT NULL COMMENT '关联潜伏感染ID（确诊来源）',
+    `population_type`     VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `name`                VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
+    `gender`              VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`          DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                 INT          DEFAULT NULL COMMENT '年龄',
+    `id_type`             VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
+    `id_number`           VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
+    `ethnicity`           VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `phone`               VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `household_address`   VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
+    `current_address`     VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `diagnosis_result`    VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
+    `source`              VARCHAR(32)  NOT NULL DEFAULT 'confirmed' COMMENT '来源：confirmed=转诊确诊 epidemic=大疫情导入',
+    `archived`            TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已归档（历史患者）',
+    `archived_time`       DATETIME     DEFAULT NULL COMMENT '归档时间',
+    `epidemic_data`       JSON         DEFAULT NULL COMMENT '大疫情表额外字段（JSON）',
+    `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`             TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_id_number` (`id_number`),
+    KEY `idx_population` (`population_type`, `archived`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='患者管理表';
+
+-- ==================== 首次入户随访记录表 ====================
+
+CREATE TABLE IF NOT EXISTS `first_visit` (
+    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `patient_id`            BIGINT       NOT NULL COMMENT '关联患者ID',
+    `population_type`       VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `visit_date`            DATE         DEFAULT NULL COMMENT '随访日期',
+    `visit_content`         TEXT         DEFAULT NULL COMMENT '随访内容（JSON格式）',
+    `filled_by`             BIGINT       DEFAULT NULL COMMENT '填写人ID',
+    `create_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`               TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_patient` (`patient_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='首次入户随访记录表';
+
+-- ==================== 后续随访记录表 ====================
+
+CREATE TABLE IF NOT EXISTS `follow_up_visit` (
+    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `patient_id`            BIGINT       NOT NULL COMMENT '关联患者ID',
+    `population_type`       VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `visit_date`            DATE         DEFAULT NULL COMMENT '随访日期',
+    `visit_content`         TEXT         DEFAULT NULL COMMENT '随访内容（JSON格式）',
+    `filled_by`             BIGINT       DEFAULT NULL COMMENT '填写人ID',
+    `create_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`               TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_patient` (`patient_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后续随访记录表';
+
+-- ==================== 服药管理表 ====================
+
+CREATE TABLE IF NOT EXISTS `medication_management` (
+    `id`                      BIGINT       NOT NULL AUTO_INCREMENT,
+    `patient_id`              BIGINT       NOT NULL COMMENT '关联患者ID',
+    `population_type`         VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `management_method`       VARCHAR(32)  DEFAULT NULL COMMENT '管理方式',
+    `supervisor`              VARCHAR(32)  DEFAULT NULL COMMENT '督导人员',
+    `sputum_result`           VARCHAR(32)  DEFAULT NULL COMMENT '治疗前痰菌检查结果',
+    `medication_records`      JSON         DEFAULT NULL COMMENT '每日服药记录（JSON：{日期:是否服药}）',
+    `stop_date`               DATE         DEFAULT NULL COMMENT '停止完成时间',
+    `create_time`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                 TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_patient` (`patient_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服药管理表';
+
+-- ==================== 大疫情导入表 ====================
+
+CREATE TABLE IF NOT EXISTS `epidemic_report` (
+    `id`                BIGINT       NOT NULL AUTO_INCREMENT,
+    `population_type`   VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `patient_id`        BIGINT       DEFAULT NULL COMMENT '匹配到的患者ID',
+    `raw_data`          JSON         NOT NULL COMMENT '原始导入数据（JSON）',
+    `matched`           TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已匹配',
+    `upload_batch`      VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `create_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`           TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_patient` (`patient_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='大疫情导入数据表';
+
+-- ==================== 权限表 ====================
+
+CREATE TABLE IF NOT EXISTS `permission` (
+    `id`        BIGINT       NOT NULL AUTO_INCREMENT,
+    `code`      VARCHAR(128) NOT NULL COMMENT '权限编码',
+    `name`      VARCHAR(128) NOT NULL COMMENT '权限名称',
+    `type`      TINYINT      NOT NULL COMMENT '类型：1=菜单 2=按钮/操作',
+    `parent_id` BIGINT       NOT NULL DEFAULT 0 COMMENT '父权限ID，0为顶级',
+    `sort`      INT          NOT NULL DEFAULT 0 COMMENT '排序号',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限表';
+
+-- ==================== 角色-权限关联表 ====================
+
+CREATE TABLE IF NOT EXISTS `role_permission` (
+    `id`            BIGINT  NOT NULL AUTO_INCREMENT,
+    `role`          TINYINT NOT NULL COMMENT '角色编号：1-6',
+    `permission_id` BIGINT  NOT NULL COMMENT '权限ID',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_role_perm` (`role`, `permission_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色权限关联表';
+
+-- ==================== 初始化权限数据 ====================
+
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+-- 一级菜单
+(1,  'school',          '学校人群',   1, 0, 1),
+(2,  'keyPopulation',   '重点人群',   1, 0, 2),
+(3,  'closeContact',    '密接人群',   1, 0, 3),
+(4,  'statistics',      '统计分析',   1, 0, 4),
+(5,  'message',         '系统消息',   1, 0, 5),
+(6,  'system',          '系统管理',   1, 0, 6),
+-- 学校人群子菜单
+(10, 'school:screening',        '筛查管理',     1, 1, 1),
+(11, 'school:latent',           '潜伏感染',     1, 1, 2),
+(12, 'school:patient',          '患者管理',     1, 1, 3),
+(13, 'school:history',          '历史患者',     1, 1, 4),
+-- 重点人群子菜单
+(20, 'keyPopulation:screening', '筛查管理',     1, 2, 1),
+(21, 'keyPopulation:latent',    '潜伏感染',     1, 2, 2),
+(22, 'keyPopulation:patient',   '患者管理',     1, 2, 3),
+(23, 'keyPopulation:history',   '历史患者',     1, 2, 4),
+-- 密接人群子菜单
+(30, 'closeContact:screening',  '筛查管理',     1, 3, 1),
+(31, 'closeContact:latent',     '潜伏感染',     1, 3, 2),
+(32, 'closeContact:patient',    '患者管理',     1, 3, 3),
+(33, 'closeContact:history',    '历史患者',     1, 3, 4),
+-- 系统管理子菜单
+(60, 'system:users',            '用户管理',     1, 6, 1),
+(61, 'system:permissions',      '权限管理',     1, 6, 2),
+-- 筛查操作按钮
+(100, 'screening:upload',       '上传筛查数据', 2, 0, 1),
+-- 潜伏感染操作按钮
+(110, 'latent:track',           '追踪',         2, 0, 2),
+(111, 'latent:referral',        '转诊',         2, 0, 3),
+(112, 'latent:sendNotice',      '发送潜伏者通知单', 2, 0, 4),
+(113, 'latent:confirmNotice',   '确认接收通知单',   2, 0, 5),
+(114, 'latent:supervision',     '填写督导表',       2, 0, 6),
+-- 患者管理操作按钮
+(120, 'patient:importEpidemic', '导入大疫情表',     2, 0, 7),
+(121, 'patient:sendNotice',     '发送患者通知单',   2, 0, 8),
+(122, 'patient:confirmNotice',  '确认接收患者通知单', 2, 0, 9),
+(123, 'patient:firstVisit',     '首次随访',         2, 0, 10),
+(124, 'patient:followUp',       '后续随访',         2, 0, 11),
+(125, 'patient:medication',     '服药管理',         2, 0, 12),
+-- 统计操作
+(130, 'statistics:export',      '导出统计',         2, 0, 13),
+-- 用户管理操作
+(140, 'user:create',            '创建用户',         2, 0, 14),
+(141, 'user:edit',              '编辑用户',         2, 0, 15),
+(142, 'user:delete',            '删除用户',         2, 0, 16),
+(143, 'permission:assign',      '分配权限',         2, 0, 17);
+
+-- ==================== 默认角色权限分配 ====================
+-- 超级管理员(1)：全部权限
+INSERT INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission`;
+
+-- 一级(2)：除系统管理外所有菜单 + 所有业务操作
+INSERT INTO `role_permission` (`role`, `permission_id`)
+SELECT 2, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign');
+
+-- 二级(3)：同一级
+INSERT INTO `role_permission` (`role`, `permission_id`)
+SELECT 3, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign');
+
+-- 三级(4)：所有业务菜单 + 大部分操作（不含导出统计）
+INSERT INTO `role_permission` (`role`, `permission_id`)
+SELECT 4, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign', 'statistics:export');
+
+-- 四级(5)：业务菜单 + 发送通知单/追踪/转诊/督导/随访/服药/上传
+INSERT INTO `role_permission` (`role`, `permission_id`)
+SELECT 5, `id` FROM `permission` WHERE `code` IN (
+  'school','keyPopulation','closeContact','statistics','message',
+  'school:screening','school:latent','school:patient','school:history',
+  'keyPopulation:screening','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
+  'closeContact:screening','closeContact:latent','closeContact:patient','closeContact:history',
+  'screening:upload','latent:track','latent:referral','latent:sendNotice','latent:supervision',
+  'patient:importEpidemic','patient:sendNotice','patient:firstVisit','patient:followUp','patient:medication'
+);
+
+-- 五级(6)：业务菜单 + 确认通知单/随访/督导
+INSERT INTO `role_permission` (`role`, `permission_id`)
+SELECT 6, `id` FROM `permission` WHERE `code` IN (
+  'school','keyPopulation','closeContact','message',
+  'school:screening','school:latent','school:patient','school:history',
+  'keyPopulation:screening','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
+  'closeContact:screening','closeContact:latent','closeContact:patient','closeContact:history',
+  'latent:confirmNotice','latent:supervision','patient:confirmNotice','patient:firstVisit','patient:followUp','patient:medication'
+);

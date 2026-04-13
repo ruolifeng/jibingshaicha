@@ -1,0 +1,99 @@
+import { getCurrentUserApi } from "@@/apis/users"
+import { setToken as _setToken, getToken, removeToken } from "@@/utils/cache/cookies"
+import { pinia } from "@/pinia"
+import { resetRouter } from "@/router"
+import { routerConfig } from "@/router/config"
+import { useSettingsStore } from "./settings"
+import { useTagsViewStore } from "./tags-view"
+
+export const useUserStore = defineStore("user", () => {
+  const token = ref<string>(getToken() || "")
+
+  const roles = ref<string[]>([])
+
+  const username = ref<string>("")
+
+  const realName = ref<string>("")
+
+  const userRole = ref<number>(0)
+
+  const roleName = ref<string>("")
+
+  const orgName = ref<string>("")
+
+  const userId = ref<number>(0)
+
+  const permissions = ref<string[]>([])
+
+  const tagsViewStore = useTagsViewStore()
+
+  const settingsStore = useSettingsStore()
+
+  // 设置 Token
+  const setToken = (value: string) => {
+    _setToken(value)
+    token.value = value
+  }
+
+  // 获取用户详情
+  const getInfo = async () => {
+    const { data } = await getCurrentUserApi()
+    username.value = data.username
+    realName.value = data.realName || ""
+    userRole.value = data.role || 0
+    roleName.value = data.roleName || ""
+    orgName.value = data.orgName || ""
+    userId.value = data.id || 0
+    permissions.value = data.permissions || []
+    roles.value = data.roles?.length > 0 ? data.roles : routerConfig.defaultRoles
+  }
+
+  // 模拟角色变化
+  const changeRoles = (role: string) => {
+    const newToken = `token-${role}`
+    token.value = newToken
+    _setToken(newToken)
+    // 用刷新页面代替重新登录
+    location.reload()
+  }
+
+  // 登出
+  const logout = () => {
+    removeToken()
+    token.value = ""
+    roles.value = []
+    resetRouter()
+    resetTagsView()
+  }
+
+  // 重置 Token
+  const resetToken = () => {
+    removeToken()
+    token.value = ""
+    roles.value = []
+  }
+
+  // 重置 Visited Views 和 Cached Views
+  const resetTagsView = () => {
+    if (!settingsStore.cacheTagsView) {
+      tagsViewStore.delAllVisitedViews()
+      tagsViewStore.delAllCachedViews()
+    }
+  }
+
+  /** 检查当前用户是否拥有指定权限 */
+  const hasPermission = (code: string) => {
+    if (userRole.value === 1) return true
+    return permissions.value.includes(code)
+  }
+
+  return { token, roles, username, realName, userRole, roleName, orgName, userId, permissions, hasPermission, setToken, getInfo, changeRoles, logout, resetToken }
+})
+
+/**
+ * @description 在 SPA 应用中可用于在 pinia 实例被激活前使用 store
+ * @description 在 SSR 应用中可用于在 setup 外使用 store
+ */
+export function useUserStoreOutside() {
+  return useUserStore(pinia)
+}
