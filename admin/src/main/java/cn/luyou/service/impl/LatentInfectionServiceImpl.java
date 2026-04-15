@@ -81,6 +81,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     entity.setTrackingStatus(4); // 强制结束
                     entity.setTrackingRemark(remark);
                     entity.setArchived(1);
+                    entity.setArchivedTime(LocalDateTime.now());
                 } else {
                     entity.setTrackingStatus(2);
                 }
@@ -90,6 +91,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 entity.setTrackingStatus(3);
                 entity.setTrackingRemark(remark);
                 entity.setArchived(1);
+                entity.setArchivedTime(LocalDateTime.now());
             }
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的追踪状态");
         }
@@ -220,11 +222,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             String idNumber = getStrCell(row, 9); // 证件号列
             if (StrUtil.isBlank(idNumber)) continue;
 
-            // 按证件号+人群类型查找潜伏感染记录
             LatentInfection entity = lambdaQuery()
                     .eq(LatentInfection::getIdNumber, idNumber)
                     .eq(LatentInfection::getPopulationType, populationType)
                     .eq(LatentInfection::getArchived, 0)
+                    .last("LIMIT 1")
                     .one();
             if (entity == null || !Integer.valueOf(1).equals(entity.getTrackingStatus())) continue;
             if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) continue;
@@ -239,10 +241,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     entity.setChestXrayDate(LocalDate.parse(xrayDateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd")));
                 } catch (Exception ignored) { /* 日期格式容错 */ }
             }
-            entity.setChestXrayResult(getStrCell(row, 2));
+            String xrayResult = getStrCell(row, 2);
+            entity.setChestXrayResult(xrayResult);
             entity.setDiagnosisFirst(diagnosisFirst);
             entity.setDiagnosisResult(diagnosisFirst);
             updateById(entity);
+            writeBackXrayToScreening(entity, entity.getHasChestXray(),
+                    entity.getChestXrayDate(), xrayResult, diagnosisFirst);
             updated++;
         }
         log.info("批量导入胸片诊断，populationType={}，成功更新 {} 条", populationType, updated);
@@ -273,15 +278,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             case "excluded" -> {
                 entity.setDiagnosisResult("排除");
                 entity.setArchived(1);
+                entity.setArchivedTime(LocalDateTime.now());
             }
             case "other" -> {
                 entity.setDiagnosisResult("其他");
                 entity.setArchived(1);
+                entity.setArchivedTime(LocalDateTime.now());
             }
             case "confirmed", "suspected" -> {
-                // 确诊患者 / 疑似肺结核 → 进入患者管理
                 entity.setDiagnosisResult("confirmed".equals(result) ? "确诊患者" : "疑似肺结核");
-                Patient patient = Patient.builder()
+                Patient.PatientBuilder pb = Patient.builder()
                         .screeningId(entity.getScreeningId())
                         .latentInfectionId(entity.getId())
                         .populationType(entity.getPopulationType())
@@ -292,9 +298,37 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .phone(entity.getPhone())
                         .diagnosisResult(entity.getDiagnosisResult())
                         .source("confirmed")
-                        .archived(0)
-                        .build();
-                patientService.save(patient);
+                        .archived(0);
+                // 从筛查表补全患者档案字段
+                String popType = entity.getPopulationType();
+                if ("school".equals(popType) && entity.getScreeningId() != null) {
+                    ScreeningSchool s = screeningSchoolMapper.selectById(entity.getScreeningId());
+                    if (s != null) {
+                        pb.birthDate(s.getBirthDate()).idType(s.getIdType())
+                          .ethnicity(s.getEthnicity())
+                          .householdAddress(s.getHouseholdAddress())
+                          .currentAddress(s.getCurrentAddress());
+                    }
+                } else if ("keyPopulation".equals(popType) && entity.getScreeningId() != null) {
+                    ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(entity.getScreeningId());
+                    if (k != null) {
+                        pb.birthDate(k.getBirthDate()).idType(k.getIdType())
+                          .ethnicity(k.getEthnicity())
+                          .householdAddress(k.getHouseholdAddress())
+                          .currentAddress(k.getCurrentAddress());
+                    }
+                } else if ("closeContact".equals(popType) && entity.getScreeningId() != null) {
+                    ScreeningCloseContact c = screeningCloseContactMapper.selectById(entity.getScreeningId());
+                    if (c != null) {
+                        pb.birthDate(c.getBirthDate()).idType(c.getIdType())
+                          .ethnicity(c.getEthnicity())
+                          .householdAddress(c.getHouseholdAddress())
+                          .currentAddress(c.getCurrentAddress());
+                    }
+                }
+                patientService.save(pb.build());
+                entity.setArchived(1);
+                entity.setArchivedTime(LocalDateTime.now());
             }
             case "latent" -> entity.setDiagnosisResult("潜伏感染者");
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的转诊结果");

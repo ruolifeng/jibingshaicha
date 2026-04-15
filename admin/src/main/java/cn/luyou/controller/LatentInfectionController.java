@@ -1,5 +1,7 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.LatentCheck;
@@ -44,6 +46,9 @@ public class LatentInfectionController {
     @Operation(summary = "追踪操作")
     @PostMapping("/track")
     public ResultResponse<Void> track(@RequestBody Map<String, Object> body) {
+        if (body.get("id") == null || body.get("status") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 status");
+        }
         Long id = Long.valueOf(body.get("id").toString());
         Integer status = Integer.valueOf(body.get("status").toString());
         String remark = body.getOrDefault("remark", "").toString();
@@ -56,6 +61,9 @@ public class LatentInfectionController {
     @Operation(summary = "手动录入胸片检查与首次诊断结果（V4 追踪到位后步骤）")
     @PostMapping("/xray")
     public ResultResponse<Void> saveXray(@RequestBody Map<String, Object> body) {
+        if (body.get("id") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id");
+        }
         Long id = Long.valueOf(body.get("id").toString());
         latentInfectionService.saveXrayAndDiagnosis(id, body);
         return ResultRes.success(null);
@@ -73,6 +81,9 @@ public class LatentInfectionController {
     @Operation(summary = "转诊操作")
     @PostMapping("/referral")
     public ResultResponse<Void> referral(@RequestBody Map<String, Object> body) {
+        if (body.get("id") == null || body.get("result") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 result");
+        }
         Long id = Long.valueOf(body.get("id").toString());
         String result = body.get("result").toString();
         String remark = body.getOrDefault("remark", "").toString();
@@ -85,6 +96,9 @@ public class LatentInfectionController {
     @Operation(summary = "设置服药状态")
     @PostMapping("/medication-status")
     public ResultResponse<Void> setMedicationStatus(@RequestBody Map<String, Object> body) {
+        if (body.get("id") == null || body.get("medicationStatus") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 medicationStatus");
+        }
         Long id = Long.valueOf(body.get("id").toString());
         Integer medicationStatus = Integer.valueOf(body.get("medicationStatus").toString());
         latentInfectionService.setMedicationStatus(id, medicationStatus);

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { getPatientHistoryApi } from "./apis"
+import { getPatientHistoryApi, getPatientHistoryStatsApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -10,15 +10,20 @@ const total = ref(0)
 
 const searchForm = reactive({ name: "", idNumber: "" })
 
-const statistics = computed(() => {
-  const allData = tableData.value
-  const totalCount = total.value
-  const confirmedCount = allData.filter((d: any) => d.source === "confirmed").length
-  const epidemicCount = allData.filter((d: any) => d.source === "epidemic").length
-  const maleCount = allData.filter((d: any) => d.gender === "男").length
-  const femaleCount = allData.filter((d: any) => d.gender === "女").length
-  return { totalCount, confirmedCount, epidemicCount, maleCount, femaleCount }
-})
+const statistics = ref({ totalCount: 0, confirmedCount: 0, epidemicCount: 0, maleCount: 0, femaleCount: 0 })
+
+async function fetchStats() {
+  try {
+    const { data } = await getPatientHistoryStatsApi("school")
+    statistics.value = {
+      totalCount: data.totalCount || 0,
+      confirmedCount: data.confirmedCount || 0,
+      epidemicCount: data.epidemicCount || 0,
+      maleCount: data.maleCount || 0,
+      femaleCount: data.femaleCount || 0
+    }
+  } catch { /* handled */ }
+}
 
 async function fetchData() {
   loading.value = true
@@ -35,6 +40,8 @@ async function fetchData() {
     loading.value = false
   }
 }
+
+onMounted(() => { fetchStats() })
 
 function handleSearch() {
   paginationData.currentPage = 1

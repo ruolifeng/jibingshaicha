@@ -126,6 +126,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-table-column prop="contactType" label="接触类型" />
         <el-table-column prop="sourcePatientName" label="原患者姓名" />
         <el-table-column prop="sourcePatientConfirmDate" label="原患者确诊日期" />
+        <el-table-column prop="sourcePatientIdNumber" label="原患者身份证号" />
 
         <!-- 三轮感染筛查摘要 -->
         <el-table-column label="首次感染结果">
@@ -206,6 +207,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-descriptions-item label="接触类型">{{ detailRow.contactType }}</el-descriptions-item>
         <el-descriptions-item label="原患者姓名">{{ detailRow.sourcePatientName }}</el-descriptions-item>
         <el-descriptions-item label="原患者确诊日期">{{ detailRow.sourcePatientConfirmDate }}</el-descriptions-item>
+        <el-descriptions-item label="原患者身份证号">{{ detailRow.sourcePatientIdNumber }}</el-descriptions-item>
         <el-descriptions-item label="户籍地址" :span="2">{{ detailRow.householdAddress }}</el-descriptions-item>
         <el-descriptions-item label="现住址" :span="2">{{ detailRow.currentAddress }}</el-descriptions-item>
       </el-descriptions>

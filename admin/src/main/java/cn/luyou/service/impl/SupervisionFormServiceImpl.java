@@ -89,6 +89,7 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             case "closeContact" -> {
                 ScreeningCloseContact c = screeningCloseContactMapper.selectById(screeningId);
                 if (c != null) {
+                    c.setHasPreventiveTreatment("是");
                     c.setPreventivePlan(form.getTreatmentPlan());
                     c.setPreventiveStartDate(form.getTreatmentStartDate());
                     c.setPreventiveEndDate(form.getTreatmentEndDate());

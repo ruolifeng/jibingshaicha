@@ -18,7 +18,7 @@ export const TREATMENT_PLAN_OPTIONS = [
   "2HRZES/6HRE",
   "FDC-2HRZE/10HRE",
   "2HRZE/10HRE",
-  "其它"
+  "个体化方案"
 ]
 
 /** 追踪状态 */

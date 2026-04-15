@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
@@ -12,7 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "患者管理")
 @RestController
@@ -47,6 +50,22 @@ public class PatientController {
         return ResultRes.success(patientService.queryHistoryPage(page, size, populationType, name, idNumber));
     }
 
+    @Operation(summary = "历史患者统计汇总")
+    @GetMapping("/history/stats")
+    public ResultResponse<Map<String, Long>> historyStats(@RequestParam String populationType) {
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Patient::getArchived, 1)
+               .eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType);
+        List<Patient> all = patientService.list(wrapper);
+        Map<String, Long> stats = new HashMap<>();
+        stats.put("totalCount", (long) all.size());
+        stats.put("confirmedCount", all.stream().filter(p -> "confirmed".equals(p.getSource())).count());
+        stats.put("epidemicCount", all.stream().filter(p -> "epidemic".equals(p.getSource())).count());
+        stats.put("maleCount", all.stream().filter(p -> "男".equals(p.getGender())).count());
+        stats.put("femaleCount", all.stream().filter(p -> "女".equals(p.getGender())).count());
+        return ResultRes.success(stats);
+    }
+
     @Operation(summary = "导入大疫情表")
     @PostMapping("/import-epidemic")
     public ResultResponse<Integer> importEpidemic(
@@ -68,7 +87,7 @@ public class PatientController {
     @Operation(summary = "保存首次随访")
     @PostMapping("/first-visit/save")
     public ResultResponse<Void> saveFirstVisit(@RequestBody FirstVisit firstVisit) {
-        firstVisitService.save(firstVisit);
+        firstVisitService.saveOrUpdate(firstVisit);
         return ResultRes.success(null);
     }
 
@@ -85,6 +104,7 @@ public class PatientController {
     @Operation(summary = "保存后续随访")
     @PostMapping("/follow-up/save")
     public ResultResponse<Void> saveFollowUp(@RequestBody FollowUpVisit followUpVisit) {
+        followUpVisit.setId(null);
         followUpVisitService.save(followUpVisit);
         return ResultRes.success(null);
     }

@@ -43,7 +43,12 @@ public class VisitTimeoutTask {
             fvWrapper.eq(FirstVisit::getPatientId, notice.getBizId());
             long count = firstVisitService.count(fvWrapper);
 
-            if (count == 0 && notice.getReceiverOrgId() != null) {
+            if (count > 0) {
+                notice.setVisitTimeoutNotified(1);
+                noticeService.updateById(notice);
+                continue;
+            }
+            if (notice.getReceiverOrgId() != null) {
                 sysMessageService.sendMessage(
                         notice.getReceiverOrgId(),
                         "首次随访填写提醒",
@@ -51,10 +56,9 @@ public class VisitTimeoutTask {
                         "visit_timeout",
                         notice.getBizId()
                 );
-                // 标记已提醒，防止重复推送
-                notice.setVisitTimeoutNotified(1);
-                noticeService.updateById(notice);
             }
+            notice.setVisitTimeoutNotified(1);
+            noticeService.updateById(notice);
         }
     }
 }

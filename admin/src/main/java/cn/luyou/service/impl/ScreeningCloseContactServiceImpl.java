@@ -30,11 +30,11 @@ import java.util.List;
  * 密接人群筛查 Service（V4 三轮判定逻辑）
  *
  * 三轮判定规则：
- *  1. 首次感染结果阳性 → is_latent=1, active_round=1, infectionResult=首次感染筛查结果
+ *  1. 首次感染结果阳性 → is_latent=1, active_round=1
  *  2. 首次阴性，半年后阳性 → is_latent=1, active_round=2
  *  3. 首次、半年后均阴，一年后阳性 → is_latent=1, active_round=3
- *  4. 三轮均阴性 → is_latent=0, archived=1（直接归档）
- *  5. 部分轮为空（数据尚未录全） → is_latent=0, archived=0（暂存，等待后续录入）
+ *  4. 三轮均阴性 → is_latent=0（筛查记录保留供统计，不创建潜伏感染记录）
+ *  5. 部分轮为空（数据尚未录全） → is_latent=0（暂存，等待后续录入）
  */
 @Slf4j
 @Service
@@ -185,11 +185,15 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             existing.setOneYearDiagnosis(incoming.getOneYearDiagnosis());
         }
         // 预防治疗管理情况
+        if (StrUtil.isNotBlank(incoming.getHasPreventiveTreatment())) existing.setHasPreventiveTreatment(incoming.getHasPreventiveTreatment());
         if (StrUtil.isNotBlank(incoming.getPreventivePlan())) existing.setPreventivePlan(incoming.getPreventivePlan());
         if (incoming.getPreventiveStartDate() != null) existing.setPreventiveStartDate(incoming.getPreventiveStartDate());
         if (incoming.getPreventiveEndDate() != null) existing.setPreventiveEndDate(incoming.getPreventiveEndDate());
         if (StrUtil.isNotBlank(incoming.getPreventiveResult())) existing.setPreventiveResult(incoming.getPreventiveResult());
         if (StrUtil.isNotBlank(incoming.getPreventiveManager())) existing.setPreventiveManager(incoming.getPreventiveManager());
+        // 惠民方式 + 备注
+        if (StrUtil.isNotBlank(incoming.getBenefitMethod())) existing.setBenefitMethod(incoming.getBenefitMethod());
+        if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
     }
 
     @Override
@@ -205,36 +209,52 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     }
 
     /**
-     * 三轮顺序判定逻辑
+     * 三轮顺序判定逻辑（严格按轮次顺序：首次 → 半年后 → 一年后）
+     * - 首次阳性 → round 1
+     * - 首次阴、半年后阳性 → round 2
+     * - 首次阴、半年后阴、一年后阳性 → round 3
+     * - 三轮均阴 → 归档（isLatent=0）
+     * - 未填满 → 暂存待后续
      */
     private void determineLatecy(ScreeningCloseContact data) {
-        boolean firstFilled   = StrUtil.isNotBlank(data.getFirstInfectionResult());
-        boolean halfFilled    = StrUtil.isNotBlank(data.getHalfYearInfectionResult());
-        boolean oneFilled     = StrUtil.isNotBlank(data.getOneYearInfectionResult());
+        boolean firstFilled = StrUtil.isNotBlank(data.getFirstInfectionResult());
+        boolean halfFilled  = StrUtil.isNotBlank(data.getHalfYearInfectionResult());
+        boolean oneFilled   = StrUtil.isNotBlank(data.getOneYearInfectionResult());
 
-        if (firstFilled && isPositive(data.getFirstInfectionResult())) {
+        // 首次必须先填
+        if (!firstFilled) {
+            data.setIsLatent(0);
+            return;
+        }
+        // 首次阳性 → round 1
+        if (isPositive(data.getFirstInfectionResult())) {
             data.setIsLatent(1);
             data.setActiveRound(1);
             return;
         }
-        if (halfFilled && isPositive(data.getHalfYearInfectionResult())) {
+        // 首次阴性，半年后未填 → 暂存
+        if (!halfFilled) {
+            data.setIsLatent(0);
+            return;
+        }
+        // 首次阴、半年后阳性 → round 2
+        if (isPositive(data.getHalfYearInfectionResult())) {
             data.setIsLatent(1);
             data.setActiveRound(2);
             return;
         }
-        if (oneFilled && isPositive(data.getOneYearInfectionResult())) {
+        // 首次阴、半年后阴、一年后未填 → 暂存
+        if (!oneFilled) {
+            data.setIsLatent(0);
+            return;
+        }
+        // 首次阴、半年后阴、一年后阳性 → round 3
+        if (isPositive(data.getOneYearInfectionResult())) {
             data.setIsLatent(1);
             data.setActiveRound(3);
             return;
         }
-        // 三轮均有结果且均为阴性 → 直接归档
-        if (firstFilled && halfFilled && oneFilled) {
-            data.setIsLatent(0);
-            // 注意：此处仅标记为非潜伏；归档操作在 screening 记录层面；
-            // latent_infection 表不会创建记录。筛查表本身保留供统计
-            return;
-        }
-        // 部分轮为空，暂存等待后续录入
+        // 三轮均阴性 → 归档
         data.setIsLatent(0);
     }
 

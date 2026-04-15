@@ -62,6 +62,8 @@ function handleReset() {
   handleSearch()
 }
 
+const submitting = ref(false)
+
 // ==================== 追踪弹窗 ====================
 const trackDialogVisible = ref(false)
 const trackingRow = ref<any>(null)
@@ -69,10 +71,11 @@ const trackForm = reactive({ status: 1, remark: "" })
 
 function openTrackDialog(row: any) { trackingRow.value = row; trackForm.status = 1; trackForm.remark = ""; trackDialogVisible.value = true }
 async function handleTrack() {
+  if (submitting.value) return; submitting.value = true
   try {
     await trackLatentApi({ id: trackingRow.value.id, status: trackForm.status, remark: trackForm.remark })
     ElMessage.success("操作成功"); trackDialogVisible.value = false; fetchData()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally { submitting.value = false }
 }
 
 // ==================== V4：录入胸片+诊断弹窗 ====================
@@ -88,10 +91,11 @@ function openXrayDialog(row: any) {
 }
 async function handleSubmitXray() {
   if (!xrayForm.diagnosisFirst) { ElMessage.warning("请选择诊断结果"); return }
+  if (submitting.value) return; submitting.value = true
   try {
     await submitXrayApi({ id: xrayRow.value.id, hasChestXray: xrayForm.hasChestXray, chestXrayDate: xrayForm.chestXrayDate || undefined, chestXrayResult: xrayForm.chestXrayResult || undefined, diagnosisFirst: xrayForm.diagnosisFirst })
     ElMessage.success("录入成功"); xrayDialogVisible.value = false; fetchData()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally { submitting.value = false }
 }
 async function handleImportXray(uploadFile: any) {
   xrayImportLoading.value = true
@@ -113,10 +117,11 @@ function openReferralDialog(row: any) {
 }
 async function handleReferral() {
   if (!referralForm.result) { ElMessage.warning("请选择转诊结果"); return }
+  if (submitting.value) return; submitting.value = true
   try {
     await referralLatentApi({ id: referralRow.value.id, result: referralForm.result, remark: referralForm.remark })
     ElMessage.success("操作成功"); referralDialogVisible.value = false; fetchData()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally { submitting.value = false }
 }
 
 // ==================== 通知单弹窗 ====================
@@ -131,10 +136,11 @@ function openNoticeDialog(row: any) {
   noticeDialogVisible.value = true
 }
 async function handleSendNotice() {
+  if (submitting.value) return; submitting.value = true
   try {
-    await sendNoticeApi({ noticeType: "latent", populationType: POPULATION_TYPE, bizId: noticeRow.value.id, patientName: noticeRow.value.name, currentAddress: noticeForm.currentAddress, householdAddress: noticeForm.householdAddress, idNumber: noticeForm.idNumber, gender: noticeForm.gender, birthDate: noticeForm.birthDate, age: noticeForm.age, ethnicity: noticeForm.ethnicity, crowdCategory: noticeForm.crowdCategory, treatmentPlan: noticeForm.treatmentPlan === "其它" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan, receiverOrgId: noticeForm.receiverOrgId, senderId: userStore.userId })
+    await sendNoticeApi({ noticeType: "latent", populationType: POPULATION_TYPE, bizId: noticeRow.value.id, patientName: noticeRow.value.name, currentAddress: noticeForm.currentAddress, householdAddress: noticeForm.householdAddress, idNumber: noticeForm.idNumber, gender: noticeForm.gender, birthDate: noticeForm.birthDate, age: noticeForm.age, ethnicity: noticeForm.ethnicity, crowdCategory: noticeForm.crowdCategory, treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan, receiverOrgId: noticeForm.receiverOrgId, senderId: userStore.userId })
     ElMessage.success("通知单发送成功"); noticeDialogVisible.value = false; fetchData()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally { submitting.value = false }
 }
 
 // ==================== 确认接收通知单 ====================
@@ -165,10 +171,11 @@ function openSupervisionDialog(row: any) {
   supervisionDialogVisible.value = true
 }
 async function handleSaveSupervision() {
+  if (submitting.value) return; submitting.value = true
   try {
     await saveSupervisionApi({ latentInfectionId: supervisionRow.value.id, populationType: POPULATION_TYPE, patientName: supervisionRow.value.name, treatmentStartDate: supervisionForm.treatmentStartDate, treatmentEndDate: supervisionForm.treatmentEndDate || undefined, treatmentPlan: supervisionForm.treatmentPlan, supervisionContent: supervisionForm.supervisionContent, preventiveResult: supervisionForm.preventiveResult || undefined, preventiveManager: supervisionForm.preventiveManager || undefined, status: 2 })
     ElMessage.success("督导表保存成功"); supervisionDialogVisible.value = false; fetchData()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally { submitting.value = false }
 }
 
 const supervisionDetailVisible = ref(false)
@@ -228,7 +235,7 @@ async function openAggregateDialog(row: any) {
   aggregateNotices.value = []; aggregateSupervision.value = null; aggregateFollowUps.value = []; aggregateChecks.value = []
   try {
     const [noticeRes, supervisionRes, followUpRes, checkRes] = await Promise.allSettled([
-      getNoticeListByBizApi({ bizId: row.id, bizType: "latent" }), getSupervisionDetailApi(row.id),
+      getNoticeListByBizApi(row.id, "latent"), getSupervisionDetailApi(row.id),
       getFollowUpListApi(row.id), getCheckListApi(row.id)
     ])
     if (noticeRes.status === "fulfilled") aggregateNotices.value = noticeRes.value?.data || []
@@ -301,6 +308,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-tag :type="getTrackingStatusType(row.trackingStatus)" size="small">{{ TRACKING_STATUS_MAP[row.trackingStatus] }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="notInPlaceCount" label="未到位次数" />
+        <el-table-column prop="trackingRemark" label="追踪备注" />
         <el-table-column prop="chestXrayResult" label="胸片结果" />
         <el-table-column prop="diagnosisFirst" label="诊断结果" />
         <el-table-column prop="referralResult" label="转诊结果">
@@ -316,6 +325,14 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <template #default="{ row }">
             <el-tag v-if="row.treatmentPhase" :type="row.treatmentPhase === 2 ? 'info' : 'warning'" size="small">{{ TREATMENT_PHASE_MAP[row.treatmentPhase] || "-" }}</el-tag>
             <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="服药状态">
+          <template #default="{ row }">{{ MEDICATION_STATUS_OPTIONS.find(o => o.value === row.medicationStatus)?.label || "-" }}</template>
+        </el-table-column>
+        <el-table-column label="归档">
+          <template #default="{ row }">
+            <el-tag :type="row.archived ? 'info' : 'success'" size="small">{{ row.archived ? "已归档" : "进行中" }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="260">
@@ -348,7 +365,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写原因" />
         </el-form-item>
       </el-form>
-      <template #footer><el-button @click="trackDialogVisible = false">取消</el-button><el-button type="primary" @click="handleTrack">确认</el-button></template>
+      <template #footer><el-button @click="trackDialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="handleTrack">确认</el-button></template>
     </el-dialog>
 
     <!-- 录入胸片+诊断弹窗 -->
@@ -372,7 +389,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           </el-select>
         </el-form-item>
       </el-form>
-      <template #footer><el-button @click="xrayDialogVisible = false">取消</el-button><el-button type="primary" @click="handleSubmitXray">确认录入</el-button></template>
+      <template #footer><el-button @click="xrayDialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="handleSubmitXray">确认录入</el-button></template>
     </el-dialog>
 
     <!-- 转诊弹窗 -->
@@ -385,7 +402,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-form-item>
         <el-form-item v-if="referralForm.result === 'other'" label="备注原因"><el-input v-model="referralForm.remark" type="textarea" :rows="3" placeholder="请填写原因" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="referralDialogVisible = false">取消</el-button><el-button type="primary" @click="handleReferral">确认</el-button></template>
+      <template #footer><el-button @click="referralDialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="handleReferral">确认</el-button></template>
     </el-dialog>
 
     <!-- 通知单弹窗 -->
@@ -408,14 +425,14 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="noticeForm.treatmentPlan === '其它'" label="方案详情"><el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" /></el-form-item>
+        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情"><el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" /></el-form-item>
         <el-form-item label="接收单位">
           <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
             <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
           </el-select>
         </el-form-item>
       </el-form>
-      <template #footer><el-button @click="noticeDialogVisible = false">取消</el-button><el-button type="primary" @click="handleSendNotice">发送通知单</el-button></template>
+      <template #footer><el-button @click="noticeDialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="handleSendNotice">发送通知单</el-button></template>
     </el-dialog>
 
     <!-- 通知单详情弹窗 -->
@@ -460,7 +477,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           </el-select>
         </el-form-item>
       </el-form>
-      <template #footer><el-button @click="supervisionDialogVisible = false">取消</el-button><el-button type="primary" @click="handleSaveSupervision">保存督导表</el-button></template>
+      <template #footer><el-button @click="supervisionDialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="handleSaveSupervision">保存督导表</el-button></template>
     </el-dialog>
 
     <!-- 督导表详情 -->

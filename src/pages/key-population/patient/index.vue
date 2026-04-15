@@ -67,11 +67,12 @@ async function handleImportEpidemic(uploadFile: any) {
 // ==================== 患者通知单 ====================
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
+const submitting = ref(false)
 const noticeForm = reactive({
   currentAddress: "", householdAddress: "", idNumber: "", gender: "",
   birthDate: "", age: null as number | null, ethnicity: "",
   crowdCategory: "", treatmentPlan: "", customPlanDetail: "",
-  receiverOrgId: null as number | null
+  receiverOrgId: undefined as number | undefined
 })
 
 function openNoticeDialog(row: any) {
@@ -83,12 +84,14 @@ function openNoticeDialog(row: any) {
     gender: row.gender || "",
     birthDate: "", age: row.age || null, ethnicity: row.ethnicity || "",
     crowdCategory: "", treatmentPlan: "", customPlanDetail: "",
-    receiverOrgId: null
+    receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
 }
 
 async function handleSendNotice() {
+  if (submitting.value) return
+  submitting.value = true
   try {
     await sendNoticeApi({
       noticeType: "patient",
@@ -103,7 +106,7 @@ async function handleSendNotice() {
     ElMessage.success("患者通知单发送成功")
     noticeDialogVisible.value = false
     fetchData()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally { submitting.value = false }
 }
 
 // ==================== 确认接收患者通知单 ====================
@@ -197,6 +200,7 @@ async function handleSaveFollowUp() {
     })
     ElMessage.success("后续随访保存成功")
     followUpDialogVisible.value = false
+    fetchData()
   } catch { /* handled */ }
 }
 
@@ -275,11 +279,13 @@ function openMedicationDialog(row: any) {
       medicationForm.supervisor = data.supervisor || ""
       medicationForm.sputumResult = data.sputumResult || ""
       medicationForm.stopDate = data.stopDate || ""
-      medicationForm.checkedDates = data.medicationRecords
-        ? (typeof data.medicationRecords === "string"
-          ? JSON.parse(data.medicationRecords)
-          : data.medicationRecords)
-        : []
+      try {
+        medicationForm.checkedDates = data.medicationRecords
+          ? (typeof data.medicationRecords === "string"
+            ? JSON.parse(data.medicationRecords)
+            : data.medicationRecords)
+          : []
+      } catch { medicationForm.checkedDates = [] }
     }
   }).catch(() => { /* 首次填写 */ })
   medicationDialogVisible.value = true
@@ -339,6 +345,7 @@ async function handleSaveMedication() {
       await saveMedicationApi(saveData)
       ElMessage.success("服药管理保存成功")
       medicationDialogVisible.value = false
+      fetchData()
     }
   } catch { /* handled */ }
 }
@@ -462,7 +469,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="noticeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSendNotice">发送通知单</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSendNotice">发送通知单</el-button>
       </template>
     </el-dialog>
 

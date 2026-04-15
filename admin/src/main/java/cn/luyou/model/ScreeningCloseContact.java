@@ -20,6 +20,8 @@ import java.time.LocalDate;
  *   AC-AK(28-36) : 半年后感染筛查+胸片+诊断
  *   AL-AT(37-45) : 一年后感染筛查+胸片+诊断
  *   AU-AZ(46-51) : 潜伏感染者管理情况（是否治疗/方案/开始/完成/结果/管理人员）
+ *   BA   (52)     : 惠民方式
+ *   BB   (53)     : 备注
  *
  * 业务规则：
  *   - 感染筛查结果阳性 → 进行胸片 → 得出诊断 → 进入潜伏/患者管理 → 停止后续轮
@@ -148,8 +150,10 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 51)
     private String preventiveManager;
 
+    // ===== 惠民方式 + 备注（BA-BB，index 52-53）=====
+    @ExcelProperty(index = 52)
     private String benefitMethod;
-
+    @ExcelProperty(index = 53)
     private String remark;
 
     /** 是否潜伏管理者：0否 1是（系统自动判定） */

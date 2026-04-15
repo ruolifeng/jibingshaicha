@@ -1,6 +1,7 @@
 export {
   getPatientListApi,
   getPatientHistoryApi,
+  getPatientHistoryStatsApi,
   importEpidemicApi,
   saveFirstVisitApi,
   getFirstVisitApi,

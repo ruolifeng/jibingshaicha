@@ -150,7 +150,7 @@ watch(
             <span v-if="row.crowdCategoryElder === '是'" class="mr-1"><el-tag size="small">老年人</el-tag></span>
             <span v-if="row.crowdCategoryDiabetes === '是'" class="mr-1"><el-tag size="small">糖尿病</el-tag></span>
             <span v-if="row.crowdCategoryDual === '是'" class="mr-1"><el-tag size="small">双感</el-tag></span>
-            <span v-if="row.crowdCategoryTbHist === '是'" class="mr-1"><el-tag size="small">既往TB</el-tag></span>
+            <span v-if="row.crowdCategoryTbHist === '是'" class="mr-1"><el-tag size="small">既往结核</el-tag></span>
             <span v-if="row.crowdCategoryNormal === '是'" class="mr-1"><el-tag size="small">非重点</el-tag></span>
           </template>
         </el-table-column>

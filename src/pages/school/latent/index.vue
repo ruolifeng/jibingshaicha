@@ -69,6 +69,8 @@ function handleReset() {
   handleSearch()
 }
 
+const submitting = ref(false)
+
 // ==================== 追踪弹窗 ====================
 const trackDialogVisible = ref(false)
 const trackingRow = ref<any>(null)
@@ -82,12 +84,14 @@ function openTrackDialog(row: any) {
 }
 
 async function handleTrack() {
+  if (submitting.value) return
+  submitting.value = true
   try {
     await trackLatentApi({ id: trackingRow.value.id, status: trackForm.status, remark: trackForm.remark })
     ElMessage.success("操作成功")
     trackDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ }
+  } catch { /* handled by interceptor */ } finally { submitting.value = false }
 }
 
 // ==================== V4：录入胸片+诊断弹窗 ====================
@@ -116,6 +120,8 @@ async function handleSubmitXray() {
     ElMessage.warning("请选择诊断结果")
     return
   }
+  if (submitting.value) return
+  submitting.value = true
   try {
     await submitXrayApi({
       id: xrayRow.value.id,
@@ -127,7 +133,7 @@ async function handleSubmitXray() {
     ElMessage.success("录入成功")
     xrayDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ }
+  } catch { /* handled by interceptor */ } finally { submitting.value = false }
 }
 
 async function handleImportXray(uploadFile: any) {
@@ -168,12 +174,14 @@ async function handleReferral() {
     ElMessage.warning("请选择转诊结果")
     return
   }
+  if (submitting.value) return
+  submitting.value = true
   try {
     await referralLatentApi({ id: referralRow.value.id, result: referralForm.result, remark: referralForm.remark })
     ElMessage.success("操作成功")
     referralDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ }
+  } catch { /* handled by interceptor */ } finally { submitting.value = false }
 }
 
 // ==================== 通知单弹窗 ====================
@@ -210,6 +218,8 @@ function openNoticeDialog(row: any) {
 }
 
 async function handleSendNotice() {
+  if (submitting.value) return
+  submitting.value = true
   try {
     await sendNoticeApi({
       noticeType: "latent",
@@ -224,14 +234,14 @@ async function handleSendNotice() {
       age: noticeForm.age,
       ethnicity: noticeForm.ethnicity,
       crowdCategory: noticeForm.crowdCategory,
-      treatmentPlan: noticeForm.treatmentPlan === "其它" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
       receiverOrgId: noticeForm.receiverOrgId,
       senderId: userStore.userId
     })
     ElMessage.success("通知单发送成功")
     noticeDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ }
+  } catch { /* handled by interceptor */ } finally { submitting.value = false }
 }
 
 // ==================== 确认接收通知单 ====================
@@ -285,6 +295,8 @@ function openSupervisionDialog(row: any) {
 }
 
 async function handleSaveSupervision() {
+  if (submitting.value) return
+  submitting.value = true
   try {
     await saveSupervisionApi({
       latentInfectionId: supervisionRow.value.id,
@@ -301,7 +313,7 @@ async function handleSaveSupervision() {
     ElMessage.success("督导表保存成功")
     supervisionDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ }
+  } catch { /* handled by interceptor */ } finally { submitting.value = false }
 }
 
 // ==================== 督导表查看 ====================
@@ -438,7 +450,7 @@ async function openAggregateDialog(row: any) {
   aggregateChecks.value = []
   try {
     const [noticeRes, supervisionRes, followUpRes, checkRes] = await Promise.allSettled([
-      getNoticeListByBizApi({ bizId: row.id, bizType: "latent" }),
+      getNoticeListByBizApi(row.id, "latent"),
       getSupervisionDetailApi(row.id),
       getFollowUpListApi(row.id),
       getCheckListApi(row.id)
@@ -699,7 +711,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="trackDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleTrack">确认</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleTrack">确认</el-button>
       </template>
     </el-dialog>
 
@@ -737,7 +749,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="xrayDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmitXray">确认录入</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmitXray">确认录入</el-button>
       </template>
     </el-dialog>
 
@@ -757,7 +769,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="referralDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleReferral">确认</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleReferral">确认</el-button>
       </template>
     </el-dialog>
 
@@ -798,7 +810,7 @@ watch(
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="noticeForm.treatmentPlan === '其它'" label="方案详情">
+        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
           <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
         </el-form-item>
         <el-form-item label="接收单位">
@@ -809,7 +821,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="noticeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSendNotice">发送通知单</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSendNotice">发送通知单</el-button>
       </template>
     </el-dialog>
 
@@ -878,7 +890,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="supervisionDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveSupervision">保存督导表</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveSupervision">保存督导表</el-button>
       </template>
     </el-dialog>
 

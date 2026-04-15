@@ -30,6 +30,15 @@ export function getPatientHistoryApi(params: {
   })
 }
 
+/** 历史患者统计汇总 */
+export function getPatientHistoryStatsApi(populationType: string) {
+  return request<ApiResponseData<Record<string, number>>>({
+    url: "patient/history/stats",
+    method: "get",
+    params: { populationType }
+  })
+}
+
 /** 导入大疫情表 */
 export function importEpidemicApi(file: File, populationType: string) {
   const formData = new FormData()
