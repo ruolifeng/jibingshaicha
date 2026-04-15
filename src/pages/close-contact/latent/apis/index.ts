@@ -7,5 +7,13 @@ export {
   getNoticeDetailApi,
   getNoticeListByBizApi,
   saveSupervisionApi,
-  getSupervisionDetailApi
+  getSupervisionDetailApi,
+  setMedicationStatusApi,
+  closeCaseApi,
+  getFollowUpListApi,
+  saveFollowUpApi,
+  getCheckListApi,
+  saveCheckApi,
+  submitXrayApi,
+  importXrayApi
 } from "@/pages/school/latent/apis"

@@ -85,3 +85,91 @@ export function getSupervisionDetailApi(latentInfectionId: number) {
     method: "get"
   })
 }
+
+/** 设置服药状态 */
+export function setMedicationStatusApi(data: { id: number, medicationStatus: number }) {
+  return request<ApiResponseData<null>>({
+    url: "latent/medication-status",
+    method: "post",
+    data
+  })
+}
+
+/** 结案归档 */
+export function closeCaseApi(id: number) {
+  return request<ApiResponseData<null>>({
+    url: `latent/close-case/${id}`,
+    method: "post"
+  })
+}
+
+/** 查询电话随访记录 */
+export function getFollowUpListApi(latentId: number) {
+  return request<ApiResponseData<any[]>>({
+    url: `latent/follow-up/list/${latentId}`,
+    method: "get"
+  })
+}
+
+/** 新增电话随访记录 */
+export function saveFollowUpApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "latent/follow-up/save",
+    method: "post",
+    data
+  })
+}
+
+/** 查询按期检查记录 */
+export function getCheckListApi(latentId: number) {
+  return request<ApiResponseData<any[]>>({
+    url: `latent/check/list/${latentId}`,
+    method: "get"
+  })
+}
+
+/** 新增按期检查记录 */
+export function saveCheckApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "latent/check/save",
+    method: "post",
+    data
+  })
+}
+
+// ==================== V4 新增：胸片与诊断 ====================
+
+/**
+ * 手动录入胸片检查与首次诊断结果（追踪到位后）
+ * diagnosisFirst 取值：排除/疑似肺结核/潜伏感染者/确诊患者/其他
+ */
+export function submitXrayApi(data: {
+  id: number
+  hasChestXray: string
+  chestXrayDate?: string
+  chestXrayResult?: string
+  diagnosisFirst: string
+}) {
+  return request<ApiResponseData<null>>({
+    url: "latent/xray",
+    method: "post",
+    data
+  })
+}
+
+/**
+ * 批量导入胸片+诊断 Excel（含转诊阶段 Z-AE 列，按证件号匹配更新）
+ */
+export function importXrayApi(file: File, populationType: string) {
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("populationType", populationType)
+  return request<ApiResponseData<number>>({
+    url: "latent/xray/import",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000
+  })
+}
+

@@ -285,6 +285,40 @@ function openMedicationDialog(row: any) {
   medicationDialogVisible.value = true
 }
 
+function handlePrintMedication() {
+  const printContent = document.querySelector(".med-calendar")
+  if (!printContent) return
+  const printWindow = window.open("", "_blank")
+  if (!printWindow) return
+  const patientName = medicationRow.value?.name || ""
+  printWindow.document.write(`
+    <html><head><title>治疗记录卡 - ${patientName}</title>
+    <style>
+      body { font-family: sans-serif; padding: 20px; }
+      h2 { text-align: center; }
+      .info { margin-bottom: 16px; }
+      .info span { margin-right: 24px; }
+      .med-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+      .med-calendar-cell { border: 1px solid #ccc; padding: 4px; text-align: center; min-height: 40px; }
+      .checked { background: #e6f7e6; }
+      .med-calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; margin-bottom: 4px; }
+    </style></head><body>
+    <h2>肺结核患者治疗记录卡</h2>
+    <div class="info">
+      <span>姓名：${patientName}</span>
+      <span>管理方式：${medicationForm.managementMethod || ""}</span>
+      <span>督导人员：${medicationForm.supervisor || ""}</span>
+      <span>痰菌检查：${medicationForm.sputumResult || ""}</span>
+    </div>
+    ${printContent.outerHTML}
+    </body></html>
+  `)
+  printWindow.document.close()
+  printWindow.focus()
+  printWindow.print()
+  printWindow.close()
+}
+
 async function handleSaveMedication() {
   try {
     const saveData: Record<string, any> = {
@@ -569,6 +603,7 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="medicationDialogVisible = false">取消</el-button>
+        <el-button @click="handlePrintMedication">打印治疗记录卡</el-button>
         <el-button type="primary" @click="handleSaveMedication">
           {{ medicationForm.stopDate ? "完成并归档" : "保存" }}
         </el-button>

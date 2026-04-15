@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS `sys_message` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统消息表';
 
 -- ==================== 学校人群筛查表 ====================
+-- V4 变更：移除胸片/诊断/痰涂片/分子生物字段（移至潜伏感染追踪阶段录入）；新增结构化预防性治疗字段
 
 CREATE TABLE IF NOT EXISTS `screening_school` (
     `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
@@ -71,16 +72,15 @@ CREATE TABLE IF NOT EXISTS `screening_school` (
     `suspicious_symptoms`   VARCHAR(128) DEFAULT NULL COMMENT '结核病可疑症状',
     `has_infection_screen`  VARCHAR(10)  DEFAULT NULL COMMENT '是否进行感染筛',
     `screen_date`           DATE         DEFAULT NULL COMMENT '感染筛查日期',
-    `screen_method`         VARCHAR(64)  DEFAULT NULL COMMENT '方法',
-    `screen_result`         VARCHAR(128) DEFAULT NULL COMMENT '结果（PPD/EC/IGRA）',
-    `infection_result`      VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
-    `has_chest_xray`        VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
-    `chest_xray_date`       DATE         DEFAULT NULL COMMENT '胸片检查日期',
-    `chest_xray_result`     VARCHAR(128) DEFAULT NULL COMMENT '胸片结果',
-    `sputum_smear`          VARCHAR(64)  DEFAULT NULL COMMENT '痰涂片',
-    `molecular_biology`     VARCHAR(64)  DEFAULT NULL COMMENT '分子生物学',
-    `diagnosis_result`      VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
-    `preventive_treatment`  VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗（方案或原因）',
+    `screen_method`         VARCHAR(64)  DEFAULT NULL COMMENT '方法（PPD/EC/IGRA）',
+    `screen_result`         VARCHAR(128) DEFAULT NULL COMMENT '结果（mmXmm/EC阴性/EC阳性/IGRA阴性/IGRA阳性）',
+    `infection_result`      VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果（V4：PPD阴性/PPD+/PPD++/PPD+++/EC阴性/EC阳性/IGRA阴性/IGRA阳性）',
+    -- 预防性治疗情况（督导表归档后同步，V4新增结构化字段）
+    `preventive_plan`       VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
+    `preventive_start_date` DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
+    `preventive_end_date`   DATE         DEFAULT NULL COMMENT '预防性治疗完成时间',
+    `preventive_result`     VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核',
+    `preventive_manager`    VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员',
     `remark`                TEXT         DEFAULT NULL COMMENT '备注',
     `is_latent`             TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
     `upload_batch`          VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
@@ -91,9 +91,10 @@ CREATE TABLE IF NOT EXISTS `screening_school` (
     KEY `idx_id_number` (`id_number`),
     KEY `idx_school` (`school_name`, `district`),
     KEY `idx_latent` (`is_latent`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学校人群筛查数据表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学校人群筛查数据表（V4）';
 
 -- ==================== 重点人群筛查表 ====================
+-- V4 变更：移除胸片/诊断/结果判定/是否转诊等字段（移至潜伏感染追踪阶段录入）；新增结构化预防性治疗字段
 
 CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `id`                       BIGINT       NOT NULL AUTO_INCREMENT,
@@ -110,7 +111,16 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `phone`                    VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
     `household_address`        VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
     `current_address`          VARCHAR(256) DEFAULT NULL COMMENT '现住址',
-    `crowd_category`           VARCHAR(256) DEFAULT NULL COMMENT '人群分类（可多选，逗号分隔）',
+    -- 人群分类（多选，V4 每项独立列）
+    `crowd_category_close`     VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-密接（是/否）',
+    `crowd_category_student`   VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-学生（是/否）',
+    `crowd_category_teacher`   VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-教职工（是/否）',
+    `crowd_category_elder`     VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-老年人（是/否）',
+    `crowd_category_diabetes`  VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-糖尿病（是/否）',
+    `crowd_category_dual`      VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-双感（是/否）',
+    `crowd_category_tb_hist`   VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-既往结核史（是/否）',
+    `crowd_category_normal`    VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-非重点人群（是/否）',
+    -- 症状筛查
     `has_suspicious_symptoms`  VARCHAR(10)  DEFAULT NULL COMMENT '是否有可疑症状',
     `cough`                    VARCHAR(10)  DEFAULT NULL COMMENT '咳嗽咳痰',
     `hemoptysis`               VARCHAR(10)  DEFAULT NULL COMMENT '咯血或血痰',
@@ -120,23 +130,20 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `appetite_loss`            VARCHAR(10)  DEFAULT NULL COMMENT '食欲不振',
     `fatigue`                  VARCHAR(10)  DEFAULT NULL COMMENT '乏力',
     `weight_loss`              VARCHAR(10)  DEFAULT NULL COMMENT '体重减轻',
+    -- 感染筛查（V4 方法改为单列）
     `has_infection_screen`     VARCHAR(10)  DEFAULT NULL COMMENT '是否进行感染筛',
     `screen_date`              DATE         DEFAULT NULL COMMENT '感染筛查日期',
-    `screen_method1`           VARCHAR(64)  DEFAULT NULL COMMENT '方法1',
-    `screen_method2`           VARCHAR(64)  DEFAULT NULL COMMENT '方法2',
-    `screen_result`            VARCHAR(128) DEFAULT NULL COMMENT '结果（PPD/EC/IGRA）',
+    `screen_method`            VARCHAR(64)  DEFAULT NULL COMMENT '感染筛查方法（PPD/EC/IGRA）',
+    `screen_result`            VARCHAR(128) DEFAULT NULL COMMENT '结果（mmXmm/EC阴性/EC阳性/IGRA阴性/IGRA阳性）',
     `infection_result`         VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
-    `has_chest_xray`           VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
-    `chest_xray_date`          DATE         DEFAULT NULL COMMENT '胸片检查日期',
-    `chest_xray_result`        VARCHAR(128) DEFAULT NULL COMMENT '胸片结果',
-    `result_judgment`          VARCHAR(128) DEFAULT NULL COMMENT '结果判定',
-    `is_referred`              VARCHAR(10)  DEFAULT NULL COMMENT '是否转诊到定点医疗机构',
-    `diagnosis_result`         VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
-    `is_eligible_preventive`   VARCHAR(10)  DEFAULT NULL COMMENT '是否符合预防性治疗',
-    `has_preventive_treatment` VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
-    `completed_preventive`     VARCHAR(10)  DEFAULT NULL COMMENT '是否规范完成预防性治疗',
+    -- 预防性治疗情况（督导表归档后同步，V4新增结构化字段）
+    `preventive_plan`          VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
+    `preventive_start_date`    DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
+    `preventive_end_date`      DATE         DEFAULT NULL COMMENT '预防性治疗完成时间',
+    `preventive_result`        VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核',
+    `preventive_manager`       VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员',
     `remark`                   TEXT         DEFAULT NULL COMMENT '备注',
-    `is_latent`                TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者',
+    `is_latent`                TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
     `upload_batch`             VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
     `create_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -144,66 +151,83 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     PRIMARY KEY (`id`),
     KEY `idx_id_number` (`id_number`),
     KEY `idx_latent` (`is_latent`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='重点人群筛查数据表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='重点人群筛查数据表（V4）';
 
 -- ==================== 密接人群筛查表 ====================
+-- V4 重大重构：三轮独立筛查（首次/半年后/一年后），每轮含感染筛查+胸片+诊断
 
 CREATE TABLE IF NOT EXISTS `screening_close_contact` (
-    `id`                          BIGINT       NOT NULL AUTO_INCREMENT,
-    `year`                        VARCHAR(10)  DEFAULT NULL COMMENT '年份',
-    `city`                        VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
-    `district`                    VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
-    `name`                        VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
-    `gender`                      VARCHAR(10)  DEFAULT NULL COMMENT '性别',
-    `birth_date`                  DATE         DEFAULT NULL COMMENT '出生日期',
-    `age`                         INT          DEFAULT NULL COMMENT '年龄',
-    `id_type`                     VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
-    `id_number`                   VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
-    `ethnicity`                   VARCHAR(32)  DEFAULT NULL COMMENT '民族',
-    `occupation`                  VARCHAR(64)  DEFAULT NULL COMMENT '职业',
-    `phone`                       VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
-    `household_address`           VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
-    `current_address`             VARCHAR(256) DEFAULT NULL COMMENT '现住址',
-    `contact_type`                VARCHAR(32)  DEFAULT NULL COMMENT '接触类型：家庭内/家庭外',
-    `source_patient_name`         VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
-    `source_patient_confirm_date` DATE         DEFAULT NULL COMMENT '原患者确诊日期',
-    `source_patient_id_number`    VARCHAR(64)  DEFAULT NULL COMMENT '原患者身份证号',
-    `first_screen_date`           DATE         DEFAULT NULL COMMENT '首次筛查日期',
-    `first_symptom_result`        VARCHAR(128) DEFAULT NULL COMMENT '首次症状筛查结果',
-    `half_year_screen_date`       DATE         DEFAULT NULL COMMENT '半年后筛查日期',
-    `half_year_symptom_result`    VARCHAR(128) DEFAULT NULL COMMENT '半年后症状筛查结果',
-    `one_year_screen_date`        DATE         DEFAULT NULL COMMENT '一年后筛查日期',
-    `one_year_symptom_result`     VARCHAR(128) DEFAULT NULL COMMENT '一年后症状筛查结果',
-    `infection_screen_date`       DATE         DEFAULT NULL COMMENT '感染检查筛查日期',
-    `infection_method`            VARCHAR(64)  DEFAULT NULL COMMENT '感染检查方法',
-    `screen_result`               VARCHAR(128) DEFAULT NULL COMMENT '结果（PPD/EC/IGRA）',
-    `infection_result`            VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
-    `has_chest_xray`              VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
-    `chest_xray_date`             DATE         DEFAULT NULL COMMENT '胸片检查日期',
-    `chest_xray_result`           VARCHAR(128) DEFAULT NULL COMMENT '胸片检查结果',
-    `first_screening_result`      VARCHAR(128) DEFAULT NULL COMMENT '筛查结果-首次',
-    `half_year_screening_result`  VARCHAR(128) DEFAULT NULL COMMENT '筛查结果-半年后',
-    `one_year_screening_result`   VARCHAR(128) DEFAULT NULL COMMENT '筛查结果-一年后',
-    `diagnosis_result`            VARCHAR(128) DEFAULT NULL COMMENT '定点医疗机构诊断结果',
-    `has_preventive_treatment`    VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
-    `preventive_plan`             VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
-    `preventive_start_date`       DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
-    `preventive_end_date`         DATE         DEFAULT NULL COMMENT '预防性治疗完成时间',
-    `preventive_result`           VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗结果',
-    `preventive_manager`          VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗期间随访管理人员',
-    `benefit_method`              VARCHAR(64)  DEFAULT NULL COMMENT '惠民方式',
-    `remark`                      TEXT         DEFAULT NULL COMMENT '备注',
-    `is_latent`                   TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者',
-    `upload_batch`                VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
-    `create_time`                 DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `update_time`                 DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    `deleted`                     TINYINT      NOT NULL DEFAULT 0,
+    `id`                              BIGINT       NOT NULL AUTO_INCREMENT,
+    `year`                            VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `city`                            VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
+    `district`                        VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
+    `name`                            VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
+    `gender`                          VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`                      DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                             INT          DEFAULT NULL COMMENT '年龄',
+    `id_type`                         VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
+    `id_number`                       VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
+    `ethnicity`                       VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `occupation`                      VARCHAR(64)  DEFAULT NULL COMMENT '职业',
+    `phone`                           VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `household_address`               VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
+    `current_address`                 VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `contact_type`                    VARCHAR(32)  DEFAULT NULL COMMENT '接触类型：家庭内/家庭外',
+    `source_patient_name`             VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
+    `source_patient_confirm_date`     DATE         DEFAULT NULL COMMENT '原患者确诊日期',
+    `source_patient_id_number`        VARCHAR(64)  DEFAULT NULL COMMENT '原患者身份证号',
+    -- 首次筛查（T-AB列）
+    `first_screen_date`               DATE         DEFAULT NULL COMMENT '首次筛查日期',
+    `first_symptom_result`            VARCHAR(128) DEFAULT NULL COMMENT '首次症状筛查结果',
+    `first_infection_method`          VARCHAR(64)  DEFAULT NULL COMMENT '首次感染检查方法（PPD/EC/IGRA）',
+    `first_screen_result`             VARCHAR(128) DEFAULT NULL COMMENT '首次结果（mmXmm/EC阴性/EC阳性/IGRA阴性/IGRA阳性）',
+    `first_infection_result`          VARCHAR(128) DEFAULT NULL COMMENT '首次感染筛查结果',
+    `first_has_chest_xray`            VARCHAR(10)  DEFAULT NULL COMMENT '首次是否进行胸片检查',
+    `first_chest_xray_date`           DATE         DEFAULT NULL COMMENT '首次胸片检查日期',
+    `first_chest_xray_result`         VARCHAR(128) DEFAULT NULL COMMENT '首次胸片检查结果',
+    `first_diagnosis`                 VARCHAR(64)  DEFAULT NULL COMMENT '首次诊断结果：排除/疑似肺结核/潜伏感染者/确诊患者/其他',
+    -- 半年后筛查（AC-AK列）
+    `half_year_screen_date`           DATE         DEFAULT NULL COMMENT '半年后筛查日期',
+    `half_year_symptom_result`        VARCHAR(128) DEFAULT NULL COMMENT '半年后症状筛查结果',
+    `half_year_infection_method`      VARCHAR(64)  DEFAULT NULL COMMENT '半年后感染检查方法',
+    `half_year_screen_result`         VARCHAR(128) DEFAULT NULL COMMENT '半年后结果',
+    `half_year_infection_result`      VARCHAR(128) DEFAULT NULL COMMENT '半年后感染筛查结果',
+    `half_year_has_chest_xray`        VARCHAR(10)  DEFAULT NULL COMMENT '半年后是否进行胸片检查',
+    `half_year_chest_xray_date`       DATE         DEFAULT NULL COMMENT '半年后胸片检查日期',
+    `half_year_chest_xray_result`     VARCHAR(128) DEFAULT NULL COMMENT '半年后胸片检查结果',
+    `half_year_diagnosis`             VARCHAR(64)  DEFAULT NULL COMMENT '半年后诊断结果',
+    -- 一年后筛查（AL-AT列）
+    `one_year_screen_date`            DATE         DEFAULT NULL COMMENT '一年后筛查日期',
+    `one_year_symptom_result`         VARCHAR(128) DEFAULT NULL COMMENT '一年后症状筛查结果',
+    `one_year_infection_method`       VARCHAR(64)  DEFAULT NULL COMMENT '一年后感染筛查方法',
+    `one_year_screen_result`          VARCHAR(128) DEFAULT NULL COMMENT '一年后结果',
+    `one_year_infection_result`       VARCHAR(128) DEFAULT NULL COMMENT '一年后感染筛查结果',
+    `one_year_has_chest_xray`         VARCHAR(10)  DEFAULT NULL COMMENT '一年后是否进行胸片检查',
+    `one_year_chest_xray_date`        DATE         DEFAULT NULL COMMENT '一年后胸片检查日期',
+    `one_year_chest_xray_result`      VARCHAR(128) DEFAULT NULL COMMENT '一年后胸片检查结果',
+    `one_year_diagnosis`              VARCHAR(64)  DEFAULT NULL COMMENT '一年后诊断结果',
+    -- 潜伏感染者管理情况（AU-AZ列，督导表归档后同步）
+    `has_preventive_treatment`        VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
+    `preventive_plan`                 VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
+    `preventive_start_date`           DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
+    `preventive_end_date`             DATE         DEFAULT NULL COMMENT '预防性治疗完成时间',
+    `preventive_result`               VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核',
+    `preventive_manager`              VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员',
+    `benefit_method`                  VARCHAR(64)  DEFAULT NULL COMMENT '惠民方式',
+    `remark`                          TEXT         DEFAULT NULL COMMENT '备注',
+    `is_latent`                       TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
+    `active_round`                    TINYINT      DEFAULT NULL COMMENT '阳性轮次：1首次 2半年后 3一年后',
+    `upload_batch`                    VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `create_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                         TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     KEY `idx_id_number` (`id_number`),
     KEY `idx_latent` (`is_latent`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接人群筛查数据表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接人群筛查数据表（V4三轮）';
 
 -- ==================== 潜伏感染管理表 ====================
+-- V4 新增：胸片检查字段（追踪到位后录入）、首次诊断字段、密接阳性轮次
 
 CREATE TABLE IF NOT EXISTS `latent_infection` (
     `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
@@ -218,10 +242,20 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
     `tracking_status`     TINYINT      NOT NULL DEFAULT 0 COMMENT '追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`  INT          NOT NULL DEFAULT 0 COMMENT '未到位次数',
     `tracking_remark`     TEXT         DEFAULT NULL COMMENT '追踪备注原因',
-    `referral_result`     VARCHAR(32)  DEFAULT NULL COMMENT '转诊结果：excluded/other/confirmed/latent',
+    -- 追踪到位后录入胸片与诊断（V4新增步骤）
+    `has_chest_xray`      VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查（是/否）',
+    `chest_xray_date`     DATE         DEFAULT NULL COMMENT '胸片检查日期',
+    `chest_xray_result`   VARCHAR(128) DEFAULT NULL COMMENT '胸片检查结果：正常/异常/未查',
+    `diagnosis_first`     VARCHAR(64)  DEFAULT NULL COMMENT '首次诊断：排除/疑似肺结核/潜伏感染者/确诊患者/其他',
+    -- 密接人群阳性轮次（来自筛查表同步）
+    `active_round`        TINYINT      DEFAULT NULL COMMENT '密接阳性轮次：1首次 2半年后 3一年后',
+    `referral_result`     VARCHAR(32)  DEFAULT NULL COMMENT '转诊结果：excluded/other/confirmed/suspected/latent',
     `referral_remark`     TEXT         DEFAULT NULL COMMENT '转诊备注',
-    `diagnosis_result`    VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果列值',
+    `diagnosis_result`    VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果展示列值',
+    `treatment_phase`     TINYINT      NOT NULL DEFAULT 0 COMMENT '治疗阶段：0未开始 1预防治疗中 2已结案',
+    `medication_status`   TINYINT      DEFAULT NULL COMMENT '服药状态：1按要求服药 2不服药',
     `archived`            TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已归档：0否 1是',
+    `archived_time`       DATETIME     DEFAULT NULL COMMENT '结案归档时间',
     `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`             TINYINT      NOT NULL DEFAULT 0,
@@ -229,7 +263,7 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
     KEY `idx_screening` (`screening_id`),
     KEY `idx_population` (`population_type`),
     KEY `idx_tracking` (`tracking_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='潜伏感染管理表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='潜伏感染管理表（V4）';
 
 -- ==================== 通知单表（潜伏者/患者通用） ====================
 
@@ -266,15 +300,19 @@ CREATE TABLE IF NOT EXISTS `notice` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知单表';
 
 -- ==================== 督导表 ====================
+-- V4 新增：治疗完成时间、预防性治疗结果、随访管理人员
 
 CREATE TABLE IF NOT EXISTS `supervision_form` (
     `id`                     BIGINT       NOT NULL AUTO_INCREMENT,
     `latent_infection_id`    BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
     `population_type`        VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `patient_name`           VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
-    `treatment_start_date`   DATE         DEFAULT NULL COMMENT '治疗开始日期',
+    `treatment_start_date`   DATE         DEFAULT NULL COMMENT '预防性治疗开始日期',
+    `treatment_end_date`     DATE         DEFAULT NULL COMMENT '预防性治疗完成时间（V4新增）',
     `treatment_plan`         VARCHAR(256) DEFAULT NULL COMMENT '治疗方案',
     `supervision_content`    TEXT         DEFAULT NULL COMMENT '督导内容（JSON格式存储表单数据）',
+    `preventive_result`      VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4新增）',
+    `preventive_manager`     VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员（V4新增）',
     `filled_by`              BIGINT       DEFAULT NULL COMMENT '填写人ID',
     `status`                 TINYINT      NOT NULL DEFAULT 0 COMMENT '状态：0未填写 1已填写 2已归档',
     `archived_time`          DATETIME     DEFAULT NULL COMMENT '归档时间',
@@ -283,7 +321,41 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     `deleted`                TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     KEY `idx_latent` (`latent_infection_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性治疗督导表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性治疗督导表（V4）';
+
+-- ==================== 潜伏感染者电话随访表 ====================
+
+CREATE TABLE IF NOT EXISTS `latent_follow_up` (
+    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `latent_infection_id`   BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
+    `follow_up_date`        DATE         NOT NULL COMMENT '随访日期',
+    `follow_up_type`        VARCHAR(32)  NOT NULL DEFAULT '电话随访' COMMENT '随访方式',
+    `content`               TEXT         DEFAULT NULL COMMENT '随访内容',
+    `result`                VARCHAR(256) DEFAULT NULL COMMENT '随访结果',
+    `operator`              VARCHAR(64)  DEFAULT NULL COMMENT '操作人',
+    `create_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`               TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_latent` (`latent_infection_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='潜伏感染者电话随访记录表';
+
+-- ==================== 潜伏感染者按期检查表 ====================
+
+CREATE TABLE IF NOT EXISTS `latent_check` (
+    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `latent_infection_id`   BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
+    `check_date`            DATE         NOT NULL COMMENT '检查日期',
+    `check_period`          VARCHAR(32)  NOT NULL COMMENT '检查周期：3个月/6个月/12个月',
+    `check_result`          VARCHAR(128) NOT NULL COMMENT '检查结果：未发病/发病/其他',
+    `content`               TEXT         DEFAULT NULL COMMENT '检查详情',
+    `operator`              VARCHAR(64)  DEFAULT NULL COMMENT '操作人',
+    `create_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`               TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_latent` (`latent_infection_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='潜伏感染者按期检查记录表';
 
 -- ==================== 患者管理表 ====================
 
@@ -502,3 +574,49 @@ UPDATE `permission` SET `parent_id` = 12 WHERE `code` IN ('patient:importEpidemi
 UPDATE `permission` SET `parent_id` = 4  WHERE `code` = 'statistics:export';
 UPDATE `permission` SET `parent_id` = 60 WHERE `code` IN ('user:create','user:edit','user:delete');
 UPDATE `permission` SET `parent_id` = 61 WHERE `code` = 'permission:assign';
+
+-- ==================== 潜伏治疗扩展（已有数据库升级用） ====================
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `treatment_phase` TINYINT NOT NULL DEFAULT 0 COMMENT '治疗阶段：0未开始 1预防治疗中 2已结案' AFTER `diagnosis_result`;
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `medication_status` TINYINT DEFAULT NULL COMMENT '服药状态：1按要求服药 2不服药' AFTER `treatment_phase`;
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `archived_time` DATETIME DEFAULT NULL COMMENT '结案归档时间' AFTER `archived`;
+
+-- V4 扩展：潜伏感染表新增胸片/诊断/轮次字段
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `has_chest_xray`    VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查' AFTER `tracking_remark`;
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `chest_xray_date`   DATE         DEFAULT NULL COMMENT '胸片检查日期' AFTER `has_chest_xray`;
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `chest_xray_result` VARCHAR(128) DEFAULT NULL COMMENT '胸片检查结果：正常/异常/未查' AFTER `chest_xray_date`;
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `diagnosis_first`   VARCHAR(64)  DEFAULT NULL COMMENT '首次诊断结果' AFTER `chest_xray_result`;
+ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `active_round`      TINYINT      DEFAULT NULL COMMENT '密接阳性轮次：1首次 2半年后 3一年后' AFTER `diagnosis_first`;
+-- referral_result 新增 suspected 值，无需迁移，注释说明即可
+-- V4 扩展：督导表新增治疗完成时间/结果/管理人员
+ALTER TABLE `supervision_form` ADD COLUMN IF NOT EXISTS `treatment_end_date` DATE         DEFAULT NULL COMMENT '预防性治疗完成时间' AFTER `treatment_start_date`;
+ALTER TABLE `supervision_form` ADD COLUMN IF NOT EXISTS `preventive_result`  VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果' AFTER `supervision_content`;
+ALTER TABLE `supervision_form` ADD COLUMN IF NOT EXISTS `preventive_manager` VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员' AFTER `preventive_result`;
+
+-- V4 GAP修复：screening_school 加回胸片/诊断系统回写列
+ALTER TABLE `screening_school` ADD COLUMN IF NOT EXISTS `has_chest_xray`    VARCHAR(8)   DEFAULT NULL COMMENT '是否进行胸片检查' AFTER `infection_result`;
+ALTER TABLE `screening_school` ADD COLUMN IF NOT EXISTS `chest_xray_date`   DATE         DEFAULT NULL COMMENT '胸片检查日期' AFTER `has_chest_xray`;
+ALTER TABLE `screening_school` ADD COLUMN IF NOT EXISTS `chest_xray_result` VARCHAR(128) DEFAULT NULL COMMENT '胸片结果' AFTER `chest_xray_date`;
+ALTER TABLE `screening_school` ADD COLUMN IF NOT EXISTS `diagnosis_first`   VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果-首次' AFTER `chest_xray_result`;
+ALTER TABLE `screening_school` ADD COLUMN IF NOT EXISTS `diagnosis_half_year` VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果-半年后（学校不涉及）' AFTER `diagnosis_first`;
+ALTER TABLE `screening_school` ADD COLUMN IF NOT EXISTS `diagnosis_one_year`  VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果-一年后（学校不涉及）' AFTER `diagnosis_half_year`;
+
+-- V4 GAP修复：screening_key_population 加回胸片/诊断系统回写列
+ALTER TABLE `screening_key_population` ADD COLUMN IF NOT EXISTS `has_chest_xray`    VARCHAR(8)   DEFAULT NULL COMMENT '是否进行胸片检查' AFTER `infection_result`;
+ALTER TABLE `screening_key_population` ADD COLUMN IF NOT EXISTS `chest_xray_date`   DATE         DEFAULT NULL COMMENT '胸片检查日期' AFTER `has_chest_xray`;
+ALTER TABLE `screening_key_population` ADD COLUMN IF NOT EXISTS `chest_xray_result` VARCHAR(128) DEFAULT NULL COMMENT '胸片结果' AFTER `chest_xray_date`;
+ALTER TABLE `screening_key_population` ADD COLUMN IF NOT EXISTS `diagnosis_first`   VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果-首次' AFTER `chest_xray_result`;
+ALTER TABLE `screening_key_population` ADD COLUMN IF NOT EXISTS `diagnosis_half_year` VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果-半年后（重点人群不涉及）' AFTER `diagnosis_first`;
+ALTER TABLE `screening_key_population` ADD COLUMN IF NOT EXISTS `diagnosis_one_year`  VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果-一年后（重点人群不涉及）' AFTER `diagnosis_half_year`;
+
+-- 新增潜伏治疗相关操作权限
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(115, 'latent:followUp',    '潜伏电话随访',   2, 11, 6),
+(116, 'latent:check',       '潜伏按期检查',   2, 11, 7),
+(117, 'latent:closeCase',   '潜伏结案归档',   2, 11, 8),
+-- V4 新增：胸片录入权限
+(118, 'latent:xray',        '录入胸片诊断',   2, 11, 9);
+
+-- 四级(5)和五级(6)获得新权限
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (5, 115), (5, 116), (5, 117), (5, 118), (6, 115), (6, 116), (6, 117);
+-- 上级角色也获得
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) SELECT r.`role`, p.`id` FROM (SELECT 1 AS `role` UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r CROSS JOIN `permission` p WHERE p.`code` IN ('latent:followUp','latent:check','latent:closeCase','latent:xray');

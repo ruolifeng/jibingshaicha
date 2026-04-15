@@ -13,6 +13,15 @@ export function uploadScreeningKeyPopulationApi(file: File) {
   })
 }
 
+/** 导出重点人群筛查数据 */
+export function exportScreeningKeyPopulationApi() {
+  return request<Blob>({
+    url: "screening/key-population/export",
+    method: "get",
+    responseType: "blob"
+  })
+}
+
 /** 分页查询重点人群筛查数据 */
 export function getScreeningKeyPopulationListApi(params: {
   page: number

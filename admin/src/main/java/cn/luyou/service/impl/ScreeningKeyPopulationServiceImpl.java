@@ -44,6 +44,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
 
         try {
+            // V4 重点人群模板：第1行大分组，第2行字段名，第3行子字段细项，第4行空行，第5行填写说明，数据从第6行开始
             EasyExcel.read(file.getInputStream(), ScreeningKeyPopulation.class, new ReadListener<ScreeningKeyPopulation>() {
                 @Override
                 public void invoke(ScreeningKeyPopulation data, AnalysisContext context) {
@@ -55,7 +56,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("重点人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(1).doRead();
+            }).sheet().headRowNumber(5).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }

@@ -13,6 +13,15 @@ export function uploadScreeningCloseContactApi(file: File) {
   })
 }
 
+/** 导出密接人群筛查数据 */
+export function exportScreeningCloseContactApi() {
+  return request<Blob>({
+    url: "screening/close-contact/export",
+    method: "get",
+    responseType: "blob"
+  })
+}
+
 /** 分页查询密接人群筛查数据 */
 export function getScreeningCloseContactListApi(params: {
   page: number

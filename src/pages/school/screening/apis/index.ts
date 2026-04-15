@@ -13,6 +13,15 @@ export function uploadScreeningSchoolApi(file: File) {
   })
 }
 
+/** 导出学校人群筛查数据 */
+export function exportScreeningSchoolApi() {
+  return request<Blob>({
+    url: "screening/school/export",
+    method: "get",
+    responseType: "blob"
+  })
+}
+
 /** 分页查询学校人群筛查数据 */
 export function getScreeningSchoolListApi(params: {
   page: number

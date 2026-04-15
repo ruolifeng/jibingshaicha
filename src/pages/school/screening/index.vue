@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningSchoolApi, getScreeningSchoolListApi } from "./apis"
+import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -58,6 +58,23 @@ async function handleUpload(uploadFile: any) {
   }
 }
 
+/** 导出 Excel */
+async function handleExport() {
+  try {
+    const res = await exportScreeningSchoolApi()
+    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "学校人群筛查数据.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  }
+}
+
 /** 判定结果标签颜色 */
 function getLatentTag(isLatent: number) {
   return isLatent === 1 ? "danger" : "success"
@@ -105,18 +122,22 @@ watch(
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">学校人群筛查数据</span>
-          <el-upload
-            ref="uploadRef"
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".xlsx,.xls"
-            :on-change="handleUpload"
-          >
-            <el-button v-permission="'screening:upload'" type="primary">上传 Excel</el-button>
-          </el-upload>
+          <div class="flex gap-2">
+            <el-button @click="handleExport">导出数据</el-button>
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".xlsx,.xls"
+              :on-change="handleUpload"
+            >
+              <el-button v-permission="'screening:upload'" type="primary">上传 Excel</el-button>
+            </el-upload>
+          </div>
         </div>
       </template>
 
+      <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
@@ -131,16 +152,17 @@ watch(
         <el-table-column prop="tbHistory" label="既往结核病史" />
         <el-table-column prop="closeContactHistory" label="密切接触史" />
         <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
-        <el-table-column prop="hasInfectionScreen" label="是否感染筛" />
+        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" />
+        <el-table-column prop="screenDate" label="感染筛查日期" />
         <el-table-column prop="screenMethod" label="筛查方法" />
         <el-table-column prop="screenResult" label="筛查结果" />
         <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="胸片检查" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column prop="sputumSmear" label="痰涂片" />
-        <el-table-column prop="molecularBiology" label="分子生物学" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column prop="preventiveTreatment" label="预防性治疗" />
+        <!-- 预防性治疗情况（督导表归档后同步） -->
+        <el-table-column prop="preventivePlan" label="预防性治疗方案" />
+        <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
+        <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
+        <el-table-column prop="preventiveResult" label="治疗结果" />
+        <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
         <el-table-column label="潜伏判定" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">

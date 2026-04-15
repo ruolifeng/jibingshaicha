@@ -10,6 +10,22 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
+/**
+ * 密接人群筛查数据（V4 模板 — 三轮独立筛查）
+ *
+ * V4 结构（A-BC 共52列）：
+ *   A-P  (0-15)  : 密接者基本信息
+ *   Q-S  (16-18) : 原患者信息
+ *   T-AB (19-27) : 首次感染筛查+胸片+诊断
+ *   AC-AK(28-36) : 半年后感染筛查+胸片+诊断
+ *   AL-AT(37-45) : 一年后感染筛查+胸片+诊断
+ *   AU-AZ(46-51) : 潜伏感染者管理情况（是否治疗/方案/开始/完成/结果/管理人员）
+ *
+ * 业务规则：
+ *   - 感染筛查结果阳性 → 进行胸片 → 得出诊断 → 进入潜伏/患者管理 → 停止后续轮
+ *   - 感染筛查结果阴性 → 跳过胸片 → 继续下一轮
+ *   - 三轮均阴 → 直接归档
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -18,94 +34,129 @@ import java.time.LocalDate;
 @TableName("screening_close_contact")
 public class ScreeningCloseContact extends BaseEntity {
 
-    @ExcelProperty("年份")
+    // ===== 密接者基本信息（A-P，index 0-15）=====
+    @ExcelProperty(index = 1)
     private String year;
-    @ExcelProperty("市（州）")
+    @ExcelProperty(index = 2)
     private String city;
-    @ExcelProperty("县（市、区）")
+    @ExcelProperty(index = 3)
     private String district;
-    @ExcelProperty("姓名")
+    @ExcelProperty(index = 4)
     private String name;
-    @ExcelProperty("性别")
+    @ExcelProperty(index = 5)
     private String gender;
-    @ExcelProperty("出生日期")
+    @ExcelProperty(index = 6)
     private LocalDate birthDate;
-    @ExcelProperty("年龄")
+    @ExcelProperty(index = 7)
     private Integer age;
-    @ExcelProperty("证件类型")
+    @ExcelProperty(index = 8)
     private String idType;
-    @ExcelProperty("证件号")
+    @ExcelProperty(index = 9)
     private String idNumber;
-    @ExcelProperty("民族")
+    @ExcelProperty(index = 10)
     private String ethnicity;
-    @ExcelProperty("职业")
+    @ExcelProperty(index = 11)
     private String occupation;
-    @ExcelProperty("联系电话")
+    @ExcelProperty(index = 12)
     private String phone;
-    @ExcelProperty("户籍所在地")
+    @ExcelProperty(index = 13)
     private String householdAddress;
-    @ExcelProperty("现住址")
+    @ExcelProperty(index = 14)
     private String currentAddress;
-    @ExcelProperty("接触类型")
+    @ExcelProperty(index = 15)
     private String contactType;
-    @ExcelProperty("原患者姓名")
+
+    // ===== 原患者信息（Q-S，index 16-18）=====
+    @ExcelProperty(index = 16)
     private String sourcePatientName;
-    @ExcelProperty("原患者确诊日期")
+    @ExcelProperty(index = 17)
     private LocalDate sourcePatientConfirmDate;
-    @ExcelProperty("原患者身份证号")
+    @ExcelProperty(index = 18)
     private String sourcePatientIdNumber;
-    @ExcelProperty("首次筛查日期")
+
+    // ===== 首次筛查（T-AB，index 19-27）=====
+    @ExcelProperty(index = 19)
     private LocalDate firstScreenDate;
-    @ExcelProperty("首次症状筛查结果")
+    @ExcelProperty(index = 20)
     private String firstSymptomResult;
-    @ExcelProperty("半年后筛查日期")
+    @ExcelProperty(index = 21)
+    private String firstInfectionMethod;
+    @ExcelProperty(index = 22)
+    private String firstScreenResult;
+    @ExcelProperty(index = 23)
+    private String firstInfectionResult;
+    @ExcelProperty(index = 24)
+    private String firstHasChestXray;
+    @ExcelProperty(index = 25)
+    private LocalDate firstChestXrayDate;
+    @ExcelProperty(index = 26)
+    private String firstChestXrayResult;
+    @ExcelProperty(index = 27)
+    private String firstDiagnosis;
+
+    // ===== 半年后筛查（AC-AK，index 28-36）=====
+    @ExcelProperty(index = 28)
     private LocalDate halfYearScreenDate;
-    @ExcelProperty("半年后症状筛查结果")
+    @ExcelProperty(index = 29)
     private String halfYearSymptomResult;
-    @ExcelProperty("一年后筛查日期")
+    @ExcelProperty(index = 30)
+    private String halfYearInfectionMethod;
+    @ExcelProperty(index = 31)
+    private String halfYearScreenResult;
+    @ExcelProperty(index = 32)
+    private String halfYearInfectionResult;
+    @ExcelProperty(index = 33)
+    private String halfYearHasChestXray;
+    @ExcelProperty(index = 34)
+    private LocalDate halfYearChestXrayDate;
+    @ExcelProperty(index = 35)
+    private String halfYearChestXrayResult;
+    @ExcelProperty(index = 36)
+    private String halfYearDiagnosis;
+
+    // ===== 一年后筛查（AL-AT，index 37-45）=====
+    @ExcelProperty(index = 37)
     private LocalDate oneYearScreenDate;
-    @ExcelProperty("一年后症状筛查结果")
+    @ExcelProperty(index = 38)
     private String oneYearSymptomResult;
-    @ExcelProperty("感染检查筛查日期")
-    private LocalDate infectionScreenDate;
-    @ExcelProperty("感染检查方法")
-    private String infectionMethod;
-    @ExcelProperty("结果")
-    private String screenResult;
-    @ExcelProperty("感染筛查结果")
-    private String infectionResult;
-    @ExcelProperty("是否进行胸片检查")
-    private String hasChestXray;
-    @ExcelProperty("胸片检查日期")
-    private LocalDate chestXrayDate;
-    @ExcelProperty("胸片检查结果")
-    private String chestXrayResult;
-    @ExcelProperty("筛查结果-首次")
-    private String firstScreeningResult;
-    @ExcelProperty("筛查结果-半年后")
-    private String halfYearScreeningResult;
-    @ExcelProperty("筛查结果-一年后")
-    private String oneYearScreeningResult;
-    @ExcelProperty("诊断结果")
-    private String diagnosisResult;
-    @ExcelProperty("是否进行预防性治疗")
+    @ExcelProperty(index = 39)
+    private String oneYearInfectionMethod;
+    @ExcelProperty(index = 40)
+    private String oneYearScreenResult;
+    @ExcelProperty(index = 41)
+    private String oneYearInfectionResult;
+    @ExcelProperty(index = 42)
+    private String oneYearHasChestXray;
+    @ExcelProperty(index = 43)
+    private LocalDate oneYearChestXrayDate;
+    @ExcelProperty(index = 44)
+    private String oneYearChestXrayResult;
+    @ExcelProperty(index = 45)
+    private String oneYearDiagnosis;
+
+    // ===== 潜伏感染者管理情况（AU-AZ，index 46-51）=====
+    @ExcelProperty(index = 46)
     private String hasPreventiveTreatment;
-    @ExcelProperty("预防性治疗方案")
+    @ExcelProperty(index = 47)
     private String preventivePlan;
-    @ExcelProperty("预防性治疗开始时间")
+    @ExcelProperty(index = 48)
     private LocalDate preventiveStartDate;
-    @ExcelProperty("预防性治疗完成时间")
+    @ExcelProperty(index = 49)
     private LocalDate preventiveEndDate;
-    @ExcelProperty("预防性治疗结果")
+    @ExcelProperty(index = 50)
     private String preventiveResult;
-    @ExcelProperty("随访管理人员")
+    @ExcelProperty(index = 51)
     private String preventiveManager;
-    @ExcelProperty("惠民方式")
+
     private String benefitMethod;
-    @ExcelProperty("备注")
+
     private String remark;
 
-    /** 是否潜伏管理者：0否 1是 */
+    /** 是否潜伏管理者：0否 1是（系统自动判定） */
     private Integer isLatent;
+
+    /** 阳性轮次：1首次 2半年后 3一年后（系统自动判定） */
+    private Integer activeRound;
+
     private String uploadBatch;
 }

@@ -1,9 +1,11 @@
 package cn.luyou.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import cn.luyou.model.LatentInfection;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.vo.DistrictStatisticsVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
+import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.StatisticsService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -14,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 
@@ -22,10 +25,17 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 public class StatisticsServiceImpl implements StatisticsService {
 
     private final ScreeningSchoolMapper screeningSchoolMapper;
+    private final LatentInfectionMapper latentInfectionMapper;
 
     @Override
     public List<SchoolStatisticsVO> getSchoolStatistics(String year, String district) {
         List<ScreeningSchool> records = queryRecords(year, district);
+        // 胸片/诊断数据已迁移到 latent_infection，按 populationType=school 一次查出
+        List<LatentInfection> latentList = queryLatentRecords("school");
+        Map<Long, LatentInfection> latentByScreeningId = latentList.stream()
+                .filter(l -> l.getScreeningId() != null)
+                .collect(Collectors.toMap(LatentInfection::getScreeningId, l -> l, (a, b) -> a));
+
         Map<String, List<ScreeningSchool>> grouped = new LinkedHashMap<>();
         for (ScreeningSchool r : records) {
             String key = StrUtil.blankToDefault(r.getDistrict(), "未知") + "|" + StrUtil.blankToDefault(r.getSchoolName(), "未知");
@@ -36,7 +46,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         for (Map.Entry<String, List<ScreeningSchool>> entry : grouped.entrySet()) {
             String[] parts = entry.getKey().split("\\|", 2);
             List<ScreeningSchool> list = entry.getValue();
-            result.add(buildSchoolVO(parts[0], parts[1], list));
+            result.add(buildSchoolVO(parts[0], parts[1], list, latentByScreeningId));
         }
         return result;
     }
@@ -44,6 +54,11 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Override
     public List<DistrictStatisticsVO> getDistrictStatistics(String year, String district) {
         List<ScreeningSchool> records = queryRecords(year, district);
+        List<LatentInfection> latentList = queryLatentRecords("school");
+        Map<Long, LatentInfection> latentByScreeningId = latentList.stream()
+                .filter(l -> l.getScreeningId() != null)
+                .collect(Collectors.toMap(LatentInfection::getScreeningId, l -> l, (a, b) -> a));
+
         Map<String, List<ScreeningSchool>> grouped = new LinkedHashMap<>();
         for (ScreeningSchool r : records) {
             String key = StrUtil.blankToDefault(r.getDistrict(), "未知");
@@ -53,7 +68,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<DistrictStatisticsVO> result = new ArrayList<>();
         for (Map.Entry<String, List<ScreeningSchool>> entry : grouped.entrySet()) {
             List<ScreeningSchool> list = entry.getValue();
-            result.add(buildDistrictVO(entry.getKey(), list));
+            result.add(buildDistrictVO(entry.getKey(), list, latentByScreeningId));
         }
         return result;
     }
@@ -79,43 +94,79 @@ public class StatisticsServiceImpl implements StatisticsService {
         return screeningSchoolMapper.selectList(wrapper);
     }
 
-    private SchoolStatisticsVO buildSchoolVO(String district, String schoolName, List<ScreeningSchool> list) {
+    private List<LatentInfection> queryLatentRecords(String populationType) {
+        return latentInfectionMapper.selectList(
+                Wrappers.<LatentInfection>lambdaQuery()
+                        .eq(LatentInfection::getPopulationType, populationType));
+    }
+
+    /**
+     * 从 latent_infection 表按 screeningId 集合统计胸片与诊断。
+     */
+    private long countLatentXray(Set<Long> screeningIds, Map<Long, LatentInfection> latentMap) {
+        return screeningIds.stream()
+                .filter(latentMap::containsKey)
+                .filter(id -> "是".equals(latentMap.get(id).getHasChestXray()))
+                .count();
+    }
+
+    private long countLatentXrayAbnormal(Set<Long> screeningIds, Map<Long, LatentInfection> latentMap) {
+        return screeningIds.stream()
+                .filter(latentMap::containsKey)
+                .filter(id -> {
+                    String val = latentMap.get(id).getChestXrayResult();
+                    return StrUtil.isNotBlank(val) && val.contains("异常");
+                })
+                .count();
+    }
+
+    private long countLatentTbPatient(Set<Long> screeningIds, Map<Long, LatentInfection> latentMap) {
+        return screeningIds.stream()
+                .filter(latentMap::containsKey)
+                .filter(id -> {
+                    String diag = latentMap.get(id).getDiagnosisFirst();
+                    return StrUtil.isNotBlank(diag) && diag.contains("肺结核");
+                })
+                .count();
+    }
+
+    private SchoolStatisticsVO buildSchoolVO(String district, String schoolName,
+                                             List<ScreeningSchool> list,
+                                             Map<Long, LatentInfection> latentByScreeningId) {
         long ppd1 = countScreenResult(list, "PPD+", true);
         long ppd2 = countScreenResult(list, "PPD++", true);
         long ppd3 = countScreenResult(list, "PPD+++", false);
-        // 汇总各记录备注，去重去空后以"；"连接
         String remark = list.stream()
                 .map(ScreeningSchool::getRemark)
                 .filter(StrUtil::isNotBlank)
                 .distinct()
                 .collect(Collectors.joining("；"));
+        Set<Long> ids = list.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
         return SchoolStatisticsVO.builder()
                 .district(district)
                 .schoolName(schoolName)
-                // 上传记录总数即应筛查人数；实际进行感染筛查（"是"）的为实际筛查人数
                 .shouldScreenCount((long) list.size())
                 .actualScreenCount(countEquals(list, ScreeningSchool::getHasInfectionScreen, "是"))
                 .closeContactCount(countContains(list, ScreeningSchool::getCloseContactHistory, "有"))
                 .suspiciousSymptomCount(countContains(list, ScreeningSchool::getSuspiciousSymptoms, "有"))
-                .chestXrayCount(countEquals(list, ScreeningSchool::getHasChestXray, "是"))
-                .chestXrayAbnormalCount(countContains(list, ScreeningSchool::getChestXrayResult, "异常"))
+                .chestXrayCount(countLatentXray(ids, latentByScreeningId))
+                .chestXrayAbnormalCount(countLatentXrayAbnormal(ids, latentByScreeningId))
                 .ppdTestCount(countContains(list, ScreeningSchool::getScreenMethod, "PPD"))
                 .ppdPositive1(ppd1)
                 .ppdPositive2(ppd2)
                 .ppdPositive3(ppd3)
-                // 合计 = 三个等级之和，避免字符串模糊匹配偏差
                 .ppdPositiveTotal(ppd1 + ppd2 + ppd3)
                 .ecNegative(countContains(list, ScreeningSchool::getInfectionResult, "EC阴性"))
                 .ecPositive(countContains(list, ScreeningSchool::getInfectionResult, "EC阳性"))
                 .igraPositive(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阳性"))
                 .igraNegative(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阴性"))
-                // "肺结核/疑似肺结核"：诊断结果含"肺结核"（"疑似肺结核"亦包含该子串）
-                .tbPatientCount(countContains(list, ScreeningSchool::getDiagnosisResult, "肺结核"))
+                .tbPatientCount(countLatentTbPatient(ids, latentByScreeningId))
                 .remark(StrUtil.blankToDefault(remark, null))
                 .build();
     }
 
-    private DistrictStatisticsVO buildDistrictVO(String district, List<ScreeningSchool> list) {
+    private DistrictStatisticsVO buildDistrictVO(String district, List<ScreeningSchool> list,
+                                                 Map<Long, LatentInfection> latentByScreeningId) {
         long ppd1 = countScreenResult(list, "PPD+", true);
         long ppd2 = countScreenResult(list, "PPD++", true);
         long ppd3 = countScreenResult(list, "PPD+++", false);
@@ -124,13 +175,14 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .filter(StrUtil::isNotBlank)
                 .distinct()
                 .collect(Collectors.joining("；"));
+        Set<Long> ids = list.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
         return DistrictStatisticsVO.builder()
                 .district(district)
                 .actualScreenCount(countEquals(list, ScreeningSchool::getHasInfectionScreen, "是"))
                 .closeContactCount(countContains(list, ScreeningSchool::getCloseContactHistory, "有"))
                 .suspiciousSymptomCount(countContains(list, ScreeningSchool::getSuspiciousSymptoms, "有"))
-                .chestXrayCount(countEquals(list, ScreeningSchool::getHasChestXray, "是"))
-                .chestXrayAbnormalCount(countContains(list, ScreeningSchool::getChestXrayResult, "异常"))
+                .chestXrayCount(countLatentXray(ids, latentByScreeningId))
+                .chestXrayAbnormalCount(countLatentXrayAbnormal(ids, latentByScreeningId))
                 .ppdTestCount(countContains(list, ScreeningSchool::getScreenMethod, "PPD"))
                 .ppdPositive1(ppd1)
                 .ppdPositive2(ppd2)
@@ -140,7 +192,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .ecPositive(countContains(list, ScreeningSchool::getInfectionResult, "EC阳性"))
                 .igraPositive(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阳性"))
                 .igraNegative(countContains(list, ScreeningSchool::getInfectionResult, "IGRA阴性"))
-                .tbPatientCount(countContains(list, ScreeningSchool::getDiagnosisResult, "肺结核"))
+                .tbPatientCount(countLatentTbPatient(ids, latentByScreeningId))
                 .remark(StrUtil.blankToDefault(remark, null))
                 .build();
     }

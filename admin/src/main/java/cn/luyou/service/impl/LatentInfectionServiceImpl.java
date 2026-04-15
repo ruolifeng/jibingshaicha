@@ -1,27 +1,54 @@
 package cn.luyou.service.impl;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.Patient;
+import cn.luyou.model.ScreeningCloseContact;
+import cn.luyou.model.ScreeningKeyPopulation;
+import cn.luyou.model.ScreeningSchool;
 import cn.luyou.mapper.LatentInfectionMapper;
+import cn.luyou.mapper.ScreeningCloseContactMapper;
+import cn.luyou.mapper.ScreeningKeyPopulationMapper;
+import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.read.listener.ReadListener;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMapper, LatentInfection>
         implements LatentInfectionService {
 
     private final PatientService patientService;
+    private final ScreeningSchoolMapper screeningSchoolMapper;
+    private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
+    private final ScreeningCloseContactMapper screeningCloseContactMapper;
+
+    private static final List<String> DIAGNOSIS_TO_PATIENT = Arrays.asList("疑似肺结核", "确诊患者");
 
     @Override
     public IPage<LatentInfection> queryPage(int page, int size, String populationType,
@@ -45,10 +72,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
 
         switch (status) {
-            case 1 -> {
-                // 到位
-                entity.setTrackingStatus(1);
-            }
+            case 1 -> entity.setTrackingStatus(1); // 到位
             case 2 -> {
                 // 未到位
                 int count = entity.getNotInPlaceCount() + 1;
@@ -75,16 +99,169 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void saveXrayAndDiagnosis(Long id, Map<String, Object> data) {
+        LatentInfection entity = getById(id);
+        if (entity == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
+        }
+        if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后可录入胸片与诊断结果");
+        }
+        if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片与诊断已录入，不可重复操作");
+        }
+
+        String diagnosisFirst = data.getOrDefault("diagnosisFirst", "").toString();
+        if (StrUtil.isBlank(diagnosisFirst)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
+        }
+
+        String hasXray = data.getOrDefault("hasChestXray", "").toString();
+        String xrayResult = data.getOrDefault("chestXrayResult", "").toString();
+        LocalDate xrayDate = null;
+        Object xrayDateObj = data.get("chestXrayDate");
+        if (xrayDateObj != null && StrUtil.isNotBlank(xrayDateObj.toString())) {
+            xrayDate = LocalDate.parse(xrayDateObj.toString(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        }
+
+        entity.setHasChestXray(hasXray);
+        entity.setChestXrayDate(xrayDate);
+        entity.setChestXrayResult(xrayResult);
+        entity.setDiagnosisFirst(diagnosisFirst);
+        entity.setDiagnosisResult(diagnosisFirst);
+        updateById(entity);
+
+        // V4 sheet2：胸片与诊断同步回写到筛查表
+        writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
+    }
+
+    /**
+     * 将胸片与诊断数据回写到对应的筛查管理表。
+     */
+    private void writeBackXrayToScreening(LatentInfection entity, String hasXray,
+                                          LocalDate xrayDate, String xrayResult, String diagnosis) {
+        Long sid = entity.getScreeningId();
+        if (sid == null) return;
+        String type = entity.getPopulationType();
+        if (StrUtil.isBlank(type)) return;
+
+        switch (type) {
+            case "school" -> {
+                ScreeningSchool s = screeningSchoolMapper.selectById(sid);
+                if (s != null) {
+                    s.setHasChestXray(hasXray);
+                    s.setChestXrayDate(xrayDate);
+                    s.setChestXrayResult(xrayResult);
+                    s.setDiagnosisFirst(diagnosis);
+                    screeningSchoolMapper.updateById(s);
+                }
+            }
+            case "keyPopulation" -> {
+                ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(sid);
+                if (k != null) {
+                    k.setHasChestXray(hasXray);
+                    k.setChestXrayDate(xrayDate);
+                    k.setChestXrayResult(xrayResult);
+                    k.setDiagnosisFirst(diagnosis);
+                    screeningKeyPopulationMapper.updateById(k);
+                }
+            }
+            case "closeContact" -> {
+                ScreeningCloseContact c = screeningCloseContactMapper.selectById(sid);
+                if (c != null) {
+                    Integer round = entity.getActiveRound();
+                    if (round != null) {
+                        switch (round) {
+                            case 1 -> {
+                                c.setFirstHasChestXray(hasXray);
+                                c.setFirstChestXrayDate(xrayDate);
+                                c.setFirstChestXrayResult(xrayResult);
+                                c.setFirstDiagnosis(diagnosis);
+                            }
+                            case 2 -> {
+                                c.setHalfYearHasChestXray(hasXray);
+                                c.setHalfYearChestXrayDate(xrayDate);
+                                c.setHalfYearChestXrayResult(xrayResult);
+                                c.setHalfYearDiagnosis(diagnosis);
+                            }
+                            case 3 -> {
+                                c.setOneYearHasChestXray(hasXray);
+                                c.setOneYearChestXrayDate(xrayDate);
+                                c.setOneYearChestXrayResult(xrayResult);
+                                c.setOneYearDiagnosis(diagnosis);
+                            }
+                        }
+                    }
+                    screeningCloseContactMapper.updateById(c);
+                }
+            }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int importXrayBatch(MultipartFile file, String populationType) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try {
+            EasyExcel.read(file.getInputStream())
+                    .headRowNumber(2)
+                    .sheet()
+                    .doReadSync()
+                    .forEach(row -> rows.add((Map<String, Object>) row));
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败：" + e.getMessage());
+        }
+        if (rows.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
+        }
+
+        int updated = 0;
+        for (Map<String, Object> row : rows) {
+            String idNumber = getStrCell(row, 9); // 证件号列
+            if (StrUtil.isBlank(idNumber)) continue;
+
+            // 按证件号+人群类型查找潜伏感染记录
+            LatentInfection entity = lambdaQuery()
+                    .eq(LatentInfection::getIdNumber, idNumber)
+                    .eq(LatentInfection::getPopulationType, populationType)
+                    .eq(LatentInfection::getArchived, 0)
+                    .one();
+            if (entity == null || !Integer.valueOf(1).equals(entity.getTrackingStatus())) continue;
+            if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) continue;
+
+            String diagnosisFirst = getStrCell(row, 3); // V4 Z-AE 中的诊断列（首次）
+            if (StrUtil.isBlank(diagnosisFirst)) continue;
+
+            entity.setHasChestXray(getStrCell(row, 0));
+            String xrayDateStr = getStrCell(row, 1);
+            if (StrUtil.isNotBlank(xrayDateStr)) {
+                try {
+                    entity.setChestXrayDate(LocalDate.parse(xrayDateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+                } catch (Exception ignored) { /* 日期格式容错 */ }
+            }
+            entity.setChestXrayResult(getStrCell(row, 2));
+            entity.setDiagnosisFirst(diagnosisFirst);
+            entity.setDiagnosisResult(diagnosisFirst);
+            updateById(entity);
+            updated++;
+        }
+        log.info("批量导入胸片诊断，populationType={}，成功更新 {} 条", populationType, updated);
+        return updated;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void referral(Long id, String result, String remark) {
         LatentInfection entity = getById(id);
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
-        // 必须追踪到位（trackingStatus=1）才允许转诊
         if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请先完成追踪到位操作后再进行转诊");
         }
-        // 已有转诊结果则不允许重复操作
+        if (StrUtil.isBlank(entity.getDiagnosisFirst())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请先录入胸片检查与诊断结果后再进行转诊");
+        }
         if (StrUtil.isNotBlank(entity.getReferralResult())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已完成转诊，不可重复操作");
         }
@@ -101,9 +278,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 entity.setDiagnosisResult("其他");
                 entity.setArchived(1);
             }
-            case "confirmed" -> {
-                entity.setDiagnosisResult("确诊");
-                // 自动创建患者记录
+            case "confirmed", "suspected" -> {
+                // 确诊患者 / 疑似肺结核 → 进入患者管理
+                entity.setDiagnosisResult("confirmed".equals(result) ? "确诊患者" : "疑似肺结核");
                 Patient patient = Patient.builder()
                         .screeningId(entity.getScreeningId())
                         .latentInfectionId(entity.getId())
@@ -113,19 +290,47 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .age(entity.getAge())
                         .idNumber(entity.getIdNumber())
                         .phone(entity.getPhone())
-                        .diagnosisResult("确诊")
+                        .diagnosisResult(entity.getDiagnosisResult())
                         .source("confirmed")
                         .archived(0)
                         .build();
                 patientService.save(patient);
             }
-            case "latent" -> {
-                entity.setDiagnosisResult("潜伏感染者");
-                // 进入发送通知单流程
-            }
+            case "latent" -> entity.setDiagnosisResult("潜伏感染者");
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的转诊结果");
         }
 
         updateById(entity);
+    }
+
+    @Override
+    public void setMedicationStatus(Long id, Integer medicationStatus) {
+        LatentInfection entity = getById(id);
+        if (entity == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
+        }
+        if (entity.getTreatmentPhase() == null || entity.getTreatmentPhase() != 1) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "当前记录不在预防治疗阶段");
+        }
+        entity.setMedicationStatus(medicationStatus);
+        updateById(entity);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void closeCase(Long id) {
+        LatentInfection entity = getById(id);
+        if (entity == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
+        }
+        entity.setTreatmentPhase(2);
+        entity.setArchived(1);
+        entity.setArchivedTime(LocalDateTime.now());
+        updateById(entity);
+    }
+
+    private String getStrCell(Map<String, Object> row, int index) {
+        Object val = row.get(index);
+        return val == null ? "" : val.toString().trim();
     }
 }

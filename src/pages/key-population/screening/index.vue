@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningKeyPopulationApi, getScreeningKeyPopulationListApi } from "./apis"
+import { uploadScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, exportScreeningKeyPopulationApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -56,6 +56,23 @@ async function handleUpload(uploadFile: any) {
   }
 }
 
+/** 导出 Excel */
+async function handleExport() {
+  try {
+    const res = await exportScreeningKeyPopulationApi()
+    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "重点人群筛查数据.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  }
+}
+
 /** 判定结果标签颜色 */
 function getLatentTag(isLatent: number) {
   return isLatent === 1 ? "danger" : "success"
@@ -100,18 +117,22 @@ watch(
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">重点人群筛查数据</span>
-          <el-upload
-            ref="uploadRef"
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".xlsx,.xls"
-            :on-change="handleUpload"
-          >
-            <el-button type="primary" v-permission="'screening:upload'">上传 Excel</el-button>
-          </el-upload>
+          <div class="flex gap-2">
+            <el-button @click="handleExport">导出数据</el-button>
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".xlsx,.xls"
+              :on-change="handleUpload"
+            >
+              <el-button type="primary" v-permission="'screening:upload'">上传 Excel</el-button>
+            </el-upload>
+          </div>
         </div>
       </template>
 
+      <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
@@ -120,7 +141,19 @@ watch(
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="district" label="区县" />
         <el-table-column prop="ethnicity" label="民族" />
-        <el-table-column prop="crowdCategory" label="人群分类" />
+        <!-- V4 人群分类：各列独立 -->
+        <el-table-column label="人群分类">
+          <template #default="{ row }">
+            <span v-if="row.crowdCategoryClose === '是'" class="mr-1"><el-tag size="small">密接</el-tag></span>
+            <span v-if="row.crowdCategoryStudent === '是'" class="mr-1"><el-tag size="small">学生</el-tag></span>
+            <span v-if="row.crowdCategoryTeacher === '是'" class="mr-1"><el-tag size="small">教职工</el-tag></span>
+            <span v-if="row.crowdCategoryElder === '是'" class="mr-1"><el-tag size="small">老年人</el-tag></span>
+            <span v-if="row.crowdCategoryDiabetes === '是'" class="mr-1"><el-tag size="small">糖尿病</el-tag></span>
+            <span v-if="row.crowdCategoryDual === '是'" class="mr-1"><el-tag size="small">双感</el-tag></span>
+            <span v-if="row.crowdCategoryTbHist === '是'" class="mr-1"><el-tag size="small">既往TB</el-tag></span>
+            <span v-if="row.crowdCategoryNormal === '是'" class="mr-1"><el-tag size="small">非重点</el-tag></span>
+          </template>
+        </el-table-column>
         <el-table-column prop="hasSuspiciousSymptoms" label="可疑症状" />
         <el-table-column prop="cough" label="咳嗽咳痰" />
         <el-table-column prop="hemoptysis" label="咯血或血痰" />
@@ -130,18 +163,17 @@ watch(
         <el-table-column prop="appetiteLoss" label="食欲不振" />
         <el-table-column prop="fatigue" label="乏力" />
         <el-table-column prop="weightLoss" label="体重减轻" />
-        <el-table-column prop="hasInfectionScreen" label="是否感染筛" />
+        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" />
+        <el-table-column prop="screenDate" label="感染筛查日期" />
         <el-table-column prop="screenMethod" label="筛查方法" />
         <el-table-column prop="screenResult" label="筛查结果" />
         <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="胸片检查" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column prop="resultJudgment" label="结果判定" />
-        <el-table-column prop="isReferred" label="是否转诊" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column prop="isEligibleForPrevention" label="符合预防性治疗" />
-        <el-table-column prop="hasPreventiveTreatment" label="是否预防性治疗" />
-        <el-table-column prop="preventionCompleted" label="规范完成" />
+        <!-- 预防性治疗情况（督导表归档后同步） -->
+        <el-table-column prop="preventivePlan" label="预防性治疗方案" />
+        <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
+        <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
+        <el-table-column prop="preventiveResult" label="治疗结果" />
+        <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
         <el-table-column label="潜伏判定" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">

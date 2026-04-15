@@ -34,6 +34,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     private final LatentInfectionService latentInfectionService;
 
+    /** V4 阳性关键字（感染筛查结果列） */
     private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
             "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
     );
@@ -44,6 +45,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         List<ScreeningSchool> dataList = new ArrayList<>();
 
         try {
+            // V4 学校模板：第1行为大分组标题，第2行为字段名，第3行为填写说明，数据从第4行开始
             EasyExcel.read(file.getInputStream(), ScreeningSchool.class, new ReadListener<ScreeningSchool>() {
                 @Override
                 public void invoke(ScreeningSchool data, AnalysisContext context) {
@@ -56,7 +58,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("学校人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(1).doRead();
+            }).sheet().headRowNumber(3).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
@@ -67,7 +69,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
         saveBatch(dataList, 500);
 
-        // 为阳性数据自动创建潜伏感染记录
+        // 感染筛查结果阳性者自动创建潜伏感染记录
         List<LatentInfection> latentList = dataList.stream()
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> LatentInfection.builder()
@@ -105,13 +107,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         return page(new Page<>(page, size), wrapper);
     }
 
-    /**
-     * 判定感染筛查结果是否为阳性（潜伏管理者）
-     */
     private boolean isPositive(String infectionResult) {
-        if (StrUtil.isBlank(infectionResult)) {
-            return false;
-        }
+        if (StrUtil.isBlank(infectionResult)) return false;
         return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);
     }
 }

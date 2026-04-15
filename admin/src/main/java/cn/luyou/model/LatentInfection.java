@@ -7,6 +7,13 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+/**
+ * 潜伏感染管理表（V4）
+ * 新增字段：追踪到位后的胸片检查信息、首次诊断结果、密接阳性轮次
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -27,9 +34,26 @@ public class LatentInfection extends BaseEntity {
     private Integer trackingStatus;
     private Integer notInPlaceCount;
     private String trackingRemark;
-    /** 转诊结果：excluded/other/confirmed/latent */
+
+    // ===== V4 新增：追踪到位后录入胸片与诊断 =====
+    /** 是否进行胸片检查（是/否） */
+    private String hasChestXray;
+    private LocalDate chestXrayDate;
+    /** 胸片检查结果：正常/异常/未查 */
+    private String chestXrayResult;
+    /** 首次诊断结果：排除/疑似肺结核/潜伏感染者/确诊患者/其他 */
+    private String diagnosisFirst;
+    /** 密接阳性轮次：1首次 2半年后 3一年后（仅密接人群使用） */
+    private Integer activeRound;
+
+    /** 转诊结果：excluded/other/confirmed/suspected/latent */
     private String referralResult;
     private String referralRemark;
     private String diagnosisResult;
+    /** 治疗阶段：0未开始 1预防治疗中 2已结案 */
+    private Integer treatmentPhase;
+    /** 服药状态：1按要求服药 2不服药 */
+    private Integer medicationStatus;
     private Integer archived;
+    private LocalDateTime archivedTime;
 }

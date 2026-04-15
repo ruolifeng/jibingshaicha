@@ -26,6 +26,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 密接人群筛查 Service（V4 三轮判定逻辑）
+ *
+ * 三轮判定规则：
+ *  1. 首次感染结果阳性 → is_latent=1, active_round=1, infectionResult=首次感染筛查结果
+ *  2. 首次阴性，半年后阳性 → is_latent=1, active_round=2
+ *  3. 首次、半年后均阴，一年后阳性 → is_latent=1, active_round=3
+ *  4. 三轮均阴性 → is_latent=0, archived=1（直接归档）
+ *  5. 部分轮为空（数据尚未录全） → is_latent=0, archived=0（暂存，等待后续录入）
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -48,14 +58,13 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 @Override
                 public void invoke(ScreeningCloseContact data, AnalysisContext context) {
                     data.setUploadBatch(batchId);
-                    data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
                     dataList.add(data);
                 }
                 @Override
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("密接人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(1).doRead();
+            }).sheet().headRowNumber(3).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
@@ -64,30 +73,123 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
         }
 
-        saveBatch(dataList, 500);
+        // 增量导入：按证件号匹配已有记录，合并后续轮次数据
+        List<ScreeningCloseContact> toInsert = new ArrayList<>();
+        List<ScreeningCloseContact> toUpdate = new ArrayList<>();
+        for (ScreeningCloseContact d : dataList) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                determineLatecy(d);
+                toInsert.add(d);
+                continue;
+            }
+            ScreeningCloseContact existing = lambdaQuery()
+                    .eq(ScreeningCloseContact::getIdNumber, d.getIdNumber())
+                    .last("LIMIT 1")
+                    .one();
+            if (existing != null) {
+                mergeRoundData(existing, d);
+                determineLatecy(existing);
+                toUpdate.add(existing);
+            } else {
+                determineLatecy(d);
+                toInsert.add(d);
+            }
+        }
+        if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
+        if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
 
-        List<LatentInfection> latentList = dataList.stream()
-                .filter(d -> d.getIsLatent() == 1)
-                .map(d -> LatentInfection.builder()
-                        .screeningId(d.getId())
-                        .populationType("closeContact")
-                        .name(d.getName())
-                        .idNumber(d.getIdNumber())
-                        .gender(d.getGender())
-                        .age(d.getAge())
-                        .phone(d.getPhone())
-                        .infectionResult(d.getInfectionResult())
-                        .trackingStatus(0)
-                        .notInPlaceCount(0)
-                        .archived(0)
-                        .build())
-                .toList();
+        List<ScreeningCloseContact> allProcessed = new ArrayList<>(toInsert);
+        allProcessed.addAll(toUpdate);
+
+        // 仅对新判定为阳性且尚无潜伏感染记录的创建记录
+        List<LatentInfection> latentList = new ArrayList<>();
+        for (ScreeningCloseContact d : allProcessed) {
+            if (d.getIsLatent() != 1) continue;
+            boolean alreadyExists = latentInfectionService.lambdaQuery()
+                    .eq(LatentInfection::getScreeningId, d.getId())
+                    .eq(LatentInfection::getPopulationType, "closeContact")
+                    .exists();
+            if (alreadyExists) continue;
+            String infectionResult = switch (d.getActiveRound()) {
+                case 1 -> d.getFirstInfectionResult();
+                case 2 -> d.getHalfYearInfectionResult();
+                case 3 -> d.getOneYearInfectionResult();
+                default -> "";
+            };
+            latentList.add(LatentInfection.builder()
+                    .screeningId(d.getId())
+                    .populationType("closeContact")
+                    .name(d.getName())
+                    .idNumber(d.getIdNumber())
+                    .gender(d.getGender())
+                    .age(d.getAge())
+                    .phone(d.getPhone())
+                    .infectionResult(infectionResult)
+                    .activeRound(d.getActiveRound())
+                    .trackingStatus(0)
+                    .notInPlaceCount(0)
+                    .archived(0)
+                    .build());
+        }
         if (!latentList.isEmpty()) {
             latentInfectionService.saveBatch(latentList, 500);
             log.info("自动创建密接人群潜伏感染记录 {} 条", latentList.size());
         }
 
         return dataList.size();
+    }
+
+    /**
+     * 将新导入数据中非空的轮次数据合并到已有记录中（增量更新）。
+     */
+    private void mergeRoundData(ScreeningCloseContact existing, ScreeningCloseContact incoming) {
+        // 基本信息始终更新
+        if (StrUtil.isNotBlank(incoming.getName())) existing.setName(incoming.getName());
+        if (StrUtil.isNotBlank(incoming.getPhone())) existing.setPhone(incoming.getPhone());
+        if (StrUtil.isNotBlank(incoming.getCurrentAddress())) existing.setCurrentAddress(incoming.getCurrentAddress());
+
+        // 首次轮数据
+        if (StrUtil.isNotBlank(incoming.getFirstInfectionResult())) {
+            existing.setFirstScreenDate(incoming.getFirstScreenDate());
+            existing.setFirstSymptomResult(incoming.getFirstSymptomResult());
+            existing.setFirstInfectionMethod(incoming.getFirstInfectionMethod());
+            existing.setFirstScreenResult(incoming.getFirstScreenResult());
+            existing.setFirstInfectionResult(incoming.getFirstInfectionResult());
+            existing.setFirstHasChestXray(incoming.getFirstHasChestXray());
+            existing.setFirstChestXrayDate(incoming.getFirstChestXrayDate());
+            existing.setFirstChestXrayResult(incoming.getFirstChestXrayResult());
+            existing.setFirstDiagnosis(incoming.getFirstDiagnosis());
+        }
+        // 半年后轮数据
+        if (StrUtil.isNotBlank(incoming.getHalfYearInfectionResult())) {
+            existing.setHalfYearScreenDate(incoming.getHalfYearScreenDate());
+            existing.setHalfYearSymptomResult(incoming.getHalfYearSymptomResult());
+            existing.setHalfYearInfectionMethod(incoming.getHalfYearInfectionMethod());
+            existing.setHalfYearScreenResult(incoming.getHalfYearScreenResult());
+            existing.setHalfYearInfectionResult(incoming.getHalfYearInfectionResult());
+            existing.setHalfYearHasChestXray(incoming.getHalfYearHasChestXray());
+            existing.setHalfYearChestXrayDate(incoming.getHalfYearChestXrayDate());
+            existing.setHalfYearChestXrayResult(incoming.getHalfYearChestXrayResult());
+            existing.setHalfYearDiagnosis(incoming.getHalfYearDiagnosis());
+        }
+        // 一年后轮数据
+        if (StrUtil.isNotBlank(incoming.getOneYearInfectionResult())) {
+            existing.setOneYearScreenDate(incoming.getOneYearScreenDate());
+            existing.setOneYearSymptomResult(incoming.getOneYearSymptomResult());
+            existing.setOneYearInfectionMethod(incoming.getOneYearInfectionMethod());
+            existing.setOneYearScreenResult(incoming.getOneYearScreenResult());
+            existing.setOneYearInfectionResult(incoming.getOneYearInfectionResult());
+            existing.setOneYearHasChestXray(incoming.getOneYearHasChestXray());
+            existing.setOneYearChestXrayDate(incoming.getOneYearChestXrayDate());
+            existing.setOneYearChestXrayResult(incoming.getOneYearChestXrayResult());
+            existing.setOneYearDiagnosis(incoming.getOneYearDiagnosis());
+        }
+        // 预防治疗管理情况
+        if (StrUtil.isNotBlank(incoming.getPreventivePlan())) existing.setPreventivePlan(incoming.getPreventivePlan());
+        if (incoming.getPreventiveStartDate() != null) existing.setPreventiveStartDate(incoming.getPreventiveStartDate());
+        if (incoming.getPreventiveEndDate() != null) existing.setPreventiveEndDate(incoming.getPreventiveEndDate());
+        if (StrUtil.isNotBlank(incoming.getPreventiveResult())) existing.setPreventiveResult(incoming.getPreventiveResult());
+        if (StrUtil.isNotBlank(incoming.getPreventiveManager())) existing.setPreventiveManager(incoming.getPreventiveManager());
     }
 
     @Override
@@ -100,6 +202,40 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 .eq(isLatent != null, ScreeningCloseContact::getIsLatent, isLatent)
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
         return page(new Page<>(page, size), wrapper);
+    }
+
+    /**
+     * 三轮顺序判定逻辑
+     */
+    private void determineLatecy(ScreeningCloseContact data) {
+        boolean firstFilled   = StrUtil.isNotBlank(data.getFirstInfectionResult());
+        boolean halfFilled    = StrUtil.isNotBlank(data.getHalfYearInfectionResult());
+        boolean oneFilled     = StrUtil.isNotBlank(data.getOneYearInfectionResult());
+
+        if (firstFilled && isPositive(data.getFirstInfectionResult())) {
+            data.setIsLatent(1);
+            data.setActiveRound(1);
+            return;
+        }
+        if (halfFilled && isPositive(data.getHalfYearInfectionResult())) {
+            data.setIsLatent(1);
+            data.setActiveRound(2);
+            return;
+        }
+        if (oneFilled && isPositive(data.getOneYearInfectionResult())) {
+            data.setIsLatent(1);
+            data.setActiveRound(3);
+            return;
+        }
+        // 三轮均有结果且均为阴性 → 直接归档
+        if (firstFilled && halfFilled && oneFilled) {
+            data.setIsLatent(0);
+            // 注意：此处仅标记为非潜伏；归档操作在 screening 记录层面；
+            // latent_infection 表不会创建记录。筛查表本身保留供统计
+            return;
+        }
+        // 部分轮为空，暂存等待后续录入
+        data.setIsLatent(0);
     }
 
     private boolean isPositive(String infectionResult) {
