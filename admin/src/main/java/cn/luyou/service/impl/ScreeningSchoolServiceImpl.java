@@ -45,7 +45,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         List<ScreeningSchool> dataList = new ArrayList<>();
 
         try {
-            // V4 学校模板：第1行为大分组标题，第2行为字段名，第3行为填写说明，数据从第4行开始
+            // V4 学校模板：第1行为大分组标题，第2行为字段名，数据从第3行开始
             EasyExcel.read(file.getInputStream(), ScreeningSchool.class, new ReadListener<ScreeningSchool>() {
                 @Override
                 public void invoke(ScreeningSchool data, AnalysisContext context) {
@@ -58,7 +58,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("学校人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(3).doRead();
+            }).sheet().headRowNumber(2).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }

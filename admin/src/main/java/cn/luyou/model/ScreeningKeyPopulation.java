@@ -1,6 +1,8 @@
 package cn.luyou.model;
 
+import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.alibaba.excel.annotation.format.DateTimeFormat;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,6 +38,7 @@ public class ScreeningKeyPopulation extends BaseEntity {
     @ExcelProperty(index = 5)
     private String gender;
     @ExcelProperty(index = 6)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate birthDate;
     @ExcelProperty(index = 7)
     private Integer age;
@@ -94,6 +97,7 @@ public class ScreeningKeyPopulation extends BaseEntity {
     @ExcelProperty(index = 31)
     private String hasInfectionScreen;
     @ExcelProperty(index = 32)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate screenDate;
     @ExcelProperty(index = 33)
     private String screenMethod;
@@ -104,24 +108,39 @@ public class ScreeningKeyPopulation extends BaseEntity {
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====
     // V4 AK-AP（index 36-41）：胸片与诊断，在潜伏感染追踪到位后由系统回写
+    @ExcelIgnore
     private String hasChestXray;
+    @ExcelIgnore
     private LocalDate chestXrayDate;
+    @ExcelIgnore
     private String chestXrayResult;
+    @ExcelIgnore
     private String diagnosisFirst;
+    @ExcelIgnore
     private String diagnosisHalfYear;
+    @ExcelIgnore
     private String diagnosisOneYear;
 
     // V4 AQ-AV（index 42-47）：预防性治疗情况，由督导表归档后系统写入
+    @ExcelIgnore
+    private String hasPreventiveTreatment;
+    @ExcelIgnore
     private String preventivePlan;
+    @ExcelIgnore
     private LocalDate preventiveStartDate;
+    @ExcelIgnore
     private LocalDate preventiveEndDate;
+    @ExcelIgnore
     private String preventiveResult;
+    @ExcelIgnore
     private String preventiveManager;
 
-    // V4 重点人群模板共 48 列（A-AV），最后一列 AV(index47) 为随访管理人员，无 remark 列
+    @ExcelIgnore
     private String remark;
 
     /** 是否潜伏管理者：0否 1是 */
+    @ExcelIgnore
     private Integer isLatent;
+    @ExcelIgnore
     private String uploadBatch;
 }

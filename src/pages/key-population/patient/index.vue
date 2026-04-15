@@ -1,6 +1,14 @@
 <script lang="ts" setup>
+import { ArrowDown } from "@element-plus/icons-vue"
 import { usePagination } from "@@/composables/usePagination"
-import { CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS, MANAGEMENT_METHOD_OPTIONS, SUPERVISOR_OPTIONS, SPUTUM_RESULT_OPTIONS, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import {
+  CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS, MANAGEMENT_METHOD_OPTIONS, SUPERVISOR_OPTIONS,
+  SPUTUM_RESULT_OPTIONS, NOTICE_STATUS_MAP, PATIENT_TYPE_OPTIONS, PATIENT_MANAGEMENT_METHOD_OPTIONS,
+  PATHOGEN_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS,
+  VISIT_METHOD_OPTIONS, SPUTUM_STATUS_OPTIONS, DRUG_RESISTANCE_OPTIONS, SYMPTOM_OPTIONS,
+  MEDICATION_USAGE_OPTIONS, DRUG_FORM_OPTIONS, FIRST_VISIT_SUPERVISOR_OPTIONS, VENTILATION_OPTIONS,
+  EDUCATION_ITEMS
+} from "@@/constants/disease"
 import {
   getPatientListApi, importEpidemicApi, saveFirstVisitApi, getFirstVisitApi,
   saveFollowUpApi, getFollowUpListApi, saveMedicationApi, getMedicationApi, completeMedicationApi
@@ -69,22 +77,28 @@ const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const submitting = ref(false)
 const noticeForm = reactive({
-  currentAddress: "", householdAddress: "", idNumber: "", gender: "",
-  birthDate: "", age: null as number | null, ethnicity: "",
-  crowdCategory: "", treatmentPlan: "", customPlanDetail: "",
+  idNumber: "", gender: "", birthDate: "", age: null as number | null,
+  phone: "", crowdCategory: "",
+  chestXrayDate: "", chestXrayResult: "",
+  treatmentInstitution: "", issuedTime: "",
+  patientType: "", managementMethod: "",
+  treatmentPlan: "", customPlanDetail: "",
+  sputumSmear: "", sputumCulture: "", molecularTest: "", pathologyTest: "",
+  otherNotes: "",
   receiverOrgId: undefined as number | undefined
 })
 
 function openNoticeDialog(row: any) {
   noticeRow.value = row
   Object.assign(noticeForm, {
-    currentAddress: row.currentAddress || "",
-    householdAddress: row.householdAddress || "",
-    idNumber: row.idNumber || "",
-    gender: row.gender || "",
-    birthDate: "", age: row.age || null, ethnicity: row.ethnicity || "",
-    crowdCategory: "", treatmentPlan: "", customPlanDetail: "",
-    receiverOrgId: undefined
+    idNumber: row.idNumber || "", gender: row.gender || "",
+    birthDate: "", age: row.age || null, phone: row.phone || "",
+    crowdCategory: "", chestXrayDate: "", chestXrayResult: "",
+    treatmentInstitution: "", issuedTime: "",
+    patientType: "", managementMethod: "",
+    treatmentPlan: "", customPlanDetail: "",
+    sputumSmear: "", sputumCulture: "", molecularTest: "", pathologyTest: "",
+    otherNotes: "", receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
 }
@@ -100,8 +114,7 @@ async function handleSendNotice() {
       patientName: noticeRow.value.name,
       ...noticeForm,
       treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
-      senderId: userStore.userId,
-      receiverOrgId: noticeForm.receiverOrgId
+      senderId: userStore.userId
     })
     ElMessage.success("患者通知单发送成功")
     noticeDialogVisible.value = false
@@ -139,12 +152,26 @@ async function viewNotice(row: any) {
 // ==================== 首次随访 ====================
 const firstVisitDialogVisible = ref(false)
 const firstVisitRow = ref<any>(null)
-const firstVisitForm = reactive({ visitDate: "", visitContent: "" })
+const firstVisitForm = reactive({
+  visitDate: "", visitMethod: "", patientType: "",
+  sputumStatus: "", drugResistance: "", symptoms: [] as string[],
+  otherSymptoms: "", chemotherapy: "", medicationUsage: "",
+  drugForm: [] as string[], supervisor: "", separateRoom: "", ventilation: "",
+  smokingAmount: "", drinkingAmount: "", medicationLocation: "",
+  medicationPickTime: "", educationItems: {} as Record<string, string>,
+  nextVisitDate: "", doctorSignature: ""
+})
 
 function openFirstVisitDialog(row: any) {
   firstVisitRow.value = row
-  firstVisitForm.visitDate = ""
-  firstVisitForm.visitContent = ""
+  Object.assign(firstVisitForm, {
+    visitDate: "", visitMethod: "", patientType: "",
+    sputumStatus: "", drugResistance: "", symptoms: [],
+    otherSymptoms: "", chemotherapy: "", medicationUsage: "",
+    drugForm: [], supervisor: "", separateRoom: "", ventilation: "",
+    smokingAmount: "", drinkingAmount: "", medicationLocation: "",
+    medicationPickTime: "", educationItems: {}, nextVisitDate: "", doctorSignature: ""
+  })
   firstVisitDialogVisible.value = true
 }
 
@@ -153,8 +180,10 @@ async function handleSaveFirstVisit() {
     await saveFirstVisitApi({
       patientId: firstVisitRow.value.id,
       populationType: "keyPopulation",
-      visitDate: firstVisitForm.visitDate,
-      visitContent: firstVisitForm.visitContent
+      ...firstVisitForm,
+      symptoms: firstVisitForm.symptoms.join(","),
+      drugForm: firstVisitForm.drugForm.join(","),
+      educationItems: JSON.stringify(firstVisitForm.educationItems)
     })
     ElMessage.success("首次随访保存成功")
     firstVisitDialogVisible.value = false
@@ -181,12 +210,11 @@ async function viewFirstVisit(row: any) {
 // ==================== 后续随访 ====================
 const followUpDialogVisible = ref(false)
 const followUpRow = ref<any>(null)
-const followUpForm = reactive({ visitDate: "", visitContent: "" })
+const followUpForm = reactive({ visitDate: "", visitMethod: "", visitSituation: "", remarks: "" })
 
 function openFollowUpDialog(row: any) {
   followUpRow.value = row
-  followUpForm.visitDate = ""
-  followUpForm.visitContent = ""
+  Object.assign(followUpForm, { visitDate: "", visitMethod: "", visitSituation: "", remarks: "" })
   followUpDialogVisible.value = true
 }
 
@@ -195,8 +223,7 @@ async function handleSaveFollowUp() {
     await saveFollowUpApi({
       patientId: followUpRow.value.id,
       populationType: "keyPopulation",
-      visitDate: followUpForm.visitDate,
-      visitContent: followUpForm.visitContent
+      ...followUpForm
     })
     ElMessage.success("后续随访保存成功")
     followUpDialogVisible.value = false
@@ -350,6 +377,14 @@ async function handleSaveMedication() {
   } catch { /* handled */ }
 }
 
+function handleActionCommand(command: string, row: any) {
+  switch (command) {
+    case "followUp": openFollowUpDialog(row); break
+    case "followUpList": viewFollowUpList(row); break
+    case "medication": openMedicationDialog(row); break
+  }
+}
+
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
   fetchData,
@@ -410,13 +445,24 @@ watch(
             <el-button type="primary" link size="small" @click="viewFirstVisit(row)">查看</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">
-            <el-button type="primary" size="small" v-permission="'patient:sendNotice'" @click="openNoticeDialog(row)">发送通知单</el-button>
-            <el-button type="success" size="small" v-permission="'patient:firstVisit'" @click="openFirstVisitDialog(row)">首次随访</el-button>
-            <el-button type="warning" size="small" v-permission="'patient:followUp'" @click="openFollowUpDialog(row)">后续随访</el-button>
-            <el-button size="small" @click="viewFollowUpList(row)">随访记录</el-button>
-            <el-button type="danger" size="small" v-permission="'patient:medication'" @click="openMedicationDialog(row)">服药管理</el-button>
+            <div class="action-btns">
+              <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
+              <el-button v-permission="'patient:firstVisit'" type="success" link size="small" @click="openFirstVisitDialog(row)">首次随访</el-button>
+              <el-dropdown trigger="click" @command="(cmd: string) => handleActionCommand(cmd, row)">
+                <el-button type="primary" link size="small">
+                  更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="followUp">后续随访</el-dropdown-item>
+                    <el-dropdown-item command="followUpList">随访记录</el-dropdown-item>
+                    <el-dropdown-item command="medication" divided>服药管理</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -435,37 +481,48 @@ watch(
     </el-card>
 
     <!-- 患者通知单弹窗 -->
-    <el-dialog v-model="noticeDialogVisible" title="填写患者通知单" width="600px">
-      <el-form :model="noticeForm" label-width="100px">
-        <el-form-item label="现居住地址"><el-input v-model="noticeForm.currentAddress" /></el-form-item>
-        <el-form-item label="户籍地址"><el-input v-model="noticeForm.householdAddress" /></el-form-item>
-        <el-form-item label="身份证"><el-input v-model="noticeForm.idNumber" /></el-form-item>
-        <el-form-item label="性别">
-          <el-select v-model="noticeForm.gender" style="width: 100%"><el-option label="男" value="男" /><el-option label="女" value="女" /></el-select>
-        </el-form-item>
-        <el-form-item label="出生日期">
-          <el-date-picker v-model="noticeForm.birthDate" type="date" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="年龄"><el-input-number v-model="noticeForm.age" :min="0" :max="150" /></el-form-item>
-        <el-form-item label="民族"><el-input v-model="noticeForm.ethnicity" /></el-form-item>
-        <el-form-item label="人群分类">
-          <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
-            <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="治疗方案">
-          <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
-            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="接收单位">
-          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
-            <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
-          </el-select>
-        </el-form-item>
+    <el-dialog v-model="noticeDialogVisible" title="填写患者通知单" width="680px">
+      <el-form :model="noticeForm" label-width="110px">
+        <el-divider content-position="left">基本信息</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="姓名"><el-input :value="noticeRow?.name" disabled /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="身份证"><el-input v-model="noticeForm.idNumber" /></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="8"><el-form-item label="性别"><el-select v-model="noticeForm.gender" style="width: 100%"><el-option label="男" value="男" /><el-option label="女" value="女" /></el-select></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="年龄"><el-input-number v-model="noticeForm.age" :min="0" :max="150" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="出生日期"><el-date-picker v-model="noticeForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="联系方式"><el-input v-model="noticeForm.phone" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="人群分类"><el-select v-model="noticeForm.crowdCategory" style="width: 100%"><el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="患者类型"><el-select v-model="noticeForm.patientType" style="width: 100%"><el-option v-for="item in PATIENT_TYPE_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="管理方式"><el-select v-model="noticeForm.managementMethod" style="width: 100%"><el-option v-for="item in PATIENT_MANAGEMENT_METHOD_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-divider content-position="left">胸片检查</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="胸片检查时间"><el-date-picker v-model="noticeForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="胸片检查结果"><el-select v-model="noticeForm.chestXrayResult" style="width: 100%"><el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-divider content-position="left">治疗方案</el-divider>
+        <el-form-item label="治疗方案"><el-select v-model="noticeForm.treatmentPlan" style="width: 100%"><el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item>
+        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情"><el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" /></el-form-item>
+        <el-divider content-position="left">病原学检查</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="8"><el-form-item label="痰涂片"><el-select v-model="noticeForm.sputumSmear" style="width: 100%"><el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="痰培养"><el-select v-model="noticeForm.sputumCulture" style="width: 100%"><el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="分子检查"><el-select v-model="noticeForm.molecularTest" style="width: 100%"><el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="病理学检查"><el-select v-model="noticeForm.pathologyTest" style="width: 100%"><el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item>
+        <el-divider content-position="left">机构信息</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="治疗机构"><el-input v-model="noticeForm.treatmentInstitution" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="下发时间"><el-date-picker v-model="noticeForm.issuedTime" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="其他注意事项"><el-input v-model="noticeForm.otherNotes" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="接收单位"><el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%"><el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" /></el-select></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="noticeDialogVisible = false">取消</el-button>
@@ -474,13 +531,26 @@ watch(
     </el-dialog>
 
     <!-- 通知单详情 -->
-    <el-dialog v-model="noticeDetailVisible" title="患者通知单详情" width="600px">
+    <el-dialog v-model="noticeDetailVisible" title="患者通知单详情" width="700px">
       <el-descriptions v-if="noticeDetailData" :column="2" border>
         <el-descriptions-item label="姓名">{{ noticeDetailData.patientName }}</el-descriptions-item>
         <el-descriptions-item label="身份证">{{ noticeDetailData.idNumber }}</el-descriptions-item>
         <el-descriptions-item label="性别">{{ noticeDetailData.gender }}</el-descriptions-item>
         <el-descriptions-item label="年龄">{{ noticeDetailData.age }}</el-descriptions-item>
-        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.treatmentPlan }}</el-descriptions-item>
+        <el-descriptions-item label="联系方式">{{ noticeDetailData.phone || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="人群分类">{{ noticeDetailData.crowdCategory || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="患者类型">{{ noticeDetailData.patientType || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="管理方式">{{ noticeDetailData.managementMethod || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="胸片检查时间">{{ noticeDetailData.chestXrayDate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="胸片检查结果">{{ noticeDetailData.chestXrayResult || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.treatmentPlan || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="痰涂片">{{ noticeDetailData.sputumSmear || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="痰培养">{{ noticeDetailData.sputumCulture || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="分子检查">{{ noticeDetailData.molecularTest || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="病理学检查">{{ noticeDetailData.pathologyTest || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="治疗机构">{{ noticeDetailData.treatmentInstitution || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="下发时间">{{ noticeDetailData.issuedTime || "-" }}</el-descriptions-item>
+        <el-descriptions-item v-if="noticeDetailData.otherNotes" label="其他注意事项" :span="2">{{ noticeDetailData.otherNotes }}</el-descriptions-item>
         <el-descriptions-item label="发送时间">{{ noticeDetailData.sentTime }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="noticeDetailData.status === 2 ? 'success' : 'warning'" size="small">
@@ -504,14 +574,49 @@ watch(
     </el-dialog>
 
     <!-- 首次随访弹窗 -->
-    <el-dialog v-model="firstVisitDialogVisible" title="首次入户随访记录" width="600px">
-      <el-form :model="firstVisitForm" label-width="100px">
-        <el-form-item label="随访日期">
-          <el-date-picker v-model="firstVisitForm.visitDate" type="date" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="随访内容">
-          <el-input v-model="firstVisitForm.visitContent" type="textarea" :rows="6" placeholder="请填写首次入户随访记录内容" />
-        </el-form-item>
+    <el-dialog v-model="firstVisitDialogVisible" title="肺结核患者第一次入户随访记录" width="920px" top="5vh">
+      <el-form :model="firstVisitForm" label-width="110px" size="default">
+        <el-divider content-position="left">基本信息</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8"><el-form-item label="随访时间"><el-date-picker v-model="firstVisitForm.visitDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="随访方式"><el-radio-group v-model="firstVisitForm.visitMethod"><el-radio v-for="item in VISIT_METHOD_OPTIONS" :key="item" :value="item">{{ item }}</el-radio></el-radio-group></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="患者类型"><el-radio-group v-model="firstVisitForm.patientType"><el-radio value="初治">初治</el-radio><el-radio value="复治">复治</el-radio></el-radio-group></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="8"><el-form-item label="痰菌情况"><el-select v-model="firstVisitForm.sputumStatus" style="width: 100%"><el-option v-for="item in SPUTUM_STATUS_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="耐药情况"><el-select v-model="firstVisitForm.drugResistance" style="width: 100%"><el-option v-for="item in DRUG_RESISTANCE_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="其他症状"><el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写" /></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="症状及体征"><el-checkbox-group v-model="firstVisitForm.symptoms"><el-checkbox v-for="s in SYMPTOM_OPTIONS" :key="s.value" :value="s.value">{{ s.label }}</el-checkbox></el-checkbox-group></el-form-item>
+        <el-divider content-position="left">用药情况</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8"><el-form-item label="化疗方案"><el-input v-model="firstVisitForm.chemotherapy" placeholder="化疗方案" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="用法"><el-radio-group v-model="firstVisitForm.medicationUsage"><el-radio v-for="item in MEDICATION_USAGE_OPTIONS" :key="item" :value="item">{{ item }}</el-radio></el-radio-group></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="督导人员"><el-select v-model="firstVisitForm.supervisor" style="width: 100%"><el-option v-for="item in FIRST_VISIT_SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="药品剂型"><el-checkbox-group v-model="firstVisitForm.drugForm"><el-checkbox v-for="item in DRUG_FORM_OPTIONS" :key="item" :value="item">{{ item }}</el-checkbox></el-checkbox-group></el-form-item>
+        <el-divider content-position="left">居住环境与生活方式</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="6"><el-form-item label="单独居室"><el-radio-group v-model="firstVisitForm.separateRoom"><el-radio value="有">有</el-radio><el-radio value="无">无</el-radio></el-radio-group></el-form-item></el-col>
+          <el-col :span="6"><el-form-item label="通风情况"><el-select v-model="firstVisitForm.ventilation" style="width: 100%"><el-option v-for="item in VENTILATION_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="6"><el-form-item label="吸烟(支/天)"><el-input v-model="firstVisitForm.smokingAmount" placeholder="0" /></el-form-item></el-col>
+          <el-col :span="6"><el-form-item label="饮酒(两/天)"><el-input v-model="firstVisitForm.drinkingAmount" placeholder="0" /></el-form-item></el-col>
+        </el-row>
+        <el-divider content-position="left">健康教育及培训</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="取药地点"><el-input v-model="firstVisitForm.medicationLocation" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="取药时间"><el-date-picker v-model="firstVisitForm.medicationPickTime" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" /></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col v-for="item in EDUCATION_ITEMS" :key="item" :span="12">
+            <el-form-item :label="item" label-width="170px"><el-radio-group v-model="firstVisitForm.educationItems[item]"><el-radio value="掌握">掌握</el-radio><el-radio value="未掌握">未掌握</el-radio></el-radio-group></el-form-item>
+          </el-col>
+        </el-row>
+        <el-divider content-position="left">其他</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="下次随访时间"><el-date-picker v-model="firstVisitForm.nextVisitDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="评估医生签名"><el-input v-model="firstVisitForm.doctorSignature" /></el-form-item></el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <el-button @click="firstVisitDialogVisible = false">取消</el-button>
@@ -520,23 +625,35 @@ watch(
     </el-dialog>
 
     <!-- 首次随访详情 -->
-    <el-dialog v-model="firstVisitDetailVisible" title="首次随访详情" width="600px">
-      <el-descriptions v-if="firstVisitDetailData" :column="2" border>
-        <el-descriptions-item label="随访日期">{{ firstVisitDetailData.visitDate }}</el-descriptions-item>
-        <el-descriptions-item label="填写时间">{{ firstVisitDetailData.createTime }}</el-descriptions-item>
-        <el-descriptions-item label="随访内容" :span="2">{{ firstVisitDetailData.visitContent }}</el-descriptions-item>
+    <el-dialog v-model="firstVisitDetailVisible" title="首次入户随访记录详情" width="860px">
+      <el-descriptions v-if="firstVisitDetailData" :column="3" border size="small">
+        <el-descriptions-item label="随访时间">{{ firstVisitDetailData.visitDate }}</el-descriptions-item>
+        <el-descriptions-item label="随访方式">{{ firstVisitDetailData.visitMethod || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="患者类型">{{ firstVisitDetailData.patientType || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="痰菌情况">{{ firstVisitDetailData.sputumStatus || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="耐药情况">{{ firstVisitDetailData.drugResistance || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="督导人员">{{ firstVisitDetailData.supervisor || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="症状及体征" :span="3">{{ firstVisitDetailData.symptoms || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="化疗方案">{{ firstVisitDetailData.chemotherapy || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="用法">{{ firstVisitDetailData.medicationUsage || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="药品剂型">{{ firstVisitDetailData.drugForm || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="单独居室">{{ firstVisitDetailData.separateRoom || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="通风情况">{{ firstVisitDetailData.ventilation || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="吸烟量">{{ firstVisitDetailData.smokingAmount || "-" }} 支/天</el-descriptions-item>
+        <el-descriptions-item label="饮酒量">{{ firstVisitDetailData.drinkingAmount || "-" }} 两/天</el-descriptions-item>
+        <el-descriptions-item label="下次随访">{{ firstVisitDetailData.nextVisitDate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="评估医生">{{ firstVisitDetailData.doctorSignature || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="填写时间" :span="3">{{ firstVisitDetailData.createTime }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
 
     <!-- 后续随访弹窗 -->
-    <el-dialog v-model="followUpDialogVisible" title="后续随访记录" width="600px">
+    <el-dialog v-model="followUpDialogVisible" title="填写后续随访记录" width="560px">
       <el-form :model="followUpForm" label-width="100px">
-        <el-form-item label="随访日期">
-          <el-date-picker v-model="followUpForm.visitDate" type="date" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="随访内容">
-          <el-input v-model="followUpForm.visitContent" type="textarea" :rows="6" placeholder="请填写后续随访记录" />
-        </el-form-item>
+        <el-form-item label="随访时间"><el-date-picker v-model="followUpForm.visitDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
+        <el-form-item label="随访方式"><el-radio-group v-model="followUpForm.visitMethod"><el-radio v-for="item in VISIT_METHOD_OPTIONS" :key="item" :value="item">{{ item }}</el-radio></el-radio-group></el-form-item>
+        <el-form-item label="随访情况"><el-input v-model="followUpForm.visitSituation" type="textarea" :rows="4" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="followUpForm.remarks" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="followUpDialogVisible = false">取消</el-button>
@@ -545,12 +662,14 @@ watch(
     </el-dialog>
 
     <!-- 后续随访记录列表 -->
-    <el-dialog v-model="followUpListVisible" title="后续随访记录列表" width="700px">
+    <el-dialog v-model="followUpListVisible" title="患者随访汇总表" width="800px">
       <el-table :data="followUpListData" border stripe>
-        <el-table-column type="index" label="序号" />
-        <el-table-column prop="visitDate" label="随访日期" />
-        <el-table-column prop="visitContent" label="随访内容" />
-        <el-table-column prop="createTime" label="填写时间" />
+        <el-table-column prop="visitSeq" label="随访次数" width="80" />
+        <el-table-column prop="visitDate" label="随访时间" width="110" />
+        <el-table-column prop="visitMethod" label="随访方式" width="80" />
+        <el-table-column prop="visitSituation" label="随访情况" show-overflow-tooltip />
+        <el-table-column prop="remarks" label="备注" width="120" show-overflow-tooltip />
+        <el-table-column prop="createTime" label="填写时间" width="160" />
       </el-table>
     </el-dialog>
 
@@ -622,6 +741,13 @@ watch(
 <style lang="scss" scoped>
 .mb-4 { margin-bottom: 16px; }
 .mt-4 { margin-top: 16px; }
+
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
 
 .med-calendar {
   width: 100%;

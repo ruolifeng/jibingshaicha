@@ -1,6 +1,8 @@
 package cn.luyou.model;
 
+import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.alibaba.excel.annotation.format.DateTimeFormat;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,6 +42,7 @@ public class ScreeningSchool extends BaseEntity {
     private String gender;
 
     @ExcelProperty(index = 6)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate birthDate;
 
     @ExcelProperty(index = 7)
@@ -87,6 +90,7 @@ public class ScreeningSchool extends BaseEntity {
 
     /** 感染筛查日期（列21） */
     @ExcelProperty(index = 21)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate screenDate;
 
     /** 方法（PPD/EC/IGRA，列22） */
@@ -103,24 +107,39 @@ public class ScreeningSchool extends BaseEntity {
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====
     // V4 Z-AE（index 25-30）：胸片与诊断，在潜伏感染追踪到位后由系统回写
+    @ExcelIgnore
     private String hasChestXray;
+    @ExcelIgnore
     private LocalDate chestXrayDate;
+    @ExcelIgnore
     private String chestXrayResult;
+    @ExcelIgnore
     private String diagnosisFirst;
+    @ExcelIgnore
     private String diagnosisHalfYear;
+    @ExcelIgnore
     private String diagnosisOneYear;
 
     // V4 AF-AK（index 31-36）：预防性治疗情况，由督导表归档后系统写入
+    @ExcelIgnore
+    private String hasPreventiveTreatment;
+    @ExcelIgnore
     private String preventivePlan;
+    @ExcelIgnore
     private LocalDate preventiveStartDate;
+    @ExcelIgnore
     private LocalDate preventiveEndDate;
+    @ExcelIgnore
     private String preventiveResult;
+    @ExcelIgnore
     private String preventiveManager;
 
-    // V4 学生模板无备注列（模板最后一列 AK=index36 为随访管理人员）
+    @ExcelIgnore
     private String remark;
 
     /** 是否潜伏管理者：0否 1是（系统自动判定） */
+    @ExcelIgnore
     private Integer isLatent;
+    @ExcelIgnore
     private String uploadBatch;
 }

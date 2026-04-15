@@ -1,6 +1,8 @@
 package cn.luyou.model;
 
+import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.alibaba.excel.annotation.format.DateTimeFormat;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,6 +50,7 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 5)
     private String gender;
     @ExcelProperty(index = 6)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate birthDate;
     @ExcelProperty(index = 7)
     private Integer age;
@@ -72,12 +75,14 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 16)
     private String sourcePatientName;
     @ExcelProperty(index = 17)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate sourcePatientConfirmDate;
     @ExcelProperty(index = 18)
     private String sourcePatientIdNumber;
 
     // ===== 首次筛查（T-AB，index 19-27）=====
     @ExcelProperty(index = 19)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate firstScreenDate;
     @ExcelProperty(index = 20)
     private String firstSymptomResult;
@@ -90,6 +95,7 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 24)
     private String firstHasChestXray;
     @ExcelProperty(index = 25)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate firstChestXrayDate;
     @ExcelProperty(index = 26)
     private String firstChestXrayResult;
@@ -98,6 +104,7 @@ public class ScreeningCloseContact extends BaseEntity {
 
     // ===== 半年后筛查（AC-AK，index 28-36）=====
     @ExcelProperty(index = 28)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate halfYearScreenDate;
     @ExcelProperty(index = 29)
     private String halfYearSymptomResult;
@@ -110,6 +117,7 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 33)
     private String halfYearHasChestXray;
     @ExcelProperty(index = 34)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate halfYearChestXrayDate;
     @ExcelProperty(index = 35)
     private String halfYearChestXrayResult;
@@ -118,6 +126,7 @@ public class ScreeningCloseContact extends BaseEntity {
 
     // ===== 一年后筛查（AL-AT，index 37-45）=====
     @ExcelProperty(index = 37)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate oneYearScreenDate;
     @ExcelProperty(index = 38)
     private String oneYearSymptomResult;
@@ -130,6 +139,7 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 42)
     private String oneYearHasChestXray;
     @ExcelProperty(index = 43)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate oneYearChestXrayDate;
     @ExcelProperty(index = 44)
     private String oneYearChestXrayResult;
@@ -142,25 +152,30 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 47)
     private String preventivePlan;
     @ExcelProperty(index = 48)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate preventiveStartDate;
     @ExcelProperty(index = 49)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate preventiveEndDate;
     @ExcelProperty(index = 50)
     private String preventiveResult;
     @ExcelProperty(index = 51)
     private String preventiveManager;
 
-    // ===== 惠民方式 + 备注（BA-BB，index 52-53）=====
-    @ExcelProperty(index = 52)
+    // ===== 惠民方式 + 备注（V4模板不含此列，仅数据库存储）=====
+    @ExcelIgnore
     private String benefitMethod;
-    @ExcelProperty(index = 53)
+    @ExcelIgnore
     private String remark;
 
     /** 是否潜伏管理者：0否 1是（系统自动判定） */
+    @ExcelIgnore
     private Integer isLatent;
 
     /** 阳性轮次：1首次 2半年后 3一年后（系统自动判定） */
+    @ExcelIgnore
     private Integer activeRound;
 
+    @ExcelIgnore
     private String uploadBatch;
 }

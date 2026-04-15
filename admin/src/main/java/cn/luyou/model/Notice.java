@@ -23,17 +23,56 @@ public class Notice extends BaseEntity {
     private String populationType;
     /** 关联业务ID */
     private Long bizId;
+
+    // ===== 基本信息（两类通知单共用）=====
     private String patientName;
-    private String currentAddress;
-    private String householdAddress;
     private String idNumber;
     private String gender;
     private LocalDate birthDate;
     private Integer age;
-    private String ethnicity;
+    private String phone;
     private String crowdCategory;
+
+    // ===== 检查信息（两类共用）=====
+    private LocalDate chestXrayDate;
+    /** 胸片检查结果：正常/异常/未查 */
+    private String chestXrayResult;
+    /** 治疗机构 */
+    private String treatmentInstitution;
+    /** 下发时间 */
+    private LocalDate issuedTime;
+
+    // ===== 潜伏感染者通知单专用字段 =====
+    /** 感染检测时间 */
+    private LocalDate infectionDate;
+    /** 感染检查方法：PPD/EC/IGRA */
+    private String infectionMethod;
+    /** 感染检查结果 */
+    private String infectionResultValue;
+    /** 治疗方案（潜伏）：免费药品/生物制剂/未治疗 */
+    private String latentTreatmentOption;
+
+    // ===== 患者通知单专用字段 =====
+    /** 患者类型：初治/复治 */
+    private String patientType;
+    /** 管理方式：全程督导/强化督导/全程管理/未管理 */
+    private String managementMethod;
+    /** 治疗方案（患者，FDC-2HRZE/4HR 等7个方案） */
     private String treatmentPlan;
+    /** 个体化方案详情 */
     private String customPlanDetail;
+    /** 痰涂片：未出结果/阴性/阳性/未做/未知 */
+    private String sputumSmear;
+    /** 痰培养 */
+    private String sputumCulture;
+    /** 分子检查 */
+    private String molecularTest;
+    /** 病理学检查 */
+    private String pathologyTest;
+    /** 其他注意事项 */
+    private String otherNotes;
+
+    // ===== 流转字段 =====
     private Long senderId;
     private Long receiverOrgId;
     /** 状态：1已发送 2已确认 */

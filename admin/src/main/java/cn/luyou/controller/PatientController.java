@@ -87,6 +87,15 @@ public class PatientController {
     @Operation(summary = "保存首次随访")
     @PostMapping("/first-visit/save")
     public ResultResponse<Void> saveFirstVisit(@RequestBody FirstVisit firstVisit) {
+        // 若已存在首次随访记录则更新，避免唯一键冲突
+        if (firstVisit.getId() == null && firstVisit.getPatientId() != null) {
+            FirstVisit existing = firstVisitService.lambdaQuery()
+                    .eq(FirstVisit::getPatientId, firstVisit.getPatientId())
+                    .one();
+            if (existing != null) {
+                firstVisit.setId(existing.getId());
+            }
+        }
         firstVisitService.saveOrUpdate(firstVisit);
         return ResultRes.success(null);
     }
@@ -105,6 +114,11 @@ public class PatientController {
     @PostMapping("/follow-up/save")
     public ResultResponse<Void> saveFollowUp(@RequestBody FollowUpVisit followUpVisit) {
         followUpVisit.setId(null);
+        // 自动计算本次随访是第几次（visitSeq = 已有记录数 + 1）
+        long count = followUpVisitService.lambdaQuery()
+                .eq(FollowUpVisit::getPatientId, followUpVisit.getPatientId())
+                .count();
+        followUpVisit.setVisitSeq((int) count + 1);
         followUpVisitService.save(followUpVisit);
         return ResultRes.success(null);
     }

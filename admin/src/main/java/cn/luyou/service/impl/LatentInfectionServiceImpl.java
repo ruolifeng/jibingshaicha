@@ -203,10 +203,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int importXrayBatch(MultipartFile file, String populationType) {
+        int headerRows = switch (populationType) {
+            case "keyPopulation" -> 5;
+            default -> 2;
+        };
+
         List<Map<String, Object>> rows = new ArrayList<>();
         try {
             EasyExcel.read(file.getInputStream())
-                    .headRowNumber(2)
+                    .headRowNumber(headerRows)
                     .sheet()
                     .doReadSync()
                     .forEach(row -> rows.add((Map<String, Object>) row));
@@ -219,7 +224,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         int updated = 0;
         for (Map<String, Object> row : rows) {
-            String idNumber = getStrCell(row, 9); // 证件号列
+            String idNumber = getStrCell(row, 9);
             if (StrUtil.isBlank(idNumber)) continue;
 
             LatentInfection entity = lambdaQuery()
@@ -231,23 +236,44 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             if (entity == null || !Integer.valueOf(1).equals(entity.getTrackingStatus())) continue;
             if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) continue;
 
-            String diagnosisFirst = getStrCell(row, 3); // V4 Z-AE 中的诊断列（首次）
+            // 根据人群类型确定 Excel 中胸片/诊断字段的列索引
+            int hasXrayIdx, xrayDateIdx, xrayResultIdx, diagnosisIdx;
+            switch (populationType) {
+                case "school" -> {
+                    // 学校人群：Z(25)-AC(28)
+                    hasXrayIdx = 25; xrayDateIdx = 26; xrayResultIdx = 27; diagnosisIdx = 28;
+                }
+                case "keyPopulation" -> {
+                    // 重点人群：AK(36)-AO(39)
+                    hasXrayIdx = 36; xrayDateIdx = 37; xrayResultIdx = 38; diagnosisIdx = 39;
+                }
+                case "closeContact" -> {
+                    // 密接人群：按阳性轮次读取对应列组
+                    Integer round = entity.getActiveRound();
+                    if (round == null) round = 1;
+                    switch (round) {
+                        case 1 -> { hasXrayIdx = 24; xrayDateIdx = 25; xrayResultIdx = 26; diagnosisIdx = 27; }
+                        case 2 -> { hasXrayIdx = 33; xrayDateIdx = 34; xrayResultIdx = 35; diagnosisIdx = 36; }
+                        case 3 -> { hasXrayIdx = 42; xrayDateIdx = 43; xrayResultIdx = 44; diagnosisIdx = 45; }
+                        default -> { continue; }
+                    }
+                }
+                default -> { continue; }
+            }
+
+            String diagnosisFirst = getStrCell(row, diagnosisIdx);
             if (StrUtil.isBlank(diagnosisFirst)) continue;
 
-            entity.setHasChestXray(getStrCell(row, 0));
-            String xrayDateStr = getStrCell(row, 1);
-            if (StrUtil.isNotBlank(xrayDateStr)) {
-                try {
-                    entity.setChestXrayDate(LocalDate.parse(xrayDateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-                } catch (Exception ignored) { /* 日期格式容错 */ }
-            }
-            String xrayResult = getStrCell(row, 2);
+            entity.setHasChestXray(getStrCell(row, hasXrayIdx));
+            LocalDate xrayDate = parseDateCell(row.get(xrayDateIdx));
+            entity.setChestXrayDate(xrayDate);
+            String xrayResult = getStrCell(row, xrayResultIdx);
             entity.setChestXrayResult(xrayResult);
             entity.setDiagnosisFirst(diagnosisFirst);
             entity.setDiagnosisResult(diagnosisFirst);
             updateById(entity);
             writeBackXrayToScreening(entity, entity.getHasChestXray(),
-                    entity.getChestXrayDate(), xrayResult, diagnosisFirst);
+                    xrayDate, xrayResult, diagnosisFirst);
             updated++;
         }
         log.info("批量导入胸片诊断，populationType={}，成功更新 {} 条", populationType, updated);
@@ -366,5 +392,31 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private String getStrCell(Map<String, Object> row, int index) {
         Object val = row.get(index);
         return val == null ? "" : val.toString().trim();
+    }
+
+    /**
+     * 兼容 Excel 日期单元格的多种返回类型（Date、LocalDateTime、字符串等）
+     */
+    private LocalDate parseDateCell(Object val) {
+        if (val == null) return null;
+        if (val instanceof LocalDate ld) return ld;
+        if (val instanceof java.time.LocalDateTime ldt) return ldt.toLocalDate();
+        if (val instanceof java.util.Date d) return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        String str = val.toString().trim();
+        if (StrUtil.isBlank(str)) return null;
+        try {
+            return LocalDate.parse(str, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        } catch (Exception e1) {
+            try {
+                return LocalDate.parse(str, DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+            } catch (Exception e2) {
+                try {
+                    return LocalDate.parse(str, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+                } catch (Exception e3) {
+                    log.warn("无法解析日期: {}", str);
+                    return null;
+                }
+            }
+        }
     }
 }

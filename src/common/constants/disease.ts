@@ -108,12 +108,77 @@ export const NOTICE_STATUS_MAP: Record<number, string> = {
   2: "已确认"
 }
 
+/** 潜伏感染者通知单治疗方案 */
+export const LATENT_TREATMENT_OPTIONS = ["免费药品", "生物制剂", "未治疗"]
+
+/** 患者类型（患者通知单） */
+export const PATIENT_TYPE_OPTIONS = ["初治", "复治"]
+
+/** 患者通知单管理方式 */
+export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导", "全程管理", "未管理"]
+
+/** 病原学/病理学检查结果 */
+export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "未做", "未知"]
+
+/** 感染检查方法 */
+export const INFECTION_METHOD_OPTIONS = ["PPD", "EC", "IGRA"]
+
 /** 密接人群阳性轮次 */
 export const ACTIVE_ROUND_MAP: Record<number, string> = {
   1: "首次",
   2: "半年后",
   3: "一年后"
 }
+
+// ==================== 患者随访相关 ====================
+
+/** 随访方式 */
+export const VISIT_METHOD_OPTIONS = ["门诊", "家庭"]
+
+/** 痰菌情况 */
+export const SPUTUM_STATUS_OPTIONS = ["阳性", "阴性", "未查痰"]
+
+/** 耐药情况 */
+export const DRUG_RESISTANCE_OPTIONS = ["耐药", "非耐药", "未检测"]
+
+/** 症状及体征（第一次入户随访） */
+export const SYMPTOM_OPTIONS = [
+  { value: "0", label: "没有症状" },
+  { value: "1", label: "咳嗽咳痰" },
+  { value: "2", label: "低热盗汗" },
+  { value: "3", label: "咯血或血痰" },
+  { value: "4", label: "胸痛消瘦" },
+  { value: "5", label: "恶心纳差" },
+  { value: "6", label: "头痛失眠" },
+  { value: "7", label: "视物模糊" },
+  { value: "8", label: "皮肤瘙痒、皮疹" },
+  { value: "9", label: "耳鸣、听力下降" }
+]
+
+/** 用法 */
+export const MEDICATION_USAGE_OPTIONS = ["每日", "间歇"]
+
+/** 药品剂型 */
+export const DRUG_FORM_OPTIONS = ["固定剂量复合制剂", "散装药", "板式组合药", "注射剂"]
+
+/** 首次随访督导人员 */
+export const FIRST_VISIT_SUPERVISOR_OPTIONS = ["医生", "家属", "自服药", "其他"]
+
+/** 居室通风情况 */
+export const VENTILATION_OPTIONS = ["良好", "一般", "差"]
+
+/** 健康教育培训项目 */
+export const EDUCATION_ITEMS = [
+  "服药记录卡的填写",
+  "服药方法及药品存放",
+  "肺结核治疗疗程",
+  "不规律服药危害",
+  "服药后不良反应及处理",
+  "治疗期间复诊查痰",
+  "外出期间如何坚持服药",
+  "生活习惯及注意事项",
+  "密切接触者检查"
+]
 
 /** 角色映射 */
 export const ROLE_MAP: Record<number, string> = {

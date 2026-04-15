@@ -4,7 +4,8 @@ import {
   TRACKING_STATUS_MAP, REFERRAL_RESULT_OPTIONS, CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS,
   NOTICE_STATUS_MAP, MEDICATION_STATUS_OPTIONS, TREATMENT_PHASE_MAP, CHECK_PERIOD_OPTIONS,
   CHECK_RESULT_OPTIONS, DIAGNOSIS_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS,
-  PREVENTIVE_RESULT_OPTIONS, PREVENTIVE_MANAGER_OPTIONS
+  PREVENTIVE_RESULT_OPTIONS, PREVENTIVE_MANAGER_OPTIONS,
+  LATENT_TREATMENT_OPTIONS, INFECTION_METHOD_OPTIONS
 } from "@@/constants/disease"
 import {
   getLatentListApi, trackLatentApi, referralLatentApi, sendNoticeApi, confirmNoticeApi,
@@ -188,32 +189,28 @@ async function handleReferral() {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const noticeForm = reactive({
-  currentAddress: "",
-  householdAddress: "",
-  idNumber: "",
-  gender: "",
-  birthDate: "",
-  age: null as number | null,
-  ethnicity: "",
-  crowdCategory: "",
-  treatmentPlan: "",
-  customPlanDetail: "",
+  idNumber: "", gender: "", birthDate: "", age: null as number | null,
+  phone: "", crowdCategory: "",
+  // 感染检查（潜伏通知单专用）
+  infectionDate: "", infectionMethod: "", infectionResultValue: "",
+  // 胸片
+  chestXrayDate: "", chestXrayResult: "",
+  // 治疗方案（潜伏）
+  latentTreatmentOption: "",
+  // 机构
+  treatmentInstitution: "", issuedTime: "",
   receiverOrgId: undefined as number | undefined
 })
 
 function openNoticeDialog(row: any) {
   noticeRow.value = row
-  noticeForm.currentAddress = ""
-  noticeForm.householdAddress = ""
-  noticeForm.idNumber = row.idNumber || ""
-  noticeForm.gender = row.gender || ""
-  noticeForm.birthDate = ""
-  noticeForm.age = row.age || null
-  noticeForm.ethnicity = ""
-  noticeForm.crowdCategory = ""
-  noticeForm.treatmentPlan = ""
-  noticeForm.customPlanDetail = ""
-  noticeForm.receiverOrgId = undefined
+  Object.assign(noticeForm, {
+    idNumber: row.idNumber || "", gender: row.gender || "",
+    birthDate: "", age: row.age || null, phone: row.phone || "",
+    crowdCategory: "", infectionDate: "", infectionMethod: "", infectionResultValue: "",
+    chestXrayDate: "", chestXrayResult: "", latentTreatmentOption: "",
+    treatmentInstitution: "", issuedTime: "", receiverOrgId: undefined
+  })
   noticeDialogVisible.value = true
 }
 
@@ -226,16 +223,7 @@ async function handleSendNotice() {
       populationType: "school",
       bizId: noticeRow.value.id,
       patientName: noticeRow.value.name,
-      currentAddress: noticeForm.currentAddress,
-      householdAddress: noticeForm.householdAddress,
-      idNumber: noticeForm.idNumber,
-      gender: noticeForm.gender,
-      birthDate: noticeForm.birthDate,
-      age: noticeForm.age,
-      ethnicity: noticeForm.ethnicity,
-      crowdCategory: noticeForm.crowdCategory,
-      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
-      receiverOrgId: noticeForm.receiverOrgId,
+      ...noticeForm,
       senderId: userStore.userId
     })
     ElMessage.success("通知单发送成功")
@@ -774,45 +762,96 @@ watch(
     </el-dialog>
 
     <!-- 通知单弹窗 -->
-    <el-dialog v-model="noticeDialogVisible" title="填写潜伏者通知单" width="600px">
-      <el-form :model="noticeForm" label-width="100px">
-        <el-form-item label="现居住地址">
-          <el-input v-model="noticeForm.currentAddress" placeholder="请输入" />
-        </el-form-item>
-        <el-form-item label="户籍地址">
-          <el-input v-model="noticeForm.householdAddress" placeholder="请输入" />
-        </el-form-item>
-        <el-form-item label="身份证">
-          <el-input v-model="noticeForm.idNumber" placeholder="请输入" />
-        </el-form-item>
-        <el-form-item label="性别">
-          <el-select v-model="noticeForm.gender" placeholder="请选择" style="width: 100%">
-            <el-option label="男" value="男" />
-            <el-option label="女" value="女" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="出生日期">
-          <el-date-picker v-model="noticeForm.birthDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="年龄">
-          <el-input-number v-model="noticeForm.age" :min="0" :max="150" />
-        </el-form-item>
-        <el-form-item label="民族">
-          <el-input v-model="noticeForm.ethnicity" placeholder="请输入" />
-        </el-form-item>
-        <el-form-item label="人群分类">
-          <el-select v-model="noticeForm.crowdCategory" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
+    <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
+      <el-form :model="noticeForm" label-width="110px">
+        <el-divider content-position="left">基本信息</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="姓名"><el-input :value="noticeRow?.name" disabled /></el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="身份证"><el-input v-model="noticeForm.idNumber" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="8">
+            <el-form-item label="性别">
+              <el-select v-model="noticeForm.gender" style="width: 100%">
+                <el-option label="男" value="男" /><el-option label="女" value="女" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="年龄"><el-input-number v-model="noticeForm.age" :min="0" :max="150" style="width: 100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="出生日期">
+              <el-date-picker v-model="noticeForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="联系方式"><el-input v-model="noticeForm.phone" /></el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="人群分类">
+              <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
+                <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-divider content-position="left">感染检查</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="8">
+            <el-form-item label="感染检测时间">
+              <el-date-picker v-model="noticeForm.infectionDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="检查方法">
+              <el-select v-model="noticeForm.infectionMethod" style="width: 100%">
+                <el-option v-for="item in INFECTION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="检查结果"><el-input v-model="noticeForm.infectionResultValue" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-divider content-position="left">胸片检查</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="胸片检查时间">
+              <el-date-picker v-model="noticeForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片检查结果">
+              <el-select v-model="noticeForm.chestXrayResult" style="width: 100%">
+                <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-divider content-position="left">治疗方案</el-divider>
         <el-form-item label="治疗方案">
-          <el-select v-model="noticeForm.treatmentPlan" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+          <el-select v-model="noticeForm.latentTreatmentOption" style="width: 100%">
+            <el-option v-for="item in LATENT_TREATMENT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
-        </el-form-item>
+        <el-divider content-position="left">机构信息</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="治疗机构"><el-input v-model="noticeForm.treatmentInstitution" /></el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="下发时间">
+              <el-date-picker v-model="noticeForm.issuedTime" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="接收单位">
           <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
             <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
@@ -826,17 +865,22 @@ watch(
     </el-dialog>
 
     <!-- 通知单详情弹窗 -->
-    <el-dialog v-model="noticeDetailVisible" title="通知单详情" width="600px">
+    <el-dialog v-model="noticeDetailVisible" title="潜伏感染者通知单详情" width="680px">
       <el-descriptions v-if="noticeDetailData" :column="2" border>
         <el-descriptions-item label="姓名">{{ noticeDetailData.patientName }}</el-descriptions-item>
         <el-descriptions-item label="身份证">{{ noticeDetailData.idNumber }}</el-descriptions-item>
         <el-descriptions-item label="性别">{{ noticeDetailData.gender }}</el-descriptions-item>
         <el-descriptions-item label="年龄">{{ noticeDetailData.age }}</el-descriptions-item>
-        <el-descriptions-item label="民族">{{ noticeDetailData.ethnicity }}</el-descriptions-item>
+        <el-descriptions-item label="联系方式">{{ noticeDetailData.phone || "-" }}</el-descriptions-item>
         <el-descriptions-item label="人群分类">{{ noticeDetailData.crowdCategory }}</el-descriptions-item>
-        <el-descriptions-item label="现居住地址" :span="2">{{ noticeDetailData.currentAddress }}</el-descriptions-item>
-        <el-descriptions-item label="户籍地址" :span="2">{{ noticeDetailData.householdAddress }}</el-descriptions-item>
-        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.treatmentPlan }}</el-descriptions-item>
+        <el-descriptions-item label="感染检测时间">{{ noticeDetailData.infectionDate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="检查方法">{{ noticeDetailData.infectionMethod || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="感染检查结果" :span="2">{{ noticeDetailData.infectionResultValue || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="胸片检查时间">{{ noticeDetailData.chestXrayDate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="胸片检查结果">{{ noticeDetailData.chestXrayResult || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.latentTreatmentOption || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="治疗机构">{{ noticeDetailData.treatmentInstitution || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="下发时间">{{ noticeDetailData.issuedTime || "-" }}</el-descriptions-item>
         <el-descriptions-item label="发送时间">{{ noticeDetailData.sentTime }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="noticeDetailData.status === 2 ? 'success' : 'warning'" size="small">

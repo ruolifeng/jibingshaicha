@@ -64,7 +64,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("密接人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(3).doRead();
+            }).sheet().headRowNumber(2).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
