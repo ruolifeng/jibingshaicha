@@ -230,6 +230,12 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/system/permissions.vue"),
         name: "SystemPermissions",
         meta: { title: "权限管理", roles: ["admin"], permission: "system:permissions" }
+      },
+      {
+        path: "backup",
+        component: () => import("@/pages/system/backup.vue"),
+        name: "SystemBackup",
+        meta: { title: "数据备份", roles: ["admin"], permission: "system:backup" }
       }
     ]
   }

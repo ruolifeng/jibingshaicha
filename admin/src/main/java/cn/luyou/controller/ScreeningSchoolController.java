@@ -2,6 +2,7 @@ package cn.luyou.controller;
 
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.service.ScreeningSchoolService;
 import com.alibaba.excel.EasyExcel;
@@ -28,9 +29,9 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "上传学校人群筛查Excel")
     @PostMapping("/upload")
-    public ResultResponse<Integer> upload(@RequestParam("file") MultipartFile file) {
-        int count = screeningSchoolService.uploadAndParse(file);
-        return ResultRes.success(count);
+    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
+        ImportResult result = screeningSchoolService.uploadAndParse(file);
+        return ResultRes.success(result);
     }
 
     @Operation(summary = "分页查询学校人群筛查数据")

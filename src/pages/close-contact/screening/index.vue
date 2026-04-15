@@ -37,10 +37,14 @@ function handleReset() {
   handleSearch()
 }
 
+const importResultVisible = ref(false)
+const importResult = ref<{ successCount: number; errors: string[] }>({ successCount: 0, errors: [] })
+
 async function handleUpload(uploadFile: any) {
   try {
     const { data } = await uploadScreeningCloseContactApi(uploadFile.raw)
-    ElMessage.success(`成功导入 ${data} 条数据`)
+    importResult.value = data
+    importResultVisible.value = true
     fetchData()
   } catch {
     ElMessage.error("上传失败")
@@ -69,6 +73,36 @@ function getActiveRoundTag(round: number) {
   if (round === 1) return "success"
   if (round === 2) return "warning"
   return "danger"
+}
+
+/**
+ * 推算密接人群下次复查时间
+ * - 首次筛查后6个月做半年复查
+ * - 半年筛查后6个月做一年复查
+ * - 完成三轮或已确认为潜伏管理者则无需复查
+ */
+function getNextReviewDate(row: any): string {
+  if (row.isLatent === 1) return "已判定潜伏"
+  if (row.activeRound === 3 || row.oneYearInfectionResult) return "已完成三轮"
+  if (row.halfYearScreenDate) {
+    const d = new Date(row.halfYearScreenDate)
+    d.setMonth(d.getMonth() + 6)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}（一年复查）`
+  }
+  if (row.firstScreenDate) {
+    const d = new Date(row.firstScreenDate)
+    d.setMonth(d.getMonth() + 6)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}（半年复查）`
+  }
+  return "—"
+}
+
+function isReviewNearDue(row: any): boolean {
+  const dateStr = getNextReviewDate(row)
+  if (dateStr.includes("—") || dateStr.includes("已")) return false
+  const reviewDate = new Date(dateStr.split("（")[0])
+  const diffDays = (reviewDate.getTime() - Date.now()) / 86400000
+  return diffDays >= 0 && diffDays <= 15
 }
 
 /** 三轮筛查详情弹窗 */
@@ -166,11 +200,16 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-table-column prop="preventiveResult" label="治疗结果" />
         <el-table-column prop="benefitMethod" label="惠民方式" />
 
-        <el-table-column label="潜伏判定" fixed="right">
+        <el-table-column label="潜伏判定">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
               {{ row.isLatent === 1 ? "潜伏管理者" : "正常" }}
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="下次复查时间" min-width="160" fixed="right">
+          <template #default="{ row }">
+            <span :class="{ 'review-near-due': isReviewNearDue(row) }">{{ getNextReviewDate(row) }}</span>
           </template>
         </el-table-column>
 
@@ -301,10 +340,30 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </div>
       </template>
     </el-dialog>
+
+    <!-- 导入结果弹窗 -->
+    <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
+      <el-alert :title="`成功导入 ${importResult.successCount} 条数据`" type="success" :closable="false" class="mb-3" />
+      <template v-if="importResult.errors.length > 0">
+        <el-alert :title="`发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
+        <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
+          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="msg" label="错误信息" />
+        </el-table>
+      </template>
+      <template #footer>
+        <el-button type="primary" @click="importResultVisible = false">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .mb-4 { margin-bottom: 16px; }
 .mt-4 { margin-top: 16px; }
+
+.review-near-due {
+  color: #e6a23c;
+  font-weight: bold;
+}
 </style>

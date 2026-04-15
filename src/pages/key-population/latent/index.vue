@@ -7,6 +7,7 @@ import {
   PREVENTIVE_RESULT_OPTIONS, PREVENTIVE_MANAGER_OPTIONS,
   LATENT_TREATMENT_OPTIONS, INFECTION_METHOD_OPTIONS
 } from "@@/constants/disease"
+import { idCardRule, phoneRule } from "@@/utils/validate"
 import {
   getLatentListApi, trackLatentApi, referralLatentApi, sendNoticeApi, confirmNoticeApi,
   getNoticeListByBizApi, saveSupervisionApi, getSupervisionDetailApi, setMedicationStatusApi,
@@ -64,6 +65,14 @@ function handleReset() {
 }
 
 const submitting = ref(false)
+
+function getLatentRowClass({ row }: { row: any }) {
+  if (row.trackingStatus === 1 && !row.chestXrayResult && row.updateTime) {
+    const diffDays = (Date.now() - new Date(row.updateTime).getTime()) / 86400000
+    if (diffDays > 7) return "overdue-row"
+  }
+  return ""
+}
 
 // ==================== 追踪弹窗 ====================
 const trackDialogVisible = ref(false)
@@ -128,6 +137,8 @@ async function handleReferral() {
 // ==================== 通知单弹窗 ====================
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
+const noticeFormRef = ref()
+const noticeFormRules = { idNumber: [idCardRule()], phone: [phoneRule()] }
 const noticeForm = reactive({
   idNumber: "", gender: "", birthDate: "", age: null as number | null,
   phone: "", crowdCategory: "",
@@ -149,7 +160,10 @@ function openNoticeDialog(row: any) {
   noticeDialogVisible.value = true
 }
 async function handleSendNotice() {
-  if (submitting.value) return; submitting.value = true
+  if (submitting.value) return
+  const valid = await noticeFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  submitting.value = true
   try {
     await sendNoticeApi({ noticeType: "latent", populationType: POPULATION_TYPE, bizId: noticeRow.value.id, patientName: noticeRow.value.name, ...noticeForm, senderId: userStore.userId })
     ElMessage.success("通知单发送成功"); noticeDialogVisible.value = false; fetchData()
@@ -309,7 +323,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" :row-class-name="getLatentRowClass">
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
@@ -420,11 +434,11 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
 
     <!-- 通知单弹窗 -->
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
-      <el-form :model="noticeForm" label-width="110px">
+      <el-form ref="noticeFormRef" :model="noticeForm" :rules="noticeFormRules" label-width="110px">
         <el-divider content-position="left">基本信息</el-divider>
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="姓名"><el-input :value="noticeRow?.name" disabled /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="身份证"><el-input v-model="noticeForm.idNumber" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="身份证" prop="idNumber"><el-input v-model="noticeForm.idNumber" /></el-form-item></el-col>
         </el-row>
         <el-row :gutter="12">
           <el-col :span="8"><el-form-item label="性别"><el-select v-model="noticeForm.gender" style="width: 100%"><el-option label="男" value="男" /><el-option label="女" value="女" /></el-select></el-form-item></el-col>
@@ -633,4 +647,11 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
 .mb-3 { margin-bottom: 12px; }
 .mb-4 { margin-bottom: 16px; }
 .mt-4 { margin-top: 16px; }
+</style>
+
+<style lang="scss">
+.el-table .overdue-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
+}
 </style>

@@ -1,5 +1,7 @@
 <script lang="ts" setup>
 import { ArrowDown } from "@element-plus/icons-vue"
+import PrintNotice from "@@/components/PrintNotice.vue"
+import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS, MANAGEMENT_METHOD_OPTIONS, SUPERVISOR_OPTIONS,
@@ -76,6 +78,15 @@ async function handleImportEpidemic(uploadFile: any) {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const submitting = ref(false)
+
+function getPatientRowClass({ row }: { row: any }) {
+  if (!row.archived && row.createTime) {
+    const diffDays = (Date.now() - new Date(row.createTime).getTime()) / 86400000
+    if (diffDays > 3) return "overdue-row"
+  }
+  return ""
+}
+
 const noticeForm = reactive({
   idNumber: "", gender: "", birthDate: "", age: null as number | null,
   phone: "", crowdCategory: "",
@@ -382,6 +393,38 @@ function handleActionCommand(command: string, row: any) {
     case "followUp": openFollowUpDialog(row); break
     case "followUpList": viewFollowUpList(row); break
     case "medication": openMedicationDialog(row); break
+    case "printNotice": openPrintNotice(row); break
+    case "printVisit": openPrintVisit(row); break
+  }
+}
+
+// ==================== 打印功能 ====================
+const printNoticeVisible = ref(false)
+const printNoticeData = ref<any>(null)
+const printVisitVisible = ref(false)
+const printVisitData = ref<any>(null)
+const printPatientName = ref("")
+
+async function openPrintNotice(row: any) {
+  try {
+    const { data } = await getNoticeListByBizApi(row.id, "patient")
+    printNoticeData.value = data?.[0] || row
+    printNoticeVisible.value = true
+  } catch {
+    printNoticeData.value = row
+    printNoticeVisible.value = true
+  }
+}
+
+async function openPrintVisit(row: any) {
+  try {
+    const { data } = await getFirstVisitApi(row.id)
+    if (!data) { ElMessage.info("暂无首次随访记录"); return }
+    printVisitData.value = data
+    printPatientName.value = row.name
+    printVisitVisible.value = true
+  } catch {
+    ElMessage.info("暂无首次随访记录")
   }
 }
 
@@ -419,7 +462,7 @@ watch(
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" :row-class-name="getPatientRowClass">
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
@@ -459,6 +502,8 @@ watch(
                     <el-dropdown-item command="followUp">后续随访</el-dropdown-item>
                     <el-dropdown-item command="followUpList">随访记录</el-dropdown-item>
                     <el-dropdown-item command="medication" divided>服药管理</el-dropdown-item>
+                    <el-dropdown-item command="printNotice" divided>打印通知单</el-dropdown-item>
+                    <el-dropdown-item command="printVisit">打印随访表</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -735,6 +780,12 @@ watch(
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 打印通知单 -->
+    <PrintNotice v-model:visible="printNoticeVisible" :notice-data="printNoticeData" notice-type="patient" />
+
+    <!-- 打印首次随访表 -->
+    <PrintFirstVisit v-model:visible="printVisitVisible" :visit-data="printVisitData" :patient-name="printPatientName" />
   </div>
 </template>
 
@@ -800,5 +851,12 @@ watch(
     font-size: 14px;
     color: #606266;
   }
+}
+</style>
+
+<style lang="scss">
+.el-table .overdue-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
 }
 </style>

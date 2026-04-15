@@ -2,6 +2,7 @@ package cn.luyou.controller;
 
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.service.ScreeningCloseContactService;
 import com.alibaba.excel.EasyExcel;
@@ -28,9 +29,9 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "上传密接人群筛查Excel")
     @PostMapping("/upload")
-    public ResultResponse<Integer> upload(@RequestParam("file") MultipartFile file) {
-        int count = screeningCloseContactService.uploadAndParse(file);
-        return ResultRes.success(count);
+    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
+        ImportResult result = screeningCloseContactService.uploadAndParse(file);
+        return ResultRes.success(result);
     }
 
     @Operation(summary = "分页查询密接人群筛查数据")

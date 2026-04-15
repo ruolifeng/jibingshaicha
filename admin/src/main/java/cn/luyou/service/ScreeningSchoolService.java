@@ -1,5 +1,6 @@
 package cn.luyou.service;
 
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningSchool;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -9,9 +10,9 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
 
     /**
      * 上传并解析学校人群筛查 Excel
-     * @return 导入成功的记录数
+     * @return 导入结果（成功条数 + 错误行列表）
      */
-    int uploadAndParse(MultipartFile file);
+    ImportResult uploadAndParse(MultipartFile file);
 
     /**
      * 分页查询筛查数据

@@ -2,6 +2,7 @@ package cn.luyou.controller;
 
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import com.alibaba.excel.EasyExcel;
@@ -28,9 +29,9 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "上传重点人群筛查Excel")
     @PostMapping("/upload")
-    public ResultResponse<Integer> upload(@RequestParam("file") MultipartFile file) {
-        int count = screeningKeyPopulationService.uploadAndParse(file);
-        return ResultRes.success(count);
+    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
+        ImportResult result = screeningKeyPopulationService.uploadAndParse(file);
+        return ResultRes.success(result);
     }
 
     @Operation(summary = "分页查询重点人群筛查数据")

@@ -57,3 +57,33 @@ export function exportDistrictStatisticsApi(params: {
     responseType: "blob"
   })
 }
+
+/** 大汇总表导出（三类人群合并） */
+export function exportWideTableApi(year?: string) {
+  return request<Blob>({
+    url: "export/wide-table",
+    method: "get",
+    params: { year },
+    responseType: "blob"
+  })
+}
+
+/** 分类汇总表导出 */
+export function exportCategoryTableApi(populationType: string, year?: string) {
+  return request<Blob>({
+    url: "export/category-table",
+    method: "get",
+    params: { populationType, year },
+    responseType: "blob"
+  })
+}
+
+/** 自定义字段导出 */
+export function exportCustomApi(populationType: string, fields: string, year?: string) {
+  return request<Blob>({
+    url: "export/custom",
+    method: "get",
+    params: { populationType, fields, year },
+    responseType: "blob"
+  })
+}

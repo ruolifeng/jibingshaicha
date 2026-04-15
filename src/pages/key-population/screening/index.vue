@@ -45,11 +45,14 @@ function handleReset() {
 
 /** Excel 上传 */
 const uploadRef = ref()
+const importResultVisible = ref(false)
+const importResult = ref<{ successCount: number; errors: string[] }>({ successCount: 0, errors: [] })
 
 async function handleUpload(uploadFile: any) {
   try {
     const { data } = await uploadScreeningKeyPopulationApi(uploadFile.raw)
-    ElMessage.success(`成功导入 ${data} 条数据`)
+    importResult.value = data
+    importResultVisible.value = true
     fetchData()
   } catch {
     ElMessage.error("上传失败")
@@ -197,6 +200,21 @@ watch(
         />
       </div>
     </el-card>
+
+    <!-- 导入结果弹窗 -->
+    <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
+      <el-alert :title="`成功导入 ${importResult.successCount} 条数据`" type="success" :closable="false" class="mb-3" />
+      <template v-if="importResult.errors.length > 0">
+        <el-alert :title="`发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
+        <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
+          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="msg" label="错误信息" />
+        </el-table>
+      </template>
+      <template #footer>
+        <el-button type="primary" @click="importResultVisible = false">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

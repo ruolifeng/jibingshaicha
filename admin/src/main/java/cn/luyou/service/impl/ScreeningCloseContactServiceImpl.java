@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 密接人群筛查 Service（V4 三轮判定逻辑）
@@ -49,14 +51,23 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     );
 
     @Override
-    public int uploadAndParse(MultipartFile file) {
+    public ImportResult uploadAndParse(MultipartFile file) {
         String batchId = IdUtil.fastSimpleUUID();
         List<ScreeningCloseContact> dataList = new ArrayList<>();
+        ImportResult result = new ImportResult();
+        AtomicInteger rowNum = new AtomicInteger(3); // 数据从第3行开始
 
         try {
             EasyExcel.read(file.getInputStream(), ScreeningCloseContact.class, new ReadListener<ScreeningCloseContact>() {
                 @Override
                 public void invoke(ScreeningCloseContact data, AnalysisContext context) {
+                    int row = rowNum.getAndIncrement();
+                    if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+                        result.addError(row, data.getName(), "身份证号格式不正确");
+                    }
+                    if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+                        result.addError(row, data.getName(), "手机号格式不正确");
+                    }
                     data.setUploadBatch(batchId);
                     dataList.add(data);
                 }
@@ -136,7 +147,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             log.info("自动创建密接人群潜伏感染记录 {} 条", latentList.size());
         }
 
-        return dataList.size();
+        result.setSuccessCount(dataList.size());
+        return result;
     }
 
     /**
@@ -261,5 +273,19 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     private boolean isPositive(String infectionResult) {
         if (StrUtil.isBlank(infectionResult)) return false;
         return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);
+    }
+
+    private boolean isValidIdCard(String id) {
+        if (id == null || id.length() != 18) return false;
+        if (!id.matches("\\d{17}[\\dXx]")) return false;
+        int[] weights = {7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2};
+        String[] checkCodes = {"1", "0", "X", "9", "8", "7", "6", "5", "4", "3", "2"};
+        int sum = 0;
+        for (int i = 0; i < 17; i++) sum += Character.getNumericValue(id.charAt(i)) * weights[i];
+        return checkCodes[sum % 11].equalsIgnoreCase(String.valueOf(id.charAt(17)));
+    }
+
+    private boolean isValidPhone(String phone) {
+        return phone != null && phone.matches("^1[3-9]\\d{9}$");
     }
 }

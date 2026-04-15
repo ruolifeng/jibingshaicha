@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import { getSchoolStatisticsApi, getDistrictStatisticsApi, exportSchoolStatisticsApi, exportDistrictStatisticsApi, getDistrictOptionsApi } from "./apis"
+import { ArrowDown } from "@element-plus/icons-vue"
+import {
+  getSchoolStatisticsApi, getDistrictStatisticsApi, exportSchoolStatisticsApi, exportDistrictStatisticsApi,
+  getDistrictOptionsApi, exportWideTableApi, exportCategoryTableApi, exportCustomApi
+} from "./apis"
 
 defineOptions({ name: "Statistics" })
 
@@ -106,6 +110,61 @@ async function handleExportDistrict() {
   }
 }
 
+// ==================== 大汇总/分类/自定义导出 ====================
+async function handleExportWide() {
+  try {
+    const data = await exportWideTableApi(filterForm.year)
+    downloadBlob(data as unknown as Blob, `大汇总表_${filterForm.year}.xlsx`)
+    ElMessage.success("导出成功")
+  } catch { ElMessage.error("导出失败") }
+}
+
+const categoryPopType = ref("school")
+const categoryPopOptions = [
+  { label: "学校人群", value: "school" },
+  { label: "重点人群", value: "keyPopulation" },
+  { label: "密接人群", value: "closeContact" }
+]
+async function handleExportCategory() {
+  try {
+    const data = await exportCategoryTableApi(categoryPopType.value, filterForm.year)
+    const label = categoryPopOptions.find(o => o.value === categoryPopType.value)?.label || "人群"
+    downloadBlob(data as unknown as Blob, `${label}汇总表_${filterForm.year}.xlsx`)
+    ElMessage.success("导出成功")
+  } catch { ElMessage.error("导出失败") }
+}
+
+// 自定义字段选择
+const customDialogVisible = ref(false)
+const customPopType = ref("school")
+const CUSTOM_FIELD_OPTIONS = [
+  { label: "年份", value: "year" },
+  { label: "市州", value: "city" },
+  { label: "县区", value: "district" },
+  { label: "姓名", value: "name" },
+  { label: "性别", value: "gender" },
+  { label: "年龄", value: "age" },
+  { label: "证件号", value: "idNumber" },
+  { label: "联系电话", value: "phone" },
+  { label: "感染筛查结果", value: "infectionResult" },
+  { label: "胸片结果", value: "chestXrayResult" },
+  { label: "诊断结果", value: "diagnosisResult" }
+]
+const selectedCustomFields = ref<string[]>(["name", "gender", "age", "idNumber", "infectionResult"])
+
+async function handleExportCustom() {
+  if (!selectedCustomFields.value.length) {
+    ElMessage.warning("请至少选择一个字段")
+    return
+  }
+  try {
+    const data = await exportCustomApi(customPopType.value, selectedCustomFields.value.join(","), filterForm.year)
+    downloadBlob(data as unknown as Blob, `自定义导出_${filterForm.year}.xlsx`)
+    customDialogVisible.value = false
+    ElMessage.success("导出成功")
+  } catch { ElMessage.error("导出失败") }
+}
+
 // ==================== Tab 切换时自动加载数据 ====================
 function handleTabChange(tab: string | number) {
   if (tab === "school") {
@@ -139,6 +198,25 @@ onMounted(() => {
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-dropdown>
+            <el-button type="warning">
+              高级导出 <el-icon class="el-icon--right"><arrow-down /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="handleExportWide">大汇总表（三类合并）</el-dropdown-item>
+                <el-dropdown-item divided>
+                  <span style="font-size:12px;color:#909399">分类汇总：</span>
+                </el-dropdown-item>
+                <el-dropdown-item v-for="opt in categoryPopOptions" :key="opt.value" @click="categoryPopType = opt.value; handleExportCategory()">
+                  {{ opt.label }}
+                </el-dropdown-item>
+                <el-dropdown-item divided @click="customDialogVisible = true">自定义字段导出</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </el-form-item>
       </el-form>
     </el-card>
@@ -201,10 +279,38 @@ onMounted(() => {
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <!-- 自定义字段导出弹窗 -->
+    <el-dialog v-model="customDialogVisible" title="自定义字段导出" width="480px">
+      <el-form label-width="90px">
+        <el-form-item label="人群类型">
+          <el-select v-model="customPopType" style="width: 100%">
+            <el-option v-for="opt in categoryPopOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="选择字段">
+          <el-checkbox-group v-model="selectedCustomFields">
+            <div class="field-grid">
+              <el-checkbox v-for="f in CUSTOM_FIELD_OPTIONS" :key="f.value" :label="f.value">{{ f.label }}</el-checkbox>
+            </div>
+          </el-checkbox-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="customDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleExportCustom">导出</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .mb-3 { margin-bottom: 12px; }
 .mb-4 { margin-bottom: 16px; }
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
 </style>
