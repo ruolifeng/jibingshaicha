@@ -234,20 +234,20 @@ onMounted(() => {
             <el-table-column prop="schoolName" label="学校名称" />
             <el-table-column prop="shouldScreenCount" label="应筛查人数" />
             <el-table-column prop="actualScreenCount" label="实际筛查人数" />
-            <el-table-column prop="closeContactCount" label="密切接触人数" />
-            <el-table-column prop="suspiciousSymptomCount" label="可疑症状人数" />
+            <el-table-column prop="closeContactCount" label="与肺结核患者密切接触的人数" />
+            <el-table-column prop="suspiciousSymptomCount" label="有肺结核可疑症状者人数" />
             <el-table-column prop="chestXrayCount" label="胸片检查人数" />
             <el-table-column prop="chestXrayAbnormalCount" label="胸片异常人数" />
-            <el-table-column prop="ppdTestCount" label="结核菌素检测人数" />
-            <el-table-column prop="ppdPositive1" label="PPD+" />
-            <el-table-column prop="ppdPositive2" label="PPD++" />
-            <el-table-column prop="ppdPositive3" label="PPD+++" />
-            <el-table-column prop="ppdPositiveTotal" label="PPD阳性合计" />
-            <el-table-column prop="ecNegative" label="EC阴性" />
-            <el-table-column prop="ecPositive" label="EC阳性" />
-            <el-table-column prop="igraPositive" label="IGRA阳性" />
-            <el-table-column prop="igraNegative" label="IGRA阴性" />
-            <el-table-column prop="tbPatientCount" label="肺结核/疑似患者" />
+            <el-table-column prop="ppdTestCount" label="结核菌素试验检测人数" />
+            <el-table-column prop="ppdPositive1" label="PPD+人数" />
+            <el-table-column prop="ppdPositive2" label="PPD++人数" />
+            <el-table-column prop="ppdPositive3" label="PPD+++人数" />
+            <el-table-column prop="ppdPositiveTotal" label="PPD阳性总人数（+、++、+++合计）" />
+            <el-table-column prop="ecNegative" label="EC阴性人数" />
+            <el-table-column prop="ecPositive" label="EC阳性人数" />
+            <el-table-column prop="igraPositive" label="IGRA阳性人数" />
+            <el-table-column prop="igraNegative" label="IGRA阴性人数" />
+            <el-table-column prop="tbPatientCount" label="肺结核/疑似肺结核患者人数" />
             <el-table-column prop="remark" label="备注" />
           </el-table>
         </el-tab-pane>
@@ -260,20 +260,20 @@ onMounted(() => {
           <el-table v-loading="districtLoading" :data="districtData" border stripe max-height="600" show-summary>
             <el-table-column prop="district" label="区/县" fixed />
             <el-table-column prop="actualScreenCount" label="实际筛查人数" />
-            <el-table-column prop="closeContactCount" label="密切接触人数" />
-            <el-table-column prop="suspiciousSymptomCount" label="可疑症状人数" />
+            <el-table-column prop="closeContactCount" label="与肺结核患者密切接触的人数" />
+            <el-table-column prop="suspiciousSymptomCount" label="有肺结核可疑症状者人数" />
             <el-table-column prop="chestXrayCount" label="胸片检查人数" />
             <el-table-column prop="chestXrayAbnormalCount" label="胸片异常人数" />
-            <el-table-column prop="ppdTestCount" label="结核菌素检测人数" />
-            <el-table-column prop="ppdPositive1" label="PPD+" />
-            <el-table-column prop="ppdPositive2" label="PPD++" />
-            <el-table-column prop="ppdPositive3" label="PPD+++" />
-            <el-table-column prop="ppdPositiveTotal" label="PPD阳性合计" />
-            <el-table-column prop="ecNegative" label="EC阴性" />
-            <el-table-column prop="ecPositive" label="EC阳性" />
-            <el-table-column prop="igraPositive" label="IGRA阳性" />
-            <el-table-column prop="igraNegative" label="IGRA阴性" />
-            <el-table-column prop="tbPatientCount" label="肺结核/疑似患者" />
+            <el-table-column prop="ppdTestCount" label="结核菌素试验检测人数" />
+            <el-table-column prop="ppdPositive1" label="PPD+人数" />
+            <el-table-column prop="ppdPositive2" label="PPD++人数" />
+            <el-table-column prop="ppdPositive3" label="PPD+++人数" />
+            <el-table-column prop="ppdPositiveTotal" label="PPD阳性总人数（+、++、+++合计）" />
+            <el-table-column prop="ecNegative" label="EC阴性人数" />
+            <el-table-column prop="ecPositive" label="EC阳性人数" />
+            <el-table-column prop="igraPositive" label="IGRA阳性人数" />
+            <el-table-column prop="igraNegative" label="IGRA阴性人数" />
+            <el-table-column prop="tbPatientCount" label="肺结核/疑似肺结核患者人数" />
             <el-table-column prop="remark" label="备注" />
           </el-table>
         </el-tab-pane>

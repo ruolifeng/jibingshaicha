@@ -18,5 +18,6 @@ public interface PatientService extends IService<Patient> {
 
     /** 历史患者列表 */
     IPage<Patient> queryHistoryPage(int page, int size, String populationType,
-                                     String name, String idNumber);
+                                     String name, String idNumber,
+                                     String startTime, String endTime);
 }

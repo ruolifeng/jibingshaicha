@@ -62,7 +62,7 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
             <th>人群分类</th>
             <td>{{ noticeData?.crowdCategory }}</td>
             <th>治疗方案</th>
-            <td>{{ noticeData?.latentTreatmentOption || noticeData?.treatmentPlan }}</td>
+            <td>{{ noticeData?.treatmentPlan }}</td>
           </tr>
           <tr>
             <th>感染检查日期</th>

@@ -5,7 +5,7 @@ import {
   NOTICE_STATUS_MAP, MEDICATION_STATUS_OPTIONS, TREATMENT_PHASE_MAP, CHECK_PERIOD_OPTIONS,
   CHECK_RESULT_OPTIONS, DIAGNOSIS_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS,
   PREVENTIVE_RESULT_OPTIONS, PREVENTIVE_MANAGER_OPTIONS,
-  LATENT_TREATMENT_OPTIONS, INFECTION_METHOD_OPTIONS
+  INFECTION_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import {
@@ -141,9 +141,10 @@ const noticeFormRef = ref()
 const noticeFormRules = { idNumber: [idCardRule()], phone: [phoneRule()] }
 const noticeForm = reactive({
   idNumber: "", gender: "", birthDate: "", age: null as number | null,
-  phone: "", crowdCategory: "",
+  ethnicity: "", phone: "", crowdCategory: "",
+  currentAddress: "", householdAddress: "",
   infectionDate: "", infectionMethod: "", infectionResultValue: "",
-  chestXrayDate: "", chestXrayResult: "", latentTreatmentOption: "",
+  chestXrayDate: "", chestXrayResult: "", treatmentPlan: "",
   treatmentInstitution: "", issuedTime: "",
   receiverOrgId: undefined as number | undefined
 })
@@ -152,9 +153,9 @@ function openNoticeDialog(row: any) {
   noticeRow.value = row
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "", gender: row.gender || "", birthDate: "", age: row.age || null,
-    phone: row.phone || "", crowdCategory: "",
+    ethnicity: row.ethnicity || "", phone: row.phone || "", crowdCategory: "", currentAddress: "", householdAddress: "",
     infectionDate: "", infectionMethod: "", infectionResultValue: "",
-    chestXrayDate: "", chestXrayResult: "", latentTreatmentOption: "",
+    chestXrayDate: "", chestXrayResult: "", treatmentPlan: "",
     treatmentInstitution: "", issuedTime: "", receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
@@ -447,7 +448,20 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-row>
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="联系方式"><el-input v-model="noticeForm.phone" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="人群分类"><el-select v-model="noticeForm.crowdCategory" style="width: 100%"><el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="民族"><el-input v-model="noticeForm.ethnicity" placeholder="如：汉族" /></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="24">
+            <el-form-item label="人群分类">
+              <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
+                <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="24"><el-form-item label="现居住地址"><el-input v-model="noticeForm.currentAddress" placeholder="请输入现居住地址" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="户籍地址"><el-input v-model="noticeForm.householdAddress" placeholder="请输入户籍地址" /></el-form-item></el-col>
         </el-row>
         <el-divider content-position="left">感染检查</el-divider>
         <el-row :gutter="12">
@@ -461,7 +475,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <el-col :span="12"><el-form-item label="胸片检查结果"><el-select v-model="noticeForm.chestXrayResult" style="width: 100%"><el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
         </el-row>
         <el-divider content-position="left">治疗方案</el-divider>
-        <el-form-item label="治疗方案"><el-select v-model="noticeForm.latentTreatmentOption" style="width: 100%"><el-option v-for="item in LATENT_TREATMENT_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item>
+        <el-form-item label="治疗方案"><el-select v-model="noticeForm.treatmentPlan" style="width: 100%" placeholder="请选择治疗方案"><el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" /></el-select></el-form-item>
         <el-divider content-position="left">机构信息</el-divider>
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="治疗机构"><el-input v-model="noticeForm.treatmentInstitution" /></el-form-item></el-col>
@@ -480,13 +494,16 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-descriptions-item label="性别">{{ noticeDetailData.gender }}</el-descriptions-item>
         <el-descriptions-item label="年龄">{{ noticeDetailData.age }}</el-descriptions-item>
         <el-descriptions-item label="联系方式">{{ noticeDetailData.phone || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="民族">{{ noticeDetailData.ethnicity || "-" }}</el-descriptions-item>
         <el-descriptions-item label="人群分类">{{ noticeDetailData.crowdCategory }}</el-descriptions-item>
+        <el-descriptions-item label="现居住地址" :span="2">{{ noticeDetailData.currentAddress || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="2">{{ noticeDetailData.householdAddress || "-" }}</el-descriptions-item>
         <el-descriptions-item label="感染检测时间">{{ noticeDetailData.infectionDate || "-" }}</el-descriptions-item>
         <el-descriptions-item label="检查方法">{{ noticeDetailData.infectionMethod || "-" }}</el-descriptions-item>
         <el-descriptions-item label="感染检查结果" :span="2">{{ noticeDetailData.infectionResultValue || "-" }}</el-descriptions-item>
         <el-descriptions-item label="胸片检查时间">{{ noticeDetailData.chestXrayDate || "-" }}</el-descriptions-item>
         <el-descriptions-item label="胸片检查结果">{{ noticeDetailData.chestXrayResult || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.latentTreatmentOption || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.treatmentPlan || "-" }}</el-descriptions-item>
         <el-descriptions-item label="治疗机构">{{ noticeDetailData.treatmentInstitution || "-" }}</el-descriptions-item>
         <el-descriptions-item label="下发时间">{{ noticeDetailData.issuedTime || "-" }}</el-descriptions-item>
         <el-descriptions-item label="状态"><el-tag :type="noticeDetailData.status === 2 ? 'success' : 'warning'" size="small">{{ NOTICE_STATUS_MAP[noticeDetailData.status] }}</el-tag></el-descriptions-item>

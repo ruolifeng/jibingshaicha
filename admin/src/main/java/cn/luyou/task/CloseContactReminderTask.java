@@ -35,12 +35,13 @@ public class CloseContactReminderTask {
     public void sendReviewReminders() {
         LocalDate today = LocalDate.now();
 
-        // 半年后复查提醒（首次 165 天 = 6个月 - 15天提前提醒）
+        // 半年后复查提醒：首次阴性（isLatent=0 且 activeRound 为 null）且首次筛查日期距今 ≥165 天
         List<ScreeningCloseContact> halfYearDue = closeContactService.list(
                 new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .eq(ScreeningCloseContact::getActiveRound, 0) // 0 表示首次阶段未变
+                        .isNull(ScreeningCloseContact::getActiveRound) // activeRound 为 null 表示首次阶段未转阳
                         .eq(ScreeningCloseContact::getIsLatent, 0)
                         .isNotNull(ScreeningCloseContact::getFirstScreenDate)
+                        .isNull(ScreeningCloseContact::getHalfYearScreenDate) // 半年复查尚未做
                         .le(ScreeningCloseContact::getFirstScreenDate, today.minusDays(165))
                         .ge(ScreeningCloseContact::getFirstScreenDate, today.minusDays(195)) // 30天窗口避免重复
         );

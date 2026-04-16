@@ -46,6 +46,21 @@ public class ScreeningKeyPopulationController {
         return ResultRes.success(screeningKeyPopulationService.queryPage(page, size, name, idNumber, district, isLatent));
     }
 
+    @Operation(summary = "更新重点人群筛查记录")
+    @PutMapping("/update/{id}")
+    public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningKeyPopulation data) {
+        data.setId(id);
+        screeningKeyPopulationService.updateScreening(data);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "删除重点人群筛查记录（级联删除后续所有关联数据）")
+    @DeleteMapping("/delete/{id}")
+    public ResultResponse<Void> delete(@PathVariable Long id) {
+        screeningKeyPopulationService.deleteScreeningCascade(id);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "导出重点人群筛查数据")
     @GetMapping("/export")
     public void export(HttpServletResponse response) throws Exception {

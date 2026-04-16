@@ -48,6 +48,21 @@ public class ScreeningSchoolController {
         return ResultRes.success(result);
     }
 
+    @Operation(summary = "更新学校人群筛查记录")
+    @PutMapping("/update/{id}")
+    public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningSchool data) {
+        data.setId(id);
+        screeningSchoolService.updateScreening(data);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "删除学校人群筛查记录（级联删除后续所有关联数据）")
+    @DeleteMapping("/delete/{id}")
+    public ResultResponse<Void> delete(@PathVariable Long id) {
+        screeningSchoolService.deleteScreeningCascade(id);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "导出学校人群筛查数据")
     @GetMapping("/export")
     public void export(HttpServletResponse response) throws Exception {

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningCloseContactApi, getScreeningCloseContactListApi, exportScreeningCloseContactApi } from "./apis"
+import { uploadScreeningCloseContactApi, getScreeningCloseContactListApi, exportScreeningCloseContactApi, deleteScreeningCloseContactApi, updateScreeningCloseContactApi } from "./apis"
 import { ACTIVE_ROUND_MAP } from "@@/constants/disease"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -103,6 +103,46 @@ function isReviewNearDue(row: any): boolean {
   const reviewDate = new Date(dateStr.split("（")[0])
   const diffDays = (reviewDate.getTime() - Date.now()) / 86400000
   return diffDays >= 0 && diffDays <= 15
+}
+
+/** 编辑弹窗 */
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editForm = ref<Record<string, any>>({})
+
+function handleEdit(row: any) {
+  editForm.value = { ...row }
+  editVisible.value = true
+}
+
+async function handleSave() {
+  editSaving.value = true
+  try {
+    await updateScreeningCloseContactApi(editForm.value.id, editForm.value)
+    ElMessage.success("保存成功")
+    editVisible.value = false
+    fetchData()
+  } catch {
+    ElMessage.error("保存失败")
+  } finally {
+    editSaving.value = false
+  }
+}
+
+/** 删除筛查记录（级联删除后续所有数据） */
+async function handleDelete(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除「${row.name}」的筛查记录吗？删除后其对应的潜伏感染、患者管理等所有关联数据将一并删除，且不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    await deleteScreeningCloseContactApi(row.id)
+    ElMessage.success("删除成功")
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除失败")
+  }
 }
 
 /** 三轮筛查详情弹窗 */
@@ -213,9 +253,11 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" fixed="right" width="100">
+        <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">查看详情</el-button>
+            <el-button type="warning" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -232,6 +274,141 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         />
       </div>
     </el-card>
+
+    <!-- 编辑弹窗 -->
+    <el-dialog v-model="editVisible" title="编辑筛查记录" width="960px" :close-on-click-modal="false">
+      <el-tabs>
+        <!-- 基本信息 Tab -->
+        <el-tab-pane label="基本信息">
+          <el-form :model="editForm" label-width="130px" class="edit-form">
+            <el-row :gutter="16">
+              <el-col :span="8"><el-form-item label="年份"><el-input v-model="editForm.year" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="市（州）"><el-input v-model="editForm.city" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="区县"><el-input v-model="editForm.district" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="姓名"><el-input v-model="editForm.name" /></el-form-item></el-col>
+              <el-col :span="8">
+                <el-form-item label="性别">
+                  <el-select v-model="editForm.gender" style="width:100%">
+                    <el-option label="男" value="男" /><el-option label="女" value="女" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8"><el-form-item label="出生日期"><el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="年龄"><el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="证件类型"><el-input v-model="editForm.idType" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="证件号"><el-input v-model="editForm.idNumber" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="民族"><el-input v-model="editForm.ethnicity" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="职业"><el-input v-model="editForm.occupation" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item></el-col>
+              <el-col :span="16"><el-form-item label="户籍地址"><el-input v-model="editForm.householdAddress" /></el-form-item></el-col>
+              <el-col :span="24"><el-form-item label="现住址"><el-input v-model="editForm.currentAddress" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="接触类型"><el-input v-model="editForm.contactType" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="原患者姓名"><el-input v-model="editForm.sourcePatientName" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="原患者确诊日期"><el-date-picker v-model="editForm.sourcePatientConfirmDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="原患者身份证号"><el-input v-model="editForm.sourcePatientIdNumber" /></el-form-item></el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 首次筛查 Tab -->
+        <el-tab-pane label="首次筛查">
+          <el-form :model="editForm" label-width="130px" class="edit-form">
+            <el-row :gutter="16">
+              <el-col :span="8"><el-form-item label="筛查日期"><el-date-picker v-model="editForm.firstScreenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="症状筛查结果"><el-input v-model="editForm.firstSymptomResult" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="感染检查方法"><el-input v-model="editForm.firstInfectionMethod" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="感染检查结果"><el-input v-model="editForm.firstScreenResult" /></el-form-item></el-col>
+              <el-col :span="16">
+                <el-form-item label="感染筛查结果">
+                  <el-select v-model="editForm.firstInfectionResult" style="width:100%" clearable>
+                    <el-option label="PPD阴性" value="PPD阴性" /><el-option label="PPD+" value="PPD+" />
+                    <el-option label="PPD++" value="PPD++" /><el-option label="PPD+++" value="PPD+++" />
+                    <el-option label="EC阴性" value="EC阴性" /><el-option label="EC阳性" value="EC阳性" />
+                    <el-option label="IGRA阴性" value="IGRA阴性" /><el-option label="IGRA阳性" value="IGRA阳性" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8"><el-form-item label="是否进行胸片"><el-input v-model="editForm.firstHasChestXray" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="胸片日期"><el-date-picker v-model="editForm.firstChestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="胸片结果"><el-input v-model="editForm.firstChestXrayResult" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="诊断结果"><el-input v-model="editForm.firstDiagnosis" /></el-form-item></el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 半年后筛查 Tab -->
+        <el-tab-pane label="半年后筛查">
+          <el-form :model="editForm" label-width="130px" class="edit-form">
+            <el-row :gutter="16">
+              <el-col :span="8"><el-form-item label="筛查日期"><el-date-picker v-model="editForm.halfYearScreenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="症状筛查结果"><el-input v-model="editForm.halfYearSymptomResult" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="感染检查方法"><el-input v-model="editForm.halfYearInfectionMethod" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="感染检查结果"><el-input v-model="editForm.halfYearScreenResult" /></el-form-item></el-col>
+              <el-col :span="16">
+                <el-form-item label="感染筛查结果">
+                  <el-select v-model="editForm.halfYearInfectionResult" style="width:100%" clearable>
+                    <el-option label="PPD阴性" value="PPD阴性" /><el-option label="PPD+" value="PPD+" />
+                    <el-option label="PPD++" value="PPD++" /><el-option label="PPD+++" value="PPD+++" />
+                    <el-option label="EC阴性" value="EC阴性" /><el-option label="EC阳性" value="EC阳性" />
+                    <el-option label="IGRA阴性" value="IGRA阴性" /><el-option label="IGRA阳性" value="IGRA阳性" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8"><el-form-item label="是否进行胸片"><el-input v-model="editForm.halfYearHasChestXray" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="胸片日期"><el-date-picker v-model="editForm.halfYearChestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="胸片结果"><el-input v-model="editForm.halfYearChestXrayResult" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="诊断结果"><el-input v-model="editForm.halfYearDiagnosis" /></el-form-item></el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 一年后筛查 Tab -->
+        <el-tab-pane label="一年后筛查">
+          <el-form :model="editForm" label-width="130px" class="edit-form">
+            <el-row :gutter="16">
+              <el-col :span="8"><el-form-item label="筛查日期"><el-date-picker v-model="editForm.oneYearScreenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="症状筛查结果"><el-input v-model="editForm.oneYearSymptomResult" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="感染检查方法"><el-input v-model="editForm.oneYearInfectionMethod" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="感染检查结果"><el-input v-model="editForm.oneYearScreenResult" /></el-form-item></el-col>
+              <el-col :span="16">
+                <el-form-item label="感染筛查结果">
+                  <el-select v-model="editForm.oneYearInfectionResult" style="width:100%" clearable>
+                    <el-option label="PPD阴性" value="PPD阴性" /><el-option label="PPD+" value="PPD+" />
+                    <el-option label="PPD++" value="PPD++" /><el-option label="PPD+++" value="PPD+++" />
+                    <el-option label="EC阴性" value="EC阴性" /><el-option label="EC阳性" value="EC阳性" />
+                    <el-option label="IGRA阴性" value="IGRA阴性" /><el-option label="IGRA阳性" value="IGRA阳性" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8"><el-form-item label="是否进行胸片"><el-input v-model="editForm.oneYearHasChestXray" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="胸片日期"><el-date-picker v-model="editForm.oneYearChestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="胸片结果"><el-input v-model="editForm.oneYearChestXrayResult" /></el-form-item></el-col>
+              <el-col :span="8"><el-form-item label="诊断结果"><el-input v-model="editForm.oneYearDiagnosis" /></el-form-item></el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 预防性治疗 Tab -->
+        <el-tab-pane label="预防性治疗">
+          <el-form :model="editForm" label-width="160px" class="edit-form">
+            <el-row :gutter="16">
+              <el-col :span="12"><el-form-item label="是否进行预防性治疗"><el-input v-model="editForm.hasPreventiveTreatment" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="预防性治疗方案"><el-input v-model="editForm.preventivePlan" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="开始时间"><el-date-picker v-model="editForm.preventiveStartDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="完成时间"><el-date-picker v-model="editForm.preventiveEndDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="治疗结果"><el-input v-model="editForm.preventiveResult" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="随访管理人员"><el-input v-model="editForm.preventiveManager" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="惠民方式"><el-input v-model="editForm.benefitMethod" /></el-form-item></el-col>
+              <el-col :span="24"><el-form-item label="备注"><el-input v-model="editForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 三轮筛查详情弹窗 -->
     <el-dialog v-model="detailVisible" :title="`${detailRow?.name} — 筛查详情`" width="800px">
@@ -361,6 +538,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
 <style lang="scss" scoped>
 .mb-4 { margin-bottom: 16px; }
 .mt-4 { margin-top: 16px; }
+.edit-form { padding: 0 8px; }
 
 .review-near-due {
   color: #e6a23c;

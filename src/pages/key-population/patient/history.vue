@@ -8,7 +8,7 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
-const searchForm = reactive({ name: "", idNumber: "" })
+const searchForm = reactive({ name: "", idNumber: "", startTime: "", endTime: "" })
 
 const statistics = ref({ totalCount: 0, confirmedCount: 0, epidemicCount: 0, maleCount: 0, femaleCount: 0 })
 
@@ -48,6 +48,8 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.startTime = ""
+  searchForm.endTime = ""
   handleSearch()
 }
 
@@ -67,6 +69,23 @@ watch(
         </el-form-item>
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
+        </el-form-item>
+        <el-form-item label="归档时间">
+          <el-date-picker
+            v-model="searchForm.startTime"
+            type="date"
+            placeholder="开始日期"
+            value-format="YYYY-MM-DD"
+            style="width: 140px"
+          />
+          <span class="mx-2 text-gray-400">至</span>
+          <el-date-picker
+            v-model="searchForm.endTime"
+            type="date"
+            placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+            style="width: 140px"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>

@@ -296,6 +296,9 @@ CREATE TABLE IF NOT EXISTS `notice` (
     `age`                    INT          DEFAULT NULL COMMENT '年龄',
     `phone`                  VARCHAR(32)  DEFAULT NULL COMMENT '联系方式',
     `crowd_category`         VARCHAR(128) DEFAULT NULL COMMENT '人群分类',
+    `ethnicity`              VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `current_address`        VARCHAR(256) DEFAULT NULL COMMENT '现居住地址',
+    `household_address`      VARCHAR(256) DEFAULT NULL COMMENT '户籍地址',
     -- 检查信息（两类共用）
     `chest_xray_date`        DATE         DEFAULT NULL COMMENT '胸片检查时间',
     `chest_xray_result`      VARCHAR(32)  DEFAULT NULL COMMENT '胸片检查结果：正常/异常/未查',
@@ -305,7 +308,7 @@ CREATE TABLE IF NOT EXISTS `notice` (
     `infection_date`         DATE         DEFAULT NULL COMMENT '感染检测时间',
     `infection_method`       VARCHAR(64)  DEFAULT NULL COMMENT '感染检查方法：PPD/EC/IGRA',
     `infection_result_value` VARCHAR(128) DEFAULT NULL COMMENT '感染检查结果',
-    `latent_treatment_option` VARCHAR(64) DEFAULT NULL COMMENT '治疗方案（潜伏）：免费药品/生物制剂/未治疗',
+    `latent_treatment_option` VARCHAR(64) DEFAULT NULL COMMENT '废弃字段，治疗方案已统一使用 treatment_plan',
     -- 患者通知单专用
     `patient_type`           VARCHAR(32)  DEFAULT NULL COMMENT '患者类型：初治/复治',
     `management_method`      VARCHAR(64)  DEFAULT NULL COMMENT '管理方式：全程督导/强化督导/全程管理/未管理',
@@ -691,3 +694,11 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (5, 115), (5, 116), (5, 117), (5, 118), (6, 115), (6, 116), (6, 117);
 -- 上级角色也获得
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) SELECT r.`role`, p.`id` FROM (SELECT 1 AS `role` UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r CROSS JOIN `permission` p WHERE p.`code` IN ('latent:followUp','latent:check','latent:closeCase','latent:xray');
+
+-- 系统管理：数据备份权限（admin 专属，parent_id=6 对应系统管理节点）
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(119, 'system:backup', '数据备份', 2, 6, 10);
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (1, 119);
+
+-- V5 迁移：notice 表补充 ethnicity 字段
+ALTER TABLE `notice` ADD COLUMN IF NOT EXISTS `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT '民族' AFTER `crowd_category`;

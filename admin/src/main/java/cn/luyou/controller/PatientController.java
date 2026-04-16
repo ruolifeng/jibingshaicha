@@ -46,8 +46,10 @@ public class PatientController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam String populationType,
             @RequestParam(required = false) String name,
-            @RequestParam(required = false) String idNumber) {
-        return ResultRes.success(patientService.queryHistoryPage(page, size, populationType, name, idNumber));
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String startTime,
+            @RequestParam(required = false) String endTime) {
+        return ResultRes.success(patientService.queryHistoryPage(page, size, populationType, name, idNumber, startTime, endTime));
     }
 
     @Operation(summary = "历史患者统计汇总")

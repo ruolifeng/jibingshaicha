@@ -91,7 +91,9 @@ function getPatientRowClass({ row }: { row: any }) {
 
 const noticeForm = reactive({
   idNumber: "", gender: "", birthDate: "", age: null as number | null,
-  phone: "", crowdCategory: "",
+  ethnicity: "", phone: "", crowdCategory: "",
+  // 地址信息
+  currentAddress: "", householdAddress: "",
   // 胸片
   chestXrayDate: "", chestXrayResult: "",
   treatmentInstitution: "", issuedTime: "",
@@ -107,8 +109,10 @@ function openNoticeDialog(row: any) {
   noticeRow.value = row
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "", gender: row.gender || "",
-    birthDate: "", age: row.age || null, phone: row.phone || "",
-    crowdCategory: "", chestXrayDate: "", chestXrayResult: "",
+    birthDate: "", age: row.age || null,
+    ethnicity: row.ethnicity || "", phone: row.phone || "",
+    crowdCategory: "", currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
+    chestXrayDate: "", chestXrayResult: "",
     treatmentInstitution: "", issuedTime: "",
     patientType: "", managementMethod: "",
     treatmentPlan: "", customPlanDetail: "",
@@ -581,11 +585,24 @@ watch(
             <el-form-item label="联系方式"><el-input v-model="noticeForm.phone" /></el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="民族"><el-input v-model="noticeForm.ethnicity" placeholder="如：汉族" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="24">
             <el-form-item label="人群分类">
               <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
                 <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="24">
+            <el-form-item label="现居住地址"><el-input v-model="noticeForm.currentAddress" placeholder="请输入现居住地址" /></el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="户籍地址"><el-input v-model="noticeForm.householdAddress" placeholder="请输入户籍地址" /></el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="12">
@@ -691,7 +708,10 @@ watch(
         <el-descriptions-item label="性别">{{ noticeDetailData.gender }}</el-descriptions-item>
         <el-descriptions-item label="年龄">{{ noticeDetailData.age }}</el-descriptions-item>
         <el-descriptions-item label="联系方式">{{ noticeDetailData.phone || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="民族">{{ noticeDetailData.ethnicity || "-" }}</el-descriptions-item>
         <el-descriptions-item label="人群分类">{{ noticeDetailData.crowdCategory || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="现居住地址" :span="2">{{ noticeDetailData.currentAddress || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="2">{{ noticeDetailData.householdAddress || "-" }}</el-descriptions-item>
         <el-descriptions-item label="患者类型">{{ noticeDetailData.patientType || "-" }}</el-descriptions-item>
         <el-descriptions-item label="管理方式">{{ noticeDetailData.managementMethod || "-" }}</el-descriptions-item>
         <el-descriptions-item label="胸片检查时间">{{ noticeDetailData.chestXrayDate || "-" }}</el-descriptions-item>

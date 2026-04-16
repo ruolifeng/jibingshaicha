@@ -48,11 +48,22 @@ public class VisitTimeoutTask {
                 noticeService.updateById(notice);
                 continue;
             }
+            // 提醒接收方（5级）：请尽快完成首次随访
             if (notice.getReceiverOrgId() != null) {
                 sysMessageService.sendMessage(
                         notice.getReceiverOrgId(),
                         "首次随访填写提醒",
                         "请尽快完成肺结核患者第一次入户随访记录表：" + notice.getPatientName(),
+                        "visit_timeout",
+                        notice.getBizId()
+                );
+            }
+            // 提醒发送方（4级）：对方尚未完成首次随访
+            if (notice.getSenderId() != null) {
+                sysMessageService.sendMessage(
+                        notice.getSenderId(),
+                        "首次随访未完成提醒",
+                        "对方（5级）尚未完成患者【" + notice.getPatientName() + "】的首次入户随访，请关注跟进",
                         "visit_timeout",
                         notice.getBizId()
                 );

@@ -12,4 +12,10 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
 
     IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
                                              String district, Integer isLatent);
+
+    /** 级联删除筛查记录（同步删除后续所有关联数据） */
+    void deleteScreeningCascade(Long id);
+
+    /** 更新筛查记录（同步重新计算潜伏判定结果） */
+    void updateScreening(ScreeningKeyPopulation data);
 }

@@ -22,6 +22,8 @@ export function getPatientHistoryApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  startTime?: string
+  endTime?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "patient/history",

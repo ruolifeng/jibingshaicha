@@ -22,6 +22,23 @@ export function exportScreeningKeyPopulationApi() {
   })
 }
 
+/** 更新重点人群筛查记录 */
+export function updateScreeningKeyPopulationApi(id: number, data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: `screening/key-population/update/${id}`,
+    method: "put",
+    data
+  })
+}
+
+/** 删除重点人群筛查记录（级联删除后续所有关联数据） */
+export function deleteScreeningKeyPopulationApi(id: number) {
+  return request<ApiResponseData<null>>({
+    url: `screening/key-population/delete/${id}`,
+    method: "delete"
+  })
+}
+
 /** 分页查询重点人群筛查数据 */
 export function getScreeningKeyPopulationListApi(params: {
   page: number

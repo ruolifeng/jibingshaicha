@@ -32,6 +32,12 @@ public class Notice extends BaseEntity {
     private Integer age;
     private String phone;
     private String crowdCategory;
+    /** 民族 */
+    private String ethnicity;
+    /** 现居住地址 */
+    private String currentAddress;
+    /** 户籍地址 */
+    private String householdAddress;
 
     // ===== 检查信息（两类共用）=====
     private LocalDate chestXrayDate;

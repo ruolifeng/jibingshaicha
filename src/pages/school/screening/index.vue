@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi } from "./apis"
+import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi, deleteScreeningSchoolApi, updateScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -75,6 +75,46 @@ async function handleExport() {
     ElMessage.success("导出成功")
   } catch {
     ElMessage.error("导出失败")
+  }
+}
+
+/** 编辑弹窗 */
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editForm = ref<Record<string, any>>({})
+
+function handleEdit(row: any) {
+  editForm.value = { ...row }
+  editVisible.value = true
+}
+
+async function handleSave() {
+  editSaving.value = true
+  try {
+    await updateScreeningSchoolApi(editForm.value.id, editForm.value)
+    ElMessage.success("保存成功")
+    editVisible.value = false
+    fetchData()
+  } catch {
+    ElMessage.error("保存失败")
+  } finally {
+    editSaving.value = false
+  }
+}
+
+/** 删除筛查记录（级联删除后续所有数据） */
+async function handleDelete(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除「${row.name}」的筛查记录吗？删除后其对应的潜伏感染、患者管理等所有关联数据将一并删除，且不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    await deleteScreeningSchoolApi(row.id)
+    ElMessage.success("删除成功")
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除失败")
   }
 }
 
@@ -174,6 +214,12 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
+        <el-table-column label="操作" fixed="right" width="120">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <!-- 分页 -->
@@ -189,6 +235,119 @@ watch(
         />
       </div>
     </el-card>
+
+    <!-- 编辑弹窗 -->
+    <el-dialog v-model="editVisible" title="编辑筛查记录" width="900px" :close-on-click-modal="false">
+      <el-form :model="editForm" label-width="120px" class="edit-form">
+        <el-divider content-position="left">基本信息</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="年份"><el-input v-model="editForm.year" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="市（州）"><el-input v-model="editForm.city" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="区县"><el-input v-model="editForm.district" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="姓名"><el-input v-model="editForm.name" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="性别">
+              <el-select v-model="editForm.gender" style="width:100%">
+                <el-option label="男" value="男" /><el-option label="女" value="女" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="出生日期"><el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="年龄"><el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="证件类型"><el-input v-model="editForm.idType" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="证件号"><el-input v-model="editForm.idNumber" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="民族"><el-input v-model="editForm.ethnicity" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item>
+          </el-col>
+          <el-col :span="16">
+            <el-form-item label="户籍地址"><el-input v-model="editForm.householdAddress" /></el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="现住址"><el-input v-model="editForm.currentAddress" /></el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">学校信息</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="学校类型"><el-input v-model="editForm.schoolType" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="学校名称"><el-input v-model="editForm.schoolName" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="班级（院系）"><el-input v-model="editForm.className" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="既往结核病史"><el-input v-model="editForm.tbHistory" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="密切接触史"><el-input v-model="editForm.closeContactHistory" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="可疑症状"><el-input v-model="editForm.suspiciousSymptoms" /></el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">感染筛查</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="是否进行感染筛"><el-input v-model="editForm.hasInfectionScreen" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="感染筛查日期"><el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="筛查方法"><el-input v-model="editForm.screenMethod" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="筛查结果"><el-input v-model="editForm.screenResult" /></el-form-item>
+          </el-col>
+          <el-col :span="16">
+            <el-form-item label="感染筛查结果">
+              <el-select v-model="editForm.infectionResult" style="width:100%" clearable>
+                <el-option label="PPD阴性" value="PPD阴性" />
+                <el-option label="PPD+" value="PPD+" />
+                <el-option label="PPD++" value="PPD++" />
+                <el-option label="PPD+++" value="PPD+++" />
+                <el-option label="EC阴性" value="EC阴性" />
+                <el-option label="EC阳性" value="EC阳性" />
+                <el-option label="IGRA阴性" value="IGRA阴性" />
+                <el-option label="IGRA阳性" value="IGRA阳性" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">备注</el-divider>
+        <el-form-item label="备注">
+          <el-input v-model="editForm.remark" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 导入结果弹窗 -->
     <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
@@ -218,10 +377,7 @@ watch(
 </template>
 
 <style lang="scss" scoped>
-.mb-4 {
-  margin-bottom: 16px;
-}
-.mt-4 {
-  margin-top: 16px;
-}
+.mb-4 { margin-bottom: 16px; }
+.mt-4 { margin-top: 16px; }
+.edit-form { padding: 0 8px; }
 </style>

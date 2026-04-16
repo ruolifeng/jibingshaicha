@@ -5,11 +5,22 @@ import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.ImportResult;
-import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.LatentInfection;
+import cn.luyou.model.Notice;
+import cn.luyou.model.Patient;
+import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
-import cn.luyou.service.ScreeningKeyPopulationService;
+import cn.luyou.service.EpidemicReportService;
+import cn.luyou.service.FirstVisitService;
+import cn.luyou.service.FollowUpVisitService;
+import cn.luyou.service.LatentCheckService;
+import cn.luyou.service.LatentFollowUpService;
 import cn.luyou.service.LatentInfectionService;
+import cn.luyou.service.MedicationManagementService;
+import cn.luyou.service.NoticeService;
+import cn.luyou.service.PatientService;
+import cn.luyou.service.ScreeningKeyPopulationService;
+import cn.luyou.service.SupervisionFormService;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -20,6 +31,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -35,6 +47,15 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         implements ScreeningKeyPopulationService {
 
     private final LatentInfectionService latentInfectionService;
+    private final PatientService patientService;
+    private final NoticeService noticeService;
+    private final SupervisionFormService supervisionFormService;
+    private final LatentFollowUpService latentFollowUpService;
+    private final LatentCheckService latentCheckService;
+    private final FirstVisitService firstVisitService;
+    private final FollowUpVisitService followUpVisitService;
+    private final MedicationManagementService medicationManagementService;
+    private final EpidemicReportService epidemicReportService;
 
     private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
             "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
@@ -132,5 +153,61 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
     private boolean isValidPhone(String phone) {
         return phone != null && phone.matches("^1[3-9]\\d{9}$");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateScreening(ScreeningKeyPopulation data) {
+        if (getById(data.getId()) == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
+        }
+        data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
+        updateById(data);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteScreeningCascade(Long id) {
+        if (getById(id) == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
+        }
+        List<LatentInfection> latentList = latentInfectionService.lambdaQuery()
+                .eq(LatentInfection::getScreeningId, id)
+                .eq(LatentInfection::getPopulationType, "keyPopulation")
+                .list();
+        for (LatentInfection latent : latentList) {
+            deleteCascadeFromLatent(latent.getId());
+        }
+        removeById(id);
+        log.info("级联删除重点人群筛查记录 id={}", id);
+    }
+
+    private void deleteCascadeFromLatent(Long latentId) {
+        List<Patient> patientList = patientService.lambdaQuery()
+                .eq(Patient::getLatentInfectionId, latentId)
+                .list();
+        for (Patient patient : patientList) {
+            Long pid = patient.getId();
+            firstVisitService.lambdaUpdate().eq(cn.luyou.model.FirstVisit::getPatientId, pid).remove();
+            followUpVisitService.lambdaUpdate().eq(cn.luyou.model.FollowUpVisit::getPatientId, pid).remove();
+            medicationManagementService.lambdaUpdate().eq(cn.luyou.model.MedicationManagement::getPatientId, pid).remove();
+            epidemicReportService.lambdaUpdate().eq(cn.luyou.model.EpidemicReport::getPatientId, pid).remove();
+            noticeService.lambdaUpdate()
+                    .eq(Notice::getBizId, pid)
+                    .eq(Notice::getNoticeType, "patient")
+                    .remove();
+            patientService.removeById(pid);
+        }
+        supervisionFormService.lambdaUpdate()
+                .eq(cn.luyou.model.SupervisionForm::getLatentInfectionId, latentId).remove();
+        latentFollowUpService.lambdaUpdate()
+                .eq(cn.luyou.model.LatentFollowUp::getLatentInfectionId, latentId).remove();
+        latentCheckService.lambdaUpdate()
+                .eq(cn.luyou.model.LatentCheck::getLatentInfectionId, latentId).remove();
+        noticeService.lambdaUpdate()
+                .eq(Notice::getBizId, latentId)
+                .eq(Notice::getNoticeType, "latent")
+                .remove();
+        latentInfectionService.removeById(latentId);
     }
 }

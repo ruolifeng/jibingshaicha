@@ -22,6 +22,23 @@ export function exportScreeningSchoolApi() {
   })
 }
 
+/** 更新学校人群筛查记录 */
+export function updateScreeningSchoolApi(id: number, data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: `screening/school/update/${id}`,
+    method: "put",
+    data
+  })
+}
+
+/** 删除学校人群筛查记录（级联删除后续所有关联数据） */
+export function deleteScreeningSchoolApi(id: number) {
+  return request<ApiResponseData<null>>({
+    url: `screening/school/delete/${id}`,
+    method: "delete"
+  })
+}
+
 /** 分页查询学校人群筛查数据 */
 export function getScreeningSchoolListApi(params: {
   page: number

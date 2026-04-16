@@ -169,12 +169,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public IPage<Patient> queryHistoryPage(int page, int size, String populationType,
-                                            String name, String idNumber) {
+                                            String name, String idNumber,
+                                            String startTime, String endTime) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .eq(Patient::getArchived, 1)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
+                .ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
+                .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
         return page(new Page<>(page, size), wrapper);
     }
