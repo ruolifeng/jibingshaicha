@@ -137,14 +137,21 @@ const noticeForm = reactive({
   treatmentInstitution: "", issuedTime: "",
   receiverOrgId: undefined as number | undefined
 })
+function getNowDateStr() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
 function openNoticeDialog(row: any) {
   noticeRow.value = row
   Object.assign(noticeForm, {
-    idNumber: row.idNumber || "", gender: row.gender || "", birthDate: "", age: row.age || null,
-    ethnicity: row.ethnicity || "", phone: row.phone || "", crowdCategory: "", currentAddress: "", householdAddress: "",
-    infectionDate: "", infectionMethod: "", infectionResultValue: "",
-    chestXrayDate: "", chestXrayResult: "", treatmentPlan: "",
-    treatmentInstitution: "", issuedTime: "", receiverOrgId: undefined
+    idNumber: row.idNumber || "", gender: row.gender || "", birthDate: row.birthDate || "", age: row.age || null,
+    ethnicity: row.ethnicity || "", phone: row.phone || "", crowdCategory: row.crowdCategory || "", currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
+    infectionDate: row.screenDate || "", infectionMethod: row.screenMethod || "", infectionResultValue: row.screenResult || row.infectionResult || "",
+    chestXrayDate: row.chestXrayDate || "", chestXrayResult: row.chestXrayResult || "", treatmentPlan: "",
+    treatmentInstitution: "", issuedTime: getNowDateStr(), receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
 }
@@ -154,6 +161,7 @@ async function handleSendNotice() {
   if (!valid) return
   submitting.value = true
   try {
+    noticeForm.issuedTime = getNowDateStr()
     await sendNoticeApi({ noticeType: "latent", populationType: POPULATION_TYPE, bizId: noticeRow.value.id, patientName: noticeRow.value.name, ...noticeForm, senderId: userStore.userId })
     ElMessage.success("通知单发送成功"); noticeDialogVisible.value = false; fetchData()
   } catch { /* handled */ } finally { submitting.value = false }
@@ -356,8 +364,18 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-button v-if="row.trackingStatus === 0 || row.trackingStatus === 2" v-permission="'latent:track'" type="primary" size="small" @click="openTrackDialog(row)">追踪</el-button>
             <el-button v-if="row.trackingStatus === 1 && !row.diagnosisFirst" v-permission="'latent:xray'" type="warning" size="small" @click="openXrayDialog(row)">录入胸片诊断</el-button>
             <el-button v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult" v-permission="'latent:referral'" type="warning" size="small" @click="openReferralDialog(row)">转诊</el-button>
-            <el-button v-if="row.referralResult === 'latent'" v-permission="'latent:sendNotice'" type="success" size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
-            <el-button v-if="row.referralResult === 'latent'" v-permission="'latent:supervision'" size="small" @click="openSupervisionDialog(row)">填写督导表</el-button>
+            <el-button v-if="row.referralResult === 'latent'" v-permission="'latent:sendNotice'" type="primary" size="small" @click="openNoticeDialog(row)">填写通知单</el-button>
+            <el-button
+              v-if="row.referralResult === 'latent'"
+              v-permission="'latent:sendNotice'"
+              type="success"
+              size="small"
+              :disabled="!!row.noticeSent"
+              @click="openNoticeDialog(row)"
+            >
+              {{ row.noticeSent ? "已发送通知单" : "发送通知单" }}
+            </el-button>
+            <el-button v-if="row.referralResult === 'latent'" v-permission="'latent:supervision'" size="small" :disabled="!row.noticeSent" @click="openSupervisionDialog(row)">填写督导表</el-button>
             <el-button v-if="row.referralResult === 'latent'" type="info" size="small" @click="viewSupervision(row)">查看督导表</el-button>
             <el-button v-if="row.treatmentPhase === 1 && !row.medicationStatus" v-permission="'latent:supervision'" type="warning" size="small" @click="openMedicationDialog(row)">设置服药状态</el-button>
             <el-button v-if="row.treatmentPhase === 1 && row.medicationStatus" v-permission="'latent:followUp'" type="primary" size="small" @click="openTreatmentDialog(row)">治疗管理</el-button>
@@ -463,7 +481,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-divider content-position="left">机构信息</el-divider>
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="治疗机构"><el-input v-model="noticeForm.treatmentInstitution" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="下发时间"><el-date-picker v-model="noticeForm.issuedTime" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="下发时间"><el-input :model-value="noticeForm.issuedTime" disabled /></el-form-item></el-col>
         </el-row>
         <el-form-item label="接收单位"><el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%"><el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" /></el-select></el-form-item>
       </el-form>

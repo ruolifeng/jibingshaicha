@@ -216,15 +216,23 @@ const noticeForm = reactive({
   receiverOrgId: undefined as number | undefined
 })
 
+function getNowDateStr() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 function openNoticeDialog(row: any) {
   noticeRow.value = row
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "", gender: row.gender || "",
-    birthDate: "", age: row.age || null, phone: row.phone || "",
-    ethnicity: "", crowdCategory: "", currentAddress: "", householdAddress: "",
-    infectionDate: "", infectionMethod: "", infectionResultValue: "",
-    chestXrayDate: "", chestXrayResult: "", treatmentPlan: "",
-    treatmentInstitution: "", issuedTime: "", receiverOrgId: undefined
+    birthDate: row.birthDate || "", age: row.age || null, phone: row.phone || "",
+    ethnicity: row.ethnicity || "", crowdCategory: row.crowdCategory || "", currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
+    infectionDate: row.screenDate || "", infectionMethod: row.screenMethod || "", infectionResultValue: row.screenResult || row.infectionResult || "",
+    chestXrayDate: row.chestXrayDate || "", chestXrayResult: row.chestXrayResult || "", treatmentPlan: "",
+    treatmentInstitution: "", issuedTime: getNowDateStr(), receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
 }
@@ -235,6 +243,7 @@ async function handleSendNotice() {
   if (!valid) return
   submitting.value = true
   try {
+    noticeForm.issuedTime = getNowDateStr()
     await sendNoticeApi({
       noticeType: "latent",
       populationType: "school",
@@ -628,17 +637,28 @@ watch(
             <el-button
               v-if="row.referralResult === 'latent'"
               v-permission="'latent:sendNotice'"
-              type="success"
+              type="primary"
               size="small"
               @click="openNoticeDialog(row)"
             >
-              发送通知单
+              填写通知单
+            </el-button>
+            <el-button
+              v-if="row.referralResult === 'latent'"
+              v-permission="'latent:sendNotice'"
+              type="success"
+              size="small"
+              :disabled="!!row.noticeSent"
+              @click="openNoticeDialog(row)"
+            >
+              {{ row.noticeSent ? "已发送通知单" : "发送通知单" }}
             </el-button>
             <!-- 督导表 -->
             <el-button
               v-if="row.referralResult === 'latent'"
               v-permission="'latent:supervision'"
               size="small"
+              :disabled="!row.noticeSent"
               @click="openSupervisionDialog(row)"
             >
               填写督导表
@@ -878,7 +898,7 @@ watch(
           </el-col>
           <el-col :span="12">
             <el-form-item label="下发时间">
-              <el-date-picker v-model="noticeForm.issuedTime" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-input :model-value="noticeForm.issuedTime" disabled />
             </el-form-item>
           </el-col>
         </el-row>

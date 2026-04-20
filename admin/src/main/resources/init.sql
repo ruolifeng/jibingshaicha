@@ -568,6 +568,10 @@ INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VAL
 (61, 'system:permissions',      '权限管理',     1, 6, 2),
 -- 筛查操作按钮（挂在 school:screening=10 下，三条主线共用此权限）
 (100, 'screening:upload',       '上传筛查数据',       2, 10, 1),
+(101, 'screening:create',       '新增筛查数据',       2, 10, 2),
+(102, 'screening:export',       '导出筛查数据',       2, 10, 3),
+(103, 'screening:edit',         '编辑筛查数据',       2, 10, 4),
+(104, 'screening:delete',       '删除筛查数据',       2, 10, 5),
 -- 潜伏感染操作按钮（挂在 school:latent=11 下，三条主线共用）
 (110, 'latent:track',           '追踪',               2, 11, 1),
 (111, 'latent:referral',        '转诊',               2, 11, 2),
@@ -614,7 +618,8 @@ SELECT 5, `id` FROM `permission` WHERE `code` IN (
   'school:screening','school:latent','school:patient','school:history',
   'keyPopulation:screening','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
   'closeContact:screening','closeContact:latent','closeContact:patient','closeContact:history',
-  'screening:upload','latent:track','latent:referral','latent:sendNotice','latent:supervision',
+  'screening:upload','screening:create','screening:export','screening:edit','screening:delete',
+  'latent:track','latent:referral','latent:sendNotice','latent:supervision',
   'patient:importEpidemic','patient:sendNotice','patient:firstVisit','patient:followUp','patient:medication'
 );
 
@@ -630,7 +635,7 @@ SELECT 6, `id` FROM `permission` WHERE `code` IN (
 
 -- ==================== 修复操作按钮 parent_id（数据库已存在时执行） ====================
 -- 若数据库已初始化，运行以下语句将操作权限挂到正确的父菜单下
-UPDATE `permission` SET `parent_id` = 10 WHERE `code` = 'screening:upload';
+UPDATE `permission` SET `parent_id` = 10 WHERE `code` IN ('screening:upload','screening:create','screening:export','screening:edit','screening:delete');
 UPDATE `permission` SET `parent_id` = 11 WHERE `code` IN ('latent:track','latent:referral','latent:sendNotice','latent:confirmNotice','latent:supervision');
 UPDATE `permission` SET `parent_id` = 12 WHERE `code` IN ('patient:importEpidemic','patient:sendNotice','patient:confirmNotice','patient:firstVisit','patient:followUp','patient:medication');
 UPDATE `permission` SET `parent_id` = 4  WHERE `code` = 'statistics:export';
@@ -700,6 +705,15 @@ INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) SELECT r.`role`, 
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
 (119, 'system:backup', '数据备份', 2, 6, 10);
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (1, 119);
+
+-- V6 新增：筛查模块按钮级权限（用于重点/密接筛查页面操作）
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(101, 'screening:create', '新增筛查数据', 2, 10, 2),
+(102, 'screening:export', '导出筛查数据', 2, 10, 3),
+(103, 'screening:edit',   '编辑筛查数据', 2, 10, 4),
+(104, 'screening:delete', '删除筛查数据', 2, 10, 5);
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES
+(5, 101), (5, 102), (5, 103), (5, 104);
 
 -- V5 迁移：notice 表补充 ethnicity 字段
 ALTER TABLE `notice` ADD COLUMN IF NOT EXISTS `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT '民族' AFTER `crowd_category`;

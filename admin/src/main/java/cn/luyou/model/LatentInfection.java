@@ -1,6 +1,7 @@
 package cn.luyou.model;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -56,4 +57,29 @@ public class LatentInfection extends BaseEntity {
     private Integer medicationStatus;
     private Integer archived;
     private LocalDateTime archivedTime;
+
+    /** 是否已发送潜伏者通知单（非持久化字段） */
+    @TableField(exist = false)
+    private Boolean noticeSent;
+
+    // ===== 通知单自动回填字段（非持久化）=====
+    @TableField(exist = false)
+    private LocalDate birthDate;
+    @TableField(exist = false)
+    private String ethnicity;
+    @TableField(exist = false)
+    private String crowdCategory;
+    @TableField(exist = false)
+    private String currentAddress;
+    @TableField(exist = false)
+    private String householdAddress;
+    /** 感染检测时间 */
+    @TableField(exist = false)
+    private LocalDate screenDate;
+    /** 感染检查方法 */
+    @TableField(exist = false)
+    private String screenMethod;
+    /** 感染检查结果 */
+    @TableField(exist = false)
+    private String screenResult;
 }

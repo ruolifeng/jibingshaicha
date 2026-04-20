@@ -13,11 +13,12 @@ export function uploadScreeningSchoolApi(file: File) {
   })
 }
 
-/** 导出学校人群筛查数据 */
-export function exportScreeningSchoolApi() {
+/** 导出学校人群筛查数据（可按勾选ID导出） */
+export function exportScreeningSchoolApi(ids?: number[]) {
   return request<Blob>({
     url: "screening/school/export",
     method: "get",
+    params: ids && ids.length > 0 ? { ids: ids.join(",") } : undefined,
     responseType: "blob"
   })
 }

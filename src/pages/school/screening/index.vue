@@ -49,6 +49,7 @@ function handleReset() {
 const uploadRef = ref()
 const importResultVisible = ref(false)
 const importResult = ref<{ successCount: number; errors: string[] }>({ successCount: 0, errors: [] })
+const selectedRows = ref<any[]>([])
 
 async function handleUpload(uploadFile: any) {
   try {
@@ -61,10 +62,19 @@ async function handleUpload(uploadFile: any) {
   }
 }
 
-/** 导出 Excel */
-async function handleExport() {
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+/** 导出 Excel（支持导出全部或勾选项） */
+async function handleExport(ids?: number[]) {
   try {
-    const res = await exportScreeningSchoolApi()
+    await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    const res = await exportScreeningSchoolApi(ids)
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -73,9 +83,18 @@ async function handleExport() {
     a.click()
     URL.revokeObjectURL(url)
     ElMessage.success("导出成功")
-  } catch {
-    ElMessage.error("导出失败")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
   }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map((item: any) => item.id).filter(Boolean)
+  if (ids.length === 0) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport(ids)
 }
 
 /** 编辑弹窗 */
@@ -83,6 +102,8 @@ const editVisible = ref(false)
 const editSaving = ref(false)
 const editForm = ref<Record<string, any>>({})
 const editMode = ref<"create" | "edit">("edit")
+const detailVisible = ref(false)
+const detailRow = ref<any>(null)
 
 function getEmptyEditForm() {
   return {
@@ -124,6 +145,11 @@ function handleEdit(row: any) {
   editMode.value = "edit"
   editForm.value = { ...row }
   editVisible.value = true
+}
+
+function viewDetail(row: any) {
+  detailRow.value = row
+  detailVisible.value = true
 }
 
 async function handleSave() {
@@ -210,7 +236,8 @@ watch(
           <span class="text-lg font-bold">学校人群筛查数据</span>
           <div class="flex gap-2">
             <el-button type="success" @click="handleCreate">新增数据</el-button>
-            <el-button @click="handleExport">导出数据</el-button>
+            <el-button @click="() => handleExport()">导出全部</el-button>
+            <el-button type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
             <el-upload
               ref="uploadRef"
               :auto-upload="false"
@@ -225,7 +252,8 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="50" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
@@ -258,8 +286,9 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" fixed="right" width="120">
+        <el-table-column label="操作" fixed="right" width="180">
           <template #default="{ row }">
+            <el-button type="info" link size="small" @click="viewDetail(row)">查看详情</el-button>
             <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -390,6 +419,41 @@ watch(
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" :loading="editSaving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 详情弹窗 -->
+    <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} - 详情`" width="900px">
+      <el-descriptions v-if="detailRow" :column="3" border>
+        <el-descriptions-item label="年份">{{ detailRow.year }}</el-descriptions-item>
+        <el-descriptions-item label="市（州）">{{ detailRow.city }}</el-descriptions-item>
+        <el-descriptions-item label="区县">{{ detailRow.district }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">{{ detailRow.name }}</el-descriptions-item>
+        <el-descriptions-item label="性别">{{ detailRow.gender }}</el-descriptions-item>
+        <el-descriptions-item label="出生日期">{{ detailRow.birthDate }}</el-descriptions-item>
+        <el-descriptions-item label="年龄">{{ detailRow.age }}</el-descriptions-item>
+        <el-descriptions-item label="证件类型">{{ detailRow.idType }}</el-descriptions-item>
+        <el-descriptions-item label="证件号">{{ detailRow.idNumber }}</el-descriptions-item>
+        <el-descriptions-item label="民族">{{ detailRow.ethnicity }}</el-descriptions-item>
+        <el-descriptions-item label="联系电话">{{ detailRow.phone }}</el-descriptions-item>
+        <el-descriptions-item label="学校类型">{{ detailRow.schoolType }}</el-descriptions-item>
+        <el-descriptions-item label="学校名称">{{ detailRow.schoolName }}</el-descriptions-item>
+        <el-descriptions-item label="班级（院系）">{{ detailRow.className }}</el-descriptions-item>
+        <el-descriptions-item label="既往结核病史">{{ detailRow.tbHistory }}</el-descriptions-item>
+        <el-descriptions-item label="密切接触史">{{ detailRow.closeContactHistory }}</el-descriptions-item>
+        <el-descriptions-item label="可疑症状">{{ detailRow.suspiciousSymptoms }}</el-descriptions-item>
+        <el-descriptions-item label="是否进行感染筛">{{ detailRow.hasInfectionScreen }}</el-descriptions-item>
+        <el-descriptions-item label="感染筛查日期">{{ detailRow.screenDate }}</el-descriptions-item>
+        <el-descriptions-item label="筛查方法">{{ detailRow.screenMethod }}</el-descriptions-item>
+        <el-descriptions-item label="筛查结果">{{ detailRow.screenResult }}</el-descriptions-item>
+        <el-descriptions-item label="感染筛查结果">{{ detailRow.infectionResult }}</el-descriptions-item>
+        <el-descriptions-item label="判定结果">{{ detailRow.isLatent === 1 ? "疑似结核" : "正常" }}</el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="3">{{ detailRow.householdAddress }}</el-descriptions-item>
+        <el-descriptions-item label="现住址" :span="3">{{ detailRow.currentAddress }}</el-descriptions-item>
+        <el-descriptions-item label="备注" :span="3">{{ detailRow.remark || "-" }}</el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 

@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 @Tag(name = "重点人群筛查管理")
@@ -75,12 +76,25 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "导出重点人群筛查数据")
     @GetMapping("/export")
-    public void export(HttpServletResponse response) throws Exception {
+    public void export(
+            HttpServletResponse response,
+            @RequestParam(required = false) String ids) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode("重点人群筛查数据.xlsx", StandardCharsets.UTF_8));
-        List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(
-                Wrappers.<ScreeningKeyPopulation>lambdaQuery().orderByDesc(ScreeningKeyPopulation::getCreateTime));
+        var query = Wrappers.<ScreeningKeyPopulation>lambdaQuery();
+        if (ids != null && !ids.isBlank()) {
+            List<Long> idList = Arrays.stream(ids.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && s.matches("\\d+"))
+                    .map(Long::valueOf)
+                    .toList();
+            if (!idList.isEmpty()) {
+                query.in(ScreeningKeyPopulation::getId, idList);
+            }
+        }
+        query.orderByDesc(ScreeningKeyPopulation::getCreateTime);
+        List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(query);
         EasyExcel.write(response.getOutputStream(), ScreeningKeyPopulation.class).sheet("筛查数据").doWrite(list);
     }
 }

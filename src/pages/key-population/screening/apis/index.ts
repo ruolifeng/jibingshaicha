@@ -13,11 +13,12 @@ export function uploadScreeningKeyPopulationApi(file: File) {
   })
 }
 
-/** 导出重点人群筛查数据 */
-export function exportScreeningKeyPopulationApi() {
+/** 导出重点人群筛查数据（可按勾选ID导出） */
+export function exportScreeningKeyPopulationApi(ids?: number[]) {
   return request<Blob>({
     url: "screening/key-population/export",
     method: "get",
+    params: ids && ids.length > 0 ? { ids: ids.join(",") } : undefined,
     responseType: "blob"
   })
 }

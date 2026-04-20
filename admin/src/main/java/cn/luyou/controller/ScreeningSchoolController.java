@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 @Tag(name = "学校人群筛查管理")
@@ -72,12 +73,25 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "导出学校人群筛查数据")
     @GetMapping("/export")
-    public void export(HttpServletResponse response) throws Exception {
+    public void export(
+            HttpServletResponse response,
+            @RequestParam(required = false) String ids) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode("学校人群筛查数据.xlsx", StandardCharsets.UTF_8));
-        List<ScreeningSchool> list = screeningSchoolService.list(
-                Wrappers.<ScreeningSchool>lambdaQuery().orderByDesc(ScreeningSchool::getCreateTime));
+        var query = Wrappers.<ScreeningSchool>lambdaQuery();
+        if (ids != null && !ids.isBlank()) {
+            List<Long> idList = Arrays.stream(ids.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && s.matches("\\d+"))
+                    .map(Long::valueOf)
+                    .toList();
+            if (!idList.isEmpty()) {
+                query.in(ScreeningSchool::getId, idList);
+            }
+        }
+        query.orderByDesc(ScreeningSchool::getCreateTime);
+        List<ScreeningSchool> list = screeningSchoolService.list(query);
         EasyExcel.write(response.getOutputStream(), ScreeningSchool.class).sheet("筛查数据").doWrite(list);
     }
 }

@@ -39,6 +39,7 @@ function handleReset() {
 
 const importResultVisible = ref(false)
 const importResult = ref<{ successCount: number; errors: string[] }>({ successCount: 0, errors: [] })
+const selectedRows = ref<any[]>([])
 
 async function handleUpload(uploadFile: any) {
   try {
@@ -51,10 +52,19 @@ async function handleUpload(uploadFile: any) {
   }
 }
 
-/** 导出 Excel */
-async function handleExport() {
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+/** 导出 Excel（支持导出全部或勾选项） */
+async function handleExport(ids?: number[]) {
   try {
-    const res = await exportScreeningCloseContactApi()
+    await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    const res = await exportScreeningCloseContactApi(ids)
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -63,9 +73,18 @@ async function handleExport() {
     a.click()
     URL.revokeObjectURL(url)
     ElMessage.success("导出成功")
-  } catch {
-    ElMessage.error("导出失败")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
   }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map((item: any) => item.id).filter(Boolean)
+  if (ids.length === 0) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport(ids)
 }
 
 function getLatentTag(isLatent: number) { return isLatent === 1 ? "danger" : "success" }
@@ -250,8 +269,9 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接人群筛查数据（V4 三轮）</span>
           <div class="flex gap-2">
-            <el-button type="success" @click="handleCreate">新增数据</el-button>
-            <el-button @click="handleExport">导出数据</el-button>
+            <el-button v-permission="'screening:create'" type="success" @click="handleCreate">新增数据</el-button>
+            <el-button v-permission="'screening:export'" @click="() => handleExport()">导出全部</el-button>
+            <el-button v-permission="'screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
             <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleUpload">
               <el-button type="primary" v-permission="'screening:upload'">上传 Excel</el-button>
             </el-upload>
@@ -260,7 +280,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       </template>
 
       <!-- V4：按三轮折叠展示，点击"查看详情"弹窗展示三轮完整字段 -->
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="50" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
@@ -328,8 +349,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">查看详情</el-button>
-            <el-button type="warning" link size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'screening:edit'" type="warning" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'screening:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -17,6 +17,14 @@ export function markMessageReadApi(id: number) {
   })
 }
 
+/** 在消息页确认接收通知单 */
+export function confirmNoticeFromMessageApi(noticeId: number) {
+  return request<ApiResponseData<null>>({
+    url: `notice/confirm/${noticeId}`,
+    method: "post"
+  })
+}
+
 /** 未读消息数 */
 export function getUnreadCountApi() {
   return request<ApiResponseData<number>>({
