@@ -48,6 +48,13 @@ public class ScreeningSchoolController {
         return ResultRes.success(result);
     }
 
+    @Operation(summary = "新增学校人群筛查记录")
+    @PostMapping("/create")
+    public ResultResponse<Void> create(@RequestBody ScreeningSchool data) {
+        screeningSchoolService.createScreening(data);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "更新学校人群筛查记录")
     @PutMapping("/update/{id}")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningSchool data) {

@@ -142,6 +142,37 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         return page(new Page<>(page, size), wrapper);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void createScreening(ScreeningSchool data) {
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+
+        data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
+        save(data);
+
+        if (data.getIsLatent() == 1) {
+            LatentInfection latent = LatentInfection.builder()
+                    .screeningId(data.getId())
+                    .populationType("school")
+                    .name(data.getName())
+                    .idNumber(data.getIdNumber())
+                    .gender(data.getGender())
+                    .age(data.getAge())
+                    .phone(data.getPhone())
+                    .infectionResult(data.getInfectionResult())
+                    .trackingStatus(0)
+                    .notInPlaceCount(0)
+                    .archived(0)
+                    .build();
+            latentInfectionService.save(latent);
+        }
+    }
+
     private boolean isPositive(String infectionResult) {
         if (StrUtil.isBlank(infectionResult)) return false;
         return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);

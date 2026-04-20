@@ -46,6 +46,13 @@ public class ScreeningCloseContactController {
         return ResultRes.success(screeningCloseContactService.queryPage(page, size, name, idNumber, district, isLatent));
     }
 
+    @Operation(summary = "新增密接人群筛查记录")
+    @PostMapping("/create")
+    public ResultResponse<Void> create(@RequestBody ScreeningCloseContact data) {
+        screeningCloseContactService.createScreening(data);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "更新密接人群筛查记录")
     @PutMapping("/update/{id}")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningCloseContact data) {

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi, deleteScreeningSchoolApi, updateScreeningSchoolApi } from "./apis"
+import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi, deleteScreeningSchoolApi, updateScreeningSchoolApi, createScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -82,8 +82,46 @@ async function handleExport() {
 const editVisible = ref(false)
 const editSaving = ref(false)
 const editForm = ref<Record<string, any>>({})
+const editMode = ref<"create" | "edit">("edit")
+
+function getEmptyEditForm() {
+  return {
+    year: "",
+    city: "",
+    district: "",
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: undefined,
+    idType: "",
+    idNumber: "",
+    ethnicity: "",
+    phone: "",
+    householdAddress: "",
+    currentAddress: "",
+    schoolType: "",
+    schoolName: "",
+    className: "",
+    tbHistory: "",
+    closeContactHistory: "",
+    suspiciousSymptoms: "",
+    hasInfectionScreen: "",
+    screenDate: "",
+    screenMethod: "",
+    screenResult: "",
+    infectionResult: "",
+    remark: ""
+  }
+}
+
+function handleCreate() {
+  editMode.value = "create"
+  editForm.value = getEmptyEditForm()
+  editVisible.value = true
+}
 
 function handleEdit(row: any) {
+  editMode.value = "edit"
   editForm.value = { ...row }
   editVisible.value = true
 }
@@ -91,12 +129,17 @@ function handleEdit(row: any) {
 async function handleSave() {
   editSaving.value = true
   try {
-    await updateScreeningSchoolApi(editForm.value.id, editForm.value)
-    ElMessage.success("保存成功")
+    if (editMode.value === "create") {
+      await createScreeningSchoolApi(editForm.value)
+      ElMessage.success("新增成功")
+    } else {
+      await updateScreeningSchoolApi(editForm.value.id, editForm.value)
+      ElMessage.success("保存成功")
+    }
     editVisible.value = false
     fetchData()
   } catch {
-    ElMessage.error("保存失败")
+    ElMessage.error(editMode.value === "create" ? "新增失败" : "保存失败")
   } finally {
     editSaving.value = false
   }
@@ -149,8 +192,8 @@ watch(
         </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
-            <el-option label="潜伏管理者" :value="1" />
-            <el-option label="非潜伏管理者" :value="0" />
+            <el-option label="疑似结核" :value="1" />
+            <el-option label="正常" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -166,6 +209,7 @@ watch(
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">学校人群筛查数据</span>
           <div class="flex gap-2">
+            <el-button type="success" @click="handleCreate">新增数据</el-button>
             <el-button @click="handleExport">导出数据</el-button>
             <el-upload
               ref="uploadRef"
@@ -206,10 +250,10 @@ watch(
         <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
         <el-table-column prop="preventiveResult" label="治疗结果" />
         <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
-        <el-table-column label="潜伏判定" fixed="right">
+        <el-table-column label="疑似结核" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
-              {{ row.isLatent === 1 ? "潜伏管理者" : "正常" }}
+              {{ row.isLatent === 1 ? "疑似结核" : "正常" }}
             </el-tag>
           </template>
         </el-table-column>
@@ -237,7 +281,7 @@ watch(
     </el-card>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" title="编辑筛查记录" width="900px" :close-on-click-modal="false">
+    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="900px" :close-on-click-modal="false">
       <el-form :model="editForm" label-width="120px" class="edit-form">
         <el-divider content-position="left">基本信息</el-divider>
         <el-row :gutter="16">

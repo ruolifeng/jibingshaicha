@@ -241,6 +241,44 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         return page(new Page<>(page, size), wrapper);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void createScreening(ScreeningCloseContact data) {
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+
+        determineLatecy(data);
+        save(data);
+
+        if (data.getIsLatent() == 1) {
+            String infectionResult = switch (data.getActiveRound()) {
+                case 1 -> data.getFirstInfectionResult();
+                case 2 -> data.getHalfYearInfectionResult();
+                case 3 -> data.getOneYearInfectionResult();
+                default -> "";
+            };
+            LatentInfection latent = LatentInfection.builder()
+                    .screeningId(data.getId())
+                    .populationType("closeContact")
+                    .name(data.getName())
+                    .idNumber(data.getIdNumber())
+                    .gender(data.getGender())
+                    .age(data.getAge())
+                    .phone(data.getPhone())
+                    .infectionResult(infectionResult)
+                    .activeRound(data.getActiveRound())
+                    .trackingStatus(0)
+                    .notInPlaceCount(0)
+                    .archived(0)
+                    .build();
+            latentInfectionService.save(latent);
+        }
+    }
+
     /**
      * 三轮顺序判定逻辑（严格按轮次顺序：首次 → 半年后 → 一年后）
      * - 首次阳性 → round 1

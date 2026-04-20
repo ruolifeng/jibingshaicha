@@ -4,7 +4,7 @@ import { request } from "@/http/axios"
 export function uploadScreeningCloseContactApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<number>>({
+  return request<ApiResponseData<{ successCount: number; errors: string[] }>>({
     url: "screening/close-contact/upload",
     method: "post",
     data: formData,
@@ -27,6 +27,15 @@ export function updateScreeningCloseContactApi(id: number, data: Record<string, 
   return request<ApiResponseData<null>>({
     url: `screening/close-contact/update/${id}`,
     method: "put",
+    data
+  })
+}
+
+/** 新增密接人群筛查记录 */
+export function createScreeningCloseContactApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "screening/close-contact/create",
+    method: "post",
     data
   })
 }

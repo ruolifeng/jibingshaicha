@@ -41,9 +41,21 @@ public class ScreeningKeyPopulationController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
             @RequestParam(required = false) String district,
+            @RequestParam(required = false) String townshipCommunity,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String screenMethod,
             @RequestParam(required = false) Integer isLatent) {
-        return ResultRes.success(screeningKeyPopulationService.queryPage(page, size, name, idNumber, district, isLatent));
+        return ResultRes.success(screeningKeyPopulationService.queryPage(
+                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent));
+    }
+
+    @Operation(summary = "新增重点人群筛查记录")
+    @PostMapping("/create")
+    public ResultResponse<Void> create(@RequestBody ScreeningKeyPopulation data) {
+        screeningKeyPopulationService.createScreening(data);
+        return ResultRes.success(null);
     }
 
     @Operation(summary = "更新重点人群筛查记录")

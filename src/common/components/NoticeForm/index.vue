@@ -104,9 +104,9 @@ async function handleSubmit() {
         <el-select v-model="form.crowdCategory" placeholder="请选择">
           <el-option
             v-for="opt in CROWD_CATEGORY_OPTIONS"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
+            :key="opt"
+            :label="opt"
+            :value="opt"
           />
         </el-select>
       </el-form-item>
@@ -114,9 +114,9 @@ async function handleSubmit() {
         <el-select v-model="form.treatmentPlan" placeholder="请选择治疗方案">
           <el-option
             v-for="opt in TREATMENT_PLAN_OPTIONS"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
+            :key="opt"
+            :label="opt"
+            :value="opt"
           />
         </el-select>
       </el-form-item>

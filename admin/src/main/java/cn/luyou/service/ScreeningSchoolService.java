@@ -20,6 +20,9 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
     IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
                                      String schoolName, String district, Integer isLatent);
 
+    /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */
+    void createScreening(ScreeningSchool data);
+
     /**
      * 级联删除筛查记录（同步删除后续所有关联数据）
      */

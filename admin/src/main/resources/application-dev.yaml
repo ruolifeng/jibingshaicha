@@ -1,5 +1,8 @@
 server:
   port: 8888
+  # 与前端 VITE_BASE_URL=/api/v1 一致，所有接口对外路径为 /api/v1/...
+  servlet:
+    context-path: /api/v1
 
 spring:
   datasource:

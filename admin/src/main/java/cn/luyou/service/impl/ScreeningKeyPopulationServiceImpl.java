@@ -126,14 +126,63 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
     @Override
     public IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
-                                                    String district, Integer isLatent) {
+                                                    String phone, String district, String townshipCommunity,
+                                                    String crowdCategory, String screenMethod, Integer isLatent) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningKeyPopulation::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningKeyPopulation::getIdNumber, idNumber)
+                .like(StrUtil.isNotBlank(phone), ScreeningKeyPopulation::getPhone, phone)
                 .eq(StrUtil.isNotBlank(district), ScreeningKeyPopulation::getDistrict, district)
-                .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
-                .orderByDesc(ScreeningKeyPopulation::getCreateTime);
+                .like(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
+                .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
+                .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent);
+        // 人群分类：按选项匹配对应的独立列
+        if (StrUtil.isNotBlank(crowdCategory)) {
+            switch (crowdCategory) {
+                case "密接"     -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryClose,    "是");
+                case "学生"     -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryStudent,  "是");
+                case "教职工"   -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTeacher,  "是");
+                case "老年人"   -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryElder,    "是");
+                case "糖尿病"   -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是");
+                case "双感"     -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDual,     "是");
+                case "既往结核史" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTbHist,  "是");
+                case "非重点人群" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryNormal,  "是");
+                default -> {}
+            }
+        }
+        wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
         return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void createScreening(ScreeningKeyPopulation data) {
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+
+        data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
+        save(data);
+
+        if (data.getIsLatent() == 1) {
+            LatentInfection latent = LatentInfection.builder()
+                    .screeningId(data.getId())
+                    .populationType("keyPopulation")
+                    .name(data.getName())
+                    .idNumber(data.getIdNumber())
+                    .gender(data.getGender())
+                    .age(data.getAge())
+                    .phone(data.getPhone())
+                    .infectionResult(data.getInfectionResult())
+                    .trackingStatus(0)
+                    .notInPlaceCount(0)
+                    .archived(0)
+                    .build();
+            latentInfectionService.save(latent);
+        }
     }
 
     private boolean isPositive(String infectionResult) {

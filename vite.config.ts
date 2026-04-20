@@ -36,12 +36,12 @@ export default defineConfig(({ mode }) => {
       // 是否自动打开浏览器
       open: true,
       // 反向代理
+      // 与后端 server.servlet.context-path=/api/v1 一致，原样转发，不要再 strip 前缀
       proxy: {
         "/api/v1": {
           target: "http://localhost:8888",
           ws: false,
-          changeOrigin: true,
-          rewrite: (path: string) => path.replace(/^\/api\/v1/, "")
+          changeOrigin: true
         }
       },
       // 是否允许跨域

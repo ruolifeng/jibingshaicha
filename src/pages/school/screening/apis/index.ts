@@ -4,7 +4,7 @@ import { request } from "@/http/axios"
 export function uploadScreeningSchoolApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<number>>({
+  return request<ApiResponseData<{ successCount: number; errors: string[] }>>({
     url: "screening/school/upload",
     method: "post",
     data: formData,
@@ -27,6 +27,15 @@ export function updateScreeningSchoolApi(id: number, data: Record<string, any>) 
   return request<ApiResponseData<null>>({
     url: `screening/school/update/${id}`,
     method: "put",
+    data
+  })
+}
+
+/** 新增学校人群筛查记录 */
+export function createScreeningSchoolApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "screening/school/create",
+    method: "post",
     data
   })
 }

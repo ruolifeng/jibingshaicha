@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.util.UrlPathHelper;
 
 /**
  * JWT 认证拦截器
@@ -23,8 +24,26 @@ public class AuthHandlerInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
 
+    private final UrlPathHelper urlPathHelper = new UrlPathHelper();
+
+    /**
+     * 登录接口无需 Token（与 {@link cn.luyou.config.AuthWebMvcConfigurer} 排除规则一致）。
+     * <p>
+     * 配置了 {@code server.servlet.context-path=/api/v1} 时，此处匹配到的路径为应用内路径 {@code /user/login}。
+     */
+    private boolean isLoginRequest(HttpServletRequest request) {
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        String path = urlPathHelper.getPathWithinApplication(request);
+        return "/user/login".equals(path);
+    }
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        if (isLoginRequest(request)) {
+            return true;
+        }
         String token = request.getHeader("Authorization");
         if (token == null || token.isBlank()) {
             throw new ServiceException(StatusEnum.UNAUTHORIZED);

@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `ethnicity`                VARCHAR(32)  DEFAULT NULL COMMENT '民族',
     `phone`                    VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
     `household_address`        VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
+    `township_community`       VARCHAR(128) DEFAULT NULL COMMENT '乡镇/社区',
     `current_address`          VARCHAR(256) DEFAULT NULL COMMENT '现住址',
     -- 人群分类（多选，V4 每项独立列）
     `crowd_category_close`     VARCHAR(10)  DEFAULT NULL COMMENT '人群分类-密接（是/否）',
@@ -702,3 +703,6 @@ INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (1, 119);
 
 -- V5 迁移：notice 表补充 ethnicity 字段
 ALTER TABLE `notice` ADD COLUMN IF NOT EXISTS `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT '民族' AFTER `crowd_category`;
+
+-- V5 迁移：重点人群筛查表补充乡镇/社区字段
+ALTER TABLE `screening_key_population` ADD COLUMN `township_community` VARCHAR(128) DEFAULT NULL COMMENT '乡镇/社区' AFTER `household_address`;

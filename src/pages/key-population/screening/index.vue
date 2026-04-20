@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, exportScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, updateScreeningKeyPopulationApi } from "./apis"
+import { uploadScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, exportScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, updateScreeningKeyPopulationApi, createScreeningKeyPopulationApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -12,6 +12,10 @@ const searchForm = reactive({
   name: "",
   idNumber: "",
   district: "",
+  townshipCommunity: "",
+  phone: "",
+  crowdCategory: "",
+  screenMethod: "",
   isLatent: undefined as number | undefined
 })
 
@@ -39,6 +43,10 @@ function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
   searchForm.district = ""
+  searchForm.townshipCommunity = ""
+  searchForm.phone = ""
+  searchForm.crowdCategory = ""
+  searchForm.screenMethod = ""
   searchForm.isLatent = undefined
   handleSearch()
 }
@@ -80,8 +88,58 @@ async function handleExport() {
 const editVisible = ref(false)
 const editSaving = ref(false)
 const editForm = ref<Record<string, any>>({})
+const editMode = ref<"create" | "edit">("edit")
+
+function getEmptyEditForm() {
+  return {
+    year: "",
+    city: "",
+    district: "",
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: undefined,
+    idType: "",
+    idNumber: "",
+    ethnicity: "",
+    phone: "",
+    householdAddress: "",
+    townshipCommunity: "",
+    currentAddress: "",
+    crowdCategoryClose: "否",
+    crowdCategoryStudent: "否",
+    crowdCategoryTeacher: "否",
+    crowdCategoryElder: "否",
+    crowdCategoryDiabetes: "否",
+    crowdCategoryDual: "否",
+    crowdCategoryTbHist: "否",
+    crowdCategoryNormal: "否",
+    hasSuspiciousSymptoms: "",
+    cough: "",
+    hemoptysis: "",
+    fever: "",
+    chestPain: "",
+    nightSweats: "",
+    appetiteLoss: "",
+    fatigue: "",
+    weightLoss: "",
+    hasInfectionScreen: "",
+    screenDate: "",
+    screenMethod: "",
+    screenResult: "",
+    infectionResult: "",
+    remark: ""
+  }
+}
+
+function handleCreate() {
+  editMode.value = "create"
+  editForm.value = getEmptyEditForm()
+  editVisible.value = true
+}
 
 function handleEdit(row: any) {
+  editMode.value = "edit"
   editForm.value = { ...row }
   editVisible.value = true
 }
@@ -89,12 +147,17 @@ function handleEdit(row: any) {
 async function handleSave() {
   editSaving.value = true
   try {
-    await updateScreeningKeyPopulationApi(editForm.value.id, editForm.value)
-    ElMessage.success("保存成功")
+    if (editMode.value === "create") {
+      await createScreeningKeyPopulationApi(editForm.value)
+      ElMessage.success("新增成功")
+    } else {
+      await updateScreeningKeyPopulationApi(editForm.value.id, editForm.value)
+      ElMessage.success("保存成功")
+    }
     editVisible.value = false
     fetchData()
   } catch {
-    ElMessage.error("保存失败")
+    ElMessage.error(editMode.value === "create" ? "新增失败" : "保存失败")
   } finally {
     editSaving.value = false
   }
@@ -139,13 +202,38 @@ watch(
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="searchForm.phone" placeholder="请输入手机号" clearable />
+        </el-form-item>
         <el-form-item label="区县">
           <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
         </el-form-item>
+        <el-form-item label="乡镇/社区">
+          <el-input v-model="searchForm.townshipCommunity" placeholder="请输入乡镇/社区" clearable />
+        </el-form-item>
+        <el-form-item label="人群分类">
+          <el-select v-model="searchForm.crowdCategory" placeholder="全部" clearable style="width: 140px">
+            <el-option label="密接" value="密接" />
+            <el-option label="学生" value="学生" />
+            <el-option label="教职工" value="教职工" />
+            <el-option label="老年人" value="老年人" />
+            <el-option label="糖尿病" value="糖尿病" />
+            <el-option label="双感" value="双感" />
+            <el-option label="既往结核史" value="既往结核史" />
+            <el-option label="非重点人群" value="非重点人群" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="感染筛查方法">
+          <el-select v-model="searchForm.screenMethod" placeholder="全部" clearable style="width: 120px">
+            <el-option label="PPD" value="PPD" />
+            <el-option label="IGRA" value="IGRA" />
+            <el-option label="EC" value="EC" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
-            <el-option label="潜伏管理者" :value="1" />
-            <el-option label="非潜伏管理者" :value="0" />
+            <el-option label="疑似结核" :value="1" />
+            <el-option label="正常" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -161,6 +249,7 @@ watch(
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">重点人群筛查数据</span>
           <div class="flex gap-2">
+            <el-button type="success" @click="handleCreate">新增数据</el-button>
             <el-button @click="handleExport">导出数据</el-button>
             <el-upload
               ref="uploadRef"
@@ -178,12 +267,19 @@ watch(
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="gender" label="性别" />
-        <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="year" label="年份" width="80" />
+        <el-table-column prop="city" label="市（州）" />
         <el-table-column prop="district" label="区县" />
-        <el-table-column prop="ethnicity" label="民族" />
+        <el-table-column prop="gender" label="性别" width="70" />
+        <el-table-column prop="birthDate" label="出生日期" width="110" />
+        <el-table-column prop="age" label="年龄" width="70" />
+        <el-table-column prop="idType" label="证件类型" />
+        <el-table-column prop="idNumber" label="证件号" width="180" />
+        <el-table-column prop="ethnicity" label="民族" width="80" />
+        <el-table-column prop="phone" label="联系电话" width="130" />
+        <el-table-column prop="householdAddress" label="户籍地址" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="townshipCommunity" label="乡镇/社区" />
+        <el-table-column prop="currentAddress" label="现住址" min-width="160" show-overflow-tooltip />
         <!-- V4 人群分类：各列独立 -->
         <el-table-column label="人群分类">
           <template #default="{ row }">
@@ -217,10 +313,10 @@ watch(
         <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
         <el-table-column prop="preventiveResult" label="治疗结果" />
         <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
-        <el-table-column label="潜伏判定" fixed="right">
+        <el-table-column label="疑似结核" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
-              {{ row.isLatent === 1 ? "潜伏管理者" : "正常" }}
+              {{ row.isLatent === 1 ? "疑似结核" : "正常" }}
             </el-tag>
           </template>
         </el-table-column>
@@ -248,7 +344,7 @@ watch(
     </el-card>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" title="编辑筛查记录" width="960px" :close-on-click-modal="false">
+    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false">
       <el-form :model="editForm" label-width="120px" class="edit-form">
         <el-divider content-position="left">基本信息</el-divider>
         <el-row :gutter="16">
@@ -270,6 +366,7 @@ watch(
           <el-col :span="8"><el-form-item label="民族"><el-input v-model="editForm.ethnicity" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item></el-col>
           <el-col :span="16"><el-form-item label="户籍地址"><el-input v-model="editForm.householdAddress" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="乡镇/社区"><el-input v-model="editForm.townshipCommunity" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="现住址"><el-input v-model="editForm.currentAddress" /></el-form-item></el-col>
         </el-row>
 

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningCloseContactApi, getScreeningCloseContactListApi, exportScreeningCloseContactApi, deleteScreeningCloseContactApi, updateScreeningCloseContactApi } from "./apis"
+import { uploadScreeningCloseContactApi, getScreeningCloseContactListApi, exportScreeningCloseContactApi, deleteScreeningCloseContactApi, updateScreeningCloseContactApi, createScreeningCloseContactApi } from "./apis"
 import { ACTIVE_ROUND_MAP } from "@@/constants/disease"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -82,7 +82,7 @@ function getActiveRoundTag(round: number) {
  * - 完成三轮或已确认为潜伏管理者则无需复查
  */
 function getNextReviewDate(row: any): string {
-  if (row.isLatent === 1) return "已判定潜伏"
+  if (row.isLatent === 1) return "已判定疑似结核"
   if (row.activeRound === 3 || row.oneYearInfectionResult) return "已完成三轮"
   if (row.halfYearScreenDate) {
     const d = new Date(row.halfYearScreenDate)
@@ -109,8 +109,74 @@ function isReviewNearDue(row: any): boolean {
 const editVisible = ref(false)
 const editSaving = ref(false)
 const editForm = ref<Record<string, any>>({})
+const editMode = ref<"create" | "edit">("edit")
+
+function getEmptyEditForm() {
+  return {
+    year: "",
+    city: "",
+    district: "",
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: undefined,
+    idType: "",
+    idNumber: "",
+    ethnicity: "",
+    occupation: "",
+    phone: "",
+    householdAddress: "",
+    currentAddress: "",
+    contactType: "",
+    sourcePatientName: "",
+    sourcePatientConfirmDate: "",
+    sourcePatientIdNumber: "",
+    firstScreenDate: "",
+    firstSymptomResult: "",
+    firstInfectionMethod: "",
+    firstScreenResult: "",
+    firstInfectionResult: "",
+    firstHasChestXray: "",
+    firstChestXrayDate: "",
+    firstChestXrayResult: "",
+    firstDiagnosis: "",
+    halfYearScreenDate: "",
+    halfYearSymptomResult: "",
+    halfYearInfectionMethod: "",
+    halfYearScreenResult: "",
+    halfYearInfectionResult: "",
+    halfYearHasChestXray: "",
+    halfYearChestXrayDate: "",
+    halfYearChestXrayResult: "",
+    halfYearDiagnosis: "",
+    oneYearScreenDate: "",
+    oneYearSymptomResult: "",
+    oneYearInfectionMethod: "",
+    oneYearScreenResult: "",
+    oneYearInfectionResult: "",
+    oneYearHasChestXray: "",
+    oneYearChestXrayDate: "",
+    oneYearChestXrayResult: "",
+    oneYearDiagnosis: "",
+    hasPreventiveTreatment: "",
+    preventivePlan: "",
+    preventiveStartDate: "",
+    preventiveEndDate: "",
+    preventiveResult: "",
+    preventiveManager: "",
+    benefitMethod: "",
+    remark: ""
+  }
+}
+
+function handleCreate() {
+  editMode.value = "create"
+  editForm.value = getEmptyEditForm()
+  editVisible.value = true
+}
 
 function handleEdit(row: any) {
+  editMode.value = "edit"
   editForm.value = { ...row }
   editVisible.value = true
 }
@@ -118,12 +184,17 @@ function handleEdit(row: any) {
 async function handleSave() {
   editSaving.value = true
   try {
-    await updateScreeningCloseContactApi(editForm.value.id, editForm.value)
-    ElMessage.success("保存成功")
+    if (editMode.value === "create") {
+      await createScreeningCloseContactApi(editForm.value)
+      ElMessage.success("新增成功")
+    } else {
+      await updateScreeningCloseContactApi(editForm.value.id, editForm.value)
+      ElMessage.success("保存成功")
+    }
     editVisible.value = false
     fetchData()
   } catch {
-    ElMessage.error("保存失败")
+    ElMessage.error(editMode.value === "create" ? "新增失败" : "保存失败")
   } finally {
     editSaving.value = false
   }
@@ -163,7 +234,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-form-item label="区县"><el-input v-model="searchForm.district" placeholder="请输入区县" clearable /></el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
-            <el-option label="潜伏管理者" :value="1" /><el-option label="非潜伏管理者" :value="0" />
+            <el-option label="疑似结核" :value="1" /><el-option label="正常" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -179,6 +250,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接人群筛查数据（V4 三轮）</span>
           <div class="flex gap-2">
+            <el-button type="success" @click="handleCreate">新增数据</el-button>
             <el-button @click="handleExport">导出数据</el-button>
             <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleUpload">
               <el-button type="primary" v-permission="'screening:upload'">上传 Excel</el-button>
@@ -240,10 +312,10 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-table-column prop="preventiveResult" label="治疗结果" />
         <el-table-column prop="benefitMethod" label="惠民方式" />
 
-        <el-table-column label="潜伏判定">
+        <el-table-column label="疑似结核">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
-              {{ row.isLatent === 1 ? "潜伏管理者" : "正常" }}
+              {{ row.isLatent === 1 ? "疑似结核" : "正常" }}
             </el-tag>
           </template>
         </el-table-column>
@@ -276,7 +348,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
     </el-card>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" title="编辑筛查记录" width="960px" :close-on-click-modal="false">
+    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false">
       <el-tabs>
         <!-- 基本信息 Tab -->
         <el-tab-pane label="基本信息">

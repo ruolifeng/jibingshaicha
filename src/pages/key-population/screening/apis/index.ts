@@ -4,7 +4,7 @@ import { request } from "@/http/axios"
 export function uploadScreeningKeyPopulationApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<number>>({
+  return request<ApiResponseData<{ successCount: number; errors: string[] }>>({
     url: "screening/key-population/upload",
     method: "post",
     data: formData,
@@ -31,6 +31,15 @@ export function updateScreeningKeyPopulationApi(id: number, data: Record<string,
   })
 }
 
+/** 新增重点人群筛查记录 */
+export function createScreeningKeyPopulationApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "screening/key-population/create",
+    method: "post",
+    data
+  })
+}
+
 /** 删除重点人群筛查记录（级联删除后续所有关联数据） */
 export function deleteScreeningKeyPopulationApi(id: number) {
   return request<ApiResponseData<null>>({
@@ -45,7 +54,11 @@ export function getScreeningKeyPopulationListApi(params: {
   size: number
   name?: string
   idNumber?: string
+  phone?: string
   district?: string
+  townshipCommunity?: string
+  crowdCategory?: string
+  screenMethod?: string
   isLatent?: number
 }) {
   return request<ApiResponseData<any>>({
