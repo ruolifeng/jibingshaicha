@@ -275,9 +275,9 @@ watch(
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">重点人群筛查数据</span>
           <div class="flex gap-2">
-            <el-button v-permission="'screening:create'" type="success" @click="handleCreate">新增数据</el-button>
-            <el-button v-permission="'screening:export'" @click="() => handleExport()">导出全部</el-button>
-            <el-button v-permission="'screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
+            <el-button v-permission="'keyPopulation:screening:create'" type="success" @click="handleCreate">新增数据</el-button>
+            <el-button v-permission="'keyPopulation:screening:export'" @click="() => handleExport()">导出全部</el-button>
+            <el-button v-permission="'keyPopulation:screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
             <el-upload
               ref="uploadRef"
               :auto-upload="false"
@@ -285,7 +285,7 @@ watch(
               accept=".xlsx,.xls"
               :on-change="handleUpload"
             >
-              <el-button type="primary" v-permission="'screening:upload'">上传 Excel</el-button>
+              <el-button type="primary" v-permission="'keyPopulation:screening:upload'">上传 Excel</el-button>
             </el-upload>
           </div>
         </div>
@@ -352,8 +352,8 @@ watch(
         <el-table-column label="操作" fixed="right" width="180">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">查看详情</el-button>
-            <el-button v-permission="'screening:edit'" type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'screening:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'keyPopulation:screening:edit'" type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'keyPopulation:screening:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

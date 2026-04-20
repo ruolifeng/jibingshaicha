@@ -572,6 +572,18 @@ INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VAL
 (102, 'screening:export',       '导出筛查数据',       2, 10, 3),
 (103, 'screening:edit',         '编辑筛查数据',       2, 10, 4),
 (104, 'screening:delete',       '删除筛查数据',       2, 10, 5),
+-- 重点人群筛查操作按钮（挂在 keyPopulation:screening=20 下）
+(210, 'keyPopulation:screening:upload', '上传筛查数据', 2, 20, 1),
+(211, 'keyPopulation:screening:create', '新增筛查数据', 2, 20, 2),
+(212, 'keyPopulation:screening:export', '导出筛查数据', 2, 20, 3),
+(213, 'keyPopulation:screening:edit',   '编辑筛查数据', 2, 20, 4),
+(214, 'keyPopulation:screening:delete', '删除筛查数据', 2, 20, 5),
+-- 密接人群筛查操作按钮（挂在 closeContact:screening=30 下）
+(310, 'closeContact:screening:upload', '上传筛查数据', 2, 30, 1),
+(311, 'closeContact:screening:create', '新增筛查数据', 2, 30, 2),
+(312, 'closeContact:screening:export', '导出筛查数据', 2, 30, 3),
+(313, 'closeContact:screening:edit',   '编辑筛查数据', 2, 30, 4),
+(314, 'closeContact:screening:delete', '删除筛查数据', 2, 30, 5),
 -- 潜伏感染操作按钮（挂在 school:latent=11 下，三条主线共用）
 (110, 'latent:track',           '追踪',               2, 11, 1),
 (111, 'latent:referral',        '转诊',               2, 11, 2),
@@ -619,6 +631,8 @@ SELECT 5, `id` FROM `permission` WHERE `code` IN (
   'keyPopulation:screening','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
   'closeContact:screening','closeContact:latent','closeContact:patient','closeContact:history',
   'screening:upload','screening:create','screening:export','screening:edit','screening:delete',
+  'keyPopulation:screening:upload','keyPopulation:screening:create','keyPopulation:screening:export','keyPopulation:screening:edit','keyPopulation:screening:delete',
+  'closeContact:screening:upload','closeContact:screening:create','closeContact:screening:export','closeContact:screening:edit','closeContact:screening:delete',
   'latent:track','latent:referral','latent:sendNotice','latent:supervision',
   'patient:importEpidemic','patient:sendNotice','patient:firstVisit','patient:followUp','patient:medication'
 );
@@ -636,6 +650,8 @@ SELECT 6, `id` FROM `permission` WHERE `code` IN (
 -- ==================== 修复操作按钮 parent_id（数据库已存在时执行） ====================
 -- 若数据库已初始化，运行以下语句将操作权限挂到正确的父菜单下
 UPDATE `permission` SET `parent_id` = 10 WHERE `code` IN ('screening:upload','screening:create','screening:export','screening:edit','screening:delete');
+UPDATE `permission` SET `parent_id` = 20 WHERE `code` IN ('keyPopulation:screening:upload','keyPopulation:screening:create','keyPopulation:screening:export','keyPopulation:screening:edit','keyPopulation:screening:delete');
+UPDATE `permission` SET `parent_id` = 30 WHERE `code` IN ('closeContact:screening:upload','closeContact:screening:create','closeContact:screening:export','closeContact:screening:edit','closeContact:screening:delete');
 UPDATE `permission` SET `parent_id` = 11 WHERE `code` IN ('latent:track','latent:referral','latent:sendNotice','latent:confirmNotice','latent:supervision');
 UPDATE `permission` SET `parent_id` = 12 WHERE `code` IN ('patient:importEpidemic','patient:sendNotice','patient:confirmNotice','patient:firstVisit','patient:followUp','patient:medication');
 UPDATE `permission` SET `parent_id` = 4  WHERE `code` = 'statistics:export';
@@ -714,6 +730,30 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (104, 'screening:delete', '删除筛查数据', 2, 10, 5);
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES
 (5, 101), (5, 102), (5, 103), (5, 104);
+
+-- V7 新增：重点/密接筛查独立按钮权限（权限树分别展示到各自主线下）
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(210, 'keyPopulation:screening:upload', '上传筛查数据', 2, 20, 1),
+(211, 'keyPopulation:screening:create', '新增筛查数据', 2, 20, 2),
+(212, 'keyPopulation:screening:export', '导出筛查数据', 2, 20, 3),
+(213, 'keyPopulation:screening:edit',   '编辑筛查数据', 2, 20, 4),
+(214, 'keyPopulation:screening:delete', '删除筛查数据', 2, 20, 5),
+(310, 'closeContact:screening:upload', '上传筛查数据', 2, 30, 1),
+(311, 'closeContact:screening:create', '新增筛查数据', 2, 30, 2),
+(312, 'closeContact:screening:export', '导出筛查数据', 2, 30, 3),
+(313, 'closeContact:screening:edit',   '编辑筛查数据', 2, 30, 4),
+(314, 'closeContact:screening:delete', '删除筛查数据', 2, 30, 5);
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES
+(5, 210), (5, 211), (5, 212), (5, 213), (5, 214),
+(5, 310), (5, 311), (5, 312), (5, 313), (5, 314);
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.`role`, p.`id`
+FROM (SELECT 1 AS `role` UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
+CROSS JOIN `permission` p
+WHERE p.`code` IN (
+  'keyPopulation:screening:upload','keyPopulation:screening:create','keyPopulation:screening:export','keyPopulation:screening:edit','keyPopulation:screening:delete',
+  'closeContact:screening:upload','closeContact:screening:create','closeContact:screening:export','closeContact:screening:edit','closeContact:screening:delete'
+);
 
 -- V5 迁移：notice 表补充 ethnicity 字段
 ALTER TABLE `notice` ADD COLUMN IF NOT EXISTS `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT '民族' AFTER `crowd_category`;

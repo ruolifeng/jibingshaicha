@@ -269,11 +269,11 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接人群筛查数据（V4 三轮）</span>
           <div class="flex gap-2">
-            <el-button v-permission="'screening:create'" type="success" @click="handleCreate">新增数据</el-button>
-            <el-button v-permission="'screening:export'" @click="() => handleExport()">导出全部</el-button>
-            <el-button v-permission="'screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
+            <el-button v-permission="'closeContact:screening:create'" type="success" @click="handleCreate">新增数据</el-button>
+            <el-button v-permission="'closeContact:screening:export'" @click="() => handleExport()">导出全部</el-button>
+            <el-button v-permission="'closeContact:screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
             <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleUpload">
-              <el-button type="primary" v-permission="'screening:upload'">上传 Excel</el-button>
+              <el-button type="primary" v-permission="'closeContact:screening:upload'">上传 Excel</el-button>
             </el-upload>
           </div>
         </div>
@@ -349,8 +349,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">查看详情</el-button>
-            <el-button v-permission="'screening:edit'" type="warning" link size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'screening:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'closeContact:screening:edit'" type="warning" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'closeContact:screening:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
