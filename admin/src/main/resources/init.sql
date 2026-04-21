@@ -338,19 +338,38 @@ CREATE TABLE IF NOT EXISTS `notice` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知单表';
 
 -- ==================== 督导表 ====================
--- V4 新增：治疗完成时间、预防性治疗结果、随访管理人员
+-- V5 重大改造：按照 Excel 模板《潜伏感染预防性治疗督导表》字段完整重构
 
 CREATE TABLE IF NOT EXISTS `supervision_form` (
     `id`                     BIGINT       NOT NULL AUTO_INCREMENT,
     `latent_infection_id`    BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
     `population_type`        VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `patient_name`           VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
+    -- V5 新增基本信息
+    `category`               VARCHAR(64)  DEFAULT NULL COMMENT '类别：密接/新生筛查/65岁以上老年人/糖尿病人/双感/其他',
+    `gender`                 VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `age`                    INT          DEFAULT NULL COMMENT '年龄',
+    `phone`                  VARCHAR(32)  DEFAULT NULL COMMENT '电话号码',
+    `current_address`        VARCHAR(256) DEFAULT NULL COMMENT '现住址',
     `treatment_start_date`   DATE         DEFAULT NULL COMMENT '预防性治疗开始日期',
-    `treatment_end_date`     DATE         DEFAULT NULL COMMENT '预防性治疗完成时间（V4新增）',
-    `treatment_plan`         VARCHAR(256) DEFAULT NULL COMMENT '治疗方案',
-    `supervision_content`    TEXT         DEFAULT NULL COMMENT '督导内容（JSON格式存储表单数据）',
-    `preventive_result`      VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4新增）',
-    `preventive_manager`     VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员（V4新增）',
+    `treatment_plan`         VARCHAR(256) DEFAULT NULL COMMENT '治疗方案（含新增"不服药"）',
+    -- V5 改造：督导记录改为 JSON 数组（督导时间/内容/方式/备注）
+    `supervision_records`    TEXT         DEFAULT NULL COMMENT '督导记录（JSON数组：time/content/method/remark）',
+    -- V5 新增：全疗程规律治疗评价
+    `interrupt_medication`   VARCHAR(16)  DEFAULT NULL COMMENT '中断用药：有/无',
+    `interrupt_count`        INT          DEFAULT NULL COMMENT '中断次数',
+    `total_doses`            INT          DEFAULT NULL COMMENT '全程应用药次数',
+    `actual_doses`           INT          DEFAULT NULL COMMENT '实际用药次数',
+    `medication_rate`        VARCHAR(16)  DEFAULT NULL COMMENT '用药率（%）',
+    `treatment_end_date`     DATE         DEFAULT NULL COMMENT '预防性治疗完成（结束疗程）时间',
+    -- V4 旧字段兼容保留
+    `preventive_result`      VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4旧字段）',
+    `preventive_manager`     VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员（V4旧字段）',
+    -- V5 新增：督导管理人员
+    `manager_type`           VARCHAR(64)  DEFAULT NULL COMMENT '督导管理人员类型',
+    `manager_name`           VARCHAR(64)  DEFAULT NULL COMMENT '督导管理人员姓名',
+    `remark`                 TEXT         DEFAULT NULL COMMENT '备注',
+    `attachment_urls`        TEXT         DEFAULT NULL COMMENT '附件（JSON数组，存储图片/文件URL）',
     `filled_by`              BIGINT       DEFAULT NULL COMMENT '填写人ID',
     `status`                 TINYINT      NOT NULL DEFAULT 0 COMMENT '状态：0未填写 1已填写 2已归档',
     `archived_time`          DATETIME     DEFAULT NULL COMMENT '归档时间',
@@ -359,7 +378,7 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     `deleted`                TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     KEY `idx_latent` (`latent_infection_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性治疗督导表（V4）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性治疗督导表（V5）';
 
 -- ==================== 潜伏感染者电话随访表 ====================
 
@@ -760,3 +779,39 @@ ALTER TABLE `notice` ADD COLUMN IF NOT EXISTS `ethnicity` VARCHAR(32) DEFAULT NU
 
 -- V5 迁移：重点人群筛查表补充乡镇/社区字段
 ALTER TABLE `screening_key_population` ADD COLUMN `township_community` VARCHAR(128) DEFAULT NULL COMMENT '乡镇/社区' AFTER `household_address`;
+
+-- ==================== V5 迁移：督导表字段完整重构 ====================
+DROP PROCEDURE IF EXISTS _v5_migrate_supervision;
+DELIMITER $$
+CREATE PROCEDURE _v5_migrate_supervision()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
+
+    -- V5 新增基本信息字段
+    ALTER TABLE `supervision_form` ADD COLUMN `category`               VARCHAR(64)  DEFAULT NULL COMMENT '类别：密接/新生筛查/65岁以上老年人/糖尿病人/双感/其他' AFTER `patient_name`;
+    ALTER TABLE `supervision_form` ADD COLUMN `gender`                 VARCHAR(10)  DEFAULT NULL COMMENT '性别' AFTER `category`;
+    ALTER TABLE `supervision_form` ADD COLUMN `age`                    INT          DEFAULT NULL COMMENT '年龄' AFTER `gender`;
+    ALTER TABLE `supervision_form` ADD COLUMN `phone`                  VARCHAR(32)  DEFAULT NULL COMMENT '电话号码' AFTER `age`;
+    ALTER TABLE `supervision_form` ADD COLUMN `current_address`        VARCHAR(256) DEFAULT NULL COMMENT '现住址' AFTER `phone`;
+
+    -- V5 改造：supervision_content → supervision_records（保留原字段兼容）
+    ALTER TABLE `supervision_form` ADD COLUMN `supervision_records`    TEXT         DEFAULT NULL COMMENT '督导记录（JSON数组：time/content/method/remark）' AFTER `treatment_plan`;
+
+    -- V5 新增：全疗程规律治疗评价
+    ALTER TABLE `supervision_form` ADD COLUMN `interrupt_medication`   VARCHAR(16)  DEFAULT NULL COMMENT '中断用药：有/无' AFTER `supervision_records`;
+    ALTER TABLE `supervision_form` ADD COLUMN `interrupt_count`        INT          DEFAULT NULL COMMENT '中断次数' AFTER `interrupt_medication`;
+    ALTER TABLE `supervision_form` ADD COLUMN `total_doses`            INT          DEFAULT NULL COMMENT '全程应用药次数' AFTER `interrupt_count`;
+    ALTER TABLE `supervision_form` ADD COLUMN `actual_doses`           INT          DEFAULT NULL COMMENT '实际用药次数' AFTER `total_doses`;
+    ALTER TABLE `supervision_form` ADD COLUMN `medication_rate`        VARCHAR(16)  DEFAULT NULL COMMENT '用药率（%）' AFTER `actual_doses`;
+
+    -- V5 新增：督导管理人员
+    ALTER TABLE `supervision_form` ADD COLUMN `manager_type`           VARCHAR(64)  DEFAULT NULL COMMENT '督导管理人员类型' AFTER `treatment_end_date`;
+    ALTER TABLE `supervision_form` ADD COLUMN `manager_name`           VARCHAR(64)  DEFAULT NULL COMMENT '督导管理人员姓名' AFTER `manager_type`;
+
+    -- V5 新增：备注与附件
+    ALTER TABLE `supervision_form` ADD COLUMN `remark`                 TEXT         DEFAULT NULL COMMENT '备注' AFTER `manager_name`;
+    ALTER TABLE `supervision_form` ADD COLUMN `attachment_urls`        TEXT         DEFAULT NULL COMMENT '附件（JSON数组，存储图片/文件URL）' AFTER `remark`;
+END$$
+DELIMITER ;
+CALL _v5_migrate_supervision();
+DROP PROCEDURE IF EXISTS _v5_migrate_supervision;

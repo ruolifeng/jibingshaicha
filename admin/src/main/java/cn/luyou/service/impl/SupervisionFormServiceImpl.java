@@ -34,6 +34,22 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
     public void saveAndArchive(SupervisionForm form) {
         form.setStatus(2);
         form.setArchivedTime(LocalDateTime.now());
+
+        // V5 兼容：将新字段回填到旧字段，保持筛查表回写兼容
+        if (StrUtil.isBlank(form.getPreventiveManager()) && (StrUtil.isNotBlank(form.getManagerType()) || StrUtil.isNotBlank(form.getManagerName()))) {
+            StringBuilder manager = new StringBuilder();
+            if (StrUtil.isNotBlank(form.getManagerType())) manager.append(form.getManagerType());
+            if (StrUtil.isNotBlank(form.getManagerName())) {
+                if (manager.length() > 0) manager.append(" - ");
+                manager.append(form.getManagerName());
+            }
+            form.setPreventiveManager(manager.toString());
+        }
+        // 若中断用药=无且完成时间存在，默认标记为规范完成
+        if (StrUtil.isBlank(form.getPreventiveResult()) && "无".equals(form.getInterruptMedication()) && form.getTreatmentEndDate() != null) {
+            form.setPreventiveResult("规范完成");
+        }
+
         saveOrUpdate(form);
 
         if (form.getLatentInfectionId() == null) return;
@@ -47,7 +63,7 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             latentInfectionService.updateById(latent);
         }
 
-        // V4 sheet2：将预防性治疗数据回写到对应筛查表
+        // V4/V5 sheet2：将预防性治疗数据回写到对应筛查表
         writeBackPreventiveToScreening(latent, form);
     }
 

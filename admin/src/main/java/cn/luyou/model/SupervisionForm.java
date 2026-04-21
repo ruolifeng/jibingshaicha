@@ -11,8 +11,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 预防性治疗督导表（V4）
- * 新增字段：治疗完成时间、预防性治疗结果、随访管理人员
+ * 预防性治疗督导表（V5）
+ * V5 重大改造：按照 Excel 模板《潜伏感染预防性治疗督导表》字段完整重构
  */
 @Data
 @Builder
@@ -25,17 +25,61 @@ public class SupervisionForm extends BaseEntity {
     private Long latentInfectionId;
     private String populationType;
     private String patientName;
+
+    /** 类别：密接/新生筛查/65岁以上老年人/糖尿病人/双感/其他 */
+    private String category;
+    /** 性别 */
+    private String gender;
+    /** 年龄 */
+    private Integer age;
+    /** 电话号码 */
+    private String phone;
+    /** 现住址 */
+    private String currentAddress;
+
     /** 预防性治疗开始日期 */
     private LocalDate treatmentStartDate;
-    /** 预防性治疗完成时间（V4新增） */
-    private LocalDate treatmentEndDate;
+    /** 治疗方案（含新增"不服药"） */
     private String treatmentPlan;
-    /** 督导内容（JSON） */
+
+    /** 督导内容（V4旧字段，兼容保留） */
     private String supervisionContent;
-    /** 预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4新增） */
+
+    /**
+     * 督导记录（JSON 数组，V5新增）
+     * 例：[{"time":"2024-01-01","content":"...","method":"电话","remark":"..."}]
+     */
+    private String supervisionRecords;
+
+    /** 全疗程规律治疗评价 — 中断用药：有/无 */
+    private String interruptMedication;
+    /** 中断次数（interruptMedication=有时填写） */
+    private Integer interruptCount;
+    /** 全程应用药次数 */
+    private Integer totalDoses;
+    /** 实际用药次数 */
+    private Integer actualDoses;
+    /** 用药率（%） */
+    private String medicationRate;
+    /** 预防性治疗完成（结束疗程）时间 */
+    private LocalDate treatmentEndDate;
+
+    /** 预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4旧字段，兼容保留） */
     private String preventiveResult;
-    /** 预防性治疗期间随访管理人员（V4新增） */
+    /** 预防性治疗期间随访管理人员（V4旧字段，兼容保留） */
     private String preventiveManager;
+
+    /** 督导管理人员类型（V5新增） */
+    private String managerType;
+    /** 督导管理人员姓名（V5新增） */
+    private String managerName;
+
+    /** 备注（V5新增） */
+    private String remark;
+    /** 附件（JSON 数组，存储图片/文件 URL） */
+    private String attachmentUrls;
+
+    /** 填写人ID */
     private Long filledBy;
     /** 状态：0未填写 1已填写 2已归档 */
     private Integer status;

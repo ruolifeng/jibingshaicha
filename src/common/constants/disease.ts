@@ -10,7 +10,7 @@ export const CROWD_CATEGORY_OPTIONS = [
   "非重点人群"
 ]
 
-/** 治疗方案选项（7种，V4与V2一致） */
+/** 治疗方案选项（8种，V5新增"不服药"） */
 export const TREATMENT_PLAN_OPTIONS = [
   "FDC-2HRZE/4HR",
   "2HRZE/4HR",
@@ -18,7 +18,8 @@ export const TREATMENT_PLAN_OPTIONS = [
   "2HRZES/6HRE",
   "FDC-2HRZE/10HRE",
   "2HRZE/10HRE",
-  "个体化方案"
+  "个体化方案",
+  "不服药"
 ]
 
 /** 追踪状态 */
@@ -72,6 +73,40 @@ export const PREVENTIVE_MANAGER_OPTIONS = [
   "志愿者（社区人员、学生等）",
   "智能辅助工具（电子药盒、手机等）",
   "自我管理"
+]
+
+/** 督导表类别选项（V5新增） */
+export const SUPERVISION_CATEGORY_OPTIONS = [
+  "密接",
+  "新生筛查",
+  "65岁以上老年人",
+  "糖尿病人",
+  "双感",
+  "其他"
+]
+
+/** 督导方式选项（V5新增） */
+export const SUPERVISION_METHOD_OPTIONS = [
+  "门诊",
+  "家庭访视",
+  "电话",
+  "视频",
+  "其他"
+]
+
+/** 中断用药选项（V5新增） */
+export const INTERRUPT_MEDICATION_OPTIONS = [
+  { label: "有", value: "有" },
+  { label: "无", value: "无" }
+]
+
+/** 督导管理人员类型选项（V5新增） */
+export const SUPERVISION_MANAGER_TYPE_OPTIONS = [
+  "医务人员",
+  "家庭成员",
+  "志愿者",
+  "患者本人",
+  "其他"
 ]
 
 /** 管理方式选项 */

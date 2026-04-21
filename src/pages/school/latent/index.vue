@@ -5,7 +5,9 @@ import {
   NOTICE_STATUS_MAP, MEDICATION_STATUS_OPTIONS, TREATMENT_PHASE_MAP, CHECK_PERIOD_OPTIONS,
   CHECK_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS,
   PREVENTIVE_RESULT_OPTIONS, PREVENTIVE_MANAGER_OPTIONS,
-  INFECTION_METHOD_OPTIONS
+  INFECTION_METHOD_OPTIONS,
+  SUPERVISION_CATEGORY_OPTIONS, SUPERVISION_METHOD_OPTIONS,
+  INTERRUPT_MEDICATION_OPTIONS, SUPERVISION_MANAGER_TYPE_OPTIONS
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import {
@@ -163,22 +165,46 @@ async function viewNotice(row: any) {
 const supervisionDialogVisible = ref(false)
 const supervisionRow = ref<any>(null)
 const supervisionForm = reactive({
+  category: "",
+  gender: "",
+  age: null as number | null,
+  phone: "",
+  currentAddress: "",
   treatmentStartDate: "",
   treatmentEndDate: "",
   treatmentPlan: "",
-  supervisionContent: "",
-  preventiveResult: "",
-  preventiveManager: ""
+  supervisionRecords: [] as { time: string, content: string, method: string, remark: string }[],
+  interruptMedication: "",
+  interruptCount: null as number | null,
+  totalDoses: null as number | null,
+  actualDoses: null as number | null,
+  medicationRate: "",
+  managerType: "",
+  managerName: "",
+  remark: "",
+  attachmentUrls: ""
 })
 
 function openSupervisionDialog(row: any) {
   supervisionRow.value = row
+  supervisionForm.category = row.crowdCategory || ""
+  supervisionForm.gender = row.gender || ""
+  supervisionForm.age = row.age || null
+  supervisionForm.phone = row.phone || ""
+  supervisionForm.currentAddress = row.currentAddress || ""
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
   supervisionForm.treatmentPlan = ""
-  supervisionForm.supervisionContent = ""
-  supervisionForm.preventiveResult = ""
-  supervisionForm.preventiveManager = ""
+  supervisionForm.supervisionRecords = [{ time: "", content: "", method: "", remark: "" }]
+  supervisionForm.interruptMedication = ""
+  supervisionForm.interruptCount = null
+  supervisionForm.totalDoses = null
+  supervisionForm.actualDoses = null
+  supervisionForm.medicationRate = ""
+  supervisionForm.managerType = ""
+  supervisionForm.managerName = ""
+  supervisionForm.remark = ""
+  supervisionForm.attachmentUrls = ""
   supervisionDialogVisible.value = true
 }
 
@@ -186,16 +212,35 @@ async function handleSaveSupervision() {
   if (submitting.value) return
   submitting.value = true
   try {
+    // 自动计算用药率
+    let rate = supervisionForm.medicationRate
+    if (!rate && supervisionForm.totalDoses && supervisionForm.actualDoses !== null && supervisionForm.totalDoses > 0) {
+      rate = ((supervisionForm.actualDoses / supervisionForm.totalDoses) * 100).toFixed(1) + "%"
+    }
     await saveSupervisionApi({
       latentInfectionId: supervisionRow.value.id,
       populationType: "school",
       patientName: supervisionRow.value.name,
+      category: supervisionForm.category || undefined,
+      gender: supervisionForm.gender || undefined,
+      age: supervisionForm.age || undefined,
+      phone: supervisionForm.phone || undefined,
+      currentAddress: supervisionForm.currentAddress || undefined,
       treatmentStartDate: supervisionForm.treatmentStartDate,
       treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
       treatmentPlan: supervisionForm.treatmentPlan,
-      supervisionContent: supervisionForm.supervisionContent,
-      preventiveResult: supervisionForm.preventiveResult || undefined,
-      preventiveManager: supervisionForm.preventiveManager || undefined,
+      supervisionRecords: supervisionForm.supervisionRecords.length > 0
+        ? JSON.stringify(supervisionForm.supervisionRecords)
+        : undefined,
+      interruptMedication: supervisionForm.interruptMedication || undefined,
+      interruptCount: supervisionForm.interruptMedication === "有" ? supervisionForm.interruptCount : undefined,
+      totalDoses: supervisionForm.totalDoses || undefined,
+      actualDoses: supervisionForm.actualDoses || undefined,
+      medicationRate: rate || undefined,
+      managerType: supervisionForm.managerType || undefined,
+      managerName: supervisionForm.managerName || undefined,
+      remark: supervisionForm.remark || undefined,
+      attachmentUrls: supervisionForm.attachmentUrls || undefined,
       status: 2
     })
     ElMessage.success("督导表保存成功")
@@ -672,32 +717,136 @@ watch(
     </el-dialog>
 
     <!-- 督导表填写弹窗 -->
-    <el-dialog v-model="supervisionDialogVisible" title="填写预防性治疗督导表" width="620px">
-      <el-form :model="supervisionForm" label-width="130px">
-        <el-form-item label="治疗开始日期">
-          <el-date-picker v-model="supervisionForm.treatmentStartDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
+    <el-dialog v-model="supervisionDialogVisible" title="填写预防性治疗督导表" width="960px">
+      <el-form :model="supervisionForm" label-width="140px">
+        <el-divider content-position="left">基本信息</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="姓名"><el-input :value="supervisionRow?.name" disabled /></el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="类别">
+              <el-select v-model="supervisionForm.category" placeholder="请选择" clearable style="width: 100%">
+                <el-option v-for="item in SUPERVISION_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="8">
+            <el-form-item label="性别">
+              <el-select v-model="supervisionForm.gender" placeholder="请选择" clearable style="width: 100%">
+                <el-option label="男" value="男" /><el-option label="女" value="女" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="年龄"><el-input-number v-model="supervisionForm.age" :min="0" :max="150" style="width: 100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="电话号码"><el-input v-model="supervisionForm.phone" placeholder="请输入" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="现住址"><el-input v-model="supervisionForm.currentAddress" placeholder="请输入现住址" /></el-form-item>
+
+        <el-divider content-position="left">治疗方案</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="开始治疗时间">
+              <el-date-picker v-model="supervisionForm.treatmentStartDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="治疗方案">
+              <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" clearable style="width: 100%">
+                <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">督导记录</el-divider>
+        <div v-for="(record, index) in supervisionForm.supervisionRecords" :key="index" class="mb-3 border rounded p-3">
+          <el-row :gutter="8">
+            <el-col :span="8">
+              <el-form-item :label="`督导时间${index + 1}`" label-width="90px">
+                <el-date-picker v-model="record.time" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="督导方式" label-width="80px">
+                <el-select v-model="record.method" placeholder="请选择" clearable style="width: 100%">
+                  <el-option v-for="item in SUPERVISION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8" class="flex items-center justify-end">
+              <el-button v-if="supervisionForm.supervisionRecords.length > 1" type="danger" link size="small" @click="supervisionForm.supervisionRecords.splice(index, 1)">删除</el-button>
+            </el-col>
+          </el-row>
+          <el-form-item label="督导内容" label-width="90px">
+            <el-input v-model="record.content" type="textarea" :rows="2" placeholder="请填写督导内容" />
+          </el-form-item>
+          <el-form-item label="备注" label-width="90px">
+            <el-input v-model="record.remark" placeholder="请填写备注" />
+          </el-form-item>
+        </div>
+        <div class="mb-4">
+          <el-button type="primary" link @click="supervisionForm.supervisionRecords.push({ time: '', content: '', method: '', remark: '' })">
+            + 添加督导记录
+          </el-button>
+        </div>
+
+        <el-divider content-position="left">全疗程规律治疗评价</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="中断用药">
+              <el-radio-group v-model="supervisionForm.interruptMedication">
+                <el-radio v-for="item in INTERRUPT_MEDICATION_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="中断次数">
+              <el-input-number v-model="supervisionForm.interruptCount" :min="0" :disabled="supervisionForm.interruptMedication !== '有'" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="8">
+            <el-form-item label="全程应用药次数"><el-input-number v-model="supervisionForm.totalDoses" :min="0" style="width: 100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="实际用药次数"><el-input-number v-model="supervisionForm.actualDoses" :min="0" style="width: 100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="用药率"><el-input v-model="supervisionForm.medicationRate" placeholder="自动计算或手动填写" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="结束疗程时间">
+          <el-date-picker v-model="supervisionForm.treatmentEndDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="治疗方案">
-          <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
+
+        <el-divider content-position="left">督导管理人员</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="管理人员类型">
+              <el-select v-model="supervisionForm.managerType" placeholder="请选择" clearable style="width: 100%">
+                <el-option v-for="item in SUPERVISION_MANAGER_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="管理人员姓名"><el-input v-model="supervisionForm.managerName" placeholder="请输入姓名" /></el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">其他</el-divider>
+        <el-form-item label="备注">
+          <el-input v-model="supervisionForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
         </el-form-item>
-        <el-form-item label="督导内容">
-          <el-input v-model="supervisionForm.supervisionContent" type="textarea" :rows="4" placeholder="请填写督导内容" />
-        </el-form-item>
-        <el-divider>预防性治疗完成情况</el-divider>
-        <el-form-item label="治疗完成时间">
-          <el-date-picker v-model="supervisionForm.treatmentEndDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="预防性治疗结果">
-          <el-select v-model="supervisionForm.preventiveResult" placeholder="请选择" clearable style="width: 100%">
-            <el-option v-for="item in PREVENTIVE_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="随访管理人员">
-          <el-select v-model="supervisionForm.preventiveManager" placeholder="请选择" clearable style="width: 100%">
-            <el-option v-for="item in PREVENTIVE_MANAGER_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
+        <el-form-item label="附件">
+          <el-input v-model="supervisionForm.attachmentUrls" type="textarea" :rows="2" placeholder="附件URL，多个用逗号分隔（暂支持手动填写）" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -707,20 +856,45 @@ watch(
     </el-dialog>
 
     <!-- 督导表详情弹窗 -->
-    <el-dialog v-model="supervisionDetailVisible" title="督导表详情" width="620px">
+    <el-dialog v-model="supervisionDetailVisible" title="督导表详情" width="780px">
       <el-descriptions v-if="supervisionDetailData" :column="2" border>
-        <el-descriptions-item label="患者姓名">{{ supervisionDetailData.patientName }}</el-descriptions-item>
-        <el-descriptions-item label="治疗方案">{{ supervisionDetailData.treatmentPlan }}</el-descriptions-item>
-        <el-descriptions-item label="治疗开始日期">{{ supervisionDetailData.treatmentStartDate }}</el-descriptions-item>
-        <el-descriptions-item label="治疗完成时间">{{ supervisionDetailData.treatmentEndDate || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="预防性治疗结果">{{ supervisionDetailData.preventiveResult || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="随访管理人员">{{ supervisionDetailData.preventiveManager || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">{{ supervisionDetailData.patientName }}</el-descriptions-item>
+        <el-descriptions-item label="类别">{{ supervisionDetailData.category || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="性别">{{ supervisionDetailData.gender || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="年龄">{{ supervisionDetailData.age ?? "-" }}</el-descriptions-item>
+        <el-descriptions-item label="电话号码">{{ supervisionDetailData.phone || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="现住址">{{ supervisionDetailData.currentAddress || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="治疗方案">{{ supervisionDetailData.treatmentPlan || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="开始治疗时间">{{ supervisionDetailData.treatmentStartDate || "-" }}</el-descriptions-item>
+      </el-descriptions>
+
+      <el-divider v-if="supervisionDetailData?.supervisionRecords" content-position="left">督导记录</el-divider>
+      <el-table v-if="supervisionDetailData?.supervisionRecords" :data="JSON.parse(supervisionDetailData.supervisionRecords)" border stripe size="small" class="mb-4">
+        <el-table-column prop="time" label="督导时间" width="120" />
+        <el-table-column prop="method" label="督导方式" width="100" />
+        <el-table-column prop="content" label="督导内容" />
+        <el-table-column prop="remark" label="备注" />
+      </el-table>
+
+      <el-descriptions v-if="supervisionDetailData" :column="2" border class="mb-4">
+        <el-descriptions-item label="中断用药">{{ supervisionDetailData.interruptMedication || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="中断次数">{{ supervisionDetailData.interruptCount ?? "-" }}</el-descriptions-item>
+        <el-descriptions-item label="全程应用药次数">{{ supervisionDetailData.totalDoses ?? "-" }}</el-descriptions-item>
+        <el-descriptions-item label="实际用药次数">{{ supervisionDetailData.actualDoses ?? "-" }}</el-descriptions-item>
+        <el-descriptions-item label="用药率">{{ supervisionDetailData.medicationRate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="结束疗程时间">{{ supervisionDetailData.treatmentEndDate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="管理人员类型">{{ supervisionDetailData.managerType || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="管理人员姓名">{{ supervisionDetailData.managerName || "-" }}</el-descriptions-item>
+      </el-descriptions>
+
+      <el-descriptions v-if="supervisionDetailData" :column="1" border>
+        <el-descriptions-item label="备注">{{ supervisionDetailData.remark || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="附件">{{ supervisionDetailData.attachmentUrls || "-" }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="supervisionDetailData.status === 2 ? 'success' : 'info'" size="small">
             {{ supervisionDetailData.status === 2 ? "已归档" : "进行中" }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="督导内容" :span="2">{{ supervisionDetailData.supervisionContent }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
 
@@ -876,12 +1050,17 @@ watch(
 
       <el-divider content-position="left">督导表</el-divider>
       <el-descriptions v-if="aggregateSupervision" :column="2" border size="small">
+        <el-descriptions-item label="类别">{{ aggregateSupervision.category || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="性别">{{ aggregateSupervision.gender || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="年龄">{{ aggregateSupervision.age ?? "-" }}</el-descriptions-item>
+        <el-descriptions-item label="电话号码">{{ aggregateSupervision.phone || "-" }}</el-descriptions-item>
         <el-descriptions-item label="治疗方案">{{ aggregateSupervision.treatmentPlan || "-" }}</el-descriptions-item>
         <el-descriptions-item label="开始日期">{{ aggregateSupervision.treatmentStartDate || "-" }}</el-descriptions-item>
         <el-descriptions-item label="完成日期">{{ aggregateSupervision.treatmentEndDate || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="治疗结果">{{ aggregateSupervision.preventiveResult || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="管理人员">{{ aggregateSupervision.preventiveManager || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="用药率">{{ aggregateSupervision.medicationRate || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="管理人员">{{ aggregateSupervision.managerName || "-" }}</el-descriptions-item>
         <el-descriptions-item label="归档时间">{{ aggregateSupervision.archivedTime || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="备注" :span="2">{{ aggregateSupervision.remark || "-" }}</el-descriptions-item>
       </el-descriptions>
       <el-empty v-else description="暂无督导表记录" :image-size="60" />
 
