@@ -495,16 +495,16 @@ watch(
           <template #default="{ row }">
             <div class="action-btns">
               <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
-              <el-button v-permission="'patient:firstVisit'" type="success" link size="small" @click="openFirstVisitDialog(row)">首次随访</el-button>
+              <el-button v-permission="'patient:firstVisit'" type="success" link size="small" @click="openFirstVisitDialog(row)">填写首次随访</el-button>
               <el-dropdown trigger="click" @command="(cmd: string) => handleActionCommand(cmd, row)">
                 <el-button type="primary" link size="small">
                   更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="followUp">后续随访</el-dropdown-item>
+                    <el-dropdown-item command="followUp">填写后续随访表</el-dropdown-item>
                     <el-dropdown-item command="followUpList">随访记录</el-dropdown-item>
-                    <el-dropdown-item command="medication" divided>服药管理</el-dropdown-item>
+                    <el-dropdown-item command="medication" divided>填写服药管理</el-dropdown-item>
                     <el-dropdown-item command="printNotice" divided>打印通知单</el-dropdown-item>
                     <el-dropdown-item command="printVisit">打印随访表</el-dropdown-item>
                   </el-dropdown-menu>
