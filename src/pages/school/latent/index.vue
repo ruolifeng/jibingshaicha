@@ -1,18 +1,17 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
 import {
-  TRACKING_STATUS_MAP, REFERRAL_RESULT_OPTIONS, CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS,
+  CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS,
   NOTICE_STATUS_MAP, MEDICATION_STATUS_OPTIONS, TREATMENT_PHASE_MAP, CHECK_PERIOD_OPTIONS,
-  CHECK_RESULT_OPTIONS, DIAGNOSIS_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS,
+  CHECK_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS,
   PREVENTIVE_RESULT_OPTIONS, PREVENTIVE_MANAGER_OPTIONS,
   INFECTION_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import {
-  getLatentListApi, trackLatentApi, referralLatentApi, sendNoticeApi, confirmNoticeApi,
+  getLatentListApi, sendNoticeApi, confirmNoticeApi,
   getNoticeListByBizApi, saveSupervisionApi, getSupervisionDetailApi, setMedicationStatusApi,
-  closeCaseApi, getFollowUpListApi, saveFollowUpApi, getCheckListApi, saveCheckApi,
-  submitXrayApi, importXrayApi
+  closeCaseApi, getFollowUpListApi, saveFollowUpApi, getCheckListApi, saveCheckApi
 } from "./apis"
 import { getLevel5UsersApi } from "@@/apis/users"
 import { useUserStore } from "@/pinia/stores/user"
@@ -38,7 +37,6 @@ const total = ref(0)
 const searchForm = reactive({
   name: "",
   idNumber: "",
-  trackingStatus: undefined as number | undefined,
   archived: undefined as number | undefined
 })
 
@@ -49,7 +47,8 @@ async function fetchData() {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       populationType: "school",
-      ...searchForm
+      ...searchForm,
+      referralResult: "latent"
     })
     tableData.value = data.records
     total.value = data.total
@@ -66,134 +65,11 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
-  searchForm.trackingStatus = undefined
   searchForm.archived = undefined
   handleSearch()
 }
 
 const submitting = ref(false)
-
-/** 潜伏感染超期判断：追踪到位超过7天但仍未填写胸片结果 */
-function getLatentRowClass({ row }: { row: any }) {
-  if (row.trackingStatus === 1 && !row.chestXrayResult && row.updateTime) {
-    const diffDays = (Date.now() - new Date(row.updateTime).getTime()) / 86400000
-    if (diffDays > 7) return "overdue-row"
-  }
-  return ""
-}
-
-// ==================== 追踪弹窗 ====================
-const trackDialogVisible = ref(false)
-const trackingRow = ref<any>(null)
-const trackForm = reactive({ status: 1, remark: "" })
-
-function openTrackDialog(row: any) {
-  trackingRow.value = row
-  trackForm.status = 1
-  trackForm.remark = ""
-  trackDialogVisible.value = true
-}
-
-async function handleTrack() {
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await trackLatentApi({ id: trackingRow.value.id, status: trackForm.status, remark: trackForm.remark })
-    ElMessage.success("操作成功")
-    trackDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally { submitting.value = false }
-}
-
-// ==================== V4：录入胸片+诊断弹窗 ====================
-const xrayDialogVisible = ref(false)
-const xrayRow = ref<any>(null)
-const xrayForm = reactive({
-  hasChestXray: "是",
-  chestXrayDate: "",
-  chestXrayResult: "",
-  diagnosisFirst: ""
-})
-// 批量导入胸片
-const xrayImportLoading = ref(false)
-
-function openXrayDialog(row: any) {
-  xrayRow.value = row
-  xrayForm.hasChestXray = "是"
-  xrayForm.chestXrayDate = ""
-  xrayForm.chestXrayResult = ""
-  xrayForm.diagnosisFirst = ""
-  xrayDialogVisible.value = true
-}
-
-async function handleSubmitXray() {
-  if (!xrayForm.diagnosisFirst) {
-    ElMessage.warning("请选择诊断结果")
-    return
-  }
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await submitXrayApi({
-      id: xrayRow.value.id,
-      hasChestXray: xrayForm.hasChestXray,
-      chestXrayDate: xrayForm.chestXrayDate || undefined,
-      chestXrayResult: xrayForm.chestXrayResult || undefined,
-      diagnosisFirst: xrayForm.diagnosisFirst
-    })
-    ElMessage.success("录入成功")
-    xrayDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally { submitting.value = false }
-}
-
-async function handleImportXray(uploadFile: any) {
-  xrayImportLoading.value = true
-  try {
-    const { data } = await importXrayApi(uploadFile.raw, "school")
-    ElMessage.success(`批量更新 ${data} 条胸片诊断数据`)
-    fetchData()
-  } catch {
-    ElMessage.error("批量导入失败")
-  } finally {
-    xrayImportLoading.value = false
-  }
-}
-
-// ==================== 转诊弹窗 ====================
-const referralDialogVisible = ref(false)
-const referralRow = ref<any>(null)
-const referralForm = reactive({ result: "", remark: "" })
-
-function openReferralDialog(row: any) {
-  referralRow.value = row
-  // 根据 diagnosisFirst 自动预选转诊结果
-  const diagMap: Record<string, string> = {
-    "排除": "excluded",
-    "疑似肺结核": "suspected",
-    "确诊患者": "confirmed",
-    "潜伏感染者": "latent",
-    "其他": "other"
-  }
-  referralForm.result = diagMap[row.diagnosisFirst] || ""
-  referralForm.remark = ""
-  referralDialogVisible.value = true
-}
-
-async function handleReferral() {
-  if (!referralForm.result) {
-    ElMessage.warning("请选择转诊结果")
-    return
-  }
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await referralLatentApi({ id: referralRow.value.id, result: referralForm.result, remark: referralForm.remark })
-    ElMessage.success("操作成功")
-    referralDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally { submitting.value = false }
-}
 
 // ==================== 通知单弹窗 ====================
 const noticeDialogVisible = ref(false)
@@ -203,15 +79,10 @@ const noticeFormRules = { idNumber: [idCardRule()], phone: [phoneRule()] }
 const noticeForm = reactive({
   idNumber: "", gender: "", birthDate: "", age: null as number | null,
   ethnicity: "", phone: "", crowdCategory: "",
-  // 地址信息
   currentAddress: "", householdAddress: "",
-  // 感染检查（潜伏通知单专用）
   infectionDate: "", infectionMethod: "", infectionResultValue: "",
-  // 胸片
   chestXrayDate: "", chestXrayResult: "",
-  // 治疗方案（7种化疗方案）
   treatmentPlan: "",
-  // 机构
   treatmentInstitution: "", issuedTime: "",
   receiverOrgId: undefined as number | undefined
 })
@@ -229,10 +100,13 @@ function openNoticeDialog(row: any) {
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "", gender: row.gender || "",
     birthDate: row.birthDate || "", age: row.age || null, phone: row.phone || "",
-    ethnicity: row.ethnicity || "", crowdCategory: row.crowdCategory || "", currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
-    infectionDate: row.screenDate || "", infectionMethod: row.screenMethod || "", infectionResultValue: row.screenResult || row.infectionResult || "",
-    chestXrayDate: row.chestXrayDate || "", chestXrayResult: row.chestXrayResult || "", treatmentPlan: "",
-    treatmentInstitution: "", issuedTime: getNowDateStr(), receiverOrgId: undefined
+    ethnicity: row.ethnicity || "", crowdCategory: row.crowdCategory || "",
+    currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
+    infectionDate: row.screenDate || "", infectionMethod: row.screenMethod || "",
+    infectionResultValue: row.screenResult || row.infectionResult || "",
+    chestXrayDate: row.chestXrayDate || "", chestXrayResult: row.chestXrayResult || "",
+    treatmentPlan: "", treatmentInstitution: "",
+    issuedTime: getNowDateStr(), receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
 }
@@ -285,7 +159,7 @@ async function viewNotice(row: any) {
   } catch { /* handled by interceptor */ }
 }
 
-// ==================== 督导表弹窗（V4 新增三个字段） ====================
+// ==================== 督导表弹窗 ====================
 const supervisionDialogVisible = ref(false)
 const supervisionRow = ref<any>(null)
 const supervisionForm = reactive({
@@ -392,7 +266,6 @@ async function loadChecks(latentId: number) {
   } catch { /* handled */ }
 }
 
-// 电话随访
 const followUpFormVisible = ref(false)
 const followUpForm = reactive({ followUpDate: "", followUpType: "电话随访", content: "", result: "" })
 
@@ -419,7 +292,6 @@ async function handleSaveFollowUp() {
   } catch { /* handled */ }
 }
 
-// 按期检查
 const checkFormVisible = ref(false)
 const checkForm = reactive({ checkDate: "", checkPeriod: "", checkResult: "", content: "" })
 
@@ -487,13 +359,6 @@ async function handleCloseCase(row: any) {
   } catch { /* cancelled */ }
 }
 
-function getTrackingStatusType(status: number) {
-  if (status === 1) return "success"
-  if (status === 2 || status === 4) return "danger"
-  if (status === 3) return "warning"
-  return "info"
-}
-
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
   fetchData,
@@ -512,11 +377,6 @@ watch(
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
-        <el-form-item label="追踪状态">
-          <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width: 120px">
-            <el-option v-for="(label, key) in TRACKING_STATUS_MAP" :key="key" :label="label" :value="Number(key)" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="归档状态">
           <el-select v-model="searchForm.archived" placeholder="全部" clearable style="width: 120px">
             <el-option label="未归档" :value="0" />
@@ -533,52 +393,23 @@ watch(
     <!-- 数据表格 -->
     <el-card shadow="never">
       <template #header>
-        <div class="flex items-center justify-between">
-          <span class="text-lg font-bold">学校人群 — 潜伏感染管理</span>
-          <!-- 批量导入胸片诊断 Excel -->
-          <el-upload
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".xlsx,.xls"
-            :on-change="handleImportXray"
-          >
-            <el-button v-permission="'latent:xray'" :loading="xrayImportLoading" size="small">
-              批量导入胸片诊断
-            </el-button>
-          </el-upload>
-        </div>
+        <span class="text-lg font-bold">学校人群 — 潜伏感染管理</span>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" :row-class-name="getLatentRowClass">
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column label="追踪状态">
-          <template #default="{ row }">
-            <el-tag :type="getTrackingStatusType(row.trackingStatus)" size="small">
-              {{ TRACKING_STATUS_MAP[row.trackingStatus] }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="notInPlaceCount" label="未到位次数" />
-        <el-table-column prop="trackingRemark" label="追踪备注" />
-        <!-- V4：胸片与诊断 -->
         <el-table-column prop="chestXrayResult" label="胸片结果" />
         <el-table-column prop="diagnosisFirst" label="诊断结果" />
-        <el-table-column prop="referralResult" label="转诊结果">
-          <template #default="{ row }">
-            {{ REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)?.label || row.referralResult || "-" }}
-          </template>
-        </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
-            <el-button v-if="row.referralResult === 'latent'" type="primary" link size="small" @click="viewNotice(row)">
+            <el-button type="primary" link size="small" @click="viewNotice(row)">
               {{ row.name }}通知单
             </el-button>
-            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="治疗阶段">
@@ -601,41 +432,10 @@ watch(
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="280">
+        <el-table-column label="操作" fixed="right" min-width="300">
           <template #default="{ row }">
-            <!-- 追踪 -->
+            <!-- 通知单 -->
             <el-button
-              v-if="row.trackingStatus === 0 || row.trackingStatus === 2"
-              v-permission="'latent:track'"
-              type="primary"
-              size="small"
-              @click="openTrackDialog(row)"
-            >
-              追踪
-            </el-button>
-            <!-- V4：录入胸片+诊断（追踪到位后、转诊前） -->
-            <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisFirst"
-              v-permission="'latent:xray'"
-              type="warning"
-              size="small"
-              @click="openXrayDialog(row)"
-            >
-              录入胸片诊断
-            </el-button>
-            <!-- 转诊（胸片已录入） -->
-            <el-button
-              v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult"
-              v-permission="'latent:referral'"
-              type="warning"
-              size="small"
-              @click="openReferralDialog(row)"
-            >
-              转诊
-            </el-button>
-            <!-- 通知单（潜伏感染者） -->
-            <el-button
-              v-if="row.referralResult === 'latent'"
               v-permission="'latent:sendNotice'"
               type="primary"
               size="small"
@@ -644,7 +444,6 @@ watch(
               填写通知单
             </el-button>
             <el-button
-              v-if="row.referralResult === 'latent'"
               v-permission="'latent:sendNotice'"
               type="success"
               size="small"
@@ -655,7 +454,6 @@ watch(
             </el-button>
             <!-- 督导表 -->
             <el-button
-              v-if="row.referralResult === 'latent'"
               v-permission="'latent:supervision'"
               size="small"
               :disabled="!row.noticeSent"
@@ -664,7 +462,6 @@ watch(
               填写督导表
             </el-button>
             <el-button
-              v-if="row.referralResult === 'latent'"
               type="info"
               size="small"
               @click="viewSupervision(row)"
@@ -693,7 +490,6 @@ watch(
             </el-button>
             <!-- 信息归集 -->
             <el-button
-              v-if="!row.archived || row.treatmentPhase >= 1"
               type="info"
               size="small"
               @click="openAggregateDialog(row)"
@@ -716,87 +512,6 @@ watch(
         />
       </div>
     </el-card>
-
-    <!-- 追踪弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="450px">
-      <el-form label-width="80px">
-        <el-form-item label="追踪状态">
-          <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">到位</el-radio>
-            <el-radio :value="2">未到位</el-radio>
-            <el-radio :value="3">其他</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="trackForm.status === 3 || (trackForm.status === 2 && trackingRow?.notInPlaceCount >= 2)" label="备注原因">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写原因" />
-        </el-form-item>
-        <el-alert v-if="trackForm.status === 2 && trackingRow" :closable="false" class="mb-4">
-          <template #default>当前已未到位 {{ trackingRow.notInPlaceCount }} 次，最多 3 次后自动归档</template>
-        </el-alert>
-      </el-form>
-      <template #footer>
-        <el-button @click="trackDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleTrack">确认</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- V4：录入胸片+诊断弹窗 -->
-    <el-dialog v-model="xrayDialogVisible" title="录入胸片检查与诊断结果" width="520px">
-      <el-alert type="info" :closable="false" class="mb-4" description="追踪到位后，请录入胸片检查情况及诊断结果。系统将根据诊断结果自动引导后续流程。" />
-      <el-form :model="xrayForm" label-width="110px">
-        <el-form-item label="是否进行胸片检查">
-          <el-radio-group v-model="xrayForm.hasChestXray">
-            <el-radio value="是">是</el-radio>
-            <el-radio value="否">否</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <template v-if="xrayForm.hasChestXray === '是'">
-          <el-form-item label="胸片检查日期">
-            <el-date-picker v-model="xrayForm.chestXrayDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-          </el-form-item>
-          <el-form-item label="胸片结果">
-            <el-select v-model="xrayForm.chestXrayResult" placeholder="请选择" style="width: 100%">
-              <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-        </template>
-        <el-form-item label="诊断结果" required>
-          <el-select v-model="xrayForm.diagnosisFirst" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in DIAGNOSIS_RESULT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <div class="mt-1 text-xs text-gray-400">
-            <span v-if="xrayForm.diagnosisFirst === '排除'">→ 归档</span>
-            <span v-else-if="xrayForm.diagnosisFirst === '疑似肺结核' || xrayForm.diagnosisFirst === '确诊患者'">→ 进入患者管理</span>
-            <span v-else-if="xrayForm.diagnosisFirst === '潜伏感染者'">→ 发送潜伏者通知单</span>
-            <span v-else-if="xrayForm.diagnosisFirst === '其他'">→ 填写备注后归档</span>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="xrayDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitXray">确认录入</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 转诊弹窗 -->
-    <el-dialog v-model="referralDialogVisible" title="转诊操作" width="450px">
-      <el-form label-width="80px">
-        <el-form-item label="转诊结果">
-          <el-radio-group v-model="referralForm.result">
-            <el-radio v-for="item in REFERRAL_RESULT_OPTIONS" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="referralForm.result === 'other'" label="备注原因">
-          <el-input v-model="referralForm.remark" type="textarea" :rows="3" placeholder="请填写原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="referralDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleReferral">确认</el-button>
-      </template>
-    </el-dialog>
 
     <!-- 通知单弹窗 -->
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
@@ -956,7 +671,7 @@ watch(
       </template>
     </el-dialog>
 
-    <!-- 督导表填写弹窗（V4 新增三个字段） -->
+    <!-- 督导表填写弹窗 -->
     <el-dialog v-model="supervisionDialogVisible" title="填写预防性治疗督导表" width="620px">
       <el-form :model="supervisionForm" label-width="130px">
         <el-form-item label="治疗开始日期">
@@ -1139,11 +854,9 @@ watch(
         <el-descriptions-item label="年龄">{{ aggregateRow?.age }}</el-descriptions-item>
         <el-descriptions-item label="联系电话">{{ aggregateRow?.phone }}</el-descriptions-item>
         <el-descriptions-item label="感染筛查结果">{{ aggregateRow?.infectionResult }}</el-descriptions-item>
-        <el-descriptions-item label="追踪状态">{{ TRACKING_STATUS_MAP[aggregateRow?.trackingStatus] || "未知" }}</el-descriptions-item>
         <el-descriptions-item label="胸片检查">{{ aggregateRow?.hasChestXray || "-" }}</el-descriptions-item>
         <el-descriptions-item label="胸片结果">{{ aggregateRow?.chestXrayResult || "-" }}</el-descriptions-item>
         <el-descriptions-item label="首次诊断">{{ aggregateRow?.diagnosisFirst || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="转诊结果">{{ aggregateRow?.diagnosisResult || "-" }}</el-descriptions-item>
         <el-descriptions-item label="治疗阶段">{{ TREATMENT_PHASE_MAP[aggregateRow?.treatmentPhase] || "-" }}</el-descriptions-item>
       </el-descriptions>
 
@@ -1204,16 +917,5 @@ watch(
 }
 .mt-4 {
   margin-top: 16px;
-}
-.mt-1 {
-  margin-top: 4px;
-}
-</style>
-
-<style lang="scss">
-/* 超期预警行（全局，用于覆盖 el-table stripe 样式） */
-.el-table .overdue-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
 }
 </style>

@@ -9,6 +9,7 @@ export function getLatentListApi(params: {
   idNumber?: string
   trackingStatus?: number
   archived?: number
+  referralResult?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "latent/list",

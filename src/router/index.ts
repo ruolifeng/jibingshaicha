@@ -81,6 +81,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "筛查管理", keepAlive: true, permission: "school:screening" }
       },
       {
+        path: "suspected",
+        component: () => import("@/pages/school/suspected/index.vue"),
+        name: "SchoolSuspected",
+        meta: { title: "疑似结核", keepAlive: true, permission: "school:suspected" }
+      },
+      {
         path: "latent",
         component: () => import("@/pages/school/latent/index.vue"),
         name: "SchoolLatent",
@@ -118,6 +124,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "筛查管理", keepAlive: true, permission: "keyPopulation:screening" }
       },
       {
+        path: "suspected",
+        component: () => import("@/pages/key-population/suspected/index.vue"),
+        name: "KeyPopulationSuspected",
+        meta: { title: "疑似结核", keepAlive: true, permission: "keyPopulation:suspected" }
+      },
+      {
         path: "latent",
         component: () => import("@/pages/key-population/latent/index.vue"),
         name: "KeyPopulationLatent",
@@ -153,6 +165,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/close-contact/screening/index.vue"),
         name: "CloseContactScreening",
         meta: { title: "筛查管理", keepAlive: true, permission: "closeContact:screening" }
+      },
+      {
+        path: "suspected",
+        component: () => import("@/pages/close-contact/suspected/index.vue"),
+        name: "CloseContactSuspected",
+        meta: { title: "疑似结核", keepAlive: true, permission: "closeContact:suspected" }
       },
       {
         path: "latent",
