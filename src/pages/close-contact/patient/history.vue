@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
 import { getPatientHistoryApi, getPatientHistoryStatsApi } from "./apis"
+import { getScreeningCloseContactDetailApi } from "@/pages/close-contact/screening/apis"
+import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -58,6 +60,23 @@ watch(
   fetchData,
   { immediate: true }
 )
+
+// ==================== 筛查详情查看 ====================
+const screeningDetailVisible = ref(false)
+const screeningDetailData = ref<any>(null)
+
+async function viewScreeningDetail(row: any) {
+  if (!row.screeningId) { ElMessage.info("暂无筛查原始数据"); return }
+  try {
+    const { data } = await getScreeningCloseContactDetailApi(row.screeningId)
+    if (data) {
+      screeningDetailData.value = data
+      screeningDetailVisible.value = true
+    } else {
+      ElMessage.info("暂无筛查原始数据")
+    }
+  } catch { /* handled by interceptor */ }
+}
 </script>
 
 <template>
@@ -136,6 +155,11 @@ watch(
         </el-table-column>
         <el-table-column prop="archivedTime" label="归档时间" />
         <el-table-column prop="createTime" label="创建时间" />
+        <el-table-column label="操作" fixed="right" width="100">
+          <template #default="{ row }">
+            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="mt-4 flex justify-end">
@@ -150,6 +174,9 @@ watch(
         />
       </div>
     </el-card>
+
+    <!-- 筛查详情弹窗 -->
+    <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="closeContact" :data="screeningDetailData" />
   </div>
 </template>
 

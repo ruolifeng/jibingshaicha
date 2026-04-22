@@ -15,6 +15,8 @@ import {
   getNoticeListByBizApi, saveSupervisionApi, getSupervisionDetailApi, setMedicationStatusApi,
   closeCaseApi, getFollowUpListApi, saveFollowUpApi, getCheckListApi, saveCheckApi
 } from "./apis"
+import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
+import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { getLevel5UsersApi } from "@@/apis/users"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -376,6 +378,23 @@ async function openAggregateDialog(row: any) {
   } catch { /* partial load is fine */ }
 }
 
+// ==================== 筛查详情查看 ====================
+const screeningDetailVisible = ref(false)
+const screeningDetailData = ref<any>(null)
+
+async function viewScreeningDetail(row: any) {
+  if (!row.screeningId) { ElMessage.info("暂无筛查原始数据"); return }
+  try {
+    const { data } = await getScreeningKeyPopulationDetailApi(row.screeningId)
+    if (data) {
+      screeningDetailData.value = data
+      screeningDetailVisible.value = true
+    } else {
+      ElMessage.info("暂无筛查原始数据")
+    }
+  } catch { /* handled by interceptor */ }
+}
+
 async function handleCloseCase(row: any) {
   try {
     await ElMessageBox.confirm("确认结案归档该潜伏感染者吗？", "结案确认", { type: "warning" })
@@ -457,8 +476,9 @@ watch(
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="300">
+        <el-table-column label="操作" fixed="right" min-width="360">
           <template #default="{ row }">
+            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
             <el-button v-permission="'latent:sendNotice'" type="primary" size="small" @click="openNoticeDialog(row)">填写通知单</el-button>
             <el-button
               v-permission="'latent:sendNotice'"
@@ -506,6 +526,9 @@ watch(
         />
       </div>
     </el-card>
+
+    <!-- 筛查详情弹窗 -->
+    <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="keyPopulation" :data="screeningDetailData" />
 
     <!-- 通知单弹窗 -->
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">

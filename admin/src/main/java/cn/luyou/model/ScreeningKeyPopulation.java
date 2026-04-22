@@ -14,9 +14,8 @@ import java.time.LocalDate;
 
 /**
  * 重点人群筛查数据（V4 模板）
- * Excel 导入字段范围：A-AL（序号~感染筛查结果），不含胸片/诊断/预防治疗列
- * 胸片检查与诊断结果由潜伏感染追踪阶段录入后系统回写到本表对应列
- * 预防性治疗字段由督导表归档后系统回写
+ * Excel 导入字段范围：A-AN（序号~首次诊断结果），预防治疗列由系统回写
+ * 胸片检查与诊断结果可由 Excel 直接导入，导入后同步进入疑似结核管理
  * V4 变更：人群分类由合并列改为各列独立 是/否，筛查方法由两列改为一列
  */
 @Data
@@ -53,71 +52,74 @@ public class ScreeningKeyPopulation extends BaseEntity {
     @ExcelProperty(index = 12)
     private String householdAddress;
     @ExcelProperty(index = 13)
-    private String townshipCommunity;
-    @ExcelProperty(index = 14)
     private String currentAddress;
+    // 乡镇/社区字段模板中不存在，由系统或其他途径写入
+    @ExcelIgnore
+    private String townshipCommunity;
 
-    // 人群分类（V4：各列独立，列15-22）
-    @ExcelProperty(index = 15)
+    // 人群分类（V4：各列独立，列14-21）
+    @ExcelProperty(index = 14)
     private String crowdCategoryClose;
-    @ExcelProperty(index = 16)
+    @ExcelProperty(index = 15)
     private String crowdCategoryStudent;
-    @ExcelProperty(index = 17)
+    @ExcelProperty(index = 16)
     private String crowdCategoryTeacher;
-    @ExcelProperty(index = 18)
+    @ExcelProperty(index = 17)
     private String crowdCategoryElder;
-    @ExcelProperty(index = 19)
+    @ExcelProperty(index = 18)
     private String crowdCategoryDiabetes;
-    @ExcelProperty(index = 20)
+    @ExcelProperty(index = 19)
     private String crowdCategoryDual;
-    @ExcelProperty(index = 21)
+    @ExcelProperty(index = 20)
     private String crowdCategoryTbHist;
-    @ExcelProperty(index = 22)
+    @ExcelProperty(index = 21)
     private String crowdCategoryNormal;
 
-    // 症状筛查（列23-31）
-    @ExcelProperty(index = 23)
+    // 症状筛查（列22-30）
+    @ExcelProperty(index = 22)
     private String hasSuspiciousSymptoms;
-    @ExcelProperty(index = 24)
+    @ExcelProperty(index = 23)
     private String cough;
-    @ExcelProperty(index = 25)
+    @ExcelProperty(index = 24)
     private String hemoptysis;
-    @ExcelProperty(index = 26)
+    @ExcelProperty(index = 25)
     private String fever;
-    @ExcelProperty(index = 27)
+    @ExcelProperty(index = 26)
     private String chestPain;
-    @ExcelProperty(index = 28)
+    @ExcelProperty(index = 27)
     private String nightSweats;
-    @ExcelProperty(index = 29)
+    @ExcelProperty(index = 28)
     private String appetiteLoss;
-    @ExcelProperty(index = 30)
+    @ExcelProperty(index = 29)
     private String fatigue;
-    @ExcelProperty(index = 31)
+    @ExcelProperty(index = 30)
     private String weightLoss;
 
-    // 感染筛查（列32-36，V4方法改为单列）
-    @ExcelProperty(index = 32)
+    // 感染筛查（列31-35）
+    @ExcelProperty(index = 31)
     private String hasInfectionScreen;
-    @ExcelProperty(index = 33)
+    @ExcelProperty(index = 32)
     @DateTimeFormat("yyyy.MM.dd")
     private LocalDate screenDate;
-    @ExcelProperty(index = 34)
+    @ExcelProperty(index = 33)
     private String screenMethod;
-    @ExcelProperty(index = 35)
+    @ExcelProperty(index = 34)
     private String screenResult;
-    @ExcelProperty(index = 36)
+    @ExcelProperty(index = 35)
     private String infectionResult;
 
-    // ===== 以下字段由系统回写，不参与 Excel 导入 =====
-    // V4 AK-AP（index 36-41）：胸片与诊断，在潜伏感染追踪到位后由系统回写
-    @ExcelIgnore
+    // ===== 胸片与诊断（列36-39）：支持 Excel 直接导入 =====
+    @ExcelProperty(index = 36)
     private String hasChestXray;
-    @ExcelIgnore
+    @ExcelProperty(index = 37)
+    @DateTimeFormat("yyyy.MM.dd")
     private LocalDate chestXrayDate;
-    @ExcelIgnore
+    @ExcelProperty(index = 38)
     private String chestXrayResult;
-    @ExcelIgnore
+    @ExcelProperty(index = 39)
     private String diagnosisFirst;
+
+    // ===== 以下字段由系统回写，不参与 Excel 导入 =====
     @ExcelIgnore
     private String diagnosisHalfYear;
     @ExcelIgnore

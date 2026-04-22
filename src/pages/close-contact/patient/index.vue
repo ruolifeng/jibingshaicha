@@ -16,6 +16,8 @@ import {
   saveFollowUpApi, getFollowUpListApi, saveMedicationApi, getMedicationApi, completeMedicationApi
 } from "./apis"
 import { sendNoticeApi, confirmNoticeApi, getNoticeListByBizApi } from "@/pages/school/latent/apis"
+import { getScreeningCloseContactDetailApi } from "@/pages/close-contact/screening/apis"
+import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { getLevel5UsersApi } from "@@/apis/users"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -72,6 +74,23 @@ async function handleImportEpidemic(uploadFile: any) {
     ElMessage.success(`成功导入 ${data} 条大疫情数据`)
     fetchData()
   } catch { /* handled */ }
+}
+
+// ==================== 筛查详情查看 ====================
+const screeningDetailVisible = ref(false)
+const screeningDetailData = ref<any>(null)
+
+async function viewScreeningDetail(row: any) {
+  if (!row.screeningId) { ElMessage.info("暂无筛查原始数据"); return }
+  try {
+    const { data } = await getScreeningCloseContactDetailApi(row.screeningId)
+    if (data) {
+      screeningDetailData.value = data
+      screeningDetailVisible.value = true
+    } else {
+      ElMessage.info("暂无筛查原始数据")
+    }
+  } catch { /* handled by interceptor */ }
 }
 
 // ==================== 患者通知单 ====================
@@ -491,9 +510,10 @@ watch(
             <el-button type="primary" link size="small" @click="viewFirstVisit(row)">查看</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="200">
+        <el-table-column label="操作" fixed="right" width="260">
           <template #default="{ row }">
             <div class="action-btns">
+              <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
               <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
               <el-button v-permission="'patient:firstVisit'" type="success" link size="small" @click="openFirstVisitDialog(row)">填写首次随访</el-button>
               <el-dropdown trigger="click" @command="(cmd: string) => handleActionCommand(cmd, row)">
@@ -529,6 +549,9 @@ watch(
     </el-card>
 
     <!-- 患者通知单弹窗 -->
+    <!-- 筛查详情弹窗 -->
+    <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="closeContact" :data="screeningDetailData" />
+
     <el-dialog v-model="noticeDialogVisible" title="填写患者通知单" width="680px">
       <el-form :model="noticeForm" label-width="110px">
         <el-divider content-position="left">基本信息</el-divider>

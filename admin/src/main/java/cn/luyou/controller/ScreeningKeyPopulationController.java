@@ -74,6 +74,12 @@ public class ScreeningKeyPopulationController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "按 ID 查询重点人群筛查记录详情")
+    @GetMapping("/{id}")
+    public ResultResponse<ScreeningKeyPopulation> detail(@PathVariable Long id) {
+        return ResultRes.success(screeningKeyPopulationService.getById(id));
+    }
+
     @Operation(summary = "导出重点人群筛查数据")
     @GetMapping("/export")
     public void export(

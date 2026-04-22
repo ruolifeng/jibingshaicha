@@ -49,6 +49,14 @@ export function deleteScreeningSchoolApi(id: number) {
   })
 }
 
+/** 按 ID 查询学校人群筛查记录详情 */
+export function getScreeningSchoolDetailApi(id: number) {
+  return request<ApiResponseData<any>>({
+    url: `screening/school/${id}`,
+    method: "get"
+  })
+}
+
 /** 分页查询学校人群筛查数据 */
 export function getScreeningSchoolListApi(params: {
   page: number

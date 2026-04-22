@@ -84,7 +84,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                         result.addError(row, data.getName(), "手机号格式不正确");
                     }
                     data.setUploadBatch(batchId);
-                    data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
+                    boolean directXray = hasDirectXrayAndDiagnosis(data);
+                    data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
                     dataList.add(data);
                 }
 
@@ -104,22 +105,30 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         saveBatch(dataList, 500);
         result.setSuccessCount(dataList.size());
 
-        // 感染筛查结果阳性者自动创建潜伏感染记录
+        // 感染筛查结果阳性者 或 包含胸片诊断数据者，自动创建潜伏感染记录
         List<LatentInfection> latentList = dataList.stream()
                 .filter(d -> d.getIsLatent() == 1)
-                .map(d -> LatentInfection.builder()
-                        .screeningId(d.getId())
-                        .populationType("school")
-                        .name(d.getName())
-                        .idNumber(d.getIdNumber())
-                        .gender(d.getGender())
-                        .age(d.getAge())
-                        .phone(d.getPhone())
-                        .infectionResult(d.getInfectionResult())
-                        .trackingStatus(0)
-                        .notInPlaceCount(0)
-                        .archived(0)
-                        .build())
+                .map(d -> {
+                    boolean directXray = hasDirectXrayAndDiagnosis(d);
+                    return LatentInfection.builder()
+                            .screeningId(d.getId())
+                            .populationType("school")
+                            .name(d.getName())
+                            .idNumber(d.getIdNumber())
+                            .gender(d.getGender())
+                            .age(d.getAge())
+                            .phone(d.getPhone())
+                            .infectionResult(d.getInfectionResult())
+                            .trackingStatus(directXray ? 1 : 0)
+                            .notInPlaceCount(0)
+                            .archived(0)
+                            .hasChestXray(d.getHasChestXray())
+                            .chestXrayDate(d.getChestXrayDate())
+                            .chestXrayResult(d.getChestXrayResult())
+                            .diagnosisFirst(d.getDiagnosisFirst())
+                            .diagnosisResult(d.getDiagnosisFirst())
+                            .build();
+                })
                 .toList();
         if (!latentList.isEmpty()) {
             latentInfectionService.saveBatch(latentList, 500);
@@ -152,7 +161,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
-        data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
+        boolean directXray = hasDirectXrayAndDiagnosis(data);
+        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
         save(data);
 
         if (data.getIsLatent() == 1) {
@@ -165,9 +175,14 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .age(data.getAge())
                     .phone(data.getPhone())
                     .infectionResult(data.getInfectionResult())
-                    .trackingStatus(0)
+                    .trackingStatus(directXray ? 1 : 0)
                     .notInPlaceCount(0)
                     .archived(0)
+                    .hasChestXray(data.getHasChestXray())
+                    .chestXrayDate(data.getChestXrayDate())
+                    .chestXrayResult(data.getChestXrayResult())
+                    .diagnosisFirst(data.getDiagnosisFirst())
+                    .diagnosisResult(data.getDiagnosisFirst())
                     .build();
             latentInfectionService.save(latent);
         }
@@ -176,6 +191,11 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     private boolean isPositive(String infectionResult) {
         if (StrUtil.isBlank(infectionResult)) return false;
         return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);
+    }
+
+    /** 判断是否包含可直接同步的胸片检查与诊断数据 */
+    private boolean hasDirectXrayAndDiagnosis(ScreeningSchool data) {
+        return "是".equals(data.getHasChestXray()) && StrUtil.isNotBlank(data.getDiagnosisFirst());
     }
 
     /** 18位身份证格式 + 校验位验证 */

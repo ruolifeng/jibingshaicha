@@ -49,6 +49,14 @@ export function deleteScreeningCloseContactApi(id: number) {
   })
 }
 
+/** 按 ID 查询密接人群筛查记录详情 */
+export function getScreeningCloseContactDetailApi(id: number) {
+  return request<ApiResponseData<any>>({
+    url: `screening/close-contact/${id}`,
+    method: "get"
+  })
+}
+
 /** 分页查询密接人群筛查数据 */
 export function getScreeningCloseContactListApi(params: {
   page: number

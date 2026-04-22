@@ -71,6 +71,12 @@ public class ScreeningSchoolController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "按 ID 查询学校人群筛查记录详情")
+    @GetMapping("/{id}")
+    public ResultResponse<ScreeningSchool> detail(@PathVariable Long id) {
+        return ResultRes.success(screeningSchoolService.getById(id));
+    }
+
     @Operation(summary = "导出学校人群筛查数据")
     @GetMapping("/export")
     public void export(

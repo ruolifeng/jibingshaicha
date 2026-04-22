@@ -49,6 +49,14 @@ export function deleteScreeningKeyPopulationApi(id: number) {
   })
 }
 
+/** 按 ID 查询重点人群筛查记录详情 */
+export function getScreeningKeyPopulationDetailApi(id: number) {
+  return request<ApiResponseData<any>>({
+    url: `screening/key-population/${id}`,
+    method: "get"
+  })
+}
+
 /** 分页查询重点人群筛查数据 */
 export function getScreeningKeyPopulationListApi(params: {
   page: number
