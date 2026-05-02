@@ -1,16 +1,21 @@
 <script lang="ts" setup>
+import ReferralDialog from "@@/components/ReferralDialog.vue"
+import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
-  TRACKING_STATUS_MAP, REFERRAL_RESULT_OPTIONS,
-  DIAGNOSIS_RESULT_OPTIONS, CHEST_XRAY_RESULT_OPTIONS
+  CHEST_XRAY_RESULT_OPTIONS,
+  DIAGNOSIS_RESULT_OPTIONS,
+  REFERRAL_RESULT_OPTIONS,
+  TRACKING_STATUS_MAP
 } from "@@/constants/disease"
-import {
-  getSuspectedListApi, trackSuspectedApi, referralSuspectedApi,
-  submitXrayApi, importXrayApi
-} from "./apis"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
-import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
-import ReferralDialog from "@@/components/ReferralDialog.vue"
+import {
+  getSuspectedListApi,
+  importXrayApi,
+  referralSuspectedApi,
+  submitXrayApi,
+  trackSuspectedApi
+} from "./apis"
 
 const POPULATION_TYPE = "keyPopulation"
 
@@ -95,7 +100,9 @@ async function handleTrack() {
     ElMessage.success("操作成功")
     trackDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ } finally { submitting.value = false }
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 录入胸片+诊断弹窗 ====================
@@ -137,7 +144,9 @@ async function handleSubmitXray() {
     ElMessage.success("录入成功")
     xrayDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ } finally { submitting.value = false }
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
 }
 
 async function handleImportXray(uploadFile: any) {
@@ -161,11 +170,11 @@ const referralForm = reactive({ result: "", remark: "" })
 function openReferralDialog(row: any) {
   referralRow.value = row
   const diagMap: Record<string, string> = {
-    "排除": "excluded",
-    "疑似肺结核": "suspected",
-    "确诊患者": "confirmed",
-    "潜伏感染者": "latent",
-    "其他": "other"
+    排除: "excluded",
+    疑似肺结核: "suspected",
+    确诊患者: "confirmed",
+    潜伏感染者: "latent",
+    其他: "other"
   }
   referralForm.result = diagMap[row.diagnosisFirst] || ""
   referralForm.remark = ""
@@ -184,7 +193,9 @@ async function handleReferral() {
     ElMessage.success("操作成功")
     referralDialogVisible.value = false
     fetchData()
-  } catch { /* handled by interceptor */ } finally { submitting.value = false }
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 筛查详情查看 ====================
@@ -192,7 +203,10 @@ const screeningDetailVisible = ref(false)
 const screeningDetailData = ref<any>(null)
 
 async function viewScreeningDetail(row: any) {
-  if (!row.screeningId) { ElMessage.info("暂无筛查原始数据"); return }
+  if (!row.screeningId) {
+    ElMessage.info("暂无筛查原始数据")
+    return
+  }
   try {
     const { data } = await getScreeningKeyPopulationDetailApi(row.screeningId)
     if (data) {
@@ -240,8 +254,12 @@ watch(
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -295,7 +313,9 @@ watch(
         </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="300">
           <template #default="{ row }">
-            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
+            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
+              查看详情
+            </el-button>
             <el-button
               v-if="row.trackingStatus == null || row.trackingStatus === 0 || row.trackingStatus === 2"
               v-permission="'latent:track'"
@@ -325,7 +345,9 @@ watch(
             >
               转诊
             </el-button>
-            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
+              分级诊疗
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -351,21 +373,33 @@ watch(
       <el-form label-width="80px">
         <el-form-item label="追踪状态">
           <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">到位</el-radio>
-            <el-radio :value="2">未到位</el-radio>
-            <el-radio :value="3">其他</el-radio>
+            <el-radio :value="1">
+              到位
+            </el-radio>
+            <el-radio :value="2">
+              未到位
+            </el-radio>
+            <el-radio :value="3">
+              其他
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="trackForm.status === 3 || (trackForm.status === 2 && trackingRow?.notInPlaceCount >= 2)" label="备注原因">
           <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写原因" />
         </el-form-item>
         <el-alert v-if="trackForm.status === 2 && trackingRow" :closable="false" class="mb-4">
-          <template #default>当前已未到位 {{ trackingRow.notInPlaceCount }} 次，最多 3 次后自动归档</template>
+          <template #default>
+            当前已未到位 {{ trackingRow.notInPlaceCount }} 次，最多 3 次后自动归档
+          </template>
         </el-alert>
       </el-form>
       <template #footer>
-        <el-button @click="trackDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleTrack">确认</el-button>
+        <el-button @click="trackDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleTrack">
+          确认
+        </el-button>
       </template>
     </el-dialog>
 
@@ -375,8 +409,12 @@ watch(
       <el-form :model="xrayForm" label-width="110px">
         <el-form-item label="是否进行胸片检查">
           <el-radio-group v-model="xrayForm.hasChestXray">
-            <el-radio value="是">是</el-radio>
-            <el-radio value="否">否</el-radio>
+            <el-radio value="是">
+              是
+            </el-radio>
+            <el-radio value="否">
+              否
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <template v-if="xrayForm.hasChestXray === '是'">
@@ -402,8 +440,12 @@ watch(
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="xrayDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitXray">确认录入</el-button>
+        <el-button @click="xrayDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmitXray">
+          确认录入
+        </el-button>
       </template>
     </el-dialog>
 
@@ -433,8 +475,12 @@ watch(
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="referralDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleReferral">确认</el-button>
+        <el-button @click="referralDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleReferral">
+          确认
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /** 肺结核患者第一次入户随访记录表打印组件 */
-const props = defineProps<{
+defineProps<{
   visible: boolean
   visitData: Record<string, any> | null
   patientName?: string
@@ -23,7 +23,9 @@ function handlePrint() {
     @update:model-value="emit('update:visible', $event)"
   >
     <div id="print-visit-content" class="print-area">
-      <h2 class="print-title">肺结核患者第一次入户随访记录表</h2>
+      <h2 class="print-title">
+        肺结核患者第一次入户随访记录表
+      </h2>
       <table class="visit-table">
         <tbody>
           <tr>
@@ -40,7 +42,9 @@ function handlePrint() {
           </tr>
           <tr>
             <th>症状及体征</th>
-            <td colspan="3">{{ visitData?.symptoms }}</td>
+            <td colspan="3">
+              {{ visitData?.symptoms }}
+            </td>
           </tr>
           <tr>
             <th>化疗方案</th>
@@ -84,20 +88,28 @@ function handlePrint() {
           </tr>
           <tr>
             <th>备注</th>
-            <td colspan="3">{{ visitData?.remark }}</td>
+            <td colspan="3">
+              {{ visitData?.remark }}
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
     <template #footer>
-      <el-button @click="emit('update:visible', false)">关闭</el-button>
-      <el-button type="primary" @click="handlePrint">打印</el-button>
+      <el-button @click="emit('update:visible', false)">
+        关闭
+      </el-button>
+      <el-button type="primary" @click="handlePrint">
+        打印
+      </el-button>
     </template>
   </el-dialog>
 </template>
 
 <style lang="scss" scoped>
-.print-area { padding: 8px; }
+.print-area {
+  padding: 8px;
+}
 
 .print-title {
   text-align: center;
@@ -110,7 +122,8 @@ function handlePrint() {
   width: 100%;
   border-collapse: collapse;
 
-  th, td {
+  th,
+  td {
     border: 1px solid #ddd;
     padding: 8px 12px;
     font-size: 14px;
@@ -126,10 +139,21 @@ function handlePrint() {
 
 <style lang="scss">
 @media print {
-  body > *:not(#print-visit-content) { display: none !important; }
-  .el-dialog__wrapper { position: static !important; }
-  .el-dialog { box-shadow: none !important; }
-  .el-dialog__header, .el-dialog__footer { display: none !important; }
-  #print-visit-content { display: block !important; }
+  body > *:not(#print-visit-content) {
+    display: none !important;
+  }
+  .el-dialog__wrapper {
+    position: static !important;
+  }
+  .el-dialog {
+    box-shadow: none !important;
+  }
+  .el-dialog__header,
+  .el-dialog__footer {
+    display: none !important;
+  }
+  #print-visit-content {
+    display: block !important;
+  }
 }
 </style>

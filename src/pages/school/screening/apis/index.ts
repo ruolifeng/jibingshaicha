@@ -4,7 +4,7 @@ import { request } from "@/http/axios"
 export function uploadScreeningSchoolApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number; errors: string[] }>>({
+  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
     url: "screening/school/upload",
     method: "post",
     data: formData,

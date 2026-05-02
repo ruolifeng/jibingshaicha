@@ -4,7 +4,7 @@ import { request } from "@/http/axios"
 export function uploadScreeningCloseContactApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number; errors: string[] }>>({
+  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
     url: "screening/close-contact/upload",
     method: "post",
     data: formData,

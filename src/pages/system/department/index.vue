@@ -1,10 +1,11 @@
 <script lang="ts" setup>
+import type { Department } from "@@/apis/department"
 import {
-  getDepartmentListApi,
   createDepartmentApi,
-  updateDepartmentApi,
   deleteDepartmentApi,
-  type Department
+
+  getDepartmentListApi,
+  updateDepartmentApi
 } from "@@/apis/department"
 
 const loading = ref(false)
@@ -25,7 +26,7 @@ const dialogVisible = ref(false)
 const dialogTitle = ref("新增部门")
 const isEdit = ref(false)
 const formRef = ref()
-const formData = reactive<{ id: number | null; name: string; description: string }>({
+const formData = reactive<{ id: number | null, name: string, description: string }>({
   id: null,
   name: "",
   description: ""
@@ -87,7 +88,9 @@ fetchData()
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">部门管理</span>
-          <el-button type="primary" @click="openCreateDialog">新增部门</el-button>
+          <el-button type="primary" @click="openCreateDialog">
+            新增部门
+          </el-button>
         </div>
       </template>
 
@@ -98,8 +101,12 @@ fetchData()
         <el-table-column prop="createTime" label="创建时间" />
         <el-table-column label="操作" fixed="right" width="160">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button type="primary" size="small" @click="openEditDialog(row)">
+              编辑
+            </el-button>
+            <el-button type="danger" size="small" @click="handleDelete(row)">
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -116,8 +123,12 @@ fetchData()
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确认</el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSubmit">
+          确认
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -107,8 +107,8 @@ export function rejectReferralFromMessageApi(referralId: number, rejectReason?: 
 }
 
 /** 查询当前用户已发送的分级诊疗列表 */
-export function getSentReferralListApi(params: { pageNum: number; size: number }) {
-  return request<ApiResponseData<{ records: SentReferralVO[]; total: number }>>({
+export function getSentReferralListApi(params: { pageNum: number, size: number }) {
+  return request<ApiResponseData<{ records: SentReferralVO[], total: number }>>({
     url: "referral/sent",
     method: "get",
     params

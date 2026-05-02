@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Search, FirstAidKit, Bell, Calendar } from "@element-plus/icons-vue"
+import { Bell, Calendar, FirstAidKit, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
 
 const summary = ref<Record<string, number>>({})
@@ -11,13 +11,15 @@ async function fetchSummary() {
   } catch { /* handled */ }
 }
 
-onMounted(() => { fetchSummary() })
+onMounted(() => {
+  fetchSummary()
+})
 
 const cards = [
-  { label: "待追踪人数",        key: "pendingTracking",  color: "#f56c6c", icon: Search      },
-  { label: "在管患者数",        key: "pendingVisit",     color: "#e6a23c", icon: FirstAidKit  },
-  { label: "待确认通知单",      key: "pendingNotice",    color: "#409eff", icon: Bell        },
-  { label: "复查（15天内）", key: "upcomingReview",  color: "#67c23a", icon: Calendar    }
+  { label: "待追踪人数", key: "pendingTracking", color: "#f56c6c", icon: Search },
+  { label: "在管患者数", key: "pendingVisit", color: "#e6a23c", icon: FirstAidKit },
+  { label: "待确认通知单", key: "pendingNotice", color: "#409eff", icon: Bell },
+  { label: "复查（15天内）", key: "upcomingReview", color: "#67c23a", icon: Calendar }
 ]
 
 function alphaColor(hex: string, alpha = "20") {
@@ -28,8 +30,12 @@ function alphaColor(hex: string, alpha = "20") {
 <template>
   <div class="dashboard">
     <div class="dashboard-header">
-      <div class="dashboard-title">我的工作台</div>
-      <div class="dashboard-subtitle">欢迎使用疾病监控管理系统</div>
+      <div class="dashboard-title">
+        我的工作台
+      </div>
+      <div class="dashboard-subtitle">
+        欢迎使用疾病监控管理系统
+      </div>
     </div>
 
     <el-row :gutter="24">
@@ -41,8 +47,12 @@ function alphaColor(hex: string, alpha = "20") {
             </el-icon>
           </div>
           <div class="stat-body">
-            <div class="stat-num" :style="{ color: card.color }">{{ summary[card.key] ?? "—" }}</div>
-            <div class="stat-label">{{ card.label }}</div>
+            <div class="stat-num" :style="{ color: card.color }">
+              {{ summary[card.key] ?? "—" }}
+            </div>
+            <div class="stat-label">
+              {{ card.label }}
+            </div>
           </div>
         </div>
       </el-col>
@@ -85,7 +95,9 @@ function alphaColor(hex: string, alpha = "20") {
   margin-bottom: 24px;
   transition: box-shadow 0.2s;
 
-  &:hover { box-shadow: var(--el-box-shadow); }
+  &:hover {
+    box-shadow: var(--el-box-shadow);
+  }
 
   .stat-icon-wrap {
     width: 56px;

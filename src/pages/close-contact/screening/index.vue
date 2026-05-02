@@ -1,13 +1,17 @@
 <script lang="ts" setup>
-import { usePagination } from "@@/composables/usePagination"
-import {
-  uploadScreeningCloseContactApi, getScreeningCloseContactListApi,
-  exportScreeningCloseContactApi, deleteScreeningCloseContactApi,
-  updateScreeningCloseContactApi, createScreeningCloseContactApi,
-  countByResultApi, batchDeleteScreeningCloseContactApi
-} from "./apis"
-import { useRouter } from "vue-router"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { usePagination } from "@@/composables/usePagination"
+import { useRouter } from "vue-router"
+import {
+  batchDeleteScreeningCloseContactApi,
+  countByResultApi,
+  createScreeningCloseContactApi,
+  deleteScreeningCloseContactApi,
+  exportScreeningCloseContactApi,
+  getScreeningCloseContactListApi,
+  updateScreeningCloseContactApi,
+  uploadScreeningCloseContactApi
+} from "./apis"
 
 const router = useRouter()
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -35,7 +39,7 @@ function tagType(t: string): TagType {
 }
 
 /** 最终筛查结果选项 */
-const FINAL_RESULT_OPTIONS: { label: string; value: string; type: TagType }[] = [
+const FINAL_RESULT_OPTIONS: { label: string, value: string, type: TagType }[] = [
   { label: "活动性肺结核", value: "活动性肺结核", type: "danger" },
   { label: "潜伏感染者", value: "潜伏感染者", type: "warning" },
   { label: "未做", value: "未做", type: "info" },
@@ -43,7 +47,7 @@ const FINAL_RESULT_OPTIONS: { label: string; value: string; type: TagType }[] = 
 ]
 
 /** 流程状态映射 */
-const CC_STATUS_MAP: Record<number, { label: string; type: string }> = {
+const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
   0: { label: "待处理", type: "info" },
   1: { label: "活动性肺结核", type: "danger" },
   2: { label: "潜伏感染-管理中", type: "warning" },
@@ -82,14 +86,20 @@ async function fetchData() {
   }
 }
 
-function handleSearch() { paginationData.currentPage = 1; fetchData() }
+function handleSearch() {
+  paginationData.currentPage = 1
+  fetchData()
+}
 function handleReset() {
-  searchForm.name = ""; searchForm.idNumber = ""; searchForm.district = ""; searchForm.finalScreeningResult = ""
+  searchForm.name = ""
+  searchForm.idNumber = ""
+  searchForm.district = ""
+  searchForm.finalScreeningResult = ""
   handleSearch()
 }
 
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number; errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 // 分级诊疗
@@ -118,13 +128,17 @@ function handleSelectionChange(rows: any[]) {
 async function handleExport(ids?: number[]) {
   try {
     await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
-      confirmButtonText: "确认导出", cancelButtonText: "取消", type: "warning"
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
     })
     const res = await exportScreeningCloseContactApi(ids)
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
-    a.href = url; a.download = "密接人群筛查数据.xlsx"; a.click()
+    a.href = url
+    a.download = "密接人群筛查数据.xlsx"
+    a.click()
     URL.revokeObjectURL(url)
     ElMessage.success("导出成功")
   } catch (err: any) {
@@ -134,7 +148,10 @@ async function handleExport(ids?: number[]) {
 
 function handleExportSelected() {
   const ids = selectedRows.value.map((item: any) => item.id).filter(Boolean)
-  if (!ids.length) { ElMessage.warning("请先勾选要导出的数据"); return }
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
   handleExport(ids)
 }
 
@@ -156,17 +173,37 @@ const editMode = ref<"create" | "edit">("edit")
 
 function getEmptyEditForm() {
   return {
-    city: "", district: "",
-    sourcePatientName: "", sourcePatientCaseNo: "", sourcePatientIdNumber: "", sourcePatientPhone: "",
-    name: "", idNumber: "", age: undefined, phone: "", gender: "", ethnicity: "",
-    contactType: "", contactPlace: "",
-    registrationDate: "", firstScreenDate: "",
-    symptom1: "", symptom2: "",
-    infectionCheckDate: "", infectionCheckMethod: "", infectionCheckResult: "",
-    imagingDate: "", imagingMethod: "", imagingResult: "",
-    sputumCheckDate: "", sputumCheckMethod: "", sputumCheckResult: "",
+    city: "",
+    district: "",
+    sourcePatientName: "",
+    sourcePatientCaseNo: "",
+    sourcePatientIdNumber: "",
+    sourcePatientPhone: "",
+    name: "",
+    idNumber: "",
+    age: undefined,
+    phone: "",
+    gender: "",
+    ethnicity: "",
+    contactType: "",
+    contactPlace: "",
+    registrationDate: "",
+    firstScreenDate: "",
+    symptom1: "",
+    symptom2: "",
+    infectionCheckDate: "",
+    infectionCheckMethod: "",
+    infectionCheckResult: "",
+    imagingDate: "",
+    imagingMethod: "",
+    imagingResult: "",
+    sputumCheckDate: "",
+    sputumCheckMethod: "",
+    sputumCheckResult: "",
     finalScreeningResult: "",
-    hasPreventiveTreatment: "", preventivePlan: "", treatmentCompleted: "",
+    hasPreventiveTreatment: "",
+    preventivePlan: "",
+    treatmentCompleted: "",
     remark: ""
   }
 }
@@ -218,7 +255,10 @@ async function handleDelete(row: any) {
 }
 
 async function handleBatchDelete() {
-  if (!selectedRows.value.length) { ElMessage.warning("请先勾选要删除的数据"); return }
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `确定删除选中的 ${selectedRows.value.length} 条筛查记录吗？删除后所有关联数据将一并删除，且不可恢复！`,
@@ -238,7 +278,10 @@ async function handleBatchDelete() {
 /** 详情弹窗 */
 const detailVisible = ref(false)
 const detailRow = ref<any>(null)
-function viewDetail(row: any) { detailRow.value = row; detailVisible.value = true }
+function viewDetail(row: any) {
+  detailRow.value = row
+  detailVisible.value = true
+}
 
 /** 判断随访月份是否有数据 */
 function hasFollowupData(row: any, month: 6 | 12 | 24): boolean {
@@ -266,7 +309,9 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-card shadow="hover" class="stat-card" @click="searchForm.finalScreeningResult = opt.value; handleSearch()">
           <div class="flex items-center justify-between">
             <span class="text-sm text-gray-500">{{ opt.label }}</span>
-            <el-tag :type="opt.type" size="small">{{ resultStats[opt.value] || 0 }} 人</el-tag>
+            <el-tag :type="opt.type" size="small">
+              {{ resultStats[opt.value] || 0 }} 人
+            </el-tag>
           </div>
         </el-card>
       </el-col>
@@ -276,8 +321,12 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
     <el-card shadow="never" class="mb-4">
       <div class="flex items-center gap-3">
         <span class="text-sm text-gray-500 font-bold">快速跳转：</span>
-        <el-button type="warning" size="small" @click="goToLatent">密接潜伏感染管理 →</el-button>
-        <el-button type="danger" size="small" @click="goToPatient">密接患者管理 →</el-button>
+        <el-button type="warning" size="small" @click="goToLatent">
+          密接潜伏感染管理 →
+        </el-button>
+        <el-button type="danger" size="small" @click="goToPatient">
+          密接患者管理 →
+        </el-button>
       </div>
     </el-card>
 
@@ -299,8 +348,12 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -311,12 +364,22 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接人群筛查数据</span>
           <div class="flex gap-2">
-            <el-button v-permission="'closeContact:screening:create'" type="success" @click="handleCreate">新增数据</el-button>
-            <el-button v-permission="'closeContact:screening:export'" @click="() => handleExport()">导出全部</el-button>
-            <el-button v-permission="'closeContact:screening:export'" type="warning" :disabled="!selectedRows.length" @click="handleExportSelected">导出勾选</el-button>
-            <el-button v-permission="'closeContact:screening:delete'" type="danger" :disabled="!selectedRows.length" @click="handleBatchDelete">批量删除</el-button>
+            <el-button v-permission="'closeContact:screening:create'" type="success" @click="handleCreate">
+              新增数据
+            </el-button>
+            <el-button v-permission="'closeContact:screening:export'" @click="() => handleExport()">
+              导出全部
+            </el-button>
+            <el-button v-permission="'closeContact:screening:export'" type="warning" :disabled="!selectedRows.length" @click="handleExportSelected">
+              导出勾选
+            </el-button>
+            <el-button v-permission="'closeContact:screening:delete'" type="danger" :disabled="!selectedRows.length" @click="handleBatchDelete">
+              批量删除
+            </el-button>
             <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleUpload">
-              <el-button type="primary" v-permission="'closeContact:screening:upload'">上传 Excel</el-button>
+              <el-button type="primary" v-permission="'closeContact:screening:upload'">
+                上传 Excel
+              </el-button>
             </el-upload>
           </div>
         </div>
@@ -377,10 +440,18 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-table-column>
         <el-table-column label="操作" fixed="right" width="260">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="viewDetail(row)">详情</el-button>
-            <el-button v-permission="'closeContact:screening:edit'" type="warning" link size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'closeContact:screening:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
-            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
+            <el-button type="primary" link size="small" @click="viewDetail(row)">
+              详情
+            </el-button>
+            <el-button v-permission="'closeContact:screening:edit'" type="warning" link size="small" @click="handleEdit(row)">
+              编辑
+            </el-button>
+            <el-button v-permission="'closeContact:screening:delete'" type="danger" link size="small" @click="handleDelete(row)">
+              删除
+            </el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
+              分级诊疗
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -404,48 +475,150 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-tab-pane label="原患者信息">
           <el-form :model="editForm" label-width="130px">
             <el-row :gutter="16">
-              <el-col :span="8"><el-form-item label="市/州"><el-input v-model="editForm.city" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="区/县"><el-input v-model="editForm.district" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="原患者姓名"><el-input v-model="editForm.sourcePatientName" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="原患者身份证号"><el-input v-model="editForm.sourcePatientIdNumber" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="原患者病案号"><el-input v-model="editForm.sourcePatientCaseNo" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="原患者电话"><el-input v-model="editForm.sourcePatientPhone" /></el-form-item></el-col>
+              <el-col :span="8">
+                <el-form-item label="市/州">
+                  <el-input v-model="editForm.city" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="区/县">
+                  <el-input v-model="editForm.district" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="原患者姓名">
+                  <el-input v-model="editForm.sourcePatientName" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="原患者身份证号">
+                  <el-input v-model="editForm.sourcePatientIdNumber" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="原患者病案号">
+                  <el-input v-model="editForm.sourcePatientCaseNo" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="原患者电话">
+                  <el-input v-model="editForm.sourcePatientPhone" />
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="接触者基本信息">
           <el-form :model="editForm" label-width="130px">
             <el-row :gutter="16">
-              <el-col :span="8"><el-form-item label="接触者姓名"><el-input v-model="editForm.name" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="身份证号"><el-input v-model="editForm.idNumber" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="年龄"><el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item></el-col>
               <el-col :span="8">
-                <el-form-item label="性别">
-                  <el-select v-model="editForm.gender" style="width:100%"><el-option label="男" value="男" /><el-option label="女" value="女" /></el-select>
+                <el-form-item label="接触者姓名">
+                  <el-input v-model="editForm.name" />
                 </el-form-item>
               </el-col>
-              <el-col :span="8"><el-form-item label="民族"><el-input v-model="editForm.ethnicity" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="接触类型"><el-input v-model="editForm.contactType" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="接触场所"><el-input v-model="editForm.contactPlace" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="登记日期"><el-date-picker v-model="editForm.registrationDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="8">
+                <el-form-item label="身份证号">
+                  <el-input v-model="editForm.idNumber" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="年龄">
+                  <el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="联系电话">
+                  <el-input v-model="editForm.phone" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="性别">
+                  <el-select v-model="editForm.gender" style="width:100%">
+                    <el-option label="男" value="男" /><el-option label="女" value="女" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="民族">
+                  <el-input v-model="editForm.ethnicity" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="接触类型">
+                  <el-input v-model="editForm.contactType" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="接触场所">
+                  <el-input v-model="editForm.contactPlace" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="登记日期">
+                  <el-date-picker v-model="editForm.registrationDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="初次筛查">
           <el-form :model="editForm" label-width="130px">
             <el-row :gutter="16">
-              <el-col :span="8"><el-form-item label="首次筛查日期"><el-date-picker v-model="editForm.firstScreenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="结核症状1"><el-input v-model="editForm.symptom1" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="结核症状2"><el-input v-model="editForm.symptom2" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="感染检测日期"><el-date-picker v-model="editForm.infectionCheckDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="感染检测方法"><el-input v-model="editForm.infectionCheckMethod" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="结果判定"><el-input v-model="editForm.infectionCheckResult" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="影像检查日期"><el-date-picker v-model="editForm.imagingDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="影像方法"><el-input v-model="editForm.imagingMethod" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="影像结果"><el-input v-model="editForm.imagingResult" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="痰检方法"><el-input v-model="editForm.sputumCheckMethod" /></el-form-item></el-col>
-              <el-col :span="8"><el-form-item label="痰检结果"><el-input v-model="editForm.sputumCheckResult" /></el-form-item></el-col>
+              <el-col :span="8">
+                <el-form-item label="首次筛查日期">
+                  <el-date-picker v-model="editForm.firstScreenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="结核症状1">
+                  <el-input v-model="editForm.symptom1" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="结核症状2">
+                  <el-input v-model="editForm.symptom2" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="感染检测日期">
+                  <el-date-picker v-model="editForm.infectionCheckDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="感染检测方法">
+                  <el-input v-model="editForm.infectionCheckMethod" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="结果判定">
+                  <el-input v-model="editForm.infectionCheckResult" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="影像检查日期">
+                  <el-date-picker v-model="editForm.imagingDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="影像方法">
+                  <el-input v-model="editForm.imagingMethod" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="影像结果">
+                  <el-input v-model="editForm.imagingResult" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="痰检方法">
+                  <el-input v-model="editForm.sputumCheckMethod" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="痰检结果">
+                  <el-input v-model="editForm.sputumCheckResult" />
+                </el-form-item>
+              </el-col>
               <el-col :span="8">
                 <el-form-item label="最终筛查结果">
                   <el-select v-model="editForm.finalScreeningResult" style="width:100%" clearable>
@@ -459,17 +632,37 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-tab-pane label="预防治疗">
           <el-form :model="editForm" label-width="160px">
             <el-row :gutter="16">
-              <el-col :span="12"><el-form-item label="是否开展预防治疗"><el-input v-model="editForm.hasPreventiveTreatment" /></el-form-item></el-col>
-              <el-col :span="12"><el-form-item label="预防性治疗方案"><el-input v-model="editForm.preventivePlan" /></el-form-item></el-col>
-              <el-col :span="12"><el-form-item label="是否完成治疗"><el-input v-model="editForm.treatmentCompleted" /></el-form-item></el-col>
-              <el-col :span="24"><el-form-item label="备注"><el-input v-model="editForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+              <el-col :span="12">
+                <el-form-item label="是否开展预防治疗">
+                  <el-input v-model="editForm.hasPreventiveTreatment" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="预防性治疗方案">
+                  <el-input v-model="editForm.preventivePlan" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="是否完成治疗">
+                  <el-input v-model="editForm.treatmentCompleted" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="备注">
+                  <el-input v-model="editForm.remark" type="textarea" :rows="2" />
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
         </el-tab-pane>
       </el-tabs>
       <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="editSaving" @click="handleSave">保存</el-button>
+        <el-button @click="editVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="editSaving" @click="handleSave">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -478,17 +671,37 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       <el-tabs v-if="detailRow">
         <el-tab-pane label="基本信息">
           <el-descriptions :column="3" border>
-            <el-descriptions-item label="接触者姓名">{{ detailRow.name }}</el-descriptions-item>
-            <el-descriptions-item label="身份证号">{{ detailRow.idNumber }}</el-descriptions-item>
-            <el-descriptions-item label="年龄">{{ detailRow.age }}</el-descriptions-item>
-            <el-descriptions-item label="联系电话">{{ detailRow.phone }}</el-descriptions-item>
-            <el-descriptions-item label="接触类型">{{ detailRow.contactType }}</el-descriptions-item>
-            <el-descriptions-item label="接触场所">{{ detailRow.contactPlace }}</el-descriptions-item>
-            <el-descriptions-item label="原患者姓名">{{ detailRow.sourcePatientName }}</el-descriptions-item>
-            <el-descriptions-item label="原患者身份证号">{{ detailRow.sourcePatientIdNumber }}</el-descriptions-item>
-            <el-descriptions-item label="密接登记日期">{{ detailRow.registrationDate }}</el-descriptions-item>
+            <el-descriptions-item label="接触者姓名">
+              {{ detailRow.name }}
+            </el-descriptions-item>
+            <el-descriptions-item label="身份证号">
+              {{ detailRow.idNumber }}
+            </el-descriptions-item>
+            <el-descriptions-item label="年龄">
+              {{ detailRow.age }}
+            </el-descriptions-item>
+            <el-descriptions-item label="联系电话">
+              {{ detailRow.phone }}
+            </el-descriptions-item>
+            <el-descriptions-item label="接触类型">
+              {{ detailRow.contactType }}
+            </el-descriptions-item>
+            <el-descriptions-item label="接触场所">
+              {{ detailRow.contactPlace }}
+            </el-descriptions-item>
+            <el-descriptions-item label="原患者姓名">
+              {{ detailRow.sourcePatientName }}
+            </el-descriptions-item>
+            <el-descriptions-item label="原患者身份证号">
+              {{ detailRow.sourcePatientIdNumber }}
+            </el-descriptions-item>
+            <el-descriptions-item label="密接登记日期">
+              {{ detailRow.registrationDate }}
+            </el-descriptions-item>
             <el-descriptions-item label="最终筛查结果" :span="2">
-              <el-tag :type="tagType(getFinalResultTag(detailRow.finalScreeningResult))">{{ detailRow.finalScreeningResult || '—' }}</el-tag>
+              <el-tag :type="tagType(getFinalResultTag(detailRow.finalScreeningResult))">
+                {{ detailRow.finalScreeningResult || '—' }}
+              </el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="流程状态">
               <el-tag v-if="CC_STATUS_MAP[detailRow.ccStatus]" :type="tagType(CC_STATUS_MAP[detailRow.ccStatus].type)">
@@ -499,13 +712,27 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-tab-pane>
         <el-tab-pane label="初次筛查">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="首次筛查日期">{{ detailRow.firstScreenDate }}</el-descriptions-item>
-            <el-descriptions-item label="感染检测方法">{{ detailRow.infectionCheckMethod }}</el-descriptions-item>
-            <el-descriptions-item label="感染检测结果">{{ detailRow.infectionCheckResult }}</el-descriptions-item>
-            <el-descriptions-item label="影像方法">{{ detailRow.imagingMethod }}</el-descriptions-item>
-            <el-descriptions-item label="影像结果">{{ detailRow.imagingResult }}</el-descriptions-item>
-            <el-descriptions-item label="痰检方法">{{ detailRow.sputumCheckMethod }}</el-descriptions-item>
-            <el-descriptions-item label="痰检结果">{{ detailRow.sputumCheckResult }}</el-descriptions-item>
+            <el-descriptions-item label="首次筛查日期">
+              {{ detailRow.firstScreenDate }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染检测方法">
+              {{ detailRow.infectionCheckMethod }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染检测结果">
+              {{ detailRow.infectionCheckResult }}
+            </el-descriptions-item>
+            <el-descriptions-item label="影像方法">
+              {{ detailRow.imagingMethod }}
+            </el-descriptions-item>
+            <el-descriptions-item label="影像结果">
+              {{ detailRow.imagingResult }}
+            </el-descriptions-item>
+            <el-descriptions-item label="痰检方法">
+              {{ detailRow.sputumCheckMethod }}
+            </el-descriptions-item>
+            <el-descriptions-item label="痰检结果">
+              {{ detailRow.sputumCheckResult }}
+            </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
         <el-tab-pane label="随访情况">
@@ -515,8 +742,12 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
               :color="hasFollowupData(detailRow, month) ? '#67c23a' : '#909399'"
             >
               <template #dot>
-                <el-icon v-if="hasFollowupData(detailRow, month)" color="#67c23a"><CircleCheck /></el-icon>
-                <el-icon v-else color="#909399"><Clock /></el-icon>
+                <el-icon v-if="hasFollowupData(detailRow, month)" color="#67c23a">
+                  <CircleCheck />
+                </el-icon>
+                <el-icon v-else color="#909399">
+                  <Clock />
+                </el-icon>
               </template>
               <div class="mb-2">
                 <span class="font-bold">{{ month }}月随访</span>
@@ -536,17 +767,31 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-tab-pane>
         <el-tab-pane label="预防治疗">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="是否开展预防治疗">{{ detailRow.hasPreventiveTreatment }}</el-descriptions-item>
-            <el-descriptions-item label="预防性治疗方案">{{ detailRow.preventivePlan }}</el-descriptions-item>
-            <el-descriptions-item label="是否完成治疗">{{ detailRow.treatmentCompleted }}</el-descriptions-item>
-            <el-descriptions-item label="未完成原因">{{ detailRow.incompleteReason }}</el-descriptions-item>
-            <el-descriptions-item label="预计完成时间">{{ detailRow.expectedTreatmentEndDate }}</el-descriptions-item>
-            <el-descriptions-item label="备注">{{ detailRow.remark }}</el-descriptions-item>
+            <el-descriptions-item label="是否开展预防治疗">
+              {{ detailRow.hasPreventiveTreatment }}
+            </el-descriptions-item>
+            <el-descriptions-item label="预防性治疗方案">
+              {{ detailRow.preventivePlan }}
+            </el-descriptions-item>
+            <el-descriptions-item label="是否完成治疗">
+              {{ detailRow.treatmentCompleted }}
+            </el-descriptions-item>
+            <el-descriptions-item label="未完成原因">
+              {{ detailRow.incompleteReason }}
+            </el-descriptions-item>
+            <el-descriptions-item label="预计完成时间">
+              {{ detailRow.expectedTreatmentEndDate }}
+            </el-descriptions-item>
+            <el-descriptions-item label="备注">
+              {{ detailRow.remark }}
+            </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
       </el-tabs>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button @click="detailVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -572,7 +817,9 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-table>
       </template>
       <template #footer>
-        <el-button type="primary" @click="importResultVisible = false">确定</el-button>
+        <el-button type="primary" @click="importResultVisible = false">
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -582,6 +829,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
 .stat-card {
   cursor: pointer;
   transition: box-shadow 0.2s;
-  &:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
 }
 </style>

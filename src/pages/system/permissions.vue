@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ROLE_OPTIONS } from "@@/constants/disease"
-import { getPermissionTreeApi, getRolePermissionIdsApi, assignRolePermissionsApi } from "./apis"
+import { assignRolePermissionsApi, getPermissionTreeApi, getRolePermissionIdsApi } from "./apis"
 
 const permissionTree = ref<any[]>([])
 const loading = ref(false)
@@ -131,9 +131,15 @@ function getTypeColor(type: number): "primary" | "warning" {
 </template>
 
 <style lang="scss" scoped>
-.mb-4 { margin-bottom: 16px; }
-.gap-4 { gap: 16px; }
-.ml-2 { margin-left: 8px; }
+.mb-4 {
+  margin-bottom: 16px;
+}
+.gap-4 {
+  gap: 16px;
+}
+.ml-2 {
+  margin-left: 8px;
+}
 
 .perm-tree-wrapper {
   max-height: 600px;

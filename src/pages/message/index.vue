@@ -1,16 +1,16 @@
 <script lang="ts" setup>
+import type { SentNoticeVO, SentReferralVO } from "./apis"
 import { usePagination } from "@@/composables/usePagination"
 import {
   confirmNoticeFromMessageApi,
+  confirmReferralFromMessageApi,
   getMessageListApi,
   getSentNoticeListApi,
   getSentReferralListApi,
   markMessageReadApi,
-  remindNoticeApi,
-  confirmReferralFromMessageApi,
   rejectReferralFromMessageApi,
-  type SentNoticeVO,
-  type SentReferralVO
+  remindNoticeApi
+
 } from "./apis"
 
 defineOptions({ name: "Message" })
@@ -220,9 +220,15 @@ const activeTab = ref("received")
         <el-tab-pane label="收到的消息" name="received">
           <div class="mb-4 flex justify-end">
             <el-radio-group v-model="isReadFilter" @change="fetchData">
-              <el-radio-button :value="undefined">全部</el-radio-button>
-              <el-radio-button :value="0">未读</el-radio-button>
-              <el-radio-button :value="1">已读</el-radio-button>
+              <el-radio-button :value="undefined">
+                全部
+              </el-radio-button>
+              <el-radio-button :value="0">
+                未读
+              </el-radio-button>
+              <el-radio-button :value="1">
+                已读
+              </el-radio-button>
             </el-radio-group>
           </div>
 
@@ -261,8 +267,12 @@ const activeTab = ref("received")
                 </el-button>
                 <!-- 分级诊疗确认/拒绝 -->
                 <template v-if="row.type === 'referral_receive' && !row.isRead">
-                  <el-button type="success" size="small" @click="handleConfirmReferral(row)">确认接收</el-button>
-                  <el-button type="danger" size="small" @click="openRejectDialog(row)">拒绝</el-button>
+                  <el-button type="success" size="small" @click="handleConfirmReferral(row)">
+                    确认接收
+                  </el-button>
+                  <el-button type="danger" size="small" @click="openRejectDialog(row)">
+                    拒绝
+                  </el-button>
                 </template>
                 <el-button v-if="!row.isRead" type="primary" size="small" link @click="handleMarkRead(row)">
                   标为已读
@@ -290,7 +300,9 @@ const activeTab = ref("received")
             <el-table-column prop="senderName" label="发送者" width="110">
               <template #default="{ row }">
                 <div>{{ row.senderName || "—" }}</div>
-                <div class="text-xs text-gray-400">{{ row.senderOrgName }}</div>
+                <div class="text-xs text-gray-400">
+                  {{ row.senderOrgName }}
+                </div>
               </template>
             </el-table-column>
             <el-table-column prop="sentTime" label="发送时间" width="170" />
@@ -310,15 +322,21 @@ const activeTab = ref("received")
             <el-table-column prop="receiverName" label="接收者" width="110">
               <template #default="{ row }">
                 <div>{{ row.receiverName || "—" }}</div>
-                <div class="text-xs text-gray-400">{{ row.receiverOrgName }}</div>
+                <div class="text-xs text-gray-400">
+                  {{ row.receiverOrgName }}
+                </div>
               </template>
             </el-table-column>
             <el-table-column prop="confirmedTime" label="接收时间" width="170">
-              <template #default="{ row }">{{ row.confirmedTime || "—" }}</template>
+              <template #default="{ row }">
+                {{ row.confirmedTime || "—" }}
+              </template>
             </el-table-column>
             <el-table-column label="操作" fixed="right" width="100">
               <template #default="{ row }">
-                <el-button v-if="row.status !== 2" type="warning" size="small" @click="handleRemind(row)">点击提醒</el-button>
+                <el-button v-if="row.status !== 2" type="warning" size="small" @click="handleRemind(row)">
+                  点击提醒
+                </el-button>
                 <span v-else class="text-sm text-gray-400">已接收</span>
               </template>
             </el-table-column>
@@ -361,14 +379,20 @@ const activeTab = ref("received")
             <el-table-column prop="receiverName" label="接收者" width="110">
               <template #default="{ row }">
                 <div>{{ row.receiverName || "—" }}</div>
-                <div class="text-xs text-gray-400">{{ row.receiverOrgName }}</div>
+                <div class="text-xs text-gray-400">
+                  {{ row.receiverOrgName }}
+                </div>
               </template>
             </el-table-column>
             <el-table-column prop="confirmedTime" label="接收时间" width="170">
-              <template #default="{ row }">{{ row.confirmedTime || "—" }}</template>
+              <template #default="{ row }">
+                {{ row.confirmedTime || "—" }}
+              </template>
             </el-table-column>
             <el-table-column prop="rejectReason" label="拒绝原因" min-width="120">
-              <template #default="{ row }">{{ row.rejectReason || "—" }}</template>
+              <template #default="{ row }">
+                {{ row.rejectReason || "—" }}
+              </template>
             </el-table-column>
           </el-table>
 
@@ -395,14 +419,22 @@ const activeTab = ref("received")
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="handleRejectReferral">确认拒绝</el-button>
+        <el-button @click="rejectDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="danger" @click="handleRejectReferral">
+          确认拒绝
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.mt-4 { margin-top: 16px; }
-.mb-4 { margin-bottom: 16px; }
+.mt-4 {
+  margin-top: 16px;
+}
+.mb-4 {
+  margin-bottom: 16px;
+}
 </style>

@@ -182,4 +182,3 @@ export function importXrayApi(file: File, populationType: string) {
     timeout: 60000
   })
 }
-

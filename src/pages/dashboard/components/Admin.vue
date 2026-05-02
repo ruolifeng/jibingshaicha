@@ -1,25 +1,24 @@
 <script lang="ts" setup>
+import type { MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
 import {
-  Search,
-  FirstAidKit,
   Bell,
   Calendar,
-  Refresh,
-  School,
-  User,
   Connection,
   DataAnalysis,
+  FirstAidKit,
   List,
+  Refresh,
+  School,
+  Search,
+  User,
   WarningFilled
 } from "@element-plus/icons-vue"
 import {
-  getDashboardSummaryApi,
   getDashboardBatchesApi,
-  getDashboardTaskStatsApi,
   getDashboardMessageStatsApi,
-  type PopulationStat,
-  type TaskStatsData,
-  type MessageStatsData
+  getDashboardSummaryApi,
+  getDashboardTaskStatsApi
+
 } from "../apis"
 
 const summaryLoading = ref(false)
@@ -33,9 +32,13 @@ const taskStats = ref<TaskStatsData>({
   closeContact: { screeningTotal: 0, latentCount: 0, latentRatio: 0, patientCount: 0, patientRatio: 0 }
 })
 const messageStats = ref<MessageStatsData>({
-  latentNoticeSent: 0, latentNoticeConfirmed: 0,
-  patientNoticeSent: 0, patientNoticeConfirmed: 0,
-  referralSent: 0, referralConfirmed: 0, referralRejected: 0
+  latentNoticeSent: 0,
+  latentNoticeConfirmed: 0,
+  patientNoticeSent: 0,
+  patientNoticeConfirmed: 0,
+  referralSent: 0,
+  referralConfirmed: 0,
+  referralRejected: 0
 })
 
 async function fetchAll() {
@@ -66,23 +69,27 @@ async function fetchTaskStats() {
   }
 }
 
-onMounted(() => { fetchAll() })
+onMounted(() => {
+  fetchAll()
+})
 
-watch(selectedBatch, () => { fetchTaskStats() })
+watch(selectedBatch, () => {
+  fetchTaskStats()
+})
 
 // ===== 统计卡片配置 =====
 const statCards = [
-  { label: "待追踪人数",     key: "pendingTracking", color: "#f56c6c", icon: Search,     bg: "#fff5f5" },
-  { label: "在管患者数",     key: "pendingVisit",    color: "#e6a23c", icon: FirstAidKit, bg: "#fffbf0" },
-  { label: "待确认通知单",   key: "pendingNotice",   color: "#409eff", icon: Bell,        bg: "#f0f7ff" },
-  { label: "近期复查(15天)", key: "upcomingReview",  color: "#67c23a", icon: Calendar,    bg: "#f0fff4" }
+  { label: "待追踪人数", key: "pendingTracking", color: "#f56c6c", icon: Search, bg: "#fff5f5" },
+  { label: "在管患者数", key: "pendingVisit", color: "#e6a23c", icon: FirstAidKit, bg: "#fffbf0" },
+  { label: "待确认通知单", key: "pendingNotice", color: "#409eff", icon: Bell, bg: "#f0f7ff" },
+  { label: "近期复查(15天)", key: "upcomingReview", color: "#67c23a", icon: Calendar, bg: "#f0fff4" }
 ]
 
 // ===== 人群卡片配置 =====
 const popCards = [
-  { label: "学校人群", key: "school",        color: "#409eff", darkColor: "#1a6fc4", icon: School,     latentColor: "#f56c6c", patientColor: "#e6a23c" },
-  { label: "重点人群", key: "keyPopulation", color: "#67c23a", darkColor: "#2e8b2e", icon: User,       latentColor: "#f56c6c", patientColor: "#e6a23c" },
-  { label: "密接人群", key: "closeContact",  color: "#f56c6c", darkColor: "#c0392b", icon: Connection, latentColor: "#9b59b6", patientColor: "#e6a23c" }
+  { label: "学校人群", key: "school", color: "#409eff", darkColor: "#1a6fc4", icon: School, latentColor: "#f56c6c", patientColor: "#e6a23c" },
+  { label: "重点人群", key: "keyPopulation", color: "#67c23a", darkColor: "#2e8b2e", icon: User, latentColor: "#f56c6c", patientColor: "#e6a23c" },
+  { label: "密接人群", key: "closeContact", color: "#f56c6c", darkColor: "#c0392b", icon: Connection, latentColor: "#9b59b6", patientColor: "#e6a23c" }
 ] as const
 
 function getStat(key: keyof TaskStatsData): PopulationStat {
@@ -114,8 +121,12 @@ const noticeMaxSent = computed(() =>
     <!-- ===== 顶部 Header ===== -->
     <div class="db-header">
       <div class="db-header-left">
-        <div class="db-title">疾病监控工作台</div>
-        <div class="db-subtitle">欢迎使用结核病筛查追踪管理系统</div>
+        <div class="db-title">
+          疾病监控工作台
+        </div>
+        <div class="db-subtitle">
+          欢迎使用结核病筛查追踪管理系统
+        </div>
       </div>
       <div class="db-header-right">
         <el-select
@@ -137,15 +148,19 @@ const noticeMaxSent = computed(() =>
     </div>
     <el-row :gutter="20" class="stat-row">
       <el-col v-for="card in statCards" :key="card.key" :xs="12" :sm="12" :md="6">
-        <div class="stat-card" :style="{ '--card-color': card.color, backgroundColor: card.bg }">
+        <div class="stat-card" :style="{ '--card-color': card.color, 'backgroundColor': card.bg }">
           <div class="stat-icon-wrap">
             <el-icon :size="24" :style="{ color: card.color }">
               <component :is="card.icon" />
             </el-icon>
           </div>
           <div class="stat-body">
-            <div class="stat-num">{{ summary[card.key] ?? "—" }}</div>
-            <div class="stat-label">{{ card.label }}</div>
+            <div class="stat-num">
+              {{ summary[card.key] ?? "—" }}
+            </div>
+            <div class="stat-label">
+              {{ card.label }}
+            </div>
           </div>
           <div class="stat-deco" :style="{ borderColor: card.color }" />
         </div>
@@ -169,8 +184,12 @@ const noticeMaxSent = computed(() =>
               <span class="pop-name">{{ pc.label }}</span>
             </div>
             <div class="pop-total-wrap">
-              <div class="pop-total-num">{{ getStat(pc.key).screeningTotal }}</div>
-              <div class="pop-total-label">筛查总数</div>
+              <div class="pop-total-num">
+                {{ getStat(pc.key).screeningTotal }}
+              </div>
+              <div class="pop-total-label">
+                筛查总数
+              </div>
             </div>
           </div>
 
@@ -191,7 +210,7 @@ const noticeMaxSent = computed(() =>
                   class="pop-bar-fill"
                   :style="{
                     width: `${Math.min(getStat(pc.key).latentRatio, 100)}%`,
-                    backgroundColor: pc.latentColor
+                    backgroundColor: pc.latentColor,
                   }"
                 />
               </div>
@@ -212,7 +231,7 @@ const noticeMaxSent = computed(() =>
                   class="pop-bar-fill"
                   :style="{
                     width: `${Math.min(getStat(pc.key).patientRatio, 100)}%`,
-                    backgroundColor: pc.patientColor
+                    backgroundColor: pc.patientColor,
                   }"
                 />
               </div>
@@ -332,8 +351,8 @@ const noticeMaxSent = computed(() =>
             <div class="msg-sum-divider" />
             <div class="msg-sum-item">
               <span class="msg-sum-num warn">
-                {{ (messageStats.latentNoticeSent + messageStats.patientNoticeSent) -
-                   (messageStats.latentNoticeConfirmed + messageStats.patientNoticeConfirmed) }}
+                {{ (messageStats.latentNoticeSent + messageStats.patientNoticeSent)
+                  - (messageStats.latentNoticeConfirmed + messageStats.patientNoticeConfirmed) }}
               </span>
               <span class="msg-sum-label">待确认</span>
             </div>
@@ -356,9 +375,13 @@ const noticeMaxSent = computed(() =>
               >
                 {{ messageStats.referralSent }}
               </div>
-              <div class="ref-label">总发送</div>
+              <div class="ref-label">
+                总发送
+              </div>
             </div>
-            <div class="ref-arrow">→</div>
+            <div class="ref-arrow">
+              →
+            </div>
             <div class="ref-stat-item">
               <div
                 class="ref-circle"
@@ -366,9 +389,13 @@ const noticeMaxSent = computed(() =>
               >
                 {{ messageStats.referralConfirmed }}
               </div>
-              <div class="ref-label">已接收</div>
+              <div class="ref-label">
+                已接收
+              </div>
             </div>
-            <div class="ref-arrow">·</div>
+            <div class="ref-arrow">
+              ·
+            </div>
             <div class="ref-stat-item">
               <div
                 class="ref-circle"
@@ -376,7 +403,9 @@ const noticeMaxSent = computed(() =>
               >
                 {{ messageStats.referralRejected }}
               </div>
-              <div class="ref-label">已拒绝</div>
+              <div class="ref-label">
+                已拒绝
+              </div>
             </div>
           </div>
 
@@ -532,7 +561,9 @@ const noticeMaxSent = computed(() =>
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
     transform: translateY(-2px);
@@ -590,7 +621,9 @@ const noticeMaxSent = computed(() =>
   margin-bottom: 20px;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
     transform: translateY(-2px);
@@ -778,9 +811,20 @@ const noticeMaxSent = computed(() =>
     font-size: 13px;
   }
 
-  .msg-num { color: var(--el-text-color-primary); font-size: 14px; font-weight: 700 }
-  .msg-confirmed { color: #67c23a; font-size: 14px; font-weight: 700 }
-  .msg-ratio { color: var(--el-color-primary); font-size: 13px; }
+  .msg-num {
+    color: var(--el-text-color-primary);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .msg-confirmed {
+    color: #67c23a;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .msg-ratio {
+    color: var(--el-color-primary);
+    font-size: 13px;
+  }
 }
 
 .msg-bar-bg {
@@ -814,8 +858,12 @@ const noticeMaxSent = computed(() =>
     font-size: 24px;
     font-weight: 700;
     color: var(--el-text-color-primary);
-    &.success { color: #67c23a }
-    &.warn { color: #e6a23c }
+    &.success {
+      color: #67c23a;
+    }
+    &.warn {
+      color: #e6a23c;
+    }
   }
   .msg-sum-label {
     display: block;
@@ -885,7 +933,9 @@ const noticeMaxSent = computed(() =>
   .ref-progress-val {
     font-weight: 600;
     color: var(--el-color-primary);
-    &.warn { color: #f56c6c }
+    &.warn {
+      color: #f56c6c;
+    }
   }
 }
 
@@ -900,6 +950,8 @@ const noticeMaxSent = computed(() =>
   font-size: 13px;
   color: #e6a23c;
 
-  .el-icon { font-size: 14px }
+  .el-icon {
+    font-size: 14px;
+  }
 }
 </style>

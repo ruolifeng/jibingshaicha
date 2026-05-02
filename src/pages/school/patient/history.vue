@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import { usePagination } from "@@/composables/usePagination"
-import { getPatientHistoryApi, getPatientHistoryStatsApi } from "./apis"
-import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import { usePagination } from "@@/composables/usePagination"
+import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
+import { getPatientHistoryApi, getPatientHistoryStatsApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -43,7 +43,9 @@ async function fetchData() {
   }
 }
 
-onMounted(() => { fetchStats() })
+onMounted(() => {
+  fetchStats()
+})
 
 function handleSearch() {
   paginationData.currentPage = 1
@@ -63,7 +65,10 @@ const screeningDetailVisible = ref(false)
 const screeningDetailData = ref<any>(null)
 
 async function viewScreeningDetail(row: any) {
-  if (!row.screeningId) { ElMessage.info("暂无筛查原始数据"); return }
+  if (!row.screeningId) {
+    ElMessage.info("暂无筛查原始数据")
+    return
+  }
   try {
     const { data } = await getScreeningSchoolDetailApi(row.screeningId)
     if (data) {
@@ -110,8 +115,12 @@ watch(
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -160,7 +169,9 @@ watch(
         <el-table-column prop="createTime" label="创建时间" />
         <el-table-column label="操作" fixed="right" width="100">
           <template #default="{ row }">
-            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
+            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
+              查看详情
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -183,6 +194,10 @@ watch(
 </template>
 
 <style lang="scss" scoped>
-.mb-4 { margin-bottom: 16px; }
-.mt-4 { margin-top: 16px; }
+.mb-4 {
+  margin-bottom: 16px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
 </style>

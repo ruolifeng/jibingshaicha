@@ -38,11 +38,15 @@ function handleChange(uploadFile: any) {
     :loading="loading"
   >
     <el-button type="primary">
-      <el-icon class="mr-1"><Upload /></el-icon>
+      <el-icon class="mr-1">
+        <Upload />
+      </el-icon>
       上传 Excel
     </el-button>
     <template #tip>
-      <div class="el-upload__tip">{{ props.tip }}</div>
+      <div class="el-upload__tip">
+        {{ props.tip }}
+      </div>
     </template>
   </el-upload>
 </template>

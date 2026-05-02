@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { getLevel5UsersApi } from "@@/apis/users"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
 /**
  * 密接人群 — 潜伏感染者管理
  *
@@ -14,30 +16,40 @@
  */
 import { usePagination } from "@@/composables/usePagination"
 import {
-  TREATMENT_PLAN_OPTIONS,
-  SUPERVISION_CATEGORY_OPTIONS, SUPERVISION_METHOD_OPTIONS,
-  INTERRUPT_MEDICATION_OPTIONS, SUPERVISION_MANAGER_TYPE_OPTIONS,
-  INFECTION_METHOD_OPTIONS, CHEST_XRAY_RESULT_OPTIONS, NOTICE_STATUS_MAP
+  CHEST_XRAY_RESULT_OPTIONS,
+  INFECTION_METHOD_OPTIONS,
+  INTERRUPT_MEDICATION_OPTIONS,
+  NOTICE_STATUS_MAP,
+  SUPERVISION_CATEGORY_OPTIONS,
+  SUPERVISION_MANAGER_TYPE_OPTIONS,
+  SUPERVISION_METHOD_OPTIONS,
+  TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
+import { getToken } from "@@/utils/cache/cookies"
 import {
+  confirmTreatmentApi,
   getScreeningCloseContactListApi,
-  setExpectedEndDateApi, confirmTreatmentApi, submitThreeMonthCheckApi,
+  setExpectedEndDateApi,
+  submitThreeMonthCheckApi,
   updateScreeningCloseContactApi
 } from "@/pages/close-contact/screening/apis"
 import {
-  saveSupervisionApi, getSupervisionDetailApi,
-  sendNoticeApi, confirmNoticeApi, getNoticeListByBizApi
+  confirmNoticeApi,
+  getNoticeListByBizApi,
+  getSupervisionDetailApi,
+  saveSupervisionApi,
+  sendNoticeApi
 } from "@/pages/school/latent/apis"
-import { getLevel5UsersApi } from "@@/apis/users"
-import { getToken } from "@@/utils/cache/cookies"
 import { useUserStore } from "@/pinia/stores/user"
-import ReferralDialog from "@@/components/ReferralDialog.vue"
 
 const userStore = useUserStore()
 const level5Users = ref<any[]>([])
 
 onMounted(async () => {
-  try { const { data } = await getLevel5UsersApi(); level5Users.value = data || [] } catch { /* ignore */ }
+  try {
+    const { data } = await getLevel5UsersApi()
+    level5Users.value = data || []
+  } catch { /* ignore */ }
 })
 
 // ==================== 分级诊疗 ====================
@@ -67,7 +79,7 @@ const TAB_RESULT_MAP: Record<string, string> = {
 }
 
 /** ccStatus 描述 */
-const CC_STATUS_MAP: Record<number, { label: string; type: string }> = {
+const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
   2: { label: "管理中", type: "warning" },
   3: { label: "已归档", type: "success" },
   4: { label: "随访监测中", type: "warning" },
@@ -96,11 +108,20 @@ async function fetchData() {
     })
     tableData.value = data.records
     total.value = data.total
-  } finally { loading.value = false }
+  } finally {
+    loading.value = false
+  }
 }
 
-function handleSearch() { paginationData.currentPage = 1; fetchData() }
-function handleReset() { searchForm.name = ""; searchForm.idNumber = ""; handleSearch() }
+function handleSearch() {
+  paginationData.currentPage = 1
+  fetchData()
+}
+function handleReset() {
+  searchForm.name = ""
+  searchForm.idNumber = ""
+  handleSearch()
+}
 
 watch([activeTab, () => paginationData.currentPage, () => paginationData.pageSize], fetchData, { immediate: true })
 
@@ -130,7 +151,9 @@ async function handleTreatmentDecision() {
     ElMessage.success("已保存预防治疗决策")
     treatmentDecisionVisible.value = false
     fetchData()
-  } catch { /* handled */ } finally { submitting.value = false }
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 设置预计完成时间 ====================
@@ -145,14 +168,19 @@ function openExpectedDateDialog(row: any) {
 }
 
 async function handleSaveExpectedDate() {
-  if (!expectedDateValue.value) { ElMessage.warning("请选择预计完成时间"); return }
+  if (!expectedDateValue.value) {
+    ElMessage.warning("请选择预计完成时间")
+    return
+  }
   submitting.value = true
   try {
     await setExpectedEndDateApi(expectedDateRow.value.id, expectedDateValue.value)
     ElMessage.success("预计完成时间已设置")
     expectedDateVisible.value = false
     fetchData()
-  } catch { /* handled */ } finally { submitting.value = false }
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 确认治疗完成/未完成 ====================
@@ -171,7 +199,9 @@ async function handleConfirmTreatment(done: boolean) {
     ElMessage.success(done ? "已标记完成，数据已归档" : "已标记未完成，进入随访监测")
     confirmTreatmentVisible.value = false
     fetchData()
-  } catch { /* handled */ } finally { submitting.value = false }
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 督导表 ====================
@@ -179,7 +209,7 @@ const supervisionDialogVisible = ref(false)
 const supervisionRow = ref<any>(null)
 
 /** 附件上传列表 */
-const attachmentFileList = ref<{ name: string; url: string }[]>([])
+const attachmentFileList = ref<{ name: string, url: string }[]>([])
 const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
@@ -200,7 +230,7 @@ function handleAttachmentSuccess(response: any, uploadFile: any) {
 }
 
 function handleAttachmentRemove(uploadFile: { name: string }) {
-  attachmentFileList.value = attachmentFileList.value.filter((f: { name: string; url: string }) => f.name !== uploadFile.name)
+  attachmentFileList.value = attachmentFileList.value.filter((f: { name: string, url: string }) => f.name !== uploadFile.name)
 }
 
 function handleAttachmentError() {
@@ -216,12 +246,24 @@ function getAttachmentLabel(url: string, index: number | string): string {
 }
 
 const supervisionForm = reactive({
-  category: "", gender: "", age: null as number | null, phone: "", currentAddress: "",
-  treatmentStartDate: "", treatmentEndDate: "", treatmentPlan: "",
-  supervisionRecords: [] as { time: string; content: string; method: string; remark: string }[],
-  interruptMedication: "", interruptCount: null as number | null,
-  totalDoses: null as number | null, actualDoses: null as number | null,
-  medicationRate: "", managerType: "", managerName: "", remark: "", attachmentUrls: ""
+  category: "",
+  gender: "",
+  age: null as number | null,
+  phone: "",
+  currentAddress: "",
+  treatmentStartDate: "",
+  treatmentEndDate: "",
+  treatmentPlan: "",
+  supervisionRecords: [] as { time: string, content: string, method: string, remark: string }[],
+  interruptMedication: "",
+  interruptCount: null as number | null,
+  totalDoses: null as number | null,
+  actualDoses: null as number | null,
+  medicationRate: "",
+  managerType: "",
+  managerName: "",
+  remark: "",
+  attachmentUrls: ""
 })
 
 function openSupervisionDialog(row: any) {
@@ -254,9 +296,9 @@ async function handleSaveSupervision() {
   try {
     let rate = supervisionForm.medicationRate
     if (!rate && supervisionForm.totalDoses && supervisionForm.actualDoses !== null) {
-      rate = ((supervisionForm.actualDoses / supervisionForm.totalDoses) * 100).toFixed(1) + "%"
+      rate = `${((supervisionForm.actualDoses / supervisionForm.totalDoses) * 100).toFixed(1)}%`
     }
-    const attachmentUrls = attachmentFileList.value.map((f: { name: string; url: string }) => f.url).join(",")
+    const attachmentUrls = attachmentFileList.value.map((f: { name: string, url: string }) => f.url).join(",")
     // 密接潜伏感染者的督导表关联到 screening_close_contact.id（作为 latentInfectionId 存入）
     await saveSupervisionApi({
       latentInfectionId: supervisionRow.value.id,
@@ -285,7 +327,9 @@ async function handleSaveSupervision() {
     ElMessage.success("督导表保存成功")
     supervisionDialogVisible.value = false
     fetchData()
-  } catch { /* handled */ } finally { submitting.value = false }
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 
 const supervisionDetailVisible = ref(false)
@@ -294,8 +338,12 @@ const supervisionDetailData = ref<any>(null)
 async function viewSupervision(row: any) {
   try {
     const { data } = await getSupervisionDetailApi(row.id)
-    if (data) { supervisionDetailData.value = data; supervisionDetailVisible.value = true }
-    else ElMessage.info("暂无督导表")
+    if (data) {
+      supervisionDetailData.value = data
+      supervisionDetailVisible.value = true
+    } else {
+      ElMessage.info("暂无督导表")
+    }
   } catch { /* handled */ }
 }
 
@@ -303,12 +351,23 @@ async function viewSupervision(row: any) {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const noticeForm = reactive({
-  idNumber: "", gender: "", birthDate: "", age: null as number | null,
-  ethnicity: "", phone: "", crowdCategory: "密接",
-  currentAddress: "", householdAddress: "",
-  infectionDate: "", infectionMethod: "", infectionResultValue: "",
-  chestXrayDate: "", chestXrayResult: "",
-  treatmentPlan: "", treatmentInstitution: "", issuedTime: "",
+  idNumber: "",
+  gender: "",
+  birthDate: "",
+  age: null as number | null,
+  ethnicity: "",
+  phone: "",
+  crowdCategory: "密接",
+  currentAddress: "",
+  householdAddress: "",
+  infectionDate: "",
+  infectionMethod: "",
+  infectionResultValue: "",
+  chestXrayDate: "",
+  chestXrayResult: "",
+  treatmentPlan: "",
+  treatmentInstitution: "",
+  issuedTime: "",
   receiverOrgId: undefined as number | undefined
 })
 
@@ -320,17 +379,24 @@ function getNowDateStr() {
 function openNoticeDialog(row: any) {
   noticeRow.value = row
   Object.assign(noticeForm, {
-    idNumber: row.idNumber || "", gender: row.gender || "",
-    birthDate: row.birthDate || "", age: row.age || null, phone: row.phone || "",
-    ethnicity: row.ethnicity || "", crowdCategory: "密接",
-    currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
+    idNumber: row.idNumber || "",
+    gender: row.gender || "",
+    birthDate: row.birthDate || "",
+    age: row.age || null,
+    phone: row.phone || "",
+    ethnicity: row.ethnicity || "",
+    crowdCategory: "密接",
+    currentAddress: row.currentAddress || "",
+    householdAddress: row.householdAddress || "",
     infectionDate: row.infectionCheckDate || "",
     infectionMethod: row.infectionCheckMethod || "",
     infectionResultValue: row.infectionCheckResult || "",
     chestXrayDate: row.imagingDate || "",
     chestXrayResult: row.imagingResult || "",
     treatmentPlan: row.preventivePlan || "",
-    treatmentInstitution: "", issuedTime: getNowDateStr(), receiverOrgId: undefined
+    treatmentInstitution: "",
+    issuedTime: getNowDateStr(),
+    receiverOrgId: undefined
   })
   noticeDialogVisible.value = true
 }
@@ -341,14 +407,19 @@ async function handleSendNotice() {
   try {
     noticeForm.issuedTime = getNowDateStr()
     await sendNoticeApi({
-      noticeType: "latent", populationType: "closeContact",
-      bizId: noticeRow.value.id, patientName: noticeRow.value.name,
-      ...noticeForm, senderId: userStore.userId
+      noticeType: "latent",
+      populationType: "closeContact",
+      bizId: noticeRow.value.id,
+      patientName: noticeRow.value.name,
+      ...noticeForm,
+      senderId: userStore.userId
     })
     ElMessage.success("通知单发送成功")
     noticeDialogVisible.value = false
     fetchData()
-  } catch { /* handled */ } finally { submitting.value = false }
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 
 const noticeDetailVisible = ref(false)
@@ -357,8 +428,12 @@ const noticeDetailData = ref<any>(null)
 async function viewNotice(row: any) {
   try {
     const { data } = await getNoticeListByBizApi(row.id, "latent")
-    if (data?.length) { noticeDetailData.value = data[0]; noticeDetailVisible.value = true }
-    else ElMessage.info("暂无通知单")
+    if (data?.length) {
+      noticeDetailData.value = data[0]
+      noticeDetailVisible.value = true
+    } else {
+      ElMessage.info("暂无通知单")
+    }
   } catch { /* handled */ }
 }
 
@@ -392,7 +467,10 @@ function openThreeMonthCheck(row: any) {
 }
 
 async function handleSubmitThreeMonthCheck() {
-  if (!threeMonthForm.checkDate) { ElMessage.warning("请选择复查日期"); return }
+  if (!threeMonthForm.checkDate) {
+    ElMessage.warning("请选择复查日期")
+    return
+  }
   submitting.value = true
   try {
     await submitThreeMonthCheckApi(threeMonthCheckRow.value.id, {
@@ -407,7 +485,9 @@ async function handleSubmitThreeMonthCheck() {
     )
     threeMonthCheckVisible.value = false
     fetchData()
-  } catch { /* handled */ } finally { submitting.value = false }
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 随访监测详情 ====================
@@ -468,8 +548,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -532,7 +616,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-button>
 
             <!-- 查看通知单 -->
-            <el-button type="info" size="small" @click="viewNotice(row)">查看通知单</el-button>
+            <el-button type="info" size="small" @click="viewNotice(row)">
+              查看通知单
+            </el-button>
 
             <!-- 步骤3: 填写督导表（已开展预防治疗） -->
             <el-button
@@ -545,7 +631,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-button>
 
             <!-- 查看督导表 -->
-            <el-button type="info" size="small" @click="viewSupervision(row)">查看督导表</el-button>
+            <el-button type="info" size="small" @click="viewSupervision(row)">
+              查看督导表
+            </el-button>
 
             <!-- 步骤4: 设置预计完成时间 -->
             <el-button
@@ -576,14 +664,18 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             >
               查看随访详情
             </el-button>
-            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
+              分级诊疗
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
       <div class="mt-4 flex justify-end">
-        <el-pagination v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
+        <el-pagination
+          v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
           :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange" @size-change="handleSizeChange" />
+          @current-change="handleCurrentChange" @size-change="handleSizeChange"
+        />
       </div>
     </el-card>
 
@@ -600,7 +692,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-table-column label="6月随访">
           <template #default="{ row }">
             <div>
-              <div class="text-xs text-gray-400">到期：{{ row.followup6DueDate || '—' }}</div>
+              <div class="text-xs text-gray-400">
+                到期：{{ row.followup6DueDate || '—' }}
+              </div>
               <el-tag v-if="row.followup6Result" :type="tagType(getFollowupTag(row.followup6Result))" size="small">
                 {{ row.followup6Result }}
               </el-tag>
@@ -611,7 +705,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-table-column label="12月随访">
           <template #default="{ row }">
             <div>
-              <div class="text-xs text-gray-400">到期：{{ row.followup12DueDate || '—' }}</div>
+              <div class="text-xs text-gray-400">
+                到期：{{ row.followup12DueDate || '—' }}
+              </div>
               <el-tag v-if="row.followup12Result" :type="tagType(getFollowupTag(row.followup12Result))" size="small">
                 {{ row.followup12Result }}
               </el-tag>
@@ -622,7 +718,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-table-column label="24月随访">
           <template #default="{ row }">
             <div>
-              <div class="text-xs text-gray-400">到期：{{ row.followup24DueDate || '—' }}</div>
+              <div class="text-xs text-gray-400">
+                到期：{{ row.followup24DueDate || '—' }}
+              </div>
               <el-tag v-if="row.followup24Result" :type="tagType(getFollowupTag(row.followup24Result))" size="small">
                 {{ row.followup24Result }}
               </el-tag>
@@ -641,14 +739,18 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         </el-table-column>
         <el-table-column label="操作" fixed="right" width="120">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="viewFollowupDetail(row)">查看详情</el-button>
+            <el-button type="primary" link size="small" @click="viewFollowupDetail(row)">
+              查看详情
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
       <div class="mt-4 flex justify-end">
-        <el-pagination v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
+        <el-pagination
+          v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
           :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange" @size-change="handleSizeChange" />
+          @current-change="handleCurrentChange" @size-change="handleSizeChange"
+        />
       </div>
     </el-card>
 
@@ -667,12 +769,16 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-table-column label="3月复查">
           <template #default="{ row }">
             <div v-if="row.threeMonthCheckDate">
-              <div class="text-xs text-gray-400">复查日期：{{ row.threeMonthCheckDate }}</div>
+              <div class="text-xs text-gray-400">
+                复查日期：{{ row.threeMonthCheckDate }}
+              </div>
               <el-tag :type="row.threeMonthFinalResult === '阴性' ? 'success' : 'danger'" size="small">
                 {{ row.threeMonthFinalResult }}
               </el-tag>
             </div>
-            <el-button v-else type="primary" size="small" @click="openThreeMonthCheck(row)">录入3月复查</el-button>
+            <el-button v-else type="primary" size="small" @click="openThreeMonthCheck(row)">
+              录入3月复查
+            </el-button>
           </template>
         </el-table-column>
         <el-table-column label="流程状态">
@@ -693,14 +799,18 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             >
               修改3月复查
             </el-button>
-            <el-button v-else type="primary" link size="small" @click="openThreeMonthCheck(row)">录入3月复查</el-button>
+            <el-button v-else type="primary" link size="small" @click="openThreeMonthCheck(row)">
+              录入3月复查
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
       <div class="mt-4 flex justify-end">
-        <el-pagination v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
+        <el-pagination
+          v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
           :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange" @size-change="handleSizeChange" />
+          @current-change="handleCurrentChange" @size-change="handleSizeChange"
+        />
       </div>
     </el-card>
 
@@ -720,8 +830,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
       <el-form label-width="120px">
         <el-form-item label="是否开展预防治疗">
           <el-radio-group v-model="treatmentDecision">
-            <el-radio value="开展">是（开展预防性治疗）</el-radio>
-            <el-radio value="未开展">否（不开展）</el-radio>
+            <el-radio value="开展">
+              是（开展预防性治疗）
+            </el-radio>
+            <el-radio value="未开展">
+              否（不开展）
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-alert
@@ -734,8 +848,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         />
       </el-form>
       <template #footer>
-        <el-button @click="treatmentDecisionVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleTreatmentDecision">确认</el-button>
+        <el-button @click="treatmentDecisionVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleTreatmentDecision">
+          确认
+        </el-button>
       </template>
     </el-dialog>
 
@@ -748,8 +866,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-alert title="到达该日期时，系统将提醒操作人员确认治疗是否完成" type="info" :closable="false" show-icon class="mt-2" />
       </el-form>
       <template #footer>
-        <el-button @click="expectedDateVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveExpectedDate">确定</el-button>
+        <el-button @click="expectedDateVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveExpectedDate">
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
@@ -762,7 +884,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         show-icon
         class="mb-4"
       />
-      <p class="text-center text-base mb-4">请确认该患者是否已完成预防性治疗？</p>
+      <p class="text-center text-base mb-4">
+        请确认该患者是否已完成预防性治疗？
+      </p>
       <div class="flex gap-4 justify-center">
         <el-button type="success" :loading="submitting" @click="handleConfirmTreatment(true)">
           ✓ 已完成（归档）
@@ -772,17 +896,23 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         </el-button>
       </div>
       <template #footer>
-        <el-button @click="confirmTreatmentVisible = false">稍后处理</el-button>
+        <el-button @click="confirmTreatmentVisible = false">
+          稍后处理
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- ==================== 弹窗：填写督导表 ==================== -->
     <el-dialog v-model="supervisionDialogVisible" title="填写预防性治疗督导表" width="960px">
       <el-form :model="supervisionForm" label-width="140px">
-        <el-divider content-position="left">基本信息</el-divider>
+        <el-divider content-position="left">
+          基本信息
+        </el-divider>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="姓名"><el-input :value="supervisionRow?.name" disabled /></el-form-item>
+            <el-form-item label="姓名">
+              <el-input :value="supervisionRow?.name" disabled />
+            </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="类别">
@@ -801,14 +931,22 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="年龄"><el-input-number v-model="supervisionForm.age" :min="0" :max="150" style="width:100%" /></el-form-item>
+            <el-form-item label="年龄">
+              <el-input-number v-model="supervisionForm.age" :min="0" :max="150" style="width:100%" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="电话号码"><el-input v-model="supervisionForm.phone" /></el-form-item>
+            <el-form-item label="电话号码">
+              <el-input v-model="supervisionForm.phone" />
+            </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="现住址"><el-input v-model="supervisionForm.currentAddress" /></el-form-item>
-        <el-divider content-position="left">治疗方案</el-divider>
+        <el-form-item label="现住址">
+          <el-input v-model="supervisionForm.currentAddress" />
+        </el-form-item>
+        <el-divider content-position="left">
+          治疗方案
+        </el-divider>
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="开始治疗时间">
@@ -823,7 +961,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-form-item>
           </el-col>
         </el-row>
-        <el-divider content-position="left">督导记录</el-divider>
+        <el-divider content-position="left">
+          督导记录
+        </el-divider>
         <div v-for="(record, index) in supervisionForm.supervisionRecords" :key="index" class="mb-3 border rounded p-3">
           <el-row :gutter="8">
             <el-col :span="8">
@@ -839,8 +979,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
               </el-form-item>
             </el-col>
             <el-col :span="8" class="flex items-center justify-end">
-              <el-button v-if="supervisionForm.supervisionRecords.length > 1" type="danger" link size="small"
-                @click="supervisionForm.supervisionRecords.splice(index, 1)">删除</el-button>
+              <el-button
+                v-if="supervisionForm.supervisionRecords.length > 1" type="danger" link size="small"
+                @click="supervisionForm.supervisionRecords.splice(index, 1)"
+              >
+                删除
+              </el-button>
             </el-col>
           </el-row>
           <el-form-item label="督导内容" label-width="90px">
@@ -851,36 +995,58 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
           </el-form-item>
         </div>
         <div class="mb-4">
-          <el-button type="primary" link
-            @click="supervisionForm.supervisionRecords.push({ time: '', content: '', method: '', remark: '' })">
+          <el-button
+            type="primary" link
+            @click="supervisionForm.supervisionRecords.push({ time: '', content: '', method: '', remark: '' })"
+          >
             + 添加督导记录
           </el-button>
         </div>
-        <el-divider content-position="left">全疗程评价</el-divider>
+        <el-divider content-position="left">
+          全疗程评价
+        </el-divider>
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="中断用药">
               <el-radio-group v-model="supervisionForm.interruptMedication">
-                <el-radio v-for="item in INTERRUPT_MEDICATION_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</el-radio>
+                <el-radio v-for="item in INTERRUPT_MEDICATION_OPTIONS" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="中断次数">
-              <el-input-number v-model="supervisionForm.interruptCount" :min="0"
-                :disabled="supervisionForm.interruptMedication !== '有'" style="width: 100%" />
+              <el-input-number
+                v-model="supervisionForm.interruptCount" :min="0"
+                :disabled="supervisionForm.interruptMedication !== '有'" style="width: 100%"
+              />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="12">
-          <el-col :span="8"><el-form-item label="全程应用药次数"><el-input-number v-model="supervisionForm.totalDoses" :min="0" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="实际用药次数"><el-input-number v-model="supervisionForm.actualDoses" :min="0" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="用药率"><el-input v-model="supervisionForm.medicationRate" placeholder="自动计算或手动填写" /></el-form-item></el-col>
+          <el-col :span="8">
+            <el-form-item label="全程应用药次数">
+              <el-input-number v-model="supervisionForm.totalDoses" :min="0" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="实际用药次数">
+              <el-input-number v-model="supervisionForm.actualDoses" :min="0" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="用药率">
+              <el-input v-model="supervisionForm.medicationRate" placeholder="自动计算或手动填写" />
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-form-item label="结束疗程时间">
           <el-date-picker v-model="supervisionForm.treatmentEndDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
-        <el-divider content-position="left">督导管理人员</el-divider>
+        <el-divider content-position="left">
+          督导管理人员
+        </el-divider>
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="管理人员类型">
@@ -889,9 +1055,15 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="管理人员姓名"><el-input v-model="supervisionForm.managerName" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="管理人员姓名">
+              <el-input v-model="supervisionForm.managerName" />
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-form-item label="备注"><el-input v-model="supervisionForm.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="supervisionForm.remark" type="textarea" :rows="2" />
+        </el-form-item>
         <el-form-item label="附件上传">
           <el-upload
             :action="uploadAction"
@@ -904,32 +1076,56 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             multiple
           >
             <el-button type="primary" size="small">
-              <el-icon class="mr-1"><Upload /></el-icon>
+              <el-icon class="mr-1">
+                <Upload />
+              </el-icon>
               点击上传
             </el-button>
             <template #tip>
-              <div class="el-upload__tip">支持图片、PDF 等格式，单个文件不超过 20MB</div>
+              <div class="el-upload__tip">
+                支持图片、PDF 等格式，单个文件不超过 20MB
+              </div>
             </template>
           </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="supervisionDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveSupervision">保存督导表</el-button>
+        <el-button @click="supervisionDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveSupervision">
+          保存督导表
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- ==================== 弹窗：督导表详情 ==================== -->
     <el-dialog v-model="supervisionDetailVisible" title="督导表详情" width="780px">
       <el-descriptions v-if="supervisionDetailData" :column="2" border>
-        <el-descriptions-item label="姓名">{{ supervisionDetailData.patientName }}</el-descriptions-item>
-        <el-descriptions-item label="类别">{{ supervisionDetailData.category || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="性别">{{ supervisionDetailData.gender || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="年龄">{{ supervisionDetailData.age ?? "—" }}</el-descriptions-item>
-        <el-descriptions-item label="治疗方案">{{ supervisionDetailData.treatmentPlan || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="开始治疗时间">{{ supervisionDetailData.treatmentStartDate || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="结束疗程时间">{{ supervisionDetailData.treatmentEndDate || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="用药率">{{ supervisionDetailData.medicationRate || "—" }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">
+          {{ supervisionDetailData.patientName }}
+        </el-descriptions-item>
+        <el-descriptions-item label="类别">
+          {{ supervisionDetailData.category || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="性别">
+          {{ supervisionDetailData.gender || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="年龄">
+          {{ supervisionDetailData.age ?? "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗方案">
+          {{ supervisionDetailData.treatmentPlan || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="开始治疗时间">
+          {{ supervisionDetailData.treatmentStartDate || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="结束疗程时间">
+          {{ supervisionDetailData.treatmentEndDate || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="用药率">
+          {{ supervisionDetailData.medicationRate || "—" }}
+        </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <template v-if="supervisionDetailData.attachmentUrls">
             <div v-for="(url, i) in supervisionDetailData.attachmentUrls.split(',')" :key="url">
@@ -953,8 +1149,16 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
       <el-form :model="noticeForm" label-width="110px">
         <el-row :gutter="12">
-          <el-col :span="12"><el-form-item label="姓名"><el-input :value="noticeRow?.name" disabled /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="身份证"><el-input v-model="noticeForm.idNumber" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="姓名">
+              <el-input :value="noticeRow?.name" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="身份证">
+              <el-input v-model="noticeForm.idNumber" />
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row :gutter="12">
           <el-col :span="8">
@@ -964,14 +1168,32 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8"><el-form-item label="年龄"><el-input-number v-model="noticeForm.age" :min="0" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="人群分类"><el-input v-model="noticeForm.crowdCategory" /></el-form-item></el-col>
+          <el-col :span="8">
+            <el-form-item label="年龄">
+              <el-input-number v-model="noticeForm.age" :min="0" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="人群分类">
+              <el-input v-model="noticeForm.crowdCategory" />
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row :gutter="12">
-          <el-col :span="24"><el-form-item label="现居住地址"><el-input v-model="noticeForm.currentAddress" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="户籍地址"><el-input v-model="noticeForm.householdAddress" /></el-form-item></el-col>
+          <el-col :span="24">
+            <el-form-item label="现居住地址">
+              <el-input v-model="noticeForm.currentAddress" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="户籍地址">
+              <el-input v-model="noticeForm.householdAddress" />
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-divider content-position="left">感染检查</el-divider>
+        <el-divider content-position="left">
+          感染检查
+        </el-divider>
         <el-row :gutter="12">
           <el-col :span="8">
             <el-form-item label="感染检测时间">
@@ -986,10 +1208,14 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="检查结果"><el-input v-model="noticeForm.infectionResultValue" /></el-form-item>
+            <el-form-item label="检查结果">
+              <el-input v-model="noticeForm.infectionResultValue" />
+            </el-form-item>
           </el-col>
         </el-row>
-        <el-divider content-position="left">胸片检查</el-divider>
+        <el-divider content-position="left">
+          胸片检查
+        </el-divider>
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="胸片检查时间">
@@ -1004,7 +1230,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-form-item>
           </el-col>
         </el-row>
-        <el-divider content-position="left">治疗方案</el-divider>
+        <el-divider content-position="left">
+          治疗方案
+        </el-divider>
         <el-form-item label="治疗方案">
           <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
@@ -1017,31 +1245,69 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="noticeDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSendNotice">发送通知单</el-button>
+        <el-button @click="noticeDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSendNotice">
+          发送通知单
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- 通知单详情 -->
     <el-dialog v-model="noticeDetailVisible" title="潜伏感染者通知单详情" width="680px">
       <el-descriptions v-if="noticeDetailData" :column="2" border>
-        <el-descriptions-item label="姓名">{{ noticeDetailData.patientName }}</el-descriptions-item>
-        <el-descriptions-item label="身份证">{{ noticeDetailData.idNumber }}</el-descriptions-item>
-        <el-descriptions-item label="性别">{{ noticeDetailData.gender || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="年龄">{{ noticeDetailData.age ?? "—" }}</el-descriptions-item>
-        <el-descriptions-item label="民族">{{ noticeDetailData.ethnicity || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="人群分类">{{ noticeDetailData.crowdCategory }}</el-descriptions-item>
-        <el-descriptions-item label="现居住地址" :span="2">{{ noticeDetailData.currentAddress || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="户籍地址" :span="2">{{ noticeDetailData.householdAddress || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="感染检测时间">{{ noticeDetailData.infectionDate || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="检查方法">{{ noticeDetailData.infectionMethod || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="感染检查结果" :span="2">{{ noticeDetailData.infectionResultValue || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="胸片检查时间">{{ noticeDetailData.chestXrayDate || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="胸片检查结果">{{ noticeDetailData.chestXrayResult || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="治疗方案" :span="2">{{ noticeDetailData.treatmentPlan || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="治疗机构">{{ noticeDetailData.treatmentInstitution || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="下发时间">{{ noticeDetailData.issuedTime || "—" }}</el-descriptions-item>
-        <el-descriptions-item label="发送时间">{{ noticeDetailData.sentTime }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">
+          {{ noticeDetailData.patientName }}
+        </el-descriptions-item>
+        <el-descriptions-item label="身份证">
+          {{ noticeDetailData.idNumber }}
+        </el-descriptions-item>
+        <el-descriptions-item label="性别">
+          {{ noticeDetailData.gender || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="年龄">
+          {{ noticeDetailData.age ?? "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="民族">
+          {{ noticeDetailData.ethnicity || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="人群分类">
+          {{ noticeDetailData.crowdCategory }}
+        </el-descriptions-item>
+        <el-descriptions-item label="现居住地址" :span="2">
+          {{ noticeDetailData.currentAddress || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="2">
+          {{ noticeDetailData.householdAddress || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染检测时间">
+          {{ noticeDetailData.infectionDate || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="检查方法">
+          {{ noticeDetailData.infectionMethod || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染检查结果" :span="2">
+          {{ noticeDetailData.infectionResultValue || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸片检查时间">
+          {{ noticeDetailData.chestXrayDate || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸片检查结果">
+          {{ noticeDetailData.chestXrayResult || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗方案" :span="2">
+          {{ noticeDetailData.treatmentPlan || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗机构">
+          {{ noticeDetailData.treatmentInstitution || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="下发时间">
+          {{ noticeDetailData.issuedTime || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="发送时间">
+          {{ noticeDetailData.sentTime }}
+        </el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="noticeDetailData.status === 2 ? 'success' : 'warning'" size="small">
             {{ NOTICE_STATUS_MAP[noticeDetailData.status] || (noticeDetailData.status === 2 ? "已确认接收" : "待接收") }}
@@ -1056,14 +1322,18 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         >
           确认接收
         </el-button>
-        <el-button @click="noticeDetailVisible = false">关闭</el-button>
+        <el-button @click="noticeDetailVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- ==================== 弹窗：3月复查 ==================== -->
     <el-dialog v-model="threeMonthCheckVisible" title="录入3月复查感染检测结果" width="500px">
       <el-form :model="threeMonthForm" label-width="130px">
-        <el-form-item label="姓名"><el-input :value="threeMonthCheckRow?.name" disabled /></el-form-item>
+        <el-form-item label="姓名">
+          <el-input :value="threeMonthCheckRow?.name" disabled />
+        </el-form-item>
         <el-form-item label="3月复查日期">
           <el-date-picker v-model="threeMonthForm.checkDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
         </el-form-item>
@@ -1072,8 +1342,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         </el-form-item>
         <el-form-item label="最终判定">
           <el-radio-group v-model="threeMonthForm.finalResult">
-            <el-radio value="阴性">阴性（非潜伏感染者，流程结束）</el-radio>
-            <el-radio value="阳性">阳性（转入潜伏感染者管理流程）</el-radio>
+            <el-radio value="阴性">
+              阴性（非潜伏感染者，流程结束）
+            </el-radio>
+            <el-radio value="阳性">
+              阳性（转入潜伏感染者管理流程）
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-alert
@@ -1086,8 +1360,12 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         />
       </el-form>
       <template #footer>
-        <el-button @click="threeMonthCheckVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitThreeMonthCheck">提交复查结果</el-button>
+        <el-button @click="threeMonthCheckVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmitThreeMonthCheck">
+          提交复查结果
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1105,12 +1383,24 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
           </div>
           <template v-if="followupDetailRow[`followup${month}Result`]">
             <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="实际筛查日期">{{ followupDetailRow[`followup${month}ScreenDate`] || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="症状">{{ followupDetailRow[`followup${month}Symptom1`] || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="影像方法">{{ followupDetailRow[`followup${month}ImagingMethod`] || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="影像结果">{{ followupDetailRow[`followup${month}ImagingResult`] || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="病原学方法">{{ followupDetailRow[`followup${month}SputumMethod`] || '—' }}</el-descriptions-item>
-              <el-descriptions-item label="病原学结果">{{ followupDetailRow[`followup${month}SputumResult`] || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="实际筛查日期">
+                {{ followupDetailRow[`followup${month}ScreenDate`] || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="症状">
+                {{ followupDetailRow[`followup${month}Symptom1`] || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="影像方法">
+                {{ followupDetailRow[`followup${month}ImagingMethod`] || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="影像结果">
+                {{ followupDetailRow[`followup${month}ImagingResult`] || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="病原学方法">
+                {{ followupDetailRow[`followup${month}SputumMethod`] || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="病原学结果">
+                {{ followupDetailRow[`followup${month}SputumResult`] || '—' }}
+              </el-descriptions-item>
               <el-descriptions-item label="筛查结果" :span="2">
                 <el-tag :type="tagType(getFollowupTag(followupDetailRow[`followup${month}Result`]))">
                   {{ followupDetailRow[`followup${month}Result`] }}
@@ -1124,13 +1414,19 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         </el-timeline-item>
       </el-timeline>
       <template #footer>
-        <el-button @click="followupDetailVisible = false">关闭</el-button>
+        <el-button @click="followupDetailVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.text-danger { color: #f56c6c; }
-.text-success { color: #67c23a; }
+.text-danger {
+  color: #f56c6c;
+}
+.text-success {
+  color: #67c23a;
+}
 </style>

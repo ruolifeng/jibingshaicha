@@ -20,7 +20,7 @@ const permission: Directive = {
     } else if (Array.isArray(value)) {
       codes = value
     } else {
-      throw new Error("v-permission 参数必须是字符串或字符串数组")
+      throw new TypeError("v-permission 参数必须是字符串或字符串数组")
     }
 
     if (codes.length === 0) return

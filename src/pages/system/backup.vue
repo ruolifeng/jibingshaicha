@@ -3,7 +3,7 @@ import { request } from "@/http/axios"
 
 defineOptions({ name: "Backup" })
 
-const backupList = ref<Array<{ name: string; size: number; lastModified: number }>>([])
+const backupList = ref<Array<{ name: string, size: number, lastModified: number }>>([])
 const loading = ref(false)
 const downloading = ref(false)
 
@@ -47,7 +47,9 @@ function formatTime(ts: number) {
   return new Date(ts).toLocaleString("zh-CN")
 }
 
-onMounted(() => { fetchList() })
+onMounted(() => {
+  fetchList()
+})
 </script>
 
 <template>
@@ -68,10 +70,14 @@ onMounted(() => { fetchList() })
       <el-table v-loading="loading" :data="backupList" border stripe max-height="500">
         <el-table-column prop="name" label="文件名" min-width="280" />
         <el-table-column label="文件大小" width="120">
-          <template #default="{ row }">{{ formatSize(row.size) }}</template>
+          <template #default="{ row }">
+            {{ formatSize(row.size) }}
+          </template>
         </el-table-column>
         <el-table-column label="备份时间" width="200">
-          <template #default="{ row }">{{ formatTime(row.lastModified) }}</template>
+          <template #default="{ row }">
+            {{ formatTime(row.lastModified) }}
+          </template>
         </el-table-column>
       </el-table>
     </el-card>
@@ -79,5 +85,7 @@ onMounted(() => { fetchList() })
 </template>
 
 <style lang="scss" scoped>
-.mb-4 { margin-bottom: 16px; }
+.mb-4 {
+  margin-bottom: 16px;
+}
 </style>

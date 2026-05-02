@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi, deleteScreeningSchoolApi, updateScreeningSchoolApi, createScreeningSchoolApi, batchDeleteScreeningSchoolApi } from "./apis"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { usePagination } from "@@/composables/usePagination"
+import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -57,7 +57,7 @@ function openTierCare(row: any) {
 /** Excel 上传 */
 const uploadRef = ref()
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number; errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 async function handleUpload(uploadFile: any) {
@@ -201,7 +201,10 @@ async function handleDelete(row: any) {
 }
 
 async function handleBatchDelete() {
-  if (!selectedRows.value.length) { ElMessage.warning("请先勾选要删除的数据"); return }
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `确定删除选中的 ${selectedRows.value.length} 条筛查记录吗？删除后所有关联数据将一并删除，且不可恢复！`,
@@ -254,8 +257,12 @@ watch(
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -266,10 +273,18 @@ watch(
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">学校人群筛查数据</span>
           <div class="flex gap-2">
-            <el-button type="success" @click="handleCreate">新增数据</el-button>
-            <el-button @click="() => handleExport()">导出全部</el-button>
-            <el-button type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
-            <el-button type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">批量删除</el-button>
+            <el-button type="success" @click="handleCreate">
+              新增数据
+            </el-button>
+            <el-button @click="() => handleExport()">
+              导出全部
+            </el-button>
+            <el-button type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">
+              导出勾选
+            </el-button>
+            <el-button type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
+              批量删除
+            </el-button>
             <el-upload
               ref="uploadRef"
               :auto-upload="false"
@@ -277,7 +292,9 @@ watch(
               accept=".xlsx,.xls"
               :on-change="handleUpload"
             >
-              <el-button v-permission="'screening:upload'" type="primary">上传 Excel</el-button>
+              <el-button v-permission="'screening:upload'" type="primary">
+                上传 Excel
+              </el-button>
             </el-upload>
           </div>
         </div>
@@ -320,10 +337,18 @@ watch(
         <el-table-column prop="remark" label="备注" />
         <el-table-column label="操作" fixed="right" width="240">
           <template #default="{ row }">
-            <el-button type="info" link size="small" @click="viewDetail(row)">查看详情</el-button>
-            <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
-            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
+            <el-button type="info" link size="small" @click="viewDetail(row)">
+              查看详情
+            </el-button>
+            <el-button type="primary" link size="small" @click="handleEdit(row)">
+              编辑
+            </el-button>
+            <el-button type="danger" link size="small" @click="handleDelete(row)">
+              删除
+            </el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
+              分级诊疗
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -345,19 +370,29 @@ watch(
     <!-- 编辑弹窗 -->
     <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="900px" :close-on-click-modal="false">
       <el-form :model="editForm" label-width="120px" class="edit-form">
-        <el-divider content-position="left">基本信息</el-divider>
+        <el-divider content-position="left">
+          基本信息
+        </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="年份"><el-input v-model="editForm.year" /></el-form-item>
+            <el-form-item label="年份">
+              <el-input v-model="editForm.year" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="市（州）"><el-input v-model="editForm.city" /></el-form-item>
+            <el-form-item label="市（州）">
+              <el-input v-model="editForm.city" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="区县"><el-input v-model="editForm.district" /></el-form-item>
+            <el-form-item label="区县">
+              <el-input v-model="editForm.district" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="姓名"><el-input v-model="editForm.name" /></el-form-item>
+            <el-form-item label="姓名">
+              <el-input v-model="editForm.name" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="性别">
@@ -367,66 +402,106 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="出生日期"><el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+            <el-form-item label="出生日期">
+              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="年龄"><el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" /></el-form-item>
+            <el-form-item label="年龄">
+              <el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="证件类型"><el-input v-model="editForm.idType" /></el-form-item>
+            <el-form-item label="证件类型">
+              <el-input v-model="editForm.idType" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="证件号"><el-input v-model="editForm.idNumber" /></el-form-item>
+            <el-form-item label="证件号">
+              <el-input v-model="editForm.idNumber" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="民族"><el-input v-model="editForm.ethnicity" /></el-form-item>
+            <el-form-item label="民族">
+              <el-input v-model="editForm.ethnicity" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item>
+            <el-form-item label="联系电话">
+              <el-input v-model="editForm.phone" />
+            </el-form-item>
           </el-col>
           <el-col :span="16">
-            <el-form-item label="户籍地址"><el-input v-model="editForm.householdAddress" /></el-form-item>
+            <el-form-item label="户籍地址">
+              <el-input v-model="editForm.householdAddress" />
+            </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="现住址"><el-input v-model="editForm.currentAddress" /></el-form-item>
+            <el-form-item label="现住址">
+              <el-input v-model="editForm.currentAddress" />
+            </el-form-item>
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">学校信息</el-divider>
+        <el-divider content-position="left">
+          学校信息
+        </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="学校类型"><el-input v-model="editForm.schoolType" /></el-form-item>
+            <el-form-item label="学校类型">
+              <el-input v-model="editForm.schoolType" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="学校名称"><el-input v-model="editForm.schoolName" /></el-form-item>
+            <el-form-item label="学校名称">
+              <el-input v-model="editForm.schoolName" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="班级（院系）"><el-input v-model="editForm.className" /></el-form-item>
+            <el-form-item label="班级（院系）">
+              <el-input v-model="editForm.className" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="既往结核病史"><el-input v-model="editForm.tbHistory" /></el-form-item>
+            <el-form-item label="既往结核病史">
+              <el-input v-model="editForm.tbHistory" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="密切接触史"><el-input v-model="editForm.closeContactHistory" /></el-form-item>
+            <el-form-item label="密切接触史">
+              <el-input v-model="editForm.closeContactHistory" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="可疑症状"><el-input v-model="editForm.suspiciousSymptoms" /></el-form-item>
+            <el-form-item label="可疑症状">
+              <el-input v-model="editForm.suspiciousSymptoms" />
+            </el-form-item>
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">感染筛查</el-divider>
+        <el-divider content-position="left">
+          感染筛查
+        </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行感染筛"><el-input v-model="editForm.hasInfectionScreen" /></el-form-item>
+            <el-form-item label="是否进行感染筛">
+              <el-input v-model="editForm.hasInfectionScreen" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="感染筛查日期"><el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+            <el-form-item label="感染筛查日期">
+              <el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="筛查方法"><el-input v-model="editForm.screenMethod" /></el-form-item>
+            <el-form-item label="筛查方法">
+              <el-input v-model="editForm.screenMethod" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="筛查结果"><el-input v-model="editForm.screenResult" /></el-form-item>
+            <el-form-item label="筛查结果">
+              <el-input v-model="editForm.screenResult" />
+            </el-form-item>
           </el-col>
           <el-col :span="16">
             <el-form-item label="感染筛查结果">
@@ -444,69 +519,147 @@ watch(
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">胸片与诊断</el-divider>
+        <el-divider content-position="left">
+          胸片与诊断
+        </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行胸片检查"><el-input v-model="editForm.hasChestXray" /></el-form-item>
+            <el-form-item label="是否进行胸片检查">
+              <el-input v-model="editForm.hasChestXray" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="胸片检查日期"><el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+            <el-form-item label="胸片检查日期">
+              <el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="胸片结果"><el-input v-model="editForm.chestXrayResult" /></el-form-item>
+            <el-form-item label="胸片结果">
+              <el-input v-model="editForm.chestXrayResult" />
+            </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="首次诊断结果"><el-input v-model="editForm.diagnosisFirst" /></el-form-item>
+            <el-form-item label="首次诊断结果">
+              <el-input v-model="editForm.diagnosisFirst" />
+            </el-form-item>
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">备注</el-divider>
+        <el-divider content-position="left">
+          备注
+        </el-divider>
         <el-form-item label="备注">
           <el-input v-model="editForm.remark" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="editSaving" @click="handleSave">保存</el-button>
+        <el-button @click="editVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="editSaving" @click="handleSave">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} - 详情`" width="900px">
       <el-descriptions v-if="detailRow" :column="3" border>
-        <el-descriptions-item label="年份">{{ detailRow.year }}</el-descriptions-item>
-        <el-descriptions-item label="市（州）">{{ detailRow.city }}</el-descriptions-item>
-        <el-descriptions-item label="区县">{{ detailRow.district }}</el-descriptions-item>
-        <el-descriptions-item label="姓名">{{ detailRow.name }}</el-descriptions-item>
-        <el-descriptions-item label="性别">{{ detailRow.gender }}</el-descriptions-item>
-        <el-descriptions-item label="出生日期">{{ detailRow.birthDate }}</el-descriptions-item>
-        <el-descriptions-item label="年龄">{{ detailRow.age }}</el-descriptions-item>
-        <el-descriptions-item label="证件类型">{{ detailRow.idType }}</el-descriptions-item>
-        <el-descriptions-item label="证件号">{{ detailRow.idNumber }}</el-descriptions-item>
-        <el-descriptions-item label="民族">{{ detailRow.ethnicity }}</el-descriptions-item>
-        <el-descriptions-item label="联系电话">{{ detailRow.phone }}</el-descriptions-item>
-        <el-descriptions-item label="学校类型">{{ detailRow.schoolType }}</el-descriptions-item>
-        <el-descriptions-item label="学校名称">{{ detailRow.schoolName }}</el-descriptions-item>
-        <el-descriptions-item label="班级（院系）">{{ detailRow.className }}</el-descriptions-item>
-        <el-descriptions-item label="既往结核病史">{{ detailRow.tbHistory }}</el-descriptions-item>
-        <el-descriptions-item label="密切接触史">{{ detailRow.closeContactHistory }}</el-descriptions-item>
-        <el-descriptions-item label="可疑症状">{{ detailRow.suspiciousSymptoms }}</el-descriptions-item>
-        <el-descriptions-item label="是否进行感染筛">{{ detailRow.hasInfectionScreen }}</el-descriptions-item>
-        <el-descriptions-item label="感染筛查日期">{{ detailRow.screenDate }}</el-descriptions-item>
-        <el-descriptions-item label="筛查方法">{{ detailRow.screenMethod }}</el-descriptions-item>
-        <el-descriptions-item label="筛查结果">{{ detailRow.screenResult }}</el-descriptions-item>
-        <el-descriptions-item label="感染筛查结果">{{ detailRow.infectionResult }}</el-descriptions-item>
-        <el-descriptions-item label="判定结果">{{ detailRow.isLatent === 1 ? "待确诊" : "正常" }}</el-descriptions-item>
-        <el-descriptions-item label="是否进行胸片检查">{{ detailRow.hasChestXray }}</el-descriptions-item>
-        <el-descriptions-item label="胸片检查日期">{{ detailRow.chestXrayDate }}</el-descriptions-item>
-        <el-descriptions-item label="胸片结果">{{ detailRow.chestXrayResult }}</el-descriptions-item>
-        <el-descriptions-item label="首次诊断结果" :span="3">{{ detailRow.diagnosisFirst }}</el-descriptions-item>
-        <el-descriptions-item label="户籍地址" :span="3">{{ detailRow.householdAddress }}</el-descriptions-item>
-        <el-descriptions-item label="现住址" :span="3">{{ detailRow.currentAddress }}</el-descriptions-item>
-        <el-descriptions-item label="备注" :span="3">{{ detailRow.remark || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="年份">
+          {{ detailRow.year }}
+        </el-descriptions-item>
+        <el-descriptions-item label="市（州）">
+          {{ detailRow.city }}
+        </el-descriptions-item>
+        <el-descriptions-item label="区县">
+          {{ detailRow.district }}
+        </el-descriptions-item>
+        <el-descriptions-item label="姓名">
+          {{ detailRow.name }}
+        </el-descriptions-item>
+        <el-descriptions-item label="性别">
+          {{ detailRow.gender }}
+        </el-descriptions-item>
+        <el-descriptions-item label="出生日期">
+          {{ detailRow.birthDate }}
+        </el-descriptions-item>
+        <el-descriptions-item label="年龄">
+          {{ detailRow.age }}
+        </el-descriptions-item>
+        <el-descriptions-item label="证件类型">
+          {{ detailRow.idType }}
+        </el-descriptions-item>
+        <el-descriptions-item label="证件号">
+          {{ detailRow.idNumber }}
+        </el-descriptions-item>
+        <el-descriptions-item label="民族">
+          {{ detailRow.ethnicity }}
+        </el-descriptions-item>
+        <el-descriptions-item label="联系电话">
+          {{ detailRow.phone }}
+        </el-descriptions-item>
+        <el-descriptions-item label="学校类型">
+          {{ detailRow.schoolType }}
+        </el-descriptions-item>
+        <el-descriptions-item label="学校名称">
+          {{ detailRow.schoolName }}
+        </el-descriptions-item>
+        <el-descriptions-item label="班级（院系）">
+          {{ detailRow.className }}
+        </el-descriptions-item>
+        <el-descriptions-item label="既往结核病史">
+          {{ detailRow.tbHistory }}
+        </el-descriptions-item>
+        <el-descriptions-item label="密切接触史">
+          {{ detailRow.closeContactHistory }}
+        </el-descriptions-item>
+        <el-descriptions-item label="可疑症状">
+          {{ detailRow.suspiciousSymptoms }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否进行感染筛">
+          {{ detailRow.hasInfectionScreen }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染筛查日期">
+          {{ detailRow.screenDate }}
+        </el-descriptions-item>
+        <el-descriptions-item label="筛查方法">
+          {{ detailRow.screenMethod }}
+        </el-descriptions-item>
+        <el-descriptions-item label="筛查结果">
+          {{ detailRow.screenResult }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染筛查结果">
+          {{ detailRow.infectionResult }}
+        </el-descriptions-item>
+        <el-descriptions-item label="判定结果">
+          {{ detailRow.isLatent === 1 ? "待确诊" : "正常" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否进行胸片检查">
+          {{ detailRow.hasChestXray }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸片检查日期">
+          {{ detailRow.chestXrayDate }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸片结果">
+          {{ detailRow.chestXrayResult }}
+        </el-descriptions-item>
+        <el-descriptions-item label="首次诊断结果" :span="3">
+          {{ detailRow.diagnosisFirst }}
+        </el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="3">
+          {{ detailRow.householdAddress }}
+        </el-descriptions-item>
+        <el-descriptions-item label="现住址" :span="3">
+          {{ detailRow.currentAddress }}
+        </el-descriptions-item>
+        <el-descriptions-item label="备注" :span="3">
+          {{ detailRow.remark || "-" }}
+        </el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button @click="detailVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -542,14 +695,22 @@ watch(
         </el-table>
       </template>
       <template #footer>
-        <el-button type="primary" @click="importResultVisible = false">确定</el-button>
+        <el-button type="primary" @click="importResultVisible = false">
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.mb-4 { margin-bottom: 16px; }
-.mt-4 { margin-top: 16px; }
-.edit-form { padding: 0 8px; }
+.mb-4 {
+  margin-bottom: 16px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
+.edit-form {
+  padding: 0 8px;
+}
 </style>

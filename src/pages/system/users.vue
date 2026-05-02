@@ -1,8 +1,9 @@
 <script lang="ts" setup>
+import type { Department } from "@@/apis/department"
+import { getDepartmentListApi } from "@@/apis/department"
+import { createUserApi, deleteUserApi, getUserListApi, updateUserApi } from "@@/apis/users"
 import { usePagination } from "@@/composables/usePagination"
-import { ROLE_OPTIONS, ROLE_MAP } from "@@/constants/disease"
-import { getUserListApi, createUserApi, updateUserApi, deleteUserApi } from "@@/apis/users"
-import { getDepartmentListApi, type Department } from "@@/apis/department"
+import { ROLE_MAP, ROLE_OPTIONS } from "@@/constants/disease"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -37,7 +38,7 @@ async function fetchDepartments() {
 
 function getDeptName(departmentId: number | null | undefined) {
   if (!departmentId) return "-"
-  return departmentList.value.find((d) => d.id === departmentId)?.name || "-"
+  return departmentList.value.find(d => d.id === departmentId)?.name || "-"
 }
 
 function handleSearch() {
@@ -150,8 +151,12 @@ fetchDepartments()
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -160,7 +165,9 @@ fetchDepartments()
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">用户管理</span>
-          <el-button v-permission="'user:create'" type="primary" @click="openCreateDialog">新增用户</el-button>
+          <el-button v-permission="'user:create'" type="primary" @click="openCreateDialog">
+            新增用户
+          </el-button>
         </div>
       </template>
 
@@ -184,8 +191,12 @@ fetchDepartments()
         <el-table-column prop="createTime" label="创建时间" />
         <el-table-column label="操作" fixed="right" width="140">
           <template #default="{ row }">
-            <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-button v-permission="'user:delete'" type="danger" size="small" :disabled="row.role === 1" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">
+              编辑
+            </el-button>
+            <el-button v-permission="'user:delete'" type="danger" size="small" :disabled="row.role === 1" @click="handleDelete(row)">
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -241,14 +252,22 @@ fetchDepartments()
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确认</el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSubmit">
+          确认
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.mb-4 { margin-bottom: 16px; }
-.mt-4 { margin-top: 16px; }
+.mb-4 {
+  margin-bottom: 16px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
 </style>

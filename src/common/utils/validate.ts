@@ -17,14 +17,14 @@ export function isExternal(path: string) {
 /** 18位身份证校验（格式 + 校验位） */
 export function validateIdCard(id: string): boolean {
   if (!id || id.length !== 18) return false
-  const reg = /^\d{17}[\dXx]$/
+  const reg = /^\d{17}[\dX]$/i
   if (!reg.test(id)) return false
   // 加权因子
   const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
   const checkCodes = ["1", "0", "X", "9", "8", "7", "6", "5", "4", "3", "2"]
   let sum = 0
   for (let i = 0; i < 17; i++) {
-    sum += parseInt(id[i]) * weights[i]
+    sum += Number.parseInt(id[i]) * weights[i]
   }
   return checkCodes[sum % 11] === id[17].toUpperCase()
 }

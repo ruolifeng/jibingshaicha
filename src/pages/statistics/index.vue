@@ -1,8 +1,14 @@
 <script lang="ts" setup>
 import { ArrowDown } from "@element-plus/icons-vue"
 import {
-  getSchoolStatisticsApi, getDistrictStatisticsApi, exportSchoolStatisticsApi, exportDistrictStatisticsApi,
-  getDistrictOptionsApi, exportWideTableApi, exportCategoryTableApi, exportCustomApi
+  exportCategoryTableApi,
+  exportCustomApi,
+  exportDistrictStatisticsApi,
+  exportSchoolStatisticsApi,
+  exportWideTableApi,
+  getDistrictOptionsApi,
+  getDistrictStatisticsApi,
+  getSchoolStatisticsApi
 } from "./apis"
 
 defineOptions({ name: "Statistics" })
@@ -116,7 +122,9 @@ async function handleExportWide() {
     const data = await exportWideTableApi(filterForm.year)
     downloadBlob(data as unknown as Blob, `大汇总表_${filterForm.year}.xlsx`)
     ElMessage.success("导出成功")
-  } catch { ElMessage.error("导出失败") }
+  } catch {
+    ElMessage.error("导出失败")
+  }
 }
 
 const categoryPopType = ref("school")
@@ -131,7 +139,9 @@ async function handleExportCategory() {
     const label = categoryPopOptions.find(o => o.value === categoryPopType.value)?.label || "人群"
     downloadBlob(data as unknown as Blob, `${label}汇总表_${filterForm.year}.xlsx`)
     ElMessage.success("导出成功")
-  } catch { ElMessage.error("导出失败") }
+  } catch {
+    ElMessage.error("导出失败")
+  }
 }
 
 // 自定义字段选择
@@ -162,7 +172,9 @@ async function handleExportCustom() {
     downloadBlob(data as unknown as Blob, `自定义导出_${filterForm.year}.xlsx`)
     customDialogVisible.value = false
     ElMessage.success("导出成功")
-  } catch { ElMessage.error("导出失败") }
+  } catch {
+    ElMessage.error("导出失败")
+  }
 }
 
 // ==================== Tab 切换时自动加载数据 ====================
@@ -196,24 +208,34 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            查询
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
         <el-form-item>
           <el-dropdown>
             <el-button type="warning">
-              高级导出 <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              高级导出 <el-icon class="el-icon--right">
+                <ArrowDown />
+              </el-icon>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="handleExportWide">大汇总表（三类合并）</el-dropdown-item>
+                <el-dropdown-item @click="handleExportWide">
+                  大汇总表（三类合并）
+                </el-dropdown-item>
                 <el-dropdown-item divided>
                   <span style="font-size:12px;color:#909399">分类汇总：</span>
                 </el-dropdown-item>
                 <el-dropdown-item v-for="opt in categoryPopOptions" :key="opt.value" @click="categoryPopType = opt.value; handleExportCategory()">
                   {{ opt.label }}
                 </el-dropdown-item>
-                <el-dropdown-item divided @click="customDialogVisible = true">自定义字段导出</el-dropdown-item>
+                <el-dropdown-item divided @click="customDialogVisible = true">
+                  自定义字段导出
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -227,7 +249,9 @@ onMounted(() => {
         <!-- 学校人群统计总表 -->
         <el-tab-pane label="辖区教育机构统计总表" name="school">
           <div class="mb-3 flex justify-end">
-            <el-button type="success" v-permission="'statistics:export'" @click="handleExportSchool">导出 Excel</el-button>
+            <el-button type="success" v-permission="'statistics:export'" @click="handleExportSchool">
+              导出 Excel
+            </el-button>
           </div>
           <el-table v-loading="schoolLoading" :data="schoolData" border stripe max-height="600" show-summary>
             <el-table-column prop="district" label="区县" fixed />
@@ -255,7 +279,9 @@ onMounted(() => {
         <!-- 区县统计表 -->
         <el-tab-pane label="区县统计表" name="district">
           <div class="mb-3 flex justify-end">
-            <el-button type="success" v-permission="'statistics:export'" @click="handleExportDistrict">导出 Excel</el-button>
+            <el-button type="success" v-permission="'statistics:export'" @click="handleExportDistrict">
+              导出 Excel
+            </el-button>
           </div>
           <el-table v-loading="districtLoading" :data="districtData" border stripe max-height="600" show-summary>
             <el-table-column prop="district" label="区/县" fixed />
@@ -291,22 +317,32 @@ onMounted(() => {
         <el-form-item label="选择字段">
           <el-checkbox-group v-model="selectedCustomFields">
             <div class="field-grid">
-              <el-checkbox v-for="f in CUSTOM_FIELD_OPTIONS" :key="f.value" :label="f.value">{{ f.label }}</el-checkbox>
+              <el-checkbox v-for="f in CUSTOM_FIELD_OPTIONS" :key="f.value" :label="f.value">
+                {{ f.label }}
+              </el-checkbox>
             </div>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="customDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleExportCustom">导出</el-button>
+        <el-button @click="customDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleExportCustom">
+          导出
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.mb-3 { margin-bottom: 12px; }
-.mb-4 { margin-bottom: 16px; }
+.mb-3 {
+  margin-bottom: 12px;
+}
+.mb-4 {
+  margin-bottom: 16px;
+}
 
 .field-grid {
   display: grid;

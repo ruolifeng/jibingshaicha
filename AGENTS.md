@@ -18,6 +18,7 @@
 ### 业务主线（共用逻辑）
 
 三条人群主线的追踪后逻辑高度共用：
+
 1. 筛查导入 → 感染筛查阴性 → **结束归档**
 2. 感染筛查阳性 → **追踪** → 系统选择（其他 / 未到位 / 到位）
 3. 到位 → 上传胸片 → 转诊 → 诊断五分类：
@@ -35,36 +36,36 @@
 
 ### 前端（根目录）
 
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| Vue | 3.5.17 | 框架，使用 Composition API + `<script setup>` |
-| TypeScript | 5.8.3 | 类型系统，`strict` 模式开启 |
-| Vite | 7.0.4 | 构建工具 |
-| Vue Router | 4.5.1 | 路由（默认 hash 模式，可切换 html5） |
-| Pinia | 3.0.3 | 状态管理 |
-| Element Plus | 2.10.4 | UI 组件库，中文语言包 |
-| VXE-Table | 4.6.25 | 高级数据表格 |
-| Axios | 1.10.0 | HTTP 客户端 |
-| UnoCSS | 66.3.3 | 原子化 CSS（Wind3 preset） |
-| SCSS | 1.78.0 (sass-embedded) | 样式预处理器 |
-| Day.js | 1.11.13 | 日期处理 |
-| js-cookie | 3.0.5 | Cookie 操作 |
-| lodash-es | 4.17.21 | 工具函数 |
-| screenfull | 6.0.2 | 全屏 API |
+| 技术         | 版本                   | 用途                                          |
+| ------------ | ---------------------- | --------------------------------------------- |
+| Vue          | 3.5.17                 | 框架，使用 Composition API + `<script setup>` |
+| TypeScript   | 5.8.3                  | 类型系统，`strict` 模式开启                   |
+| Vite         | 7.0.4                  | 构建工具                                      |
+| Vue Router   | 4.5.1                  | 路由（默认 hash 模式，可切换 html5）          |
+| Pinia        | 3.0.3                  | 状态管理                                      |
+| Element Plus | 2.10.4                 | UI 组件库，中文语言包                         |
+| VXE-Table    | 4.6.25                 | 高级数据表格                                  |
+| Axios        | 1.10.0                 | HTTP 客户端                                   |
+| UnoCSS       | 66.3.3                 | 原子化 CSS（Wind3 preset）                    |
+| SCSS         | 1.78.0 (sass-embedded) | 样式预处理器                                  |
+| Day.js       | 1.11.13                | 日期处理                                      |
+| js-cookie    | 3.0.5                  | Cookie 操作                                   |
+| lodash-es    | 4.17.21                | 工具函数                                      |
+| screenfull   | 6.0.2                  | 全屏 API                                      |
 
 ### 后端（`admin/` 目录）
 
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| Spring Boot | 3.3.2 | Java 后端框架（JDK 17） |
-| MyBatis-Plus | 3.5.7 | ORM |
-| MySQL | 8.x (mysql-connector-j 8.3.0) | 数据库 |
-| HikariCP | 5.1.0 | 连接池 |
-| Hutool | 5.8.31 | JWT、工具类 |
-| Knife4j | 4.4.0 | API 文档（OpenAPI 3） |
-| EasyExcel | 4.0.3 | Excel 导入导出 |
-| Lombok | 1.18.34 | 简化实体类代码 |
-| Spring Scheduling | — | 定时任务（提醒、备份、超时处理） |
+| 技术              | 版本                          | 用途                             |
+| ----------------- | ----------------------------- | -------------------------------- |
+| Spring Boot       | 3.3.2                         | Java 后端框架（JDK 17）          |
+| MyBatis-Plus      | 3.5.7                         | ORM                              |
+| MySQL             | 8.x (mysql-connector-j 8.3.0) | 数据库                           |
+| HikariCP          | 5.1.0                         | 连接池                           |
+| Hutool            | 5.8.31                        | JWT、工具类                      |
+| Knife4j           | 4.4.0                         | API 文档（OpenAPI 3）            |
+| EasyExcel         | 4.0.3                         | Excel 导入导出                   |
+| Lombok            | 1.18.34                       | 简化实体类代码                   |
+| Spring Scheduling | —                             | 定时任务（提醒、备份、超时处理） |
 
 ---
 
@@ -205,12 +206,12 @@ mvn spring-boot:run
 
 ### 环境变量说明
 
-| 文件 | `VITE_BASE_URL` | `VITE_PUBLIC_PATH` | 说明 |
-|------|-----------------|--------------------|------|
-| `.env` | — | — | 通用：`VITE_APP_TITLE`、`VITE_ROUTER_HISTORY=hash` |
-| `.env.development` | `/api/v1` | `/` | 开发环境，代理到后端 `localhost:8888` |
-| `.env.production` | `/api/v1` | `/` | 生产环境 |
-| `.env.staging` | `https://apifoxmock.com/...` | `/` | 预发布，使用 Mock API |
+| 文件               | `VITE_BASE_URL`              | `VITE_PUBLIC_PATH` | 说明                                               |
+| ------------------ | ---------------------------- | ------------------ | -------------------------------------------------- |
+| `.env`             | —                            | —                  | 通用：`VITE_APP_TITLE`、`VITE_ROUTER_HISTORY=hash` |
+| `.env.development` | `/api/v1`                    | `/`                | 开发环境，代理到后端 `localhost:8888`              |
+| `.env.production`  | `/api/v1`                    | `/`                | 生产环境                                           |
+| `.env.staging`     | `https://apifoxmock.com/...` | `/`                | 预发布，使用 Mock API                              |
 
 > 后端 `server.servlet.context-path=/api/v1`，与前端 `VITE_BASE_URL` 对齐。
 
@@ -235,9 +236,9 @@ mvn spring-boot:run
 
 ### 路径别名
 
-| 别名 | 目标 |
-|------|------|
-| `@/` | `src/` |
+| 别名  | 目标          |
+| ----- | ------------- |
+| `@/`  | `src/`        |
 | `@@/` | `src/common/` |
 
 ### 自动导入
@@ -260,11 +261,11 @@ mvn spring-boot:run
 
 ### 当前测试覆盖（非常有限）
 
-| 文件 | 内容 |
-|------|------|
-| `tests/demo.test.ts` | Vitest 基础示例 |
-| `tests/utils/validate.test.ts` | `isArray()` 测试 |
-| `tests/components/Notify.test.ts` | 组件浅挂载测试 |
+| 文件                              | 内容             |
+| --------------------------------- | ---------------- |
+| `tests/demo.test.ts`              | Vitest 基础示例  |
+| `tests/utils/validate.test.ts`    | `isArray()` 测试 |
+| `tests/components/Notify.test.ts` | 组件浅挂载测试   |
 
 > ⚠️ **警告**：业务逻辑测试覆盖极低，新增核心功能时应补充单元测试或组件测试。
 
@@ -296,9 +297,9 @@ pnpm test
 
 ```typescript
 interface ApiResponse<T> {
-  code: number   // 200 = 成功，401 = Token 过期/无效，其他为业务错误
+  code: number // 200 = 成功，401 = Token 过期/无效，其他为业务错误
   data: T
-  msg: string    // 提示信息
+  msg: string // 提示信息
 }
 ```
 

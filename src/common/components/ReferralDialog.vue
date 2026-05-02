@@ -1,11 +1,12 @@
 <script lang="ts" setup>
-import { getLevel5UsersApi } from "@@/apis/users"
+import type { ReferralRecord } from "@@/apis/referral"
 import {
-  sendReferralApi,
   getReferralListApi,
+
   resendReferralApi,
-  type ReferralRecord
+  sendReferralApi
 } from "@@/apis/referral"
+import { getLevel5UsersApi } from "@@/apis/users"
 
 interface Props {
   /** 是否显示弹窗 */
@@ -57,7 +58,7 @@ const STATUS_TAG_TYPE: Record<number, "warning" | "success" | "danger"> = {
 }
 
 // ====== 接收方用户列表 ======
-const receiverUsers = ref<{ id: number; realName: string; username: string; orgName: string }[]>([])
+const receiverUsers = ref<{ id: number, realName: string, username: string, orgName: string }[]>([])
 
 async function loadReceiverUsers() {
   try {
@@ -130,9 +131,15 @@ watch(visible, (val: boolean) => {
   <el-dialog v-model="visible" title="分级诊疗" width="700px" append-to-body>
     <!-- 业务信息摘要 -->
     <el-descriptions :column="2" border size="small" class="mb-4">
-      <el-descriptions-item label="对象姓名">{{ subjectName }}</el-descriptions-item>
-      <el-descriptions-item label="人群类型">{{ POPULATION_LABEL[populationType] || populationType }}</el-descriptions-item>
-      <el-descriptions-item label="当前模块">{{ MODULE_LABEL[moduleType] || moduleType }}</el-descriptions-item>
+      <el-descriptions-item label="对象姓名">
+        {{ subjectName }}
+      </el-descriptions-item>
+      <el-descriptions-item label="人群类型">
+        {{ POPULATION_LABEL[populationType] || populationType }}
+      </el-descriptions-item>
+      <el-descriptions-item label="当前模块">
+        {{ MODULE_LABEL[moduleType] || moduleType }}
+      </el-descriptions-item>
     </el-descriptions>
 
     <!-- 发起推送 -->
@@ -157,7 +164,9 @@ watch(visible, (val: boolean) => {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="sending" @click="handleSend">发起推送</el-button>
+          <el-button type="primary" :loading="sending" @click="handleSend">
+            发起推送
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -177,13 +186,19 @@ watch(visible, (val: boolean) => {
           </template>
         </el-table-column>
         <el-table-column prop="confirmedTime" label="接收时间" width="170">
-          <template #default="{ row }">{{ row.confirmedTime || "—" }}</template>
+          <template #default="{ row }">
+            {{ row.confirmedTime || "—" }}
+          </template>
         </el-table-column>
         <el-table-column prop="rejectedTime" label="拒绝时间" width="170">
-          <template #default="{ row }">{{ row.rejectedTime || "—" }}</template>
+          <template #default="{ row }">
+            {{ row.rejectedTime || "—" }}
+          </template>
         </el-table-column>
         <el-table-column prop="rejectReason" label="拒绝原因" min-width="120">
-          <template #default="{ row }">{{ row.rejectReason || "—" }}</template>
+          <template #default="{ row }">
+            {{ row.rejectReason || "—" }}
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
@@ -202,7 +217,9 @@ watch(visible, (val: boolean) => {
     </el-card>
 
     <template #footer>
-      <el-button @click="visible = false">关闭</el-button>
+      <el-button @click="visible = false">
+        关闭
+      </el-button>
     </template>
   </el-dialog>
 </template>

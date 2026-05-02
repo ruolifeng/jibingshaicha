@@ -89,8 +89,8 @@ export function getReferralListApi(bizId: number, bizType: string) {
 }
 
 /** 当前用户已发送的分级诊疗分页列表 */
-export function getSentReferralListApi(params: { pageNum: number; size: number }) {
-  return request<ApiResponseData<{ records: SentReferralVO[]; total: number }>>({
+export function getSentReferralListApi(params: { pageNum: number, size: number }) {
+  return request<ApiResponseData<{ records: SentReferralVO[], total: number }>>({
     url: "referral/sent",
     method: "get",
     params

@@ -56,7 +56,9 @@ function logout() {
         <div class="right-menu-item user">
           <el-avatar :icon="UserFilled" :size="30" />
           <span>{{ userStore.realName || userStore.username }}</span>
-          <el-tag v-if="userStore.roleName" size="small" type="info" class="ml-2">{{ userStore.roleName }}</el-tag>
+          <el-tag v-if="userStore.roleName" size="small" type="info" class="ml-2">
+            {{ userStore.roleName }}
+          </el-tag>
         </div>
         <template #dropdown>
           <el-dropdown-menu>
@@ -121,7 +123,9 @@ function logout() {
         margin-left: 20px;
       }
     }
-    .ml-2 { margin-left: 8px; }
+    .ml-2 {
+      margin-left: 8px;
+    }
     .user {
       display: flex;
       align-items: center;

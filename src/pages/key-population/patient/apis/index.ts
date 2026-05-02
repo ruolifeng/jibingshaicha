@@ -1,14 +1,14 @@
 export {
-  getPatientListApi,
+  archivePatientApi,
+  completeMedicationApi,
+  getFirstVisitApi,
+  getFollowUpListApi,
+  getMedicationApi,
   getPatientHistoryApi,
   getPatientHistoryStatsApi,
+  getPatientListApi,
   importEpidemicApi,
   saveFirstVisitApi,
-  getFirstVisitApi,
   saveFollowUpApi,
-  getFollowUpListApi,
-  saveMedicationApi,
-  getMedicationApi,
-  completeMedicationApi,
-  archivePatientApi
+  saveMedicationApi
 } from "@/pages/school/patient/apis"

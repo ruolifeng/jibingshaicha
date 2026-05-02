@@ -25,7 +25,9 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
     @update:model-value="emit('update:visible', $event)"
   >
     <div id="print-notice-content" class="print-area">
-      <h2 class="print-title">{{ title }}</h2>
+      <h2 class="print-title">
+        {{ title }}
+      </h2>
       <table class="notice-table">
         <tbody>
           <tr>
@@ -42,7 +44,9 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
           </tr>
           <tr>
             <th>身份证号</th>
-            <td colspan="3">{{ noticeData?.idNumber }}</td>
+            <td colspan="3">
+              {{ noticeData?.idNumber }}
+            </td>
           </tr>
           <tr>
             <th>民族</th>
@@ -52,11 +56,15 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
           </tr>
           <tr>
             <th>现居住地址</th>
-            <td colspan="3">{{ noticeData?.currentAddress }}</td>
+            <td colspan="3">
+              {{ noticeData?.currentAddress }}
+            </td>
           </tr>
           <tr>
             <th>户籍地址</th>
-            <td colspan="3">{{ noticeData?.householdAddress }}</td>
+            <td colspan="3">
+              {{ noticeData?.householdAddress }}
+            </td>
           </tr>
           <tr>
             <th>人群分类</th>
@@ -84,7 +92,9 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
           </tr>
           <tr>
             <th>下发时间</th>
-            <td colspan="3">{{ noticeData?.issuedTime }}</td>
+            <td colspan="3">
+              {{ noticeData?.issuedTime }}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -95,8 +105,12 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
       </div>
     </div>
     <template #footer>
-      <el-button @click="emit('update:visible', false)">关闭</el-button>
-      <el-button type="primary" @click="handlePrint">打印</el-button>
+      <el-button @click="emit('update:visible', false)">
+        关闭
+      </el-button>
+      <el-button type="primary" @click="handlePrint">
+        打印
+      </el-button>
     </template>
   </el-dialog>
 </template>
@@ -117,7 +131,8 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
   width: 100%;
   border-collapse: collapse;
 
-  th, td {
+  th,
+  td {
     border: 1px solid #ddd;
     padding: 8px 12px;
     font-size: 14px;
@@ -141,10 +156,21 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
 
 <style lang="scss">
 @media print {
-  body > *:not(#print-notice-content) { display: none !important; }
-  .el-dialog__wrapper { position: static !important; }
-  .el-dialog { box-shadow: none !important; }
-  .el-dialog__header, .el-dialog__footer { display: none !important; }
-  #print-notice-content { display: block !important; }
+  body > *:not(#print-notice-content) {
+    display: none !important;
+  }
+  .el-dialog__wrapper {
+    position: static !important;
+  }
+  .el-dialog {
+    box-shadow: none !important;
+  }
+  .el-dialog__header,
+  .el-dialog__footer {
+    display: none !important;
+  }
+  #print-notice-content {
+    display: block !important;
+  }
 }
 </style>

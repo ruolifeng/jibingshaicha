@@ -19,7 +19,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   "update:visible": [val: boolean]
-  submit: [data: any]
+  "submit": [data: any]
 }>()
 
 const formRef = ref()
@@ -87,8 +87,12 @@ async function handleSubmit() {
       </el-form-item>
       <el-form-item label="性别">
         <el-radio-group v-model="form.gender">
-          <el-radio value="男">男</el-radio>
-          <el-radio value="女">女</el-radio>
+          <el-radio value="男">
+            男
+          </el-radio>
+          <el-radio value="女">
+            女
+          </el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="出生日期">
@@ -125,8 +129,12 @@ async function handleSubmit() {
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="handleClose">取消</el-button>
-      <el-button type="primary" @click="handleSubmit">发送</el-button>
+      <el-button @click="handleClose">
+        取消
+      </el-button>
+      <el-button type="primary" @click="handleSubmit">
+        发送
+      </el-button>
     </template>
   </el-dialog>
 </template>
