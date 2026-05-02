@@ -74,6 +74,13 @@ public class ScreeningKeyPopulationController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "批量删除重点人群筛查记录（级联删除）")
+    @DeleteMapping("/batch-delete")
+    public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
+        if (ids != null) ids.forEach(screeningKeyPopulationService::deleteScreeningCascade);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "按 ID 查询重点人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningKeyPopulation> detail(@PathVariable Long id) {

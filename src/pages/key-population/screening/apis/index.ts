@@ -49,6 +49,15 @@ export function deleteScreeningKeyPopulationApi(id: number) {
   })
 }
 
+/** 批量删除重点人群筛查记录（级联删除） */
+export function batchDeleteScreeningKeyPopulationApi(ids: number[]) {
+  return request<ApiResponseData<null>>({
+    url: "screening/key-population/batch-delete",
+    method: "delete",
+    data: ids
+  })
+}
+
 /** 按 ID 查询重点人群筛查记录详情 */
 export function getScreeningKeyPopulationDetailApi(id: number) {
   return request<ApiResponseData<any>>({

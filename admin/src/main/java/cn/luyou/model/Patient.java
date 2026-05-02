@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,4 +39,18 @@ public class Patient extends BaseEntity {
     private LocalDateTime archivedTime;
     /** 大疫情表额外字段（JSON） */
     private String epidemicData;
+    /** 所属部门ID */
+    private Long departmentId;
+
+    /** 患者通知单状态（非数据库字段，查询时填充）：0草稿 1已发送 2已确认 null无通知单 */
+    @TableField(exist = false)
+    private Integer noticeStatus;
+
+    /** 患者通知单ID（非数据库字段，查询时填充） */
+    @TableField(exist = false)
+    private Long noticeId;
+
+    /** 是否已填写首次随访（非数据库字段，查询时填充） */
+    @TableField(exist = false)
+    private Boolean hasFirstVisit;
 }

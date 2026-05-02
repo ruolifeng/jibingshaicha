@@ -1,8 +1,8 @@
 package cn.luyou.model;
 
+import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
-import com.alibaba.excel.annotation.format.DateTimeFormat;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,8 +36,7 @@ public class ScreeningKeyPopulation extends BaseEntity {
     private String name;
     @ExcelProperty(index = 5)
     private String gender;
-    @ExcelProperty(index = 6)
-    @DateTimeFormat("yyyy.MM.dd")
+    @ExcelProperty(index = 6, converter = FlexibleLocalDateConverter.class)
     private LocalDate birthDate;
     @ExcelProperty(index = 7)
     private Integer age;
@@ -52,71 +51,68 @@ public class ScreeningKeyPopulation extends BaseEntity {
     @ExcelProperty(index = 12)
     private String householdAddress;
     @ExcelProperty(index = 13)
-    private String currentAddress;
-    // 乡镇/社区字段模板中不存在，由系统或其他途径写入
-    @ExcelIgnore
     private String townshipCommunity;
-
-    // 人群分类（V4：各列独立，列14-21）
     @ExcelProperty(index = 14)
-    private String crowdCategoryClose;
+    private String currentAddress;
+
+    // 人群分类（各列独立，列15-22）
     @ExcelProperty(index = 15)
-    private String crowdCategoryStudent;
+    private String crowdCategoryClose;
     @ExcelProperty(index = 16)
-    private String crowdCategoryTeacher;
+    private String crowdCategoryStudent;
     @ExcelProperty(index = 17)
-    private String crowdCategoryElder;
+    private String crowdCategoryTeacher;
     @ExcelProperty(index = 18)
-    private String crowdCategoryDiabetes;
+    private String crowdCategoryElder;
     @ExcelProperty(index = 19)
-    private String crowdCategoryDual;
+    private String crowdCategoryDiabetes;
     @ExcelProperty(index = 20)
-    private String crowdCategoryTbHist;
+    private String crowdCategoryDual;
     @ExcelProperty(index = 21)
+    private String crowdCategoryTbHist;
+    @ExcelProperty(index = 22)
     private String crowdCategoryNormal;
 
-    // 症状筛查（列22-30）
-    @ExcelProperty(index = 22)
-    private String hasSuspiciousSymptoms;
+    // 症状筛查（列23-31）
     @ExcelProperty(index = 23)
-    private String cough;
+    private String hasSuspiciousSymptoms;
     @ExcelProperty(index = 24)
-    private String hemoptysis;
+    private String cough;
     @ExcelProperty(index = 25)
-    private String fever;
+    private String hemoptysis;
     @ExcelProperty(index = 26)
-    private String chestPain;
+    private String fever;
     @ExcelProperty(index = 27)
-    private String nightSweats;
+    private String chestPain;
     @ExcelProperty(index = 28)
-    private String appetiteLoss;
+    private String nightSweats;
     @ExcelProperty(index = 29)
-    private String fatigue;
+    private String appetiteLoss;
     @ExcelProperty(index = 30)
+    private String fatigue;
+    @ExcelProperty(index = 31)
     private String weightLoss;
 
-    // 感染筛查（列31-35）
-    @ExcelProperty(index = 31)
-    private String hasInfectionScreen;
+    // 感染筛查（列32-36）
     @ExcelProperty(index = 32)
-    @DateTimeFormat("yyyy.MM.dd")
+    private String hasInfectionScreen;
+    @ExcelProperty(index = 33, converter = FlexibleLocalDateConverter.class)
     private LocalDate screenDate;
-    @ExcelProperty(index = 33)
-    private String screenMethod;
     @ExcelProperty(index = 34)
-    private String screenResult;
+    private String screenMethod;
     @ExcelProperty(index = 35)
+    private String screenResult;
+    @ExcelProperty(index = 36)
     private String infectionResult;
 
-    // ===== 胸片与诊断（列36-39）：支持 Excel 直接导入 =====
-    @ExcelProperty(index = 36)
-    private String hasChestXray;
+    // ===== 胸片与诊断（列37-40）：支持 Excel 直接导入 =====
     @ExcelProperty(index = 37)
-    @DateTimeFormat("yyyy.MM.dd")
+    private String hasChestXray;
+    @ExcelProperty(index = 38, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;
-    @ExcelProperty(index = 38)
-    private String chestXrayResult;
     @ExcelProperty(index = 39)
+    private String chestXrayResult;
+    @ExcelProperty(index = 40)
     private String diagnosisFirst;
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====
@@ -147,4 +143,7 @@ public class ScreeningKeyPopulation extends BaseEntity {
     private Integer isLatent;
     @ExcelIgnore
     private String uploadBatch;
+    /** 所属部门ID */
+    @ExcelIgnore
+    private Long departmentId;
 }

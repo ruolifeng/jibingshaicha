@@ -2,6 +2,8 @@ package cn.luyou.security;
 
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
+import cn.luyou.mapper.UserMapper;
+import cn.luyou.model.User;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,9 +15,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.util.UrlPathHelper;
 
 /**
- * JWT 认证拦截器
- *
- * @author ruolifeng
+ * JWT 认证拦截器，鉴权通过后将 userId、role、departmentId 写入 BaseContext
  */
 @Slf4j
 @Component
@@ -23,14 +23,10 @@ import org.springframework.web.util.UrlPathHelper;
 public class AuthHandlerInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
+    private final UserMapper userMapper;
 
     private final UrlPathHelper urlPathHelper = new UrlPathHelper();
 
-    /**
-     * 登录接口无需 Token（与 {@link cn.luyou.config.AuthWebMvcConfigurer} 排除规则一致）。
-     * <p>
-     * 配置了 {@code server.servlet.context-path=/api/v1} 时，此处匹配到的路径为应用内路径 {@code /user/login}。
-     */
     private boolean isLoginRequest(HttpServletRequest request) {
         if (!"POST".equalsIgnoreCase(request.getMethod())) {
             return false;
@@ -48,7 +44,6 @@ public class AuthHandlerInterceptor implements HandlerInterceptor {
         if (token == null || token.isBlank()) {
             throw new ServiceException(StatusEnum.UNAUTHORIZED);
         }
-        // Bearer 前缀处理
         if (token.startsWith("Bearer ")) {
             token = token.substring(7);
         }
@@ -56,13 +51,18 @@ public class AuthHandlerInterceptor implements HandlerInterceptor {
             throw new ServiceException(StatusEnum.UNAUTHORIZED);
         }
         Long userId = jwtUtil.getUserIdFromToken(token);
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new ServiceException(StatusEnum.UNAUTHORIZED);
+        }
         BaseContext.setCurrentId(userId);
+        BaseContext.setCurrentRole(user.getRole());
+        BaseContext.setCurrentDepartmentId(user.getDepartmentId());
         return true;
     }
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        // 请求结束后清理 ThreadLocal，防止内存泄漏
         BaseContext.remove();
     }
 }

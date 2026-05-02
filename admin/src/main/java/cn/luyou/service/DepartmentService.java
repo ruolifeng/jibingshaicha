@@ -1,0 +1,21 @@
+package cn.luyou.service;
+
+import cn.luyou.model.Department;
+import com.baomidou.mybatisplus.extension.service.IService;
+
+import java.util.List;
+
+public interface DepartmentService extends IService<Department> {
+
+    /** 获取全部未删除部门列表 */
+    List<Department> listAll();
+
+    /** 创建部门 */
+    void createDepartment(Department department);
+
+    /** 更新部门 */
+    void updateDepartment(Department department);
+
+    /** 删除部门（逻辑删除） */
+    void deleteDepartment(Long id);
+}

@@ -9,8 +9,13 @@ import java.util.Map;
 
 public interface LatentInfectionService extends IService<LatentInfection> {
 
+    /**
+     * 分页查询
+     * @param referralResult 转诊结果过滤：null 不过滤；"pending" 查询尚未转诊（referralResult IS NULL）；其他值精确匹配
+     */
     IPage<LatentInfection> queryPage(int page, int size, String populationType,
-                                      String name, String idNumber, Integer trackingStatus, Integer archived);
+                                      String name, String idNumber, Integer trackingStatus, Integer archived,
+                                      String referralResult);
 
     /** 追踪操作 */
     void track(Long id, Integer status, String remark);

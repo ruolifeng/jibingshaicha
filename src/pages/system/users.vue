@@ -2,12 +2,14 @@
 import { usePagination } from "@@/composables/usePagination"
 import { ROLE_OPTIONS, ROLE_MAP } from "@@/constants/disease"
 import { getUserListApi, createUserApi, updateUserApi, deleteUserApi } from "@@/apis/users"
+import { getDepartmentListApi, type Department } from "@@/apis/department"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+const departmentList = ref<Department[]>([])
 
 const searchForm = reactive({ username: "", role: undefined as number | undefined })
 
@@ -24,6 +26,18 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+async function fetchDepartments() {
+  try {
+    const { data } = await getDepartmentListApi()
+    departmentList.value = data
+  } catch { /* ignore */ }
+}
+
+function getDeptName(departmentId: number | null | undefined) {
+  if (!departmentId) return "-"
+  return departmentList.value.find((d) => d.id === departmentId)?.name || "-"
 }
 
 function handleSearch() {
@@ -47,7 +61,8 @@ const formData = reactive({
   password: "",
   realName: "",
   role: 6,
-  orgName: ""
+  orgName: "",
+  departmentId: null as number | null
 })
 
 function openCreateDialog() {
@@ -59,6 +74,7 @@ function openCreateDialog() {
   formData.realName = ""
   formData.role = 6
   formData.orgName = ""
+  formData.departmentId = null
   dialogVisible.value = true
 }
 
@@ -71,13 +87,21 @@ function openEditDialog(row: any) {
   formData.realName = row.realName || ""
   formData.role = row.role
   formData.orgName = row.orgName || ""
+  formData.departmentId = row.departmentId || null
   dialogVisible.value = true
 }
 
 async function handleSubmit() {
   try {
     if (isEdit.value) {
-      const payload: Record<string, any> = { id: formData.id, username: formData.username, realName: formData.realName, role: formData.role, orgName: formData.orgName }
+      const payload: Record<string, any> = {
+        id: formData.id,
+        username: formData.username,
+        realName: formData.realName,
+        role: formData.role,
+        orgName: formData.orgName,
+        departmentId: formData.departmentId
+      }
       if (formData.password) payload.password = formData.password
       await updateUserApi(payload)
       ElMessage.success("更新成功")
@@ -109,6 +133,8 @@ watch(
   fetchData,
   { immediate: true }
 )
+
+fetchDepartments()
 </script>
 
 <template>
@@ -139,19 +165,24 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="id" label="ID" />
+        <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="realName" label="真实姓名" />
-        <el-table-column label="角色">
+        <el-table-column label="角色" width="100">
           <template #default="{ row }">
             <el-tag :type="row.role === 1 ? 'danger' : row.role <= 4 ? 'warning' : 'primary'" size="small">
               {{ ROLE_MAP[row.role] || "未知" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="orgName" label="所属机构" />
+        <el-table-column prop="orgName" label="所属机构" show-overflow-tooltip />
+        <el-table-column label="所属部门">
+          <template #default="{ row }">
+            {{ getDeptName(row.departmentId) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="140">
           <template #default="{ row }">
             <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button v-permission="'user:delete'" type="danger" size="small" :disabled="row.role === 1" @click="handleDelete(row)">删除</el-button>
@@ -174,7 +205,7 @@ watch(
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
-      <el-form :model="formData" label-width="80px">
+      <el-form :model="formData" label-width="90px">
         <el-form-item label="用户名">
           <el-input v-model="formData.username" placeholder="请输入用户名" />
         </el-form-item>
@@ -187,6 +218,22 @@ watch(
         <el-form-item label="角色">
           <el-select v-model="formData.role" placeholder="请选择角色" style="width: 100%">
             <el-option v-for="item in ROLE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="所属部门">
+          <el-select
+            v-model="formData.departmentId"
+            placeholder="请选择部门（超级管理员无需选择）"
+            clearable
+            style="width: 100%"
+            :disabled="formData.role === 1"
+          >
+            <el-option
+              v-for="dept in departmentList"
+              :key="dept.id"
+              :label="dept.name"
+              :value="(dept.id as number)"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="所属机构">

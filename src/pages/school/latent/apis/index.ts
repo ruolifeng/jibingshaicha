@@ -45,6 +45,15 @@ export function sendNoticeApi(data: Record<string, any>) {
   })
 }
 
+/** 保存通知单草稿（填写但不发送） */
+export function saveNoticeDraftApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "notice/draft",
+    method: "post",
+    data
+  })
+}
+
 /** 确认接收通知单 */
 export function confirmNoticeApi(id: number) {
   return request<ApiResponseData<null>>({

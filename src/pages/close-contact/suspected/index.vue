@@ -10,6 +10,7 @@ import {
 } from "./apis"
 import { getScreeningCloseContactDetailApi } from "@/pages/close-contact/screening/apis"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
 
 const POPULATION_TYPE = "closeContact"
 
@@ -33,6 +34,7 @@ async function fetchData() {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       populationType: POPULATION_TYPE,
+      referralResult: "pending",
       ...searchForm
     })
     tableData.value = data.records
@@ -56,6 +58,14 @@ function handleReset() {
 }
 
 const submitting = ref(false)
+
+// 分级诊疗
+const tierCareVisible = ref(false)
+const tierCareRow = ref<any>(null)
+function openTierCare(row: any) {
+  tierCareRow.value = row
+  tierCareVisible.value = true
+}
 
 function getRowClass({ row }: { row: any }) {
   if (row.trackingStatus === 1 && !row.chestXrayResult && row.updateTime) {
@@ -101,10 +111,11 @@ const xrayImportLoading = ref(false)
 
 function openXrayDialog(row: any) {
   xrayRow.value = row
-  xrayForm.hasChestXray = "是"
-  xrayForm.chestXrayDate = ""
-  xrayForm.chestXrayResult = ""
-  xrayForm.diagnosisFirst = ""
+  // 自动填充第一次导入的筛查数据，用户仅需确认
+  xrayForm.hasChestXray = row.hasChestXray || "是"
+  xrayForm.chestXrayDate = row.chestXrayDate || ""
+  xrayForm.chestXrayResult = row.chestXrayResult || ""
+  xrayForm.diagnosisFirst = row.diagnosisFirst || ""
   xrayDialogVisible.value = true
 }
 
@@ -142,7 +153,7 @@ async function handleImportXray(uploadFile: any) {
   }
 }
 
-// ==================== 转诊弹窗 ====================
+// ==================== 诊断弹窗 ====================
 const referralDialogVisible = ref(false)
 const referralRow = ref<any>(null)
 const referralForm = reactive({ result: "", remark: "" })
@@ -163,7 +174,7 @@ function openReferralDialog(row: any) {
 
 async function handleReferral() {
   if (!referralForm.result) {
-    ElMessage.warning("请选择转诊结果")
+    ElMessage.warning("请选择诊断结果")
     return
   }
   if (submitting.value) return
@@ -238,7 +249,7 @@ watch(
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="text-lg font-bold">密接人群 — 疑似结核管理</span>
+          <span class="text-lg font-bold">密接人群 — 待诊断管理</span>
           <el-upload
             :auto-upload="false"
             :show-file-list="false"
@@ -275,8 +286,8 @@ watch(
         <el-table-column prop="notInPlaceCount" label="未到位次数" />
         <el-table-column prop="trackingRemark" label="追踪备注" />
         <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column prop="diagnosisFirst" label="诊断结果" />
-        <el-table-column label="转诊结果">
+        <el-table-column prop="diagnosisFirst" label="胸片诊断" />
+        <el-table-column label="确认诊断">
           <template #default="{ row }">
             {{ REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)?.label || row.referralResult || "-" }}
           </template>
@@ -292,7 +303,7 @@ watch(
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
             <el-button
-              v-if="row.trackingStatus === 0 || row.trackingStatus === 2"
+              v-if="row.trackingStatus == null || row.trackingStatus === 0 || row.trackingStatus === 2"
               v-permission="'latent:track'"
               type="primary"
               size="small"
@@ -300,15 +311,17 @@ watch(
             >
               追踪
             </el-button>
+            <!-- 录入胸片结果（追踪到位后、尚未录入诊断时可操作） -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisFirst"
+              v-if="row.trackingStatus === 1 && !row.diagnosisFirst && !row.referralResult"
               v-permission="'latent:xray'"
               type="warning"
               size="small"
               @click="openXrayDialog(row)"
             >
-              录入胸片诊断
+              录入胸片结果
             </el-button>
+            <!-- 转诊（胸片已录入时可操作） -->
             <el-button
               v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult"
               v-permission="'latent:referral'"
@@ -318,9 +331,7 @@ watch(
             >
               转诊
             </el-button>
-            <el-tag v-if="row.referralResult" type="info" size="small">
-              已转诊：{{ REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)?.label }}
-            </el-tag>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -340,6 +351,17 @@ watch(
 
     <!-- 筛查详情弹窗 -->
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="closeContact" :data="screeningDetailData" />
+
+    <!-- 分级诊疗弹窗 -->
+    <ReferralDialog
+      v-if="tierCareRow"
+      v-model="tierCareVisible"
+      :biz-id="tierCareRow.id"
+      biz-type="suspected_close"
+      population-type="close"
+      module-type="suspected"
+      :subject-name="tierCareRow.name || ''"
+    />
 
     <!-- 追踪弹窗 -->
     <el-dialog v-model="trackDialogVisible" title="追踪操作" width="450px">
@@ -365,12 +387,12 @@ watch(
     </el-dialog>
 
     <!-- 录入胸片+诊断弹窗 -->
-    <el-dialog v-model="xrayDialogVisible" title="录入胸片检查与诊断结果" width="520px">
+    <el-dialog v-model="xrayDialogVisible" title="确认胸片检查结果" width="520px">
       <el-alert
         type="info"
         :closable="false"
         class="mb-4"
-        :description="`${xrayRow ? `${ACTIVE_ROUND_MAP[xrayRow.activeRound] || ''}轮次` : ''}追踪到位后，请录入胸片检查情况及诊断结果。`"
+        :description="`${xrayRow ? `【${ACTIVE_ROUND_MAP[xrayRow.activeRound] || ''}轮次】` : ''}以下数据已自动从初始导入记录填充，请确认无误后点击确认。如有需要可修改后再提交。`"
       />
       <el-form :model="xrayForm" label-width="110px">
         <el-form-item label="是否进行胸片检查">
@@ -410,7 +432,7 @@ watch(
     <!-- 转诊弹窗 -->
     <el-dialog v-model="referralDialogVisible" title="转诊操作" width="450px">
       <el-form label-width="80px">
-        <el-form-item label="转诊结果">
+        <el-form-item label="诊断结果">
           <el-radio-group v-model="referralForm.result">
             <el-radio v-for="item in REFERRAL_RESULT_OPTIONS" :key="item.value" :value="item.value">
               {{ item.label }}

@@ -16,11 +16,11 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 密接人群半年/一年复查提醒定时任务
+ * 密接人群6月/12月复查提醒定时任务
  * - 每天 08:00 执行
  * - 提前 15 天提醒：
- *   半年复查：active_round=1，首次筛查日期距今 ≥165 天
- *   一年复查：active_round=2，半年筛查日期距今 ≥350 天
+ *   6月复查：首次筛查日期距今 ≥165 天且未做6月复查
+ *   12月复查：6月复查日期距今 ≥350 天且未做12月复查
  */
 @Slf4j
 @Component
@@ -35,37 +35,43 @@ public class CloseContactReminderTask {
     public void sendReviewReminders() {
         LocalDate today = LocalDate.now();
 
-        // 半年后复查提醒：首次阴性（isLatent=0 且 activeRound 为 null）且首次筛查日期距今 ≥165 天
+        // 6月后复查提醒：首次筛查已过 165 天，且尚未进行 6月随访（followup6ScreenDate 为空）
+        // ccStatus 排除已确认为患者(1)或潜伏感染者已归档(3)的记录
         List<ScreeningCloseContact> halfYearDue = closeContactService.list(
                 new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .isNull(ScreeningCloseContact::getActiveRound) // activeRound 为 null 表示首次阶段未转阳
-                        .eq(ScreeningCloseContact::getIsLatent, 0)
+                        .notIn(ScreeningCloseContact::getCcStatus, 1, 2, 3, 5, 7, 8)
                         .isNotNull(ScreeningCloseContact::getFirstScreenDate)
-                        .isNull(ScreeningCloseContact::getHalfYearScreenDate) // 半年复查尚未做
+                        .isNull(ScreeningCloseContact::getFollowup6ScreenDate)
                         .le(ScreeningCloseContact::getFirstScreenDate, today.minusDays(165))
-                        .ge(ScreeningCloseContact::getFirstScreenDate, today.minusDays(195)) // 30天窗口避免重复
+                        .ge(ScreeningCloseContact::getFirstScreenDate, today.minusDays(195))
         );
 
-        sendBatchReminders(halfYearDue, "半年后复查提醒",
-                "密接人群【%s】首次筛查已满165天，请尽快安排半年后复查（原筛查日期：%s）");
+        sendBatchReminders(halfYearDue, "6月后复查提醒",
+                "密接人群【%s】首次筛查已满165天，请尽快安排6月后复查（原筛查日期：%s）",
+                false);
 
-        // 一年后复查提醒（半年后筛查 350 天 = 12个月 - 15天提前提醒）
+        // 12月后复查提醒：6月随访日期距今 ≥350 天，且尚未进行 12月随访
         List<ScreeningCloseContact> oneYearDue = closeContactService.list(
                 new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .eq(ScreeningCloseContact::getActiveRound, 2)
-                        .eq(ScreeningCloseContact::getIsLatent, 0)
-                        .isNotNull(ScreeningCloseContact::getHalfYearScreenDate)
-                        .le(ScreeningCloseContact::getHalfYearScreenDate, today.minusDays(350))
-                        .ge(ScreeningCloseContact::getHalfYearScreenDate, today.minusDays(380))
+                        .notIn(ScreeningCloseContact::getCcStatus, 1, 2, 3, 5, 7, 8)
+                        .isNotNull(ScreeningCloseContact::getFollowup6ScreenDate)
+                        .isNull(ScreeningCloseContact::getFollowup12ScreenDate)
+                        .le(ScreeningCloseContact::getFollowup6ScreenDate, today.minusDays(350))
+                        .ge(ScreeningCloseContact::getFollowup6ScreenDate, today.minusDays(380))
         );
 
-        sendBatchReminders(oneYearDue, "一年后复查提醒",
-                "密接人群【%s】半年后筛查已满350天，请尽快安排一年后复查（半年筛查日期：%s）");
+        sendBatchReminders(oneYearDue, "12月后复查提醒",
+                "密接人群【%s】6月后筛查已满350天，请尽快安排12月后复查（6月筛查日期：%s）",
+                true);
 
-        log.info("密接人群复查提醒：半年到期 {} 人，一年到期 {} 人", halfYearDue.size(), oneYearDue.size());
+        log.info("密接人群复查提醒：6月到期 {} 人，12月到期 {} 人", halfYearDue.size(), oneYearDue.size());
     }
 
-    private void sendBatchReminders(List<ScreeningCloseContact> list, String title, String contentTemplate) {
+    /**
+     * @param isOneYearReminder true=12月提醒（取followup6ScreenDate作为提示日期），false=6月提醒（取firstScreenDate）
+     */
+    private void sendBatchReminders(List<ScreeningCloseContact> list, String title,
+                                    String contentTemplate, boolean isOneYearReminder) {
         if (list.isEmpty()) return;
 
         // 向所有4级用户发送提醒
@@ -74,9 +80,8 @@ public class CloseContactReminderTask {
         );
 
         for (ScreeningCloseContact record : list) {
-            String dateStr = record.getActiveRound() != null && record.getActiveRound() == 2
-                    ? (record.getHalfYearScreenDate() != null ? record.getHalfYearScreenDate().toString() : "未知")
-                    : (record.getFirstScreenDate() != null ? record.getFirstScreenDate().toString() : "未知");
+            LocalDate refDate = isOneYearReminder ? record.getFollowup6ScreenDate() : record.getFirstScreenDate();
+            String dateStr = refDate != null ? refDate.toString() : "未知";
             String content = String.format(contentTemplate, record.getName(), dateStr);
 
             for (User user : level4Users) {

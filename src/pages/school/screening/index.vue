@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi, deleteScreeningSchoolApi, updateScreeningSchoolApi, createScreeningSchoolApi } from "./apis"
+import { uploadScreeningSchoolApi, getScreeningSchoolListApi, exportScreeningSchoolApi, deleteScreeningSchoolApi, updateScreeningSchoolApi, createScreeningSchoolApi, batchDeleteScreeningSchoolApi } from "./apis"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -43,6 +44,14 @@ function handleReset() {
   searchForm.district = ""
   searchForm.isLatent = undefined
   handleSearch()
+}
+
+// 分级诊疗
+const tierCareVisible = ref(false)
+const tierCareRow = ref<any>(null)
+function openTierCare(row: any) {
+  tierCareRow.value = row
+  tierCareVisible.value = true
 }
 
 /** Excel 上传 */
@@ -131,6 +140,10 @@ function getEmptyEditForm() {
     screenMethod: "",
     screenResult: "",
     infectionResult: "",
+    hasChestXray: "",
+    chestXrayDate: "",
+    chestXrayResult: "",
+    diagnosisFirst: "",
     remark: ""
   }
 }
@@ -187,6 +200,24 @@ async function handleDelete(row: any) {
   }
 }
 
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) { ElMessage.warning("请先勾选要删除的数据"); return }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条筛查记录吗？删除后所有关联数据将一并删除，且不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    const ids = selectedRows.value.map((r: any) => r.id)
+    await batchDeleteScreeningSchoolApi(ids)
+    ElMessage.success(`成功删除 ${ids.length} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("批量删除失败")
+  }
+}
+
 /** 判定结果标签颜色 */
 function getLatentTag(isLatent: number) {
   return isLatent === 1 ? "danger" : "success"
@@ -218,7 +249,7 @@ watch(
         </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
-            <el-option label="疑似结核" :value="1" />
+            <el-option label="待确诊" :value="1" />
             <el-option label="正常" :value="0" />
           </el-select>
         </el-form-item>
@@ -238,6 +269,7 @@ watch(
             <el-button type="success" @click="handleCreate">新增数据</el-button>
             <el-button @click="() => handleExport()">导出全部</el-button>
             <el-button type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">导出勾选</el-button>
+            <el-button type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">批量删除</el-button>
             <el-upload
               ref="uploadRef"
               :auto-upload="false"
@@ -278,19 +310,20 @@ watch(
         <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
         <el-table-column prop="preventiveResult" label="治疗结果" />
         <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
-        <el-table-column label="疑似结核" fixed="right">
+        <el-table-column label="待确诊" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getLatentTag(row.isLatent)" size="small">
-              {{ row.isLatent === 1 ? "疑似结核" : "正常" }}
+              {{ row.isLatent === 1 ? "待确诊" : "正常" }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" fixed="right" width="180">
+        <el-table-column label="操作" fixed="right" width="240">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">查看详情</el-button>
             <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -411,6 +444,22 @@ watch(
           </el-col>
         </el-row>
 
+        <el-divider content-position="left">胸片与诊断</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="是否进行胸片检查"><el-input v-model="editForm.hasChestXray" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="胸片检查日期"><el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="胸片结果"><el-input v-model="editForm.chestXrayResult" /></el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="首次诊断结果"><el-input v-model="editForm.diagnosisFirst" /></el-form-item>
+          </el-col>
+        </el-row>
+
         <el-divider content-position="left">备注</el-divider>
         <el-form-item label="备注">
           <el-input v-model="editForm.remark" type="textarea" :rows="2" />
@@ -447,7 +496,11 @@ watch(
         <el-descriptions-item label="筛查方法">{{ detailRow.screenMethod }}</el-descriptions-item>
         <el-descriptions-item label="筛查结果">{{ detailRow.screenResult }}</el-descriptions-item>
         <el-descriptions-item label="感染筛查结果">{{ detailRow.infectionResult }}</el-descriptions-item>
-        <el-descriptions-item label="判定结果">{{ detailRow.isLatent === 1 ? "疑似结核" : "正常" }}</el-descriptions-item>
+        <el-descriptions-item label="判定结果">{{ detailRow.isLatent === 1 ? "待确诊" : "正常" }}</el-descriptions-item>
+        <el-descriptions-item label="是否进行胸片检查">{{ detailRow.hasChestXray }}</el-descriptions-item>
+        <el-descriptions-item label="胸片检查日期">{{ detailRow.chestXrayDate }}</el-descriptions-item>
+        <el-descriptions-item label="胸片结果">{{ detailRow.chestXrayResult }}</el-descriptions-item>
+        <el-descriptions-item label="首次诊断结果" :span="3">{{ detailRow.diagnosisFirst }}</el-descriptions-item>
         <el-descriptions-item label="户籍地址" :span="3">{{ detailRow.householdAddress }}</el-descriptions-item>
         <el-descriptions-item label="现住址" :span="3">{{ detailRow.currentAddress }}</el-descriptions-item>
         <el-descriptions-item label="备注" :span="3">{{ detailRow.remark || "-" }}</el-descriptions-item>
@@ -456,6 +509,17 @@ watch(
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 分级诊疗弹窗 -->
+    <ReferralDialog
+      v-if="tierCareRow"
+      v-model="tierCareVisible"
+      :biz-id="tierCareRow.id"
+      biz-type="screening_school"
+      population-type="school"
+      module-type="screening"
+      :subject-name="tierCareRow.name || ''"
+    />
 
     <!-- 导入结果弹窗 -->
     <el-dialog v-model="importResultVisible" title="导入结果" width="560px">

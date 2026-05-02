@@ -21,8 +21,10 @@ import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.exception.ExcelDataConvertException;
 import com.alibaba.excel.read.listener.ReadListener;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -66,10 +68,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         String batchId = IdUtil.fastSimpleUUID();
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
-        AtomicInteger rowNum = new AtomicInteger(6); // 数据从第6行开始
+        AtomicInteger rowNum = new AtomicInteger(5); // 数据从第5行开始
 
         try {
-            // V4 重点人群模板：第1行大分组，第2行字段名，第3行子字段细项，第4行空行，第5行填写说明，数据从第6行开始
+            // 重点人群模板：第1行大分组，第2行字段名，第3行子字段细项，第4行空行，数据从第5行开始
             EasyExcel.read(file.getInputStream(), ScreeningKeyPopulation.class, new ReadListener<ScreeningKeyPopulation>() {
                 @Override
                 public void invoke(ScreeningKeyPopulation data, AnalysisContext context) {
@@ -83,13 +85,25 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     data.setUploadBatch(batchId);
                     boolean directXray = hasDirectXrayAndDiagnosis(data);
                     data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+                    data.setDepartmentId(BaseContext.getCurrentDepartmentId());
                     dataList.add(data);
                 }
                 @Override
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("重点人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(5).doRead();
+                @Override
+                public void onException(Exception exception, AnalysisContext context) throws Exception {
+                    if (exception instanceof ExcelDataConvertException e) {
+                        int rowIdx = e.getRowIndex() + 1;
+                        int colIdx = e.getColumnIndex() + 1;
+                        log.warn("重点人群第{}行第{}列数据转换失败，已跳过该行: {}", rowIdx, colIdx, e.getMessage());
+                        result.addError(rowIdx, "第" + rowIdx + "行", "第" + colIdx + "列数据格式不正确，已跳过");
+                    } else {
+                        throw exception;
+                    }
+                }
+            }).sheet().headRowNumber(4).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
@@ -98,11 +112,45 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
         }
 
-        saveBatch(dataList, 500);
+        // 增量导入：按身份证号去重，同一人多次导入时更新而非重复插入
+        List<ScreeningKeyPopulation> toInsert = new ArrayList<>();
+        List<ScreeningKeyPopulation> toUpdate = new ArrayList<>();
+
+        for (ScreeningKeyPopulation d : dataList) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                toInsert.add(d);
+                continue;
+            }
+            ScreeningKeyPopulation existing = lambdaQuery()
+                    .eq(ScreeningKeyPopulation::getIdNumber, d.getIdNumber())
+                    .last("LIMIT 1")
+                    .one();
+            if (existing != null) {
+                // 合并基本信息，以最新导入为准
+                if (StrUtil.isNotBlank(d.getName())) existing.setName(d.getName());
+                if (StrUtil.isNotBlank(d.getPhone())) existing.setPhone(d.getPhone());
+                if (StrUtil.isNotBlank(d.getCurrentAddress())) existing.setCurrentAddress(d.getCurrentAddress());
+                if (StrUtil.isNotBlank(d.getInfectionResult())) existing.setInfectionResult(d.getInfectionResult());
+                if (StrUtil.isNotBlank(d.getHasChestXray())) existing.setHasChestXray(d.getHasChestXray());
+                if (d.getChestXrayDate() != null) existing.setChestXrayDate(d.getChestXrayDate());
+                if (StrUtil.isNotBlank(d.getChestXrayResult())) existing.setChestXrayResult(d.getChestXrayResult());
+                if (StrUtil.isNotBlank(d.getDiagnosisFirst())) existing.setDiagnosisFirst(d.getDiagnosisFirst());
+                if (StrUtil.isNotBlank(d.getRemark())) existing.setRemark(d.getRemark());
+                boolean directXray = hasDirectXrayAndDiagnosis(existing);
+                existing.setIsLatent((isPositive(existing.getInfectionResult()) || directXray) ? 1 : 0);
+                toUpdate.add(existing);
+            } else {
+                toInsert.add(d);
+            }
+        }
+
+        if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
+        if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
+
         result.setSuccessCount(dataList.size());
 
-        // 感染筛查结果阳性者 或 包含胸片诊断数据者，自动创建潜伏感染记录
-        List<LatentInfection> latentList = dataList.stream()
+        // 仅对新插入且感染筛查阳性的记录自动创建潜伏感染记录
+        List<LatentInfection> latentList = toInsert.stream()
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> {
                     boolean directXray = hasDirectXrayAndDiagnosis(d);
@@ -123,12 +171,45 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .chestXrayResult(d.getChestXrayResult())
                             .diagnosisFirst(d.getDiagnosisFirst())
                             .diagnosisResult(d.getDiagnosisFirst())
+                            .departmentId(d.getDepartmentId())
                             .build();
                 })
                 .toList();
-        if (!latentList.isEmpty()) {
-            latentInfectionService.saveBatch(latentList, 500);
-            log.info("自动创建重点人群潜伏感染记录 {} 条", latentList.size());
+        // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建
+        List<LatentInfection> latentFromUpdated = toUpdate.stream()
+                .filter(d -> d.getIsLatent() == 1)
+                .filter(d -> !latentInfectionService.lambdaQuery()
+                        .eq(LatentInfection::getScreeningId, d.getId())
+                        .eq(LatentInfection::getPopulationType, "keyPopulation")
+                        .exists())
+                .map(d -> {
+                    boolean directXray = hasDirectXrayAndDiagnosis(d);
+                    return LatentInfection.builder()
+                            .screeningId(d.getId())
+                            .populationType("keyPopulation")
+                            .name(d.getName())
+                            .idNumber(d.getIdNumber())
+                            .gender(d.getGender())
+                            .age(d.getAge())
+                            .phone(d.getPhone())
+                            .infectionResult(d.getInfectionResult())
+                            .trackingStatus(directXray ? 1 : 0)
+                            .notInPlaceCount(0)
+                            .archived(0)
+                            .hasChestXray(d.getHasChestXray())
+                            .chestXrayDate(d.getChestXrayDate())
+                            .chestXrayResult(d.getChestXrayResult())
+                            .diagnosisFirst(d.getDiagnosisFirst())
+                            .diagnosisResult(d.getDiagnosisFirst())
+                            .departmentId(d.getDepartmentId())
+                            .build();
+                })
+                .toList();
+        List<LatentInfection> allLatent = new ArrayList<>(latentList);
+        allLatent.addAll(latentFromUpdated);
+        if (!allLatent.isEmpty()) {
+            latentInfectionService.saveBatch(allLatent, 500);
+            log.info("自动创建重点人群潜伏感染记录 {} 条", allLatent.size());
         }
 
         return result;
@@ -161,6 +242,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             }
         }
         wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
+        if (!BaseContext.isSuperAdmin()) {
+            wrapper.eq(ScreeningKeyPopulation::getDepartmentId, BaseContext.getCurrentDepartmentId());
+        }
         return page(new Page<>(page, size), wrapper);
     }
 
@@ -176,6 +260,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
         boolean directXray = hasDirectXrayAndDiagnosis(data);
         data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        data.setDepartmentId(BaseContext.getCurrentDepartmentId());
         save(data);
 
         if (data.getIsLatent() == 1) {
@@ -196,6 +281,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .chestXrayResult(data.getChestXrayResult())
                     .diagnosisFirst(data.getDiagnosisFirst())
                     .diagnosisResult(data.getDiagnosisFirst())
+                    .departmentId(data.getDepartmentId())
                     .build();
             latentInfectionService.save(latent);
         }
@@ -212,13 +298,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     }
 
     private boolean isValidIdCard(String id) {
-        if (id == null || id.length() != 18) return false;
-        if (!id.matches("\\d{17}[\\dXx]")) return false;
-        int[] weights = {7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2};
-        String[] checkCodes = {"1", "0", "X", "9", "8", "7", "6", "5", "4", "3", "2"};
-        int sum = 0;
-        for (int i = 0; i < 17; i++) sum += Character.getNumericValue(id.charAt(i)) * weights[i];
-        return checkCodes[sum % 11].equalsIgnoreCase(String.valueOf(id.charAt(17)));
+        // 仅校验格式（18位 + 字符规则）。Excel 以数值型存储身份证号时会丢失浮点精度，导致校验码错误，故不做校验码验证。
+        return id != null && id.length() == 18 && id.matches("\\d{17}[\\dXx]");
     }
 
     private boolean isValidPhone(String phone) {

@@ -39,6 +39,9 @@ public class User implements Serializable {
     /** 所属机构名称 */
     private String orgName;
 
+    /** 所属部门ID */
+    private Long departmentId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

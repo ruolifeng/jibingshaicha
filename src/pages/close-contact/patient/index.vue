@@ -15,9 +15,10 @@ import {
   getPatientListApi, importEpidemicApi, saveFirstVisitApi, getFirstVisitApi,
   saveFollowUpApi, getFollowUpListApi, saveMedicationApi, getMedicationApi, completeMedicationApi
 } from "./apis"
-import { sendNoticeApi, confirmNoticeApi, getNoticeListByBizApi } from "@/pages/school/latent/apis"
+import { sendNoticeApi, confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi } from "@/pages/school/latent/apis"
 import { getScreeningCloseContactDetailApi } from "@/pages/close-contact/screening/apis"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getLevel5UsersApi } from "@@/apis/users"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -32,6 +33,14 @@ async function loadLevel5Users() {
 }
 
 onMounted(() => { loadLevel5Users() })
+
+// ==================== 分级诊疗 ====================
+const tierCareVisible = ref(false)
+const tierCareRow = ref<any>(null)
+function openTierCare(row: any) {
+  tierCareRow.value = row
+  tierCareVisible.value = true
+}
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -121,18 +130,40 @@ const noticeForm = reactive({
 
 function openNoticeDialog(row: any) {
   noticeRow.value = row
-  Object.assign(noticeForm, {
-    idNumber: row.idNumber || "", gender: row.gender || "",
-    birthDate: "", age: row.age || null,
-    ethnicity: row.ethnicity || "", phone: row.phone || "",
-    crowdCategory: "", currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
-    chestXrayDate: "", chestXrayResult: "",
-    treatmentInstitution: "", issuedTime: "",
-    patientType: "", managementMethod: "",
-    treatmentPlan: "", customPlanDetail: "",
-    sputumSmear: "", sputumCulture: "", molecularTest: "", pathologyTest: "",
-    otherNotes: "", receiverOrgId: undefined
-  })
+  if ((row.noticeStatus === 0 || row.noticeStatus === 2) && row.noticeId) {
+    getNoticeListByBizApi(row.id, "patient").then(({ data }) => {
+      const notice = data?.[0]
+      if (notice) {
+        Object.assign(noticeForm, {
+          idNumber: notice.idNumber || "", gender: notice.gender || "",
+          birthDate: notice.birthDate || "", age: notice.age || null,
+          ethnicity: notice.ethnicity || "", phone: notice.phone || "",
+          crowdCategory: notice.crowdCategory || "",
+          currentAddress: notice.currentAddress || "", householdAddress: notice.householdAddress || "",
+          chestXrayDate: notice.chestXrayDate || "", chestXrayResult: notice.chestXrayResult || "",
+          treatmentInstitution: notice.treatmentInstitution || "", issuedTime: notice.issuedTime || "",
+          patientType: notice.patientType || "", managementMethod: notice.managementMethod || "",
+          treatmentPlan: notice.treatmentPlan || "", customPlanDetail: notice.customPlanDetail || "",
+          sputumSmear: notice.sputumSmear || "", sputumCulture: notice.sputumCulture || "",
+          molecularTest: notice.molecularTest || "", pathologyTest: notice.pathologyTest || "",
+          otherNotes: notice.otherNotes || "", receiverOrgId: notice.receiverOrgId || undefined
+        })
+      }
+    }).catch(() => { /* 忽略 */ })
+  } else {
+    Object.assign(noticeForm, {
+      idNumber: row.idNumber || "", gender: row.gender || "",
+      birthDate: "", age: row.age || null,
+      ethnicity: row.ethnicity || "", phone: row.phone || "",
+      crowdCategory: "", currentAddress: row.currentAddress || "", householdAddress: row.householdAddress || "",
+      chestXrayDate: "", chestXrayResult: "",
+      treatmentInstitution: "", issuedTime: "",
+      patientType: "", managementMethod: "",
+      treatmentPlan: "", customPlanDetail: "",
+      sputumSmear: "", sputumCulture: "", molecularTest: "", pathologyTest: "",
+      otherNotes: "", receiverOrgId: undefined
+    })
+  }
   noticeDialogVisible.value = true
 }
 
@@ -150,6 +181,25 @@ async function handleSendNotice() {
       senderId: userStore.userId
     })
     ElMessage.success("患者通知单发送成功")
+    noticeDialogVisible.value = false
+    fetchData()
+  } catch { /* handled */ } finally { submitting.value = false }
+}
+
+async function handleSaveDraft() {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await saveNoticeDraftApi({
+      noticeType: "patient",
+      populationType: "closeContact",
+      bizId: noticeRow.value.id,
+      patientName: noticeRow.value.name,
+      ...noticeForm,
+      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+      senderId: userStore.userId
+    })
+    ElMessage.success("通知单草稿已保存")
     noticeDialogVisible.value = false
     fetchData()
   } catch { /* handled */ } finally { submitting.value = false }
@@ -494,15 +544,20 @@ watch(
         <el-table-column prop="source" label="来源">
           <template #default="{ row }">
             <el-tag :type="row.source === 'confirmed' ? 'danger' : 'warning'" size="small">
-              {{ row.source === "confirmed" ? "转诊确诊" : "大疫情导入" }}
+              {{ row.source === "confirmed" ? "诊断确诊" : "大疫情导入" }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="患者通知单">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="viewNotice(row)">
-              {{ row.name }}通知单
-            </el-button>
+            <template v-if="row.noticeStatus === 1 || row.noticeStatus === 2">
+              <el-button type="primary" link size="small" @click="viewNotice(row)">
+                {{ row.name }}通知单
+              </el-button>
+              <el-tag v-if="row.noticeStatus === 2" type="success" size="small" class="ml-1">已确认</el-tag>
+            </template>
+            <el-tag v-else-if="row.noticeStatus === 0" type="info" size="small">草稿</el-tag>
+            <span v-else class="text-gray-400">-</span>
           </template>
         </el-table-column>
         <el-table-column label="首次随访">
@@ -510,12 +565,21 @@ watch(
             <el-button type="primary" link size="small" @click="viewFirstVisit(row)">查看</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="260">
+        <el-table-column label="操作" fixed="right" width="380">
           <template #default="{ row }">
             <div class="action-btns">
               <el-button type="info" link size="small" @click="viewScreeningDetail(row)">查看详情</el-button>
-              <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
-              <el-button v-permission="'patient:firstVisit'" type="success" link size="small" @click="openFirstVisitDialog(row)">填写首次随访</el-button>
+              <template v-if="row.noticeStatus === null || row.noticeStatus === undefined">
+                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">填写通知单</el-button>
+              </template>
+              <template v-else-if="row.noticeStatus === 0">
+                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">填写通知单</el-button>
+                <el-button v-permission="'patient:sendNotice'" type="success" link size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
+              </template>
+              <template v-else-if="row.noticeStatus === 2">
+                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">发送通知单</el-button>
+              </template>
+              <el-button v-permission="'patient:firstVisit'" type="success" link size="small" :disabled="!!row.hasFirstVisit" @click="openFirstVisitDialog(row)">填写首次随访</el-button>
               <el-dropdown trigger="click" @command="(cmd: string) => handleActionCommand(cmd, row)">
                 <el-button type="primary" link size="small">
                   更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -530,6 +594,7 @@ watch(
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
+              <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
             </div>
           </template>
         </el-table-column>
@@ -551,6 +616,17 @@ watch(
     <!-- 患者通知单弹窗 -->
     <!-- 筛查详情弹窗 -->
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="closeContact" :data="screeningDetailData" />
+
+    <!-- 分级诊疗弹窗 -->
+    <ReferralDialog
+      v-if="tierCareRow"
+      v-model="tierCareVisible"
+      :biz-id="tierCareRow.id"
+      biz-type="patient_close"
+      population-type="close"
+      module-type="patient"
+      :subject-name="tierCareRow.name || ''"
+    />
 
     <el-dialog v-model="noticeDialogVisible" title="填写患者通知单" width="680px">
       <el-form :model="noticeForm" label-width="110px">
@@ -604,7 +680,8 @@ watch(
       </el-form>
       <template #footer>
         <el-button @click="noticeDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSendNotice">发送通知单</el-button>
+        <el-button :loading="submitting" @click="handleSaveDraft">保存草稿</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSendNotice">发送</el-button>
       </template>
     </el-dialog>
 

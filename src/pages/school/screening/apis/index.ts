@@ -49,6 +49,15 @@ export function deleteScreeningSchoolApi(id: number) {
   })
 }
 
+/** 批量删除学校人群筛查记录（级联删除） */
+export function batchDeleteScreeningSchoolApi(ids: number[]) {
+  return request<ApiResponseData<null>>({
+    url: "screening/school/batch-delete",
+    method: "delete",
+    data: ids
+  })
+}
+
 /** 按 ID 查询学校人群筛查记录详情 */
 export function getScreeningSchoolDetailApi(id: number) {
   return request<ApiResponseData<any>>({

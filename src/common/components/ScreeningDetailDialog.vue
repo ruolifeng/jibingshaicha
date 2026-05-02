@@ -60,7 +60,16 @@ const dialogTitle = computed(() => {
           <el-descriptions-item label="筛查方法">{{ data.screenMethod }}</el-descriptions-item>
           <el-descriptions-item label="筛查结果">{{ data.screenResult }}</el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">{{ data.infectionResult }}</el-descriptions-item>
-          <el-descriptions-item label="判定结果">{{ data.isLatent === 1 ? "疑似结核" : "正常" }}</el-descriptions-item>
+          <el-descriptions-item label="感染判定">{{ data.isLatent === 1 ? "阳性（潜伏管理）" : "阴性" }}</el-descriptions-item>
+          <el-descriptions-item label="是否进行胸片">{{ data.hasChestXray || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="胸片检查日期">{{ data.chestXrayDate || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="胸片检查结果">{{ data.chestXrayResult || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="首次诊断结果" :span="3">
+            <el-tag v-if="data.diagnosisFirst" :type="data.diagnosisFirst?.includes('确诊') || data.diagnosisFirst?.includes('疑似') ? 'danger' : 'info'" size="small">
+              {{ data.diagnosisFirst }}
+            </el-tag>
+            <span v-else>-</span>
+          </el-descriptions-item>
           <el-descriptions-item label="户籍地址" :span="3">{{ data.householdAddress }}</el-descriptions-item>
           <el-descriptions-item label="现住址" :span="3">{{ data.currentAddress }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="3">{{ data.remark || "-" }}</el-descriptions-item>
@@ -106,7 +115,16 @@ const dialogTitle = computed(() => {
           <el-descriptions-item label="筛查方法">{{ data.screenMethod }}</el-descriptions-item>
           <el-descriptions-item label="筛查结果">{{ data.screenResult }}</el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">{{ data.infectionResult }}</el-descriptions-item>
-          <el-descriptions-item label="判定结果">{{ data.isLatent === 1 ? "疑似结核" : "正常" }}</el-descriptions-item>
+          <el-descriptions-item label="感染判定">{{ data.isLatent === 1 ? "阳性（潜伏管理）" : "阴性" }}</el-descriptions-item>
+          <el-descriptions-item label="是否进行胸片">{{ data.hasChestXray || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="胸片检查日期">{{ data.chestXrayDate || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="胸片检查结果">{{ data.chestXrayResult || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="首次诊断结果" :span="3">
+            <el-tag v-if="data.diagnosisFirst" :type="data.diagnosisFirst?.includes('确诊') || data.diagnosisFirst?.includes('疑似') ? 'danger' : 'info'" size="small">
+              {{ data.diagnosisFirst }}
+            </el-tag>
+            <span v-else>-</span>
+          </el-descriptions-item>
           <el-descriptions-item label="户籍地址" :span="3">{{ data.householdAddress }}</el-descriptions-item>
           <el-descriptions-item label="现住址" :span="3">{{ data.currentAddress }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="3">{{ data.remark || "-" }}</el-descriptions-item>

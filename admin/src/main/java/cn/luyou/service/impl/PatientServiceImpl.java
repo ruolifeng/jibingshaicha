@@ -5,10 +5,15 @@ import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.EpidemicReport;
+import cn.luyou.model.FirstVisit;
+import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.mapper.FirstVisitMapper;
+import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.PatientMapper;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
+import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -29,6 +34,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -38,6 +44,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private final EpidemicReportService epidemicReportService;
     private final ObjectMapper objectMapper;
+    private final NoticeMapper noticeMapper;
+    private final FirstVisitMapper firstVisitMapper;
 
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
@@ -48,7 +56,50 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .eq(archived != null, Patient::getArchived, archived)
                 .orderByDesc(Patient::getCreateTime);
-        return page(new Page<>(page, size), wrapper);
+        if (!BaseContext.isSuperAdmin()) {
+            wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+        }
+        IPage<Patient> result = page(new Page<>(page, size), wrapper);
+        fillNoticeStatus(result.getRecords(), populationType);
+        fillFirstVisitStatus(result.getRecords());
+        return result;
+    }
+
+    /** 批量查询首次随访状态并填充到每条记录 */
+    private void fillFirstVisitStatus(List<Patient> patients) {
+        if (patients == null || patients.isEmpty()) return;
+        List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
+        LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
+        fw.in(FirstVisit::getPatientId, patientIds).select(FirstVisit::getPatientId);
+        List<Long> visitedIds = firstVisitMapper.selectList(fw).stream()
+                .map(FirstVisit::getPatientId)
+                .collect(Collectors.toList());
+        patients.forEach(p -> p.setHasFirstVisit(visitedIds.contains(p.getId())));
+    }
+
+    /** 批量查询患者通知单状态并填充到每条记录 */
+    private void fillNoticeStatus(List<Patient> patients, String populationType) {
+        if (patients == null || patients.isEmpty()) return;
+        List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
+        LambdaQueryWrapper<Notice> nw = new LambdaQueryWrapper<>();
+        nw.in(Notice::getBizId, patientIds)
+          .eq(Notice::getNoticeType, "patient")
+          .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType);
+        List<Notice> notices = noticeMapper.selectList(nw);
+        // 每个 bizId 保留最新一条（取 id 最大的，因为插入顺序即为时间顺序）
+        Map<Long, Notice> noticeMap = notices.stream()
+                .collect(Collectors.toMap(
+                        Notice::getBizId,
+                        n -> n,
+                        (a, b) -> a.getId() > b.getId() ? a : b
+                ));
+        patients.forEach(p -> {
+            Notice n = noticeMap.get(p.getId());
+            if (n != null) {
+                p.setNoticeStatus(n.getStatus());
+                p.setNoticeId(n.getId());
+            }
+        });
     }
 
     @Override
@@ -143,6 +194,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .source("epidemic")
                         .archived(0)
                         .epidemicData(rawJson)
+                        .departmentId(BaseContext.getCurrentDepartmentId())
                         .build();
                 save(newPatient);
                 report.setPatientId(newPatient.getId());
@@ -179,6 +231,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
+        if (!BaseContext.isSuperAdmin()) {
+            wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+        }
         return page(new Page<>(page, size), wrapper);
     }
 

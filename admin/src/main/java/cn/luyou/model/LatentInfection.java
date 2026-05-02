@@ -57,6 +57,8 @@ public class LatentInfection extends BaseEntity {
     private Integer medicationStatus;
     private Integer archived;
     private LocalDateTime archivedTime;
+    /** 所属部门ID */
+    private Long departmentId;
 
     /** 是否已发送潜伏者通知单（非持久化字段） */
     @TableField(exist = false)

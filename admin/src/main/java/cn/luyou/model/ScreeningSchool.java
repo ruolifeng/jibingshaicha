@@ -1,8 +1,8 @@
 package cn.luyou.model;
 
+import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
-import com.alibaba.excel.annotation.format.DateTimeFormat;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,8 +40,7 @@ public class ScreeningSchool extends BaseEntity {
     @ExcelProperty(index = 5)
     private String gender;
 
-    @ExcelProperty(index = 6)
-    @DateTimeFormat("yyyy.MM.dd")
+    @ExcelProperty(index = 6, converter = FlexibleLocalDateConverter.class)
     private LocalDate birthDate;
 
     @ExcelProperty(index = 7)
@@ -88,8 +87,7 @@ public class ScreeningSchool extends BaseEntity {
     private String hasInfectionScreen;
 
     /** 感染筛查日期（列21） */
-    @ExcelProperty(index = 21)
-    @DateTimeFormat("yyyy.MM.dd")
+    @ExcelProperty(index = 21, converter = FlexibleLocalDateConverter.class)
     private LocalDate screenDate;
 
     /** 方法（PPD/EC/IGRA，列22） */
@@ -107,8 +105,7 @@ public class ScreeningSchool extends BaseEntity {
     // ===== 胸片与诊断（Z-AC，index 25-28）：支持 Excel 直接导入 =====
     @ExcelProperty(index = 25)
     private String hasChestXray;
-    @ExcelProperty(index = 26)
-    @DateTimeFormat("yyyy.MM.dd")
+    @ExcelProperty(index = 26, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;
     @ExcelProperty(index = 27)
     private String chestXrayResult;
@@ -143,4 +140,7 @@ public class ScreeningSchool extends BaseEntity {
     private Integer isLatent;
     @ExcelIgnore
     private String uploadBatch;
+    /** 所属部门ID */
+    @ExcelIgnore
+    private Long departmentId;
 }

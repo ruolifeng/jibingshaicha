@@ -105,12 +105,10 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             case "closeContact" -> {
                 ScreeningCloseContact c = screeningCloseContactMapper.selectById(screeningId);
                 if (c != null) {
+                    // 密接模型中仅有 hasPreventiveTreatment 与 preventivePlan 两个预防治疗字段
+                    // 治疗开始/结束日期、管理人员等详情保存在 supervision_form 表，无需回写
                     c.setHasPreventiveTreatment("是");
                     c.setPreventivePlan(form.getTreatmentPlan());
-                    c.setPreventiveStartDate(form.getTreatmentStartDate());
-                    c.setPreventiveEndDate(form.getTreatmentEndDate());
-                    c.setPreventiveResult(form.getPreventiveResult());
-                    c.setPreventiveManager(form.getPreventiveManager());
                     screeningCloseContactMapper.updateById(c);
                 }
             }

@@ -73,6 +73,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq(role != null, User::getRole, role)
                 .orderByAsc(User::getRole)
                 .orderByDesc(User::getCreateTime);
+        if (!BaseContext.isSuperAdmin()) {
+            wrapper.eq(User::getDepartmentId, BaseContext.getCurrentDepartmentId());
+        }
         return page(new Page<>(page, size), wrapper);
     }
 
@@ -127,9 +130,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public List<UserInfoVO> getLevel5Users() {
-        List<User> users = lambdaQuery()
-                .eq(User::getRole, 6)
-                .list();
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .eq(User::getRole, 6);
+        if (!BaseContext.isSuperAdmin()) {
+            wrapper.eq(User::getDepartmentId, BaseContext.getCurrentDepartmentId());
+        }
+        List<User> users = list(wrapper);
         return users.stream().map(this::buildUserInfoVO).toList();
     }
 
@@ -157,6 +163,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .role(user.getRole())
                 .roleName(roleName)
                 .orgName(user.getOrgName())
+                .departmentId(user.getDepartmentId())
                 .roles(roleList)
                 .permissions(permissions)
                 .build();

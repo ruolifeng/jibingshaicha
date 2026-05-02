@@ -84,7 +84,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "suspected",
         component: () => import("@/pages/school/suspected/index.vue"),
         name: "SchoolSuspected",
-        meta: { title: "疑似结核", keepAlive: true, permission: "school:suspected" }
+        meta: { title: "待诊断", keepAlive: true, permission: "school:suspected" }
       },
       {
         path: "latent",
@@ -127,7 +127,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "suspected",
         component: () => import("@/pages/key-population/suspected/index.vue"),
         name: "KeyPopulationSuspected",
-        meta: { title: "疑似结核", keepAlive: true, permission: "keyPopulation:suspected" }
+        meta: { title: "待诊断", keepAlive: true, permission: "keyPopulation:suspected" }
       },
       {
         path: "latent",
@@ -170,7 +170,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "suspected",
         component: () => import("@/pages/close-contact/suspected/index.vue"),
         name: "CloseContactSuspected",
-        meta: { title: "疑似结核", keepAlive: true, permission: "closeContact:suspected" }
+        meta: { title: "待诊断", keepAlive: true, permission: "closeContact:suspected" }
       },
       {
         path: "latent",
@@ -242,6 +242,12 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/system/users.vue"),
         name: "SystemUsers",
         meta: { title: "用户管理", roles: ["admin"], permission: "system:users" }
+      },
+      {
+        path: "department",
+        component: () => import("@/pages/system/department/index.vue"),
+        name: "SystemDepartment",
+        meta: { title: "部门管理", roles: ["admin"], permission: "system:department" }
       },
       {
         path: "permissions",

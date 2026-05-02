@@ -16,6 +16,7 @@ import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
+import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -56,14 +57,28 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     public IPage<LatentInfection> queryPage(int page, int size, String populationType,
-                                             String name, String idNumber, Integer trackingStatus, Integer archived) {
+                                             String name, String idNumber, Integer trackingStatus, Integer archived,
+                                             String referralResult) {
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived)
-                .orderByDesc(LatentInfection::getCreateTime);
+                // 潜伏感染列表始终排除确诊患者/疑似肺结核，这些数据属于患者管理模块
+                .notIn(LatentInfection::getDiagnosisResult, Arrays.asList("确诊患者", "疑似肺结核"));
+
+        // referralResult 过滤：pending = 查尚未转诊的记录；具体值 = 精确匹配
+        if ("pending".equals(referralResult)) {
+            wrapper.isNull(LatentInfection::getReferralResult);
+        } else if (StrUtil.isNotBlank(referralResult)) {
+            wrapper.eq(LatentInfection::getReferralResult, referralResult);
+        }
+
+        wrapper.orderByDesc(LatentInfection::getCreateTime);
+        if (!BaseContext.isSuperAdmin()) {
+            wrapper.eq(LatentInfection::getDepartmentId, BaseContext.getCurrentDepartmentId());
+        }
         IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);
 
         // 补充通知单发送状态：用于前端控制“发送通知单”禁用和督导表启用
@@ -123,7 +138,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             case "closeContact" -> {
                 ScreeningCloseContact c = screeningCloseContactMapper.selectById(latent.getScreeningId());
                 if (c == null) return;
-                latent.setBirthDate(c.getBirthDate());
+                // ScreeningCloseContact 无独立 birthDate 字段，通知单出生日期留空由前端手填
                 latent.setEthnicity(c.getEthnicity());
                 latent.setCurrentAddress(c.getCurrentAddress());
                 latent.setHouseholdAddress(c.getHouseholdAddress());
@@ -131,19 +146,22 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 Integer round = latent.getActiveRound() == null ? 1 : latent.getActiveRound();
                 switch (round) {
                     case 1 -> {
+                        // 首次筛查：index 18=firstScreenDate, 22=infectionCheckMethod, 23=infectionCheckResult
                         latent.setScreenDate(c.getFirstScreenDate());
-                        latent.setScreenMethod(c.getFirstInfectionMethod());
-                        latent.setScreenResult(c.getFirstScreenResult());
+                        latent.setScreenMethod(c.getInfectionCheckMethod());
+                        latent.setScreenResult(c.getInfectionCheckResult());
                     }
                     case 2 -> {
-                        latent.setScreenDate(c.getHalfYearScreenDate());
-                        latent.setScreenMethod(c.getHalfYearInfectionMethod());
-                        latent.setScreenResult(c.getHalfYearScreenResult());
+                        // 6月随访：index 40=followup6ScreenDate, 44=followup6ImagingMethod, 49=followup6Result
+                        latent.setScreenDate(c.getFollowup6ScreenDate());
+                        latent.setScreenMethod(c.getFollowup6ImagingMethod());
+                        latent.setScreenResult(c.getFollowup6Result());
                     }
                     case 3 -> {
-                        latent.setScreenDate(c.getOneYearScreenDate());
-                        latent.setScreenMethod(c.getOneYearInfectionMethod());
-                        latent.setScreenResult(c.getOneYearScreenResult());
+                        // 12月随访：index 51=followup12ScreenDate, 55=followup12ImagingMethod, 60=followup12Result
+                        latent.setScreenDate(c.getFollowup12ScreenDate());
+                        latent.setScreenMethod(c.getFollowup12ImagingMethod());
+                        latent.setScreenResult(c.getFollowup12Result());
                     }
                     default -> {
                     }
@@ -229,12 +247,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             xrayDate = LocalDate.parse(xrayDateObj.toString(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         }
 
-        entity.setHasChestXray(hasXray);
-        entity.setChestXrayDate(xrayDate);
-        entity.setChestXrayResult(xrayResult);
-        entity.setDiagnosisFirst(diagnosisFirst);
-        entity.setDiagnosisResult(diagnosisFirst);
-        updateById(entity);
+        // 精确更新胸片与诊断字段，避免回写无关字段
+        lambdaUpdate()
+                .eq(LatentInfection::getId, entity.getId())
+                .set(LatentInfection::getHasChestXray, hasXray)
+                .set(LatentInfection::getChestXrayDate, xrayDate)
+                .set(LatentInfection::getChestXrayResult, xrayResult)
+                .set(LatentInfection::getDiagnosisFirst, diagnosisFirst)
+                .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
+                .update();
 
         // V4 sheet2：胸片与诊断同步回写到筛查表
         writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
@@ -242,6 +263,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     /**
      * 将胸片与诊断数据回写到对应的筛查管理表。
+     * 使用 LambdaUpdateWrapper 精确更新目标字段，避免 updateById 回写其他无关字段。
      */
     private void writeBackXrayToScreening(LatentInfection entity, String hasXray,
                                           LocalDate xrayDate, String xrayResult, String diagnosis) {
@@ -252,53 +274,26 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         switch (type) {
             case "school" -> {
-                ScreeningSchool s = screeningSchoolMapper.selectById(sid);
-                if (s != null) {
-                    if (StrUtil.isNotBlank(hasXray)) s.setHasChestXray(hasXray);
-                    if (xrayDate != null) s.setChestXrayDate(xrayDate);
-                    if (StrUtil.isNotBlank(xrayResult)) s.setChestXrayResult(xrayResult);
-                    if (StrUtil.isNotBlank(diagnosis)) s.setDiagnosisFirst(diagnosis);
-                    screeningSchoolMapper.updateById(s);
-                }
+                var update = new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ScreeningSchool>()
+                        .eq(ScreeningSchool::getId, sid);
+                if (StrUtil.isNotBlank(hasXray)) update.set(ScreeningSchool::getHasChestXray, hasXray);
+                if (xrayDate != null) update.set(ScreeningSchool::getChestXrayDate, xrayDate);
+                if (StrUtil.isNotBlank(xrayResult)) update.set(ScreeningSchool::getChestXrayResult, xrayResult);
+                if (StrUtil.isNotBlank(diagnosis)) update.set(ScreeningSchool::getDiagnosisFirst, diagnosis);
+                screeningSchoolMapper.update(null, update);
             }
             case "keyPopulation" -> {
-                ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(sid);
-                if (k != null) {
-                    if (StrUtil.isNotBlank(hasXray)) k.setHasChestXray(hasXray);
-                    if (xrayDate != null) k.setChestXrayDate(xrayDate);
-                    if (StrUtil.isNotBlank(xrayResult)) k.setChestXrayResult(xrayResult);
-                    if (StrUtil.isNotBlank(diagnosis)) k.setDiagnosisFirst(diagnosis);
-                    screeningKeyPopulationMapper.updateById(k);
-                }
+                var update = new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ScreeningKeyPopulation>()
+                        .eq(ScreeningKeyPopulation::getId, sid);
+                if (StrUtil.isNotBlank(hasXray)) update.set(ScreeningKeyPopulation::getHasChestXray, hasXray);
+                if (xrayDate != null) update.set(ScreeningKeyPopulation::getChestXrayDate, xrayDate);
+                if (StrUtil.isNotBlank(xrayResult)) update.set(ScreeningKeyPopulation::getChestXrayResult, xrayResult);
+                if (StrUtil.isNotBlank(diagnosis)) update.set(ScreeningKeyPopulation::getDiagnosisFirst, diagnosis);
+                screeningKeyPopulationMapper.update(null, update);
             }
             case "closeContact" -> {
-                ScreeningCloseContact c = screeningCloseContactMapper.selectById(sid);
-                if (c != null) {
-                    Integer round = entity.getActiveRound();
-                    if (round != null) {
-                        switch (round) {
-                            case 1 -> {
-                                if (StrUtil.isNotBlank(hasXray)) c.setFirstHasChestXray(hasXray);
-                                if (xrayDate != null) c.setFirstChestXrayDate(xrayDate);
-                                if (StrUtil.isNotBlank(xrayResult)) c.setFirstChestXrayResult(xrayResult);
-                                if (StrUtil.isNotBlank(diagnosis)) c.setFirstDiagnosis(diagnosis);
-                            }
-                            case 2 -> {
-                                if (StrUtil.isNotBlank(hasXray)) c.setHalfYearHasChestXray(hasXray);
-                                if (xrayDate != null) c.setHalfYearChestXrayDate(xrayDate);
-                                if (StrUtil.isNotBlank(xrayResult)) c.setHalfYearChestXrayResult(xrayResult);
-                                if (StrUtil.isNotBlank(diagnosis)) c.setHalfYearDiagnosis(diagnosis);
-                            }
-                            case 3 -> {
-                                if (StrUtil.isNotBlank(hasXray)) c.setOneYearHasChestXray(hasXray);
-                                if (xrayDate != null) c.setOneYearChestXrayDate(xrayDate);
-                                if (StrUtil.isNotBlank(xrayResult)) c.setOneYearChestXrayResult(xrayResult);
-                                if (StrUtil.isNotBlank(diagnosis)) c.setOneYearDiagnosis(diagnosis);
-                            }
-                        }
-                    }
-                    screeningCloseContactMapper.updateById(c);
-                }
+                // 密接人群的胸片回写到 latent_infection 表已完成，无需再回写到筛查表
+                // （密接筛查表结构与胸片字段不对应，由各轮次随访字段承载）
             }
         }
     }
@@ -306,8 +301,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int importXrayBatch(MultipartFile file, String populationType) {
+        // 与各人群主导入的 headRowNumber 保持一致
         int headerRows = switch (populationType) {
-            case "keyPopulation" -> 5;
+            case "keyPopulation" -> 4;
             default -> 2;
         };
 
@@ -327,7 +323,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         int updated = 0;
         for (Map<String, Object> row : rows) {
-            String idNumber = getStrCell(row, 9);
+            // 密接人群证件号在列12，其余人群在列9
+            int idNumberIdx = "closeContact".equals(populationType) ? 12 : 9;
+            String idNumber = getStrCell(row, idNumberIdx);
             if (StrUtil.isBlank(idNumber)) continue;
 
             LatentInfection entity = lambdaQuery()
@@ -339,25 +337,28 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             if (entity == null || !Integer.valueOf(1).equals(entity.getTrackingStatus())) continue;
             if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) continue;
 
-            // 根据人群类型确定 Excel 中胸片/诊断字段的列索引
+            // 根据人群类型确定 Excel 中胸片/诊断字段的列索引（与模型 @ExcelProperty(index=N) 对齐）
             int hasXrayIdx, xrayDateIdx, xrayResultIdx, diagnosisIdx;
             switch (populationType) {
                 case "school" -> {
-                    // 学校人群：Z(25)-AC(28)
+                    // 学校人群：hasChestXray(25) chestXrayDate(26) chestXrayResult(27) diagnosisFirst(28)
                     hasXrayIdx = 25; xrayDateIdx = 26; xrayResultIdx = 27; diagnosisIdx = 28;
                 }
                 case "keyPopulation" -> {
-                    // 重点人群：AK(36)-AO(39)
-                    hasXrayIdx = 36; xrayDateIdx = 37; xrayResultIdx = 38; diagnosisIdx = 39;
+                    // 重点人群：hasChestXray(37) chestXrayDate(38) chestXrayResult(39) diagnosisFirst(40)
+                    hasXrayIdx = 37; xrayDateIdx = 38; xrayResultIdx = 39; diagnosisIdx = 40;
                 }
                 case "closeContact" -> {
                     // 密接人群：按阳性轮次读取对应列组
                     Integer round = entity.getActiveRound();
                     if (round == null) round = 1;
                     switch (round) {
-                        case 1 -> { hasXrayIdx = 24; xrayDateIdx = 25; xrayResultIdx = 26; diagnosisIdx = 27; }
-                        case 2 -> { hasXrayIdx = 33; xrayDateIdx = 34; xrayResultIdx = 35; diagnosisIdx = 36; }
-                        case 3 -> { hasXrayIdx = 42; xrayDateIdx = 43; xrayResultIdx = 44; diagnosisIdx = 45; }
+                        // 首次筛查：imagingDate(24) imagingMethod(25) imagingResult(26) finalScreeningResult(30)
+                        case 1 -> { hasXrayIdx = 24; xrayDateIdx = 25; xrayResultIdx = 26; diagnosisIdx = 30; }
+                        // 6月随访：followup6ImagingDate(43) followup6ImagingMethod(44) followup6ImagingResult(45) followup6Result(49)
+                        case 2 -> { hasXrayIdx = 43; xrayDateIdx = 44; xrayResultIdx = 45; diagnosisIdx = 49; }
+                        // 12月随访：followup12ImagingDate(54) followup12ImagingMethod(55) followup12ImagingResult(56) followup12Result(60)
+                        case 3 -> { hasXrayIdx = 54; xrayDateIdx = 55; xrayResultIdx = 56; diagnosisIdx = 60; }
                         default -> { continue; }
                     }
                 }
@@ -370,14 +371,18 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             String hasXray = getStrCell(row, hasXrayIdx);
             LocalDate xrayDate = parseDateCell(row.get(xrayDateIdx));
             String xrayResult = getStrCell(row, xrayResultIdx);
-            if (StrUtil.isNotBlank(hasXray)) entity.setHasChestXray(hasXray);
-            if (xrayDate != null) entity.setChestXrayDate(xrayDate);
-            if (StrUtil.isNotBlank(xrayResult)) entity.setChestXrayResult(xrayResult);
-            entity.setDiagnosisFirst(diagnosisFirst);
-            entity.setDiagnosisResult(diagnosisFirst);
-            updateById(entity);
-            writeBackXrayToScreening(entity, hasXray,
-                    xrayDate, xrayResult, diagnosisFirst);
+
+            // 使用精确字段更新，避免 updateById 回写无关字段
+            lambdaUpdate()
+                    .eq(LatentInfection::getId, entity.getId())
+                    .set(StrUtil.isNotBlank(hasXray), LatentInfection::getHasChestXray, hasXray)
+                    .set(xrayDate != null, LatentInfection::getChestXrayDate, xrayDate)
+                    .set(StrUtil.isNotBlank(xrayResult), LatentInfection::getChestXrayResult, xrayResult)
+                    .set(LatentInfection::getDiagnosisFirst, diagnosisFirst)
+                    .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
+                    .update();
+
+            writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
             updated++;
         }
         log.info("批量导入胸片诊断，populationType={}，成功更新 {} 条", populationType, updated);
@@ -399,6 +404,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         if (StrUtil.isNotBlank(entity.getReferralResult())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已完成转诊，不可重复操作");
+        }
+
+        // 胸片诊断为确诊患者/疑似肺结核时，不允许转诊为潜伏感染者
+        if ("latent".equals(result) &&
+                ("确诊患者".equals(entity.getDiagnosisFirst()) || "疑似肺结核".equals(entity.getDiagnosisFirst()))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片诊断结果为「" + entity.getDiagnosisFirst() + "」，不可转诊为潜伏感染者，请选择正确的转诊结果");
         }
 
         entity.setReferralResult(result);
@@ -428,7 +439,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .phone(entity.getPhone())
                         .diagnosisResult(entity.getDiagnosisResult())
                         .source("confirmed")
-                        .archived(0);
+                        .archived(0)
+                        .departmentId(entity.getDepartmentId());
                 // 从筛查表补全患者档案字段
                 String popType = entity.getPopulationType();
                 if ("school".equals(popType) && entity.getScreeningId() != null) {
@@ -450,8 +462,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 } else if ("closeContact".equals(popType) && entity.getScreeningId() != null) {
                     ScreeningCloseContact c = screeningCloseContactMapper.selectById(entity.getScreeningId());
                     if (c != null) {
-                        pb.birthDate(c.getBirthDate()).idType(c.getIdType())
-                          .ethnicity(c.getEthnicity())
+                        // ScreeningCloseContact 无 birthDate/idType 字段，患者档案中留空
+                        pb.ethnicity(c.getEthnicity())
                           .householdAddress(c.getHouseholdAddress())
                           .currentAddress(c.getCurrentAddress());
                     }

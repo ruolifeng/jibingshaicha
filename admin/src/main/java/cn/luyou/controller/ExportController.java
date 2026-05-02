@@ -91,9 +91,9 @@ public class ExportController {
             row.put("证件号", s.getIdNumber());
             row.put("联系电话", s.getPhone());
             row.put("学校名称", "");
-            row.put("感染筛查结果", s.getFirstInfectionResult());
-            row.put("胸片结果", s.getFirstChestXrayResult());
-            row.put("诊断结果", s.getFirstDiagnosis());
+            row.put("感染筛查结果", s.getInfectionCheckResult());
+            row.put("胸片结果", s.getImagingResult());
+            row.put("诊断结果", s.getFinalScreeningResult());
             rows.add(row);
         });
 
@@ -146,9 +146,9 @@ public class ExportController {
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
                     row.put("证件号", s.getIdNumber()); row.put("电话", s.getPhone());
                     row.put("接触类型", s.getContactType());
-                    row.put("感染筛查结果", s.getFirstInfectionResult());
-                    row.put("胸片结果", s.getFirstChestXrayResult());
-                    row.put("诊断结果", s.getFirstDiagnosis());
+                    row.put("感染筛查结果", s.getInfectionCheckResult());
+                    row.put("胸片结果", s.getImagingResult());
+                    row.put("诊断结果", s.getFinalScreeningResult());
                     rows.add(row);
                 });
             }

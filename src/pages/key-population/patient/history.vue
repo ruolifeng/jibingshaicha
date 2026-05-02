@@ -122,7 +122,7 @@ watch(
           <el-statistic title="历史患者总数" :value="statistics.totalCount" />
         </el-col>
         <el-col :span="5">
-          <el-statistic title="转诊确诊" :value="statistics.confirmedCount" />
+          <el-statistic title="诊断确诊" :value="statistics.confirmedCount" />
         </el-col>
         <el-col :span="5">
           <el-statistic title="大疫情导入" :value="statistics.epidemicCount" />
@@ -150,7 +150,7 @@ watch(
         <el-table-column prop="diagnosisResult" label="诊断结果" />
         <el-table-column prop="source" label="来源">
           <template #default="{ row }">
-            {{ row.source === "confirmed" ? "转诊确诊" : "大疫情导入" }}
+            {{ row.source === "confirmed" ? "诊断确诊" : "大疫情导入" }}
           </template>
         </el-table-column>
         <el-table-column prop="archivedTime" label="归档时间" />

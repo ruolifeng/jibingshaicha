@@ -10,6 +10,7 @@ import {
   INTERRUPT_MEDICATION_OPTIONS, SUPERVISION_MANAGER_TYPE_OPTIONS
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
+import { getToken } from "@@/utils/cache/cookies"
 import {
   getLatentListApi, sendNoticeApi, confirmNoticeApi,
   getNoticeListByBizApi, saveSupervisionApi, getSupervisionDetailApi, setMedicationStatusApi,
@@ -17,6 +18,7 @@ import {
 } from "./apis"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getLevel5UsersApi } from "@@/apis/users"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -76,6 +78,14 @@ function handleReset() {
 }
 
 const submitting = ref(false)
+
+// ==================== 分级诊疗 ====================
+const tierCareVisible = ref(false)
+const tierCareRow = ref<any>(null)
+function openTierCare(row: any) {
+  tierCareRow.value = row
+  tierCareVisible.value = true
+}
 
 // ==================== 通知单弹窗 ====================
 const noticeDialogVisible = ref(false)
@@ -168,6 +178,44 @@ async function viewNotice(row: any) {
 // ==================== 督导表 ====================
 const supervisionDialogVisible = ref(false)
 const supervisionRow = ref<any>(null)
+
+/** 附件上传列表 */
+const attachmentFileList = ref<{ name: string; url: string }[]>([])
+const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
+const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
+
+function beforeAttachmentUpload(file: File) {
+  if (file.size > 20 * 1024 * 1024) {
+    ElMessage.error("附件大小不能超过 20MB")
+    return false
+  }
+  return true
+}
+
+function handleAttachmentSuccess(response: any, uploadFile: any) {
+  if (response.code === 200) {
+    attachmentFileList.value.push({ name: uploadFile.name, url: import.meta.env.VITE_BASE_URL + response.data })
+  } else {
+    ElMessage.error(response.msg || "附件上传失败")
+  }
+}
+
+function handleAttachmentRemove(uploadFile: { name: string }) {
+  attachmentFileList.value = attachmentFileList.value.filter((f: { name: string; url: string }) => f.name !== uploadFile.name)
+}
+
+function handleAttachmentError() {
+  ElMessage.error("附件上传失败，请重试")
+}
+
+function getAttachmentLabel(url: string, index: number | string): string {
+  try {
+    const match = url.match(/[?&]name=([^&]+)/)
+    if (match) return decodeURIComponent(match[1])
+  } catch { /* ignore */ }
+  return `附件${Number(index) + 1}`
+}
+
 const supervisionForm = reactive({
   category: "",
   gender: "",
@@ -209,6 +257,7 @@ function openSupervisionDialog(row: any) {
   supervisionForm.managerName = ""
   supervisionForm.remark = ""
   supervisionForm.attachmentUrls = ""
+  attachmentFileList.value = []
   supervisionDialogVisible.value = true
 }
 
@@ -220,6 +269,7 @@ async function handleSaveSupervision() {
     if (!rate && supervisionForm.totalDoses && supervisionForm.actualDoses !== null && supervisionForm.totalDoses > 0) {
       rate = ((supervisionForm.actualDoses / supervisionForm.totalDoses) * 100).toFixed(1) + "%"
     }
+    const attachmentUrls = attachmentFileList.value.map((f: { name: string; url: string }) => f.url).join(",")
     await saveSupervisionApi({
       latentInfectionId: supervisionRow.value.id,
       populationType: POPULATION_TYPE,
@@ -243,7 +293,7 @@ async function handleSaveSupervision() {
       managerType: supervisionForm.managerType || undefined,
       managerName: supervisionForm.managerName || undefined,
       remark: supervisionForm.remark || undefined,
-      attachmentUrls: supervisionForm.attachmentUrls || undefined,
+      attachmentUrls: attachmentUrls || undefined,
       status: 2
     })
     ElMessage.success("督导表保存成功")
@@ -510,6 +560,7 @@ watch(
               治疗管理
             </el-button>
             <el-button type="info" size="small" @click="openAggregateDialog(row)">信息归集</el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">分级诊疗</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -529,6 +580,17 @@ watch(
 
     <!-- 筛查详情弹窗 -->
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="keyPopulation" :data="screeningDetailData" />
+
+    <!-- 分级诊疗弹窗 -->
+    <ReferralDialog
+      v-if="tierCareRow"
+      v-model="tierCareVisible"
+      :biz-id="tierCareRow.id"
+      biz-type="latent_key"
+      population-type="key"
+      module-type="latent"
+      :subject-name="tierCareRow.name || ''"
+    />
 
     <!-- 通知单弹窗 -->
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
@@ -802,8 +864,25 @@ watch(
         <el-form-item label="备注">
           <el-input v-model="supervisionForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
         </el-form-item>
-        <el-form-item label="附件">
-          <el-input v-model="supervisionForm.attachmentUrls" type="textarea" :rows="2" placeholder="附件URL，多个用逗号分隔（暂支持手动填写）" />
+        <el-form-item label="附件上传">
+          <el-upload
+            :action="uploadAction"
+            :headers="uploadHeaders"
+            :file-list="attachmentFileList"
+            :before-upload="beforeAttachmentUpload"
+            :on-success="handleAttachmentSuccess"
+            :on-remove="handleAttachmentRemove"
+            :on-error="handleAttachmentError"
+            multiple
+          >
+            <el-button type="primary" size="small">
+              <el-icon class="mr-1"><Upload /></el-icon>
+              点击上传
+            </el-button>
+            <template #tip>
+              <div class="el-upload__tip">支持图片、PDF 等格式，单个文件不超过 20MB</div>
+            </template>
+          </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -846,7 +925,16 @@ watch(
 
       <el-descriptions v-if="supervisionDetailData" :column="1" border>
         <el-descriptions-item label="备注">{{ supervisionDetailData.remark || "-" }}</el-descriptions-item>
-        <el-descriptions-item label="附件">{{ supervisionDetailData.attachmentUrls || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="附件">
+          <template v-if="supervisionDetailData.attachmentUrls">
+            <div v-for="(url, i) in supervisionDetailData.attachmentUrls.split(',')" :key="url">
+              <a :href="url" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline break-all">
+                {{ getAttachmentLabel(url, i) }}
+              </a>
+            </div>
+          </template>
+          <span v-else>-</span>
+        </el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="supervisionDetailData.status === 2 ? 'success' : 'info'" size="small">
             {{ supervisionDetailData.status === 2 ? "已归档" : "进行中" }}

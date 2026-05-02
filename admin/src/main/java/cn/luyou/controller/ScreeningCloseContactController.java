@@ -12,11 +12,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -32,11 +34,10 @@ public class ScreeningCloseContactController {
 
     private final ScreeningCloseContactService screeningCloseContactService;
 
-    @Operation(summary = "上传密接人群筛查Excel")
+    @Operation(summary = "上传密接人群筛查Excel（新模板73列）")
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
-        ImportResult result = screeningCloseContactService.uploadAndParse(file);
-        return ResultRes.success(result);
+        return ResultRes.success(screeningCloseContactService.uploadAndParse(file));
     }
 
     @Operation(summary = "分页查询密接人群筛查数据")
@@ -47,8 +48,16 @@ public class ScreeningCloseContactController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String district,
-            @RequestParam(required = false) Integer isLatent) {
-        return ResultRes.success(screeningCloseContactService.queryPage(page, size, name, idNumber, district, isLatent));
+            @RequestParam(required = false) Integer ccStatus,
+            @RequestParam(required = false) String finalScreeningResult) {
+        return ResultRes.success(screeningCloseContactService.queryPage(
+                page, size, name, idNumber, district, ccStatus, finalScreeningResult));
+    }
+
+    @Operation(summary = "各最终筛查结果分类统计")
+    @GetMapping("/count-by-result")
+    public ResultResponse<Map<String, Long>> countByResult() {
+        return ResultRes.success(screeningCloseContactService.countByFinalResult());
     }
 
     @Operation(summary = "新增密接人群筛查记录")
@@ -66,18 +75,58 @@ public class ScreeningCloseContactController {
         return ResultRes.success(null);
     }
 
-    @Operation(summary = "删除密接人群筛查记录（级联删除后续所有关联数据）")
+    @Operation(summary = "删除密接人群筛查记录（级联删除）")
     @DeleteMapping("/delete/{id}")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         screeningCloseContactService.deleteScreeningCascade(id);
         return ResultRes.success(null);
     }
 
-    @Operation(summary = "按 ID 查询密接人群筛查记录详情")
+    @Operation(summary = "批量删除密接人群筛查记录（级联删除）")
+    @DeleteMapping("/batch-delete")
+    public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
+        if (ids != null) ids.forEach(screeningCloseContactService::deleteScreeningCascade);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "按ID查询密接人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningCloseContact> detail(@PathVariable Long id) {
         return ResultRes.success(screeningCloseContactService.getById(id));
     }
+
+    // ==================== 密接专属业务接口 ====================
+
+    @Operation(summary = "设置预计完成治疗时间（潜伏感染者-预防治疗）")
+    @PostMapping("/{id}/expected-end-date")
+    public ResultResponse<Void> setExpectedEndDate(
+            @PathVariable Long id,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate expectedDate) {
+        screeningCloseContactService.setExpectedTreatmentEndDate(id, expectedDate);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "确认治疗是否完成（到预计完成时间后操作）")
+    @PostMapping("/{id}/confirm-treatment")
+    public ResultResponse<Void> confirmTreatment(
+            @PathVariable Long id,
+            @RequestParam boolean done) {
+        screeningCloseContactService.confirmTreatmentDone(id, done);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "提交3月复查结果（未发现异常流程）")
+    @PostMapping("/{id}/three-month-check")
+    public ResultResponse<Void> threeMonthCheck(
+            @PathVariable Long id,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkDate,
+            @RequestParam String checkResult,
+            @RequestParam String finalResult) {
+        screeningCloseContactService.submitThreeMonthCheck(id, checkDate, checkResult, finalResult);
+        return ResultRes.success(null);
+    }
+
+    // ==================== 导出 ====================
 
     @Operation(summary = "导出密接人群筛查数据")
     @GetMapping("/export")
@@ -87,6 +136,7 @@ public class ScreeningCloseContactController {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode("密接人群筛查数据.xlsx", StandardCharsets.UTF_8));
+
         var query = Wrappers.<ScreeningCloseContact>lambdaQuery();
         if (ids != null && !ids.isBlank()) {
             List<Long> idList = Arrays.stream(ids.split(","))
@@ -94,75 +144,42 @@ public class ScreeningCloseContactController {
                     .filter(s -> !s.isEmpty() && s.matches("\\d+"))
                     .map(Long::valueOf)
                     .toList();
-            if (!idList.isEmpty()) {
-                query.in(ScreeningCloseContact::getId, idList);
-            }
+            if (!idList.isEmpty()) query.in(ScreeningCloseContact::getId, idList);
         }
         query.orderByDesc(ScreeningCloseContact::getCreateTime);
         List<ScreeningCloseContact> list = screeningCloseContactService.list(query);
+
         List<Map<String, Object>> rows = new ArrayList<>();
         for (ScreeningCloseContact s : list) {
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("年份", s.getYear());
-            row.put("市（州）", s.getCity());
-            row.put("县（市、区）", s.getDistrict());
-            row.put("姓名", s.getName());
-            row.put("性别", s.getGender());
-            row.put("出生日期", s.getBirthDate());
-            row.put("年龄", s.getAge());
-            row.put("证件类型", s.getIdType());
-            row.put("证件号", s.getIdNumber());
-            row.put("民族", s.getEthnicity());
-            row.put("职业", s.getOccupation());
-            row.put("联系电话", s.getPhone());
-            row.put("户籍所在地", s.getHouseholdAddress());
-            row.put("现住址", s.getCurrentAddress());
-            row.put("接触类型", toCnContactType(s.getContactType()));
+            row.put("市/州", s.getCity());
+            row.put("区/县", s.getDistrict());
             row.put("原患者姓名", s.getSourcePatientName());
-            row.put("原患者确诊日期", s.getSourcePatientConfirmDate());
+            row.put("原患者病案号", s.getSourcePatientCaseNo());
             row.put("原患者身份证号", s.getSourcePatientIdNumber());
-
+            row.put("接触者姓名", s.getName());
+            row.put("接触者身份证号", s.getIdNumber());
+            row.put("年龄", s.getAge());
+            row.put("接触者电话", s.getPhone());
+            row.put("接触类型", s.getContactType());
+            row.put("接触场所", s.getContactPlace());
+            row.put("密接登记日期", s.getRegistrationDate());
             row.put("首次筛查日期", s.getFirstScreenDate());
-            row.put("首次症状筛查结果", s.getFirstSymptomResult());
-            row.put("首次感染检查方法", s.getFirstInfectionMethod());
-            row.put("首次感染检查结果", s.getFirstScreenResult());
-            row.put("首次感染筛查结果", s.getFirstInfectionResult());
-            row.put("首次是否进行胸片", toCnYesNo(s.getFirstHasChestXray()));
-            row.put("首次胸片日期", s.getFirstChestXrayDate());
-            row.put("首次胸片结果", s.getFirstChestXrayResult());
-            row.put("首次诊断结果", s.getFirstDiagnosis());
-
-            row.put("半年后筛查日期", s.getHalfYearScreenDate());
-            row.put("半年后症状筛查结果", s.getHalfYearSymptomResult());
-            row.put("半年后感染检查方法", s.getHalfYearInfectionMethod());
-            row.put("半年后感染检查结果", s.getHalfYearScreenResult());
-            row.put("半年后感染筛查结果", s.getHalfYearInfectionResult());
-            row.put("半年后是否进行胸片", toCnYesNo(s.getHalfYearHasChestXray()));
-            row.put("半年后胸片日期", s.getHalfYearChestXrayDate());
-            row.put("半年后胸片结果", s.getHalfYearChestXrayResult());
-            row.put("半年后诊断结果", s.getHalfYearDiagnosis());
-
-            row.put("一年后筛查日期", s.getOneYearScreenDate());
-            row.put("一年后症状筛查结果", s.getOneYearSymptomResult());
-            row.put("一年后感染检查方法", s.getOneYearInfectionMethod());
-            row.put("一年后感染检查结果", s.getOneYearScreenResult());
-            row.put("一年后感染筛查结果", s.getOneYearInfectionResult());
-            row.put("一年后是否进行胸片", toCnYesNo(s.getOneYearHasChestXray()));
-            row.put("一年后胸片日期", s.getOneYearChestXrayDate());
-            row.put("一年后胸片结果", s.getOneYearChestXrayResult());
-            row.put("一年后诊断结果", s.getOneYearDiagnosis());
-
-            row.put("是否进行预防性治疗", toCnYesNo(s.getHasPreventiveTreatment()));
+            row.put("感染检测方法", s.getInfectionCheckMethod());
+            row.put("感染检测结果", s.getInfectionCheckResult());
+            row.put("影像方法", s.getImagingMethod());
+            row.put("影像结果", s.getImagingResult());
+            row.put("痰检方法", s.getSputumCheckMethod());
+            row.put("痰检结果", s.getSputumCheckResult());
+            row.put("最终筛查结果", s.getFinalScreeningResult());
+            row.put("是否开展预防治疗", s.getHasPreventiveTreatment());
             row.put("预防性治疗方案", s.getPreventivePlan());
-            row.put("预防性治疗开始时间", s.getPreventiveStartDate());
-            row.put("预防性治疗完成时间", s.getPreventiveEndDate());
-            row.put("预防性治疗结果", s.getPreventiveResult());
-            row.put("预防性治疗期间随访管理人员", s.getPreventiveManager());
-            row.put("惠民方式", s.getBenefitMethod());
+            row.put("是否完成治疗", s.getTreatmentCompleted());
+            row.put("6月随访结果", s.getFollowup6Result());
+            row.put("12月随访结果", s.getFollowup12Result());
+            row.put("24月随访结果", s.getFollowup24Result());
+            row.put("流程状态", toCnStatus(s.getCcStatus()));
             row.put("备注", s.getRemark());
-
-            row.put("疑似结核判定", Integer.valueOf(1).equals(s.getIsLatent()) ? "疑似结核" : "正常");
-            row.put("阳性轮次", toCnRound(s.getActiveRound()));
             rows.add(row);
         }
 
@@ -170,44 +187,24 @@ public class ScreeningCloseContactController {
             EasyExcel.write(response.getOutputStream()).sheet("筛查数据").doWrite(new ArrayList<>());
             return;
         }
-        List<List<String>> heads = rows.get(0).keySet().stream()
-                .map(k -> List.of(k))
-                .collect(Collectors.toList());
+        List<List<String>> heads = rows.get(0).keySet().stream().map(List::of).collect(Collectors.toList());
         List<List<Object>> data = rows.stream()
-                .map(r -> new ArrayList<Object>(r.values()))
-                .collect(Collectors.toList());
-        EasyExcel.write(response.getOutputStream())
-                .head(heads)
-                .sheet("筛查数据")
-                .doWrite(data);
+                .map(r -> new ArrayList<Object>(r.values())).collect(Collectors.toList());
+        EasyExcel.write(response.getOutputStream()).head(heads).sheet("筛查数据").doWrite(data);
     }
 
-    private String toCnContactType(String contactType) {
-        if (contactType == null) return "";
-        return switch (contactType) {
-            case "家庭内", "family", "inside", "home" -> "家庭内";
-            case "家庭外", "outside", "outer", "external" -> "家庭外";
-            default -> contactType;
-        };
-    }
-
-    private String toCnYesNo(String value) {
-        if (value == null) return "";
-        String v = value.trim();
-        return switch (v.toLowerCase()) {
-            case "yes", "y", "true", "1", "是" -> "是";
-            case "no", "n", "false", "0", "否" -> "否";
-            default -> value;
-        };
-    }
-
-    private String toCnRound(Integer round) {
-        if (round == null) return "";
-        return switch (round) {
-            case 1 -> "首次";
-            case 2 -> "半年后";
-            case 3 -> "一年后";
-            default -> "";
+    private String toCnStatus(Integer status) {
+        if (status == null) return "待处理";
+        return switch (status) {
+            case 1 -> "活动性肺结核-患者管理";
+            case 2 -> "潜伏感染者-管理中";
+            case 3 -> "潜伏感染者-已归档";
+            case 4 -> "随访监测中";
+            case 5 -> "随访监测-已归档";
+            case 6 -> "未发现异常-待3月复查";
+            case 7 -> "3月复查阴性-已结束";
+            case 8 -> "3月复查阳性-转潜伏流程";
+            default -> "待处理";
         };
     }
 }

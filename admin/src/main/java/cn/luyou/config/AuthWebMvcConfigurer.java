@@ -24,6 +24,7 @@ public class AuthWebMvcConfigurer implements WebMvcConfigurer {
                 // 放行登录接口和 Swagger/Knife4j 文档路径
                 .excludePathPatterns(
                         "/user/login",
+                        "/file/serve/**",
                         "/doc.html",
                         "/webjars/**",
                         "/v3/api-docs/**",

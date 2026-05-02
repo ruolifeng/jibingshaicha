@@ -3,8 +3,11 @@ package cn.luyou.controller;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Notice;
+import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.service.NoticeService;
+import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,13 @@ public class NoticeController {
     @PostMapping("/send")
     public ResultResponse<Void> send(@RequestBody Notice notice) {
         noticeService.send(notice);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "保存通知单草稿（填写但不发送）")
+    @PostMapping("/draft")
+    public ResultResponse<Void> saveDraft(@RequestBody Notice notice) {
+        noticeService.saveAsDraft(notice);
         return ResultRes.success(null);
     }
 
@@ -50,5 +60,21 @@ public class NoticeController {
                 .eq(Notice::getNoticeType, noticeType)
                 .orderByDesc(Notice::getCreateTime);
         return ResultRes.success(noticeService.list(wrapper));
+    }
+
+    @Operation(summary = "查询当前用户已发送的通知单列表（含发送者/接收者信息）")
+    @GetMapping("/sent")
+    public ResultResponse<IPage<SentNoticeVO>> sent(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int size) {
+        Long senderId = BaseContext.getCurrentId();
+        return ResultRes.success(noticeService.sentPage(senderId, pageNum, size));
+    }
+
+    @Operation(summary = "催促接收方接收通知单")
+    @PostMapping("/remind/{id}")
+    public ResultResponse<Void> remind(@PathVariable Long id) {
+        noticeService.remind(id);
+        return ResultRes.success(null);
     }
 }
