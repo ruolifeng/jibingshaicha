@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLevel5UsersApi } from "@@/apis/users"
 import { CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS } from "@@/constants/disease"
 
 interface Props {
@@ -34,16 +35,30 @@ const form = reactive({
   crowdCategory: "",
   treatmentPlan: "",
   customPlanDetail: "",
-  receiverOrgId: null as number | null
+  receiverOrgId: undefined as number | undefined
 })
 
 const rules = {
+  receiverOrgId: [{ required: true, message: "请选择发送对象", trigger: "change" }],
   idNumber: [{ required: true, message: "请输入身份证号", trigger: "blur" }],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
   treatmentPlan: [{ required: true, message: "请选择治疗方案", trigger: "change" }]
 }
 
+// 5级用户列表
+const receiverUsers = ref<{ id: number, realName: string, username: string, orgName: string }[]>([])
+
+async function loadReceiverUsers() {
+  try {
+    const { data } = await getLevel5UsersApi()
+    receiverUsers.value = data
+  } catch { /* ignored */ }
+}
+
 watch(() => props.visible, (val) => {
+  if (val) {
+    loadReceiverUsers()
+  }
   if (val && props.prefillData) {
     const d = props.prefillData
     form.currentAddress = d.currentAddress || ""
@@ -57,6 +72,7 @@ watch(() => props.visible, (val) => {
 })
 
 function handleClose() {
+  formRef.value?.resetFields()
   emit("update:visible", false)
 }
 
@@ -76,6 +92,21 @@ async function handleSubmit() {
     @update:model-value="(val: boolean) => emit('update:visible', val)"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
+      <el-form-item label="发送对象" prop="receiverOrgId">
+        <el-select
+          v-model="form.receiverOrgId"
+          placeholder="请选择接收单位（必填）"
+          filterable
+          style="width: 100%"
+        >
+          <el-option
+            v-for="u in receiverUsers"
+            :key="u.id"
+            :value="u.id"
+            :label="`${u.orgName}（${u.realName || u.username}）`"
+          />
+        </el-select>
+      </el-form-item>
       <el-form-item label="现居住地址">
         <el-input v-model="form.currentAddress" placeholder="请输入现居住地址" />
       </el-form-item>

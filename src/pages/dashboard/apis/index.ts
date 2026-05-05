@@ -49,7 +49,7 @@ export function getDashboardTaskStatsApi(batch?: string) {
   })
 }
 
-/** 获取消息通知统计（通知单 + 分级诊疗） */
+/** 获取消息通知统计（通知单 + 转诊） */
 export function getDashboardMessageStatsApi() {
   return request<ApiResponseData<MessageStatsData>>({
     url: "dashboard/message-stats",

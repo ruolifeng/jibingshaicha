@@ -8,7 +8,9 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningKeyPopulation;
+import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
@@ -19,8 +21,10 @@ import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.MedicationManagementService;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
+import cn.luyou.service.ReferralService;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -58,6 +62,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
     private final EpidemicReportService epidemicReportService;
+    private final SysMessageService sysMessageService;
+    private final ReferralService referralService;
 
     private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
             "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
@@ -149,7 +155,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
         result.setSuccessCount(dataList.size());
 
-        // 仅对新插入且感染筛查阳性的记录自动创建潜伏感染记录
+        // 仅对新插入且感染筛查阳性、或已含胸片+首次诊断的记录自动创建潜伏感染记录。
+        // 注意：diagnosisResult 不在此处预填，需操作员在"待诊断"页面点击"诊断"后由
+        // referral 流程写入；否则会被潜伏列表的 diagnosisResult 过滤器排除，
+        // 导致导入的确诊/疑似记录在"待诊断"中不可见。
         List<LatentInfection> latentList = toInsert.stream()
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> {
@@ -170,7 +179,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
                             .diagnosisFirst(d.getDiagnosisFirst())
-                            .diagnosisResult(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .build();
                 })
@@ -200,7 +208,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
                             .diagnosisFirst(d.getDiagnosisFirst())
-                            .diagnosisResult(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .build();
                 })
@@ -264,6 +271,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         save(data);
 
         if (data.getIsLatent() == 1) {
+            // diagnosisResult 不在此预填，由"待诊断"页面诊断后由 referral 流程写入
             LatentInfection latent = LatentInfection.builder()
                     .screeningId(data.getId())
                     .populationType("keyPopulation")
@@ -280,7 +288,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
                     .diagnosisFirst(data.getDiagnosisFirst())
-                    .diagnosisResult(data.getDiagnosisFirst())
                     .departmentId(data.getDepartmentId())
                     .build();
             latentInfectionService.save(latent);
@@ -343,10 +350,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             followUpVisitService.lambdaUpdate().eq(cn.luyou.model.FollowUpVisit::getPatientId, pid).remove();
             medicationManagementService.lambdaUpdate().eq(cn.luyou.model.MedicationManagement::getPatientId, pid).remove();
             epidemicReportService.lambdaUpdate().eq(cn.luyou.model.EpidemicReport::getPatientId, pid).remove();
-            noticeService.lambdaUpdate()
-                    .eq(Notice::getBizId, pid)
-                    .eq(Notice::getNoticeType, "patient")
-                    .remove();
+            deleteNoticeAndMessages(pid, "patient");
+            deleteReferralsAndMessages(pid);
             patientService.removeById(pid);
         }
         supervisionFormService.lambdaUpdate()
@@ -355,10 +360,34 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .eq(cn.luyou.model.LatentFollowUp::getLatentInfectionId, latentId).remove();
         latentCheckService.lambdaUpdate()
                 .eq(cn.luyou.model.LatentCheck::getLatentInfectionId, latentId).remove();
-        noticeService.lambdaUpdate()
-                .eq(Notice::getBizId, latentId)
-                .eq(Notice::getNoticeType, "latent")
-                .remove();
+        deleteNoticeAndMessages(latentId, "latent");
+        deleteReferralsAndMessages(latentId);
         latentInfectionService.removeById(latentId);
+    }
+
+    /** 删除指定业务ID的通知单及关联系统消息 */
+    private void deleteNoticeAndMessages(Long bizId, String noticeType) {
+        List<Long> noticeIds = noticeService.lambdaQuery()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .list().stream().map(Notice::getId).toList();
+        if (!noticeIds.isEmpty()) {
+            sysMessageService.lambdaUpdate().in(SysMessage::getBizId, noticeIds).remove();
+        }
+        noticeService.lambdaUpdate()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .remove();
+    }
+
+    /** 删除指定业务ID的分级诊疗记录及关联系统消息 */
+    private void deleteReferralsAndMessages(Long bizId) {
+        List<Long> referralIds = referralService.lambdaQuery()
+                .eq(Referral::getBizId, bizId)
+                .list().stream().map(Referral::getId).toList();
+        if (!referralIds.isEmpty()) {
+            sysMessageService.lambdaUpdate().in(SysMessage::getBizId, referralIds).remove();
+            referralService.lambdaUpdate().eq(Referral::getBizId, bizId).remove();
+        }
     }
 }

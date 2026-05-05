@@ -7,7 +7,9 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningCloseContact;
+import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
@@ -15,8 +17,10 @@ import cn.luyou.service.FollowUpVisitService;
 import cn.luyou.service.MedicationManagementService;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
+import cn.luyou.service.ReferralService;
 import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -34,8 +38,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -61,6 +67,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
     private final EpidemicReportService epidemicReportService;
+    private final SysMessageService sysMessageService;
+    private final ReferralService referralService;
 
     /** 活动性肺结核的最终筛查结果标识（模板中的文字） */
     private static final String RESULT_ACTIVE_TB = "活动性肺结核";
@@ -277,7 +285,24 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (!BaseContext.isSuperAdmin()) {
             wrapper.eq(ScreeningCloseContact::getDepartmentId, BaseContext.getCurrentDepartmentId());
         }
-        return page(new Page<>(page, size), wrapper);
+        IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);
+
+        // 补充通知单发送状态，用于前端控制"发送通知单"按钮的显示
+        List<ScreeningCloseContact> records = result.getRecords();
+        if (records != null && !records.isEmpty()) {
+            List<Long> ids = records.stream()
+                    .map(ScreeningCloseContact::getId)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            Set<Long> sentBizIds = new HashSet<>(noticeService.lambdaQuery()
+                    .in(Notice::getBizId, ids)
+                    .eq(Notice::getNoticeType, "latent")
+                    .eq(Notice::getPopulationType, "closeContact")
+                    .list()
+                    .stream().map(Notice::getBizId).toList());
+            records.forEach(r -> r.setNoticeSent(sentBizIds.contains(r.getId())));
+        }
+        return result;
     }
 
     // ==================== 单条增删改 ====================
@@ -326,15 +351,44 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             followUpVisitService.lambdaUpdate().eq(cn.luyou.model.FollowUpVisit::getPatientId, pid).remove();
             medicationManagementService.lambdaUpdate().eq(cn.luyou.model.MedicationManagement::getPatientId, pid).remove();
             epidemicReportService.lambdaUpdate().eq(cn.luyou.model.EpidemicReport::getPatientId, pid).remove();
-            noticeService.lambdaUpdate()
-                    .eq(Notice::getBizId, pid).eq(Notice::getNoticeType, "patient").remove();
+            deleteNoticeAndMessages(pid, "patient");
+            deleteReferralsAndMessages(pid);
             patientService.removeById(pid);
         }
         // 删除潜伏感染者的督导表等
         supervisionFormService.lambdaUpdate()
                 .eq(cn.luyou.model.SupervisionForm::getLatentInfectionId, id).remove();
+        // 删除密接筛查本体关联的通知单及消息（密接潜伏通知单 bizId 为筛查记录ID）
+        deleteNoticeAndMessages(id, "latent");
+        deleteReferralsAndMessages(id);
         removeById(id);
         log.info("级联删除密接人群筛查记录 id={}", id);
+    }
+
+    /** 删除指定业务ID的通知单及关联系统消息 */
+    private void deleteNoticeAndMessages(Long bizId, String noticeType) {
+        List<Long> noticeIds = noticeService.lambdaQuery()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .list().stream().map(Notice::getId).toList();
+        if (!noticeIds.isEmpty()) {
+            sysMessageService.lambdaUpdate().in(SysMessage::getBizId, noticeIds).remove();
+        }
+        noticeService.lambdaUpdate()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .remove();
+    }
+
+    /** 删除指定业务ID的分级诊疗记录及关联系统消息 */
+    private void deleteReferralsAndMessages(Long bizId) {
+        List<Long> referralIds = referralService.lambdaQuery()
+                .eq(Referral::getBizId, bizId)
+                .list().stream().map(Referral::getId).toList();
+        if (!referralIds.isEmpty()) {
+            sysMessageService.lambdaUpdate().in(SysMessage::getBizId, referralIds).remove();
+            referralService.lambdaUpdate().eq(Referral::getBizId, bizId).remove();
+        }
     }
 
     // ==================== 密接专属业务操作 ====================

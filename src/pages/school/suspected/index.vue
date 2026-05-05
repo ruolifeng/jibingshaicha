@@ -62,7 +62,7 @@ function handleReset() {
 
 const submitting = ref(false)
 
-// 分级诊疗
+// 转诊
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -337,7 +337,7 @@ watch(
             >
               录入胸片结果
             </el-button>
-            <!-- 转诊（胸片已录入时可操作） -->
+            <!-- 诊断（胸片已录入时可操作） -->
             <el-button
               v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult"
               v-permission="'latent:referral'"
@@ -345,10 +345,10 @@ watch(
               size="small"
               @click="openReferralDialog(row)"
             >
-              转诊
+              诊断
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              分级诊疗
+              转诊
             </el-button>
           </template>
         </el-table-column>
@@ -451,7 +451,7 @@ watch(
       </template>
     </el-dialog>
 
-    <!-- 分级诊疗弹窗 -->
+    <!-- 转诊弹窗 -->
     <ReferralDialog
       v-if="tierCareRow"
       v-model="tierCareVisible"
@@ -462,8 +462,8 @@ watch(
       :subject-name="tierCareRow.name || ''"
     />
 
-    <!-- 转诊弹窗 -->
-    <el-dialog v-model="referralDialogVisible" title="转诊操作" width="450px">
+    <!-- 诊断弹窗 -->
+    <el-dialog v-model="referralDialogVisible" title="诊断操作" width="450px">
       <el-form label-width="80px">
         <el-form-item label="诊断结果">
           <el-radio-group v-model="referralForm.result">

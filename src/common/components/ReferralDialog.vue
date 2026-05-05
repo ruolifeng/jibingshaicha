@@ -87,7 +87,7 @@ async function handleSend() {
       summary: props.summary,
       receiverOrgId: sendForm.receiverOrgId
     })
-    ElMessage.success("分级诊疗推送已发送")
+    ElMessage.success("转诊推送已发送")
     sendForm.receiverOrgId = undefined
     await loadHistory()
   } finally {
@@ -113,7 +113,7 @@ async function loadHistory() {
 async function handleResend(record: ReferralRecord) {
   try {
     await resendReferralApi(record.id)
-    ElMessage.success("已重新发起分级诊疗")
+    ElMessage.success("已重新发起转诊")
     await loadHistory()
   } catch { /* handled */ }
 }
@@ -128,7 +128,7 @@ watch(visible, (val: boolean) => {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="分级诊疗" width="700px" append-to-body>
+  <el-dialog v-model="visible" title="转诊" width="700px" append-to-body>
     <!-- 业务信息摘要 -->
     <el-descriptions :column="2" border size="small" class="mb-4">
       <el-descriptions-item label="对象姓名">
@@ -145,7 +145,7 @@ watch(visible, (val: boolean) => {
     <!-- 发起推送 -->
     <el-card shadow="never" class="mb-4">
       <template #header>
-        <span class="font-semibold">发起分级诊疗推送</span>
+        <span class="font-semibold">发起转诊推送</span>
       </template>
       <el-form :model="sendForm" label-width="100px" size="small">
         <el-form-item label="接收部门" required>

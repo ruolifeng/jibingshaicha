@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
+import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
@@ -30,11 +31,14 @@ import {
   getLatentListApi,
   getNoticeListByBizApi,
   getSupervisionDetailApi,
+  referralLatentApi,
   saveCheckApi,
   saveFollowUpApi,
   saveSupervisionApi,
   sendNoticeApi,
-  setMedicationStatusApi
+  setMedicationStatusApi,
+  submitXrayApi,
+  trackLatentApi
 } from "./apis"
 
 const POPULATION_TYPE = "keyPopulation"
@@ -72,8 +76,10 @@ async function fetchData() {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       populationType: POPULATION_TYPE,
-      ...searchForm,
-      referralResult: "latent"
+      // 潜伏感染管理仅展示已诊断为"潜伏感染者"的记录；
+      // 待追踪 / 待录入诊断 / 待诊断的数据由"待诊断管理"模块负责。
+      referralResult: "latent",
+      ...searchForm
     })
     tableData.value = data.records
     total.value = data.total
@@ -96,12 +102,124 @@ function handleReset() {
 
 const submitting = ref(false)
 
-// ==================== 分级诊疗 ====================
+// ==================== 转诊 ====================
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
   tierCareRow.value = row
   tierCareVisible.value = true
+}
+
+// ==================== 阶段判断 ====================
+function getStageInfo(row: any): { label: string, type: "danger" | "warning" | "success" | "info" } {
+  if (row.archived === 1) return { label: "已归档", type: "info" }
+  if (row.referralResult === "latent") return { label: "潜伏感染者", type: "warning" }
+  if (row.trackingStatus === 0) return { label: "待追踪", type: "danger" }
+  if (row.trackingStatus === 1 && !row.diagnosisFirst) return { label: "待录入诊断", type: "warning" }
+  if (row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult) return { label: "待诊断", type: "warning" }
+  if (row.trackingStatus === 2) return { label: "未到位", type: "danger" }
+  if (row.trackingStatus === 3 || row.trackingStatus === 4) return { label: "已终止", type: "info" }
+  return { label: "-", type: "info" }
+}
+
+// ==================== 追踪弹窗 ====================
+const trackDialogVisible = ref(false)
+const trackRow = ref<any>(null)
+const trackStatus = ref<1 | 2 | 3>(1)
+const trackRemark = ref("")
+
+function openTrackDialog(row: any) {
+  trackRow.value = row
+  trackStatus.value = 1
+  trackRemark.value = ""
+  trackDialogVisible.value = true
+}
+
+async function handleTrack() {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await trackLatentApi({ id: trackRow.value.id, status: trackStatus.value, remark: trackRemark.value })
+    ElMessage.success("追踪操作已保存")
+    trackDialogVisible.value = false
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
+}
+
+// ==================== 录入胸片诊断弹窗 ====================
+const xrayDialogVisible = ref(false)
+const xrayRow = ref<any>(null)
+const xrayForm = reactive({
+  hasChestXray: "否",
+  chestXrayDate: "",
+  chestXrayResult: "",
+  diagnosisFirst: ""
+})
+
+function openXrayDialog(row: any) {
+  xrayRow.value = row
+  xrayForm.hasChestXray = "否"
+  xrayForm.chestXrayDate = ""
+  xrayForm.chestXrayResult = ""
+  xrayForm.diagnosisFirst = ""
+  xrayDialogVisible.value = true
+}
+
+async function handleSubmitXray() {
+  if (!xrayForm.diagnosisFirst) {
+    ElMessage.warning("请选择首次诊断结果")
+    return
+  }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await submitXrayApi({ id: xrayRow.value.id, ...xrayForm })
+    ElMessage.success("胸片诊断录入成功")
+    xrayDialogVisible.value = false
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
+}
+
+// ==================== 转诊弹窗 ====================
+const referralDialogVisible = ref(false)
+const referralRow = ref<any>(null)
+const referralResultValue = ref("")
+const referralRemark = ref("")
+
+const REFERRAL_OPTIONS = [
+  { label: "排除", value: "excluded" },
+  { label: "其他", value: "other" },
+  { label: "疑似肺结核", value: "suspected" },
+  { label: "确诊患者", value: "confirmed" },
+  { label: "潜伏感染者", value: "latent" }
+]
+
+function openReferralDialog(row: any) {
+  referralRow.value = row
+  referralResultValue.value = ""
+  referralRemark.value = ""
+  referralDialogVisible.value = true
+}
+
+async function handleReferral() {
+  if (!referralResultValue.value) {
+    ElMessage.warning("请选择诊断结果")
+    return
+  }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await referralLatentApi({ id: referralRow.value.id, result: referralResultValue.value, remark: referralRemark.value })
+    ElMessage.success("诊断操作成功")
+    referralDialogVisible.value = false
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 通知单弹窗 ====================
@@ -344,6 +462,7 @@ async function handleSaveSupervision() {
 
 const supervisionDetailVisible = ref(false)
 const supervisionDetailData = ref<any>(null)
+const supervisionPrintVisible = ref(false)
 
 async function viewSupervision(row: any) {
   try {
@@ -572,59 +691,111 @@ watch(
             {{ MEDICATION_STATUS_OPTIONS.find(o => o.value === row.medicationStatus)?.label || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="归档">
+        <el-table-column label="当前阶段" fixed="right" width="110">
           <template #default="{ row }">
-            <el-tag :type="row.archived ? 'info' : 'success'" size="small">
-              {{ row.archived ? "已归档" : "进行中" }}
+            <el-tag :type="getStageInfo(row).type" size="small">
+              {{ getStageInfo(row).label }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="360">
+        <el-table-column label="操作" fixed="right" min-width="400">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
               查看详情
             </el-button>
-            <el-button v-permission="'latent:sendNotice'" type="primary" size="small" @click="openNoticeDialog(row)">
-              填写通知单
-            </el-button>
+
+            <!-- 阶段1：待追踪 -->
+            <template v-if="row.trackingStatus === 0 && !row.archived">
+              <el-button
+                v-permission="'keyPopulation:latent:track'"
+                type="primary"
+                size="small"
+                @click="openTrackDialog(row)"
+              >
+                追踪
+              </el-button>
+            </template>
+
+            <!-- 阶段2：追踪到位，待录入胸片诊断 -->
+            <template v-if="row.trackingStatus === 1 && !row.diagnosisFirst && !row.referralResult">
+              <el-button
+                v-permission="'keyPopulation:latent:xray'"
+                type="warning"
+                size="small"
+                @click="openXrayDialog(row)"
+              >
+                录入胸片诊断
+              </el-button>
+            </template>
+
+            <!-- 阶段3：已录入诊断，待诊断 -->
+            <template v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult">
+              <el-button
+                v-permission="'keyPopulation:latent:referral'"
+                type="danger"
+                size="small"
+                @click="openReferralDialog(row)"
+              >
+                诊断
+              </el-button>
+            </template>
+
+            <!-- 阶段4：潜伏感染者（已诊断为 latent） -->
+            <template v-if="row.referralResult === 'latent'">
+              <el-button v-if="!row.noticeSent" v-permission="'keyPopulation:latent:sendNotice'" type="primary" size="small" @click="openNoticeDialog(row)">
+                填写通知单
+              </el-button>
+              <el-button
+                v-if="row.noticeSent"
+                v-permission="'keyPopulation:latent:sendNotice'"
+                type="success"
+                size="small"
+                disabled
+              >
+                已发送通知单
+              </el-button>
+              <el-button v-permission="'keyPopulation:latent:supervision'" size="small" :disabled="!row.noticeSent" @click="openSupervisionDialog(row)">
+                填写督导表
+              </el-button>
+              <el-button type="info" size="small" @click="viewSupervision(row)">
+                查看督导表
+              </el-button>
+              <el-button
+                v-if="row.treatmentPhase === 1 && !row.medicationStatus"
+                v-permission="'keyPopulation:latent:supervision'"
+                type="warning"
+                size="small"
+                @click="openMedicationDialog(row)"
+              >
+                设置服药状态
+              </el-button>
+              <el-button
+                v-if="row.treatmentPhase === 1 && row.medicationStatus"
+                v-permission="'keyPopulation:latent:followUp'"
+                type="primary"
+                size="small"
+                @click="openTreatmentDialog(row)"
+              >
+                治疗管理
+              </el-button>
+            </template>
+
+            <!-- 通知单查看 -->
             <el-button
-              v-permission="'latent:sendNotice'"
-              type="success"
+              v-if="row.noticeSent"
+              type="info"
+              link
               size="small"
-              :disabled="!!row.noticeSent"
-              @click="openNoticeDialog(row)"
+              @click="viewNotice(row)"
             >
-              {{ row.noticeSent ? "已发送通知单" : "发送通知单" }}
+              查看通知单
             </el-button>
-            <el-button v-permission="'latent:supervision'" size="small" :disabled="!row.noticeSent" @click="openSupervisionDialog(row)">
-              填写督导表
-            </el-button>
-            <el-button type="info" size="small" @click="viewSupervision(row)">
-              查看督导表
-            </el-button>
-            <el-button
-              v-if="row.treatmentPhase === 1 && !row.medicationStatus"
-              v-permission="'latent:supervision'"
-              type="warning"
-              size="small"
-              @click="openMedicationDialog(row)"
-            >
-              设置服药状态
-            </el-button>
-            <el-button
-              v-if="row.treatmentPhase === 1 && row.medicationStatus"
-              v-permission="'latent:followUp'"
-              type="primary"
-              size="small"
-              @click="openTreatmentDialog(row)"
-            >
-              治疗管理
-            </el-button>
+
             <el-button type="info" size="small" @click="openAggregateDialog(row)">
               信息归集
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              分级诊疗
+              转诊
             </el-button>
           </template>
         </el-table-column>
@@ -646,7 +817,7 @@ watch(
     <!-- 筛查详情弹窗 -->
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="keyPopulation" :data="screeningDetailData" />
 
-    <!-- 分级诊疗弹窗 -->
+    <!-- 转诊弹窗 -->
     <ReferralDialog
       v-if="tierCareRow"
       v-model="tierCareVisible"
@@ -841,7 +1012,7 @@ watch(
       <template #footer>
         <el-button
           v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6"
-          v-permission="'latent:confirmNotice'"
+          v-permission="'keyPopulation:latent:confirmNotice'"
           type="primary"
           @click="handleConfirmNotice(noticeDetailData.id)"
         >
@@ -1132,7 +1303,18 @@ watch(
           </el-tag>
         </el-descriptions-item>
       </el-descriptions>
+      <template #footer>
+        <el-button @click="supervisionDetailVisible = false">
+          关闭
+        </el-button>
+        <el-button type="primary" @click="supervisionPrintVisible = true">
+          打印 / 保存PDF
+        </el-button>
+      </template>
     </el-dialog>
+
+    <!-- 督导表打印预览 -->
+    <PrintSupervision v-model:visible="supervisionPrintVisible" :data="supervisionDetailData" />
 
     <!-- 服药状态 -->
     <el-dialog v-model="medicationDialogVisible" title="设置服药状态" width="450px">
@@ -1160,7 +1342,7 @@ watch(
       <el-tabs>
         <el-tab-pane label="电话随访">
           <div class="mb-3 flex justify-end">
-            <el-button type="primary" size="small" v-permission="'latent:followUp'" @click="openFollowUpForm">
+            <el-button type="primary" size="small" v-permission="'keyPopulation:latent:followUp'" @click="openFollowUpForm">
               新增电话随访
             </el-button>
           </div>
@@ -1174,7 +1356,7 @@ watch(
         </el-tab-pane>
         <el-tab-pane label="按期检查">
           <div class="mb-3 flex justify-end">
-            <el-button type="primary" size="small" v-permission="'latent:check'" @click="openCheckForm">
+            <el-button type="primary" size="small" v-permission="'keyPopulation:latent:check'" @click="openCheckForm">
               新增按期检查
             </el-button>
           </div>
@@ -1199,7 +1381,7 @@ watch(
         </el-button>
         <el-button
           v-if="treatmentRow?.treatmentPhase === 1"
-          v-permission="'latent:closeCase'"
+          v-permission="'keyPopulation:latent:closeCase'"
           type="danger"
           @click="handleCloseCase(treatmentRow)"
         >
@@ -1299,41 +1481,90 @@ watch(
       <el-divider content-position="left">
         督导表
       </el-divider>
-      <el-descriptions v-if="aggregateSupervision" :column="2" border size="small">
-        <el-descriptions-item label="类别">
-          {{ aggregateSupervision.category || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="性别">
-          {{ aggregateSupervision.gender || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="年龄">
-          {{ aggregateSupervision.age ?? "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="电话号码">
-          {{ aggregateSupervision.phone || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="治疗方案">
-          {{ aggregateSupervision.treatmentPlan || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="开始日期">
-          {{ aggregateSupervision.treatmentStartDate || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="完成日期">
-          {{ aggregateSupervision.treatmentEndDate || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="用药率">
-          {{ aggregateSupervision.medicationRate || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="管理人员">
-          {{ aggregateSupervision.managerName || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="归档时间">
-          {{ aggregateSupervision.archivedTime || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="备注" :span="2">
-          {{ aggregateSupervision.remark || "-" }}
-        </el-descriptions-item>
-      </el-descriptions>
+      <template v-if="aggregateSupervision">
+        <!-- 基本信息 -->
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="类别">
+            {{ aggregateSupervision.category || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="性别">
+            {{ aggregateSupervision.gender || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="年龄">
+            {{ aggregateSupervision.age ?? "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="电话号码">
+            {{ aggregateSupervision.phone || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="现住址" :span="2">
+            {{ aggregateSupervision.currentAddress || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="治疗方案" :span="2">
+            {{ aggregateSupervision.treatmentPlan || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="开始日期">
+            {{ aggregateSupervision.treatmentStartDate || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="完成日期">
+            {{ aggregateSupervision.treatmentEndDate || "-" }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 督导记录 -->
+        <div class="mt-3 mb-1 text-sm font-bold text-gray-600">
+          督导记录
+        </div>
+        <el-table
+          :data="aggregateSupervision.supervisionRecords ? JSON.parse(aggregateSupervision.supervisionRecords) : []"
+          border stripe size="small"
+        >
+          <el-table-column prop="time" label="督导时间" width="120" />
+          <el-table-column prop="method" label="督导方式" width="100" />
+          <el-table-column prop="content" label="督导内容" />
+          <el-table-column prop="remark" label="备注" width="130" />
+        </el-table>
+
+        <!-- 全疗程规律治疗评价 -->
+        <div class="mt-3 mb-1 text-sm font-bold text-gray-600">
+          全疗程规律治疗评价
+        </div>
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="中断用药">
+            {{ aggregateSupervision.interruptMedication || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="中断次数">
+            {{ aggregateSupervision.interruptCount ?? "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="全程应用药次数">
+            {{ aggregateSupervision.totalDoses ?? "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="实际用药次数">
+            {{ aggregateSupervision.actualDoses ?? "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="用药率" :span="2">
+            {{ aggregateSupervision.medicationRate || "-" }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 督导管理人员 -->
+        <div class="mt-3 mb-1 text-sm font-bold text-gray-600">
+          督导管理人员
+        </div>
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="管理人员类型">
+            {{ aggregateSupervision.managerType || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="管理人员姓名">
+            {{ aggregateSupervision.managerName || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="归档时间">
+            {{ aggregateSupervision.archivedTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">
+            {{ aggregateSupervision.remark || "-" }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </template>
       <el-empty v-else description="暂无督导表记录" :image-size="60" />
 
       <el-divider content-position="left">
@@ -1358,6 +1589,106 @@ watch(
       <template #footer>
         <el-button @click="aggregateDialogVisible = false">
           关闭
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 追踪弹窗 -->
+    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="460px">
+      <el-form label-width="90px">
+        <el-form-item label="追踪结果">
+          <el-radio-group v-model="trackStatus">
+            <el-radio :value="1">到位</el-radio>
+            <el-radio :value="2">未到位</el-radio>
+            <el-radio :value="3">其他</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="trackStatus === 2 || trackStatus === 3" label="备注原因">
+          <el-input v-model="trackRemark" type="textarea" :rows="3" placeholder="请填写备注原因" />
+        </el-form-item>
+        <el-alert
+          v-if="trackRow && trackRow.notInPlaceCount >= 2 && trackStatus === 2"
+          title="注意：已连续未到位 2 次，再次未到位将强制终止追踪流程"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="mb-3"
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="trackDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleTrack">
+          确认
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 录入胸片诊断弹窗 -->
+    <el-dialog v-model="xrayDialogVisible" title="录入胸片检查与诊断结果" width="500px">
+      <el-form :model="xrayForm" label-width="110px">
+        <el-form-item label="是否做胸片">
+          <el-radio-group v-model="xrayForm.hasChestXray">
+            <el-radio value="是">是</el-radio>
+            <el-radio value="否">否</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="xrayForm.hasChestXray === '是'">
+          <el-form-item label="胸片检查日期">
+            <el-date-picker v-model="xrayForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="胸片检查结果">
+            <el-select v-model="xrayForm.chestXrayResult" style="width: 100%" placeholder="请选择">
+              <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </template>
+        <el-form-item label="首次诊断结果">
+          <el-select v-model="xrayForm.diagnosisFirst" style="width: 100%" placeholder="请选择诊断结果">
+            <el-option label="排除" value="排除" />
+            <el-option label="疑似肺结核" value="疑似肺结核" />
+            <el-option label="潜伏感染者" value="潜伏感染者" />
+            <el-option label="确诊患者" value="确诊患者" />
+            <el-option label="其他" value="其他" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="xrayDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmitXray">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 诊断弹窗 -->
+    <el-dialog v-model="referralDialogVisible" title="诊断操作" width="460px">
+      <el-form label-width="90px">
+        <el-form-item label="诊断结果">
+          <el-select v-model="referralResultValue" style="width: 100%" placeholder="请选择诊断结果">
+            <el-option v-for="item in REFERRAL_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="referralResultValue === 'other' || referralResultValue === 'excluded'" label="备注原因">
+          <el-input v-model="referralRemark" type="textarea" :rows="3" placeholder="请填写备注原因" />
+        </el-form-item>
+        <el-alert
+          v-if="referralResultValue === 'confirmed' || referralResultValue === 'suspected'"
+          :title="`确认后该记录将进入患者管理模块（${referralResultValue === 'confirmed' ? '确诊患者' : '疑似肺结核'}）`"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="referralDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleReferral">
+          确认诊断
         </el-button>
       </template>
     </el-dialog>

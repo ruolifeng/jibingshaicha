@@ -102,7 +102,7 @@ const importResultVisible = ref(false)
 const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
-// 分级诊疗
+// 转诊
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -450,7 +450,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
               删除
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              分级诊疗
+              转诊
             </el-button>
           </template>
         </el-table-column>
@@ -738,7 +738,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-tab-pane label="随访情况">
           <el-timeline>
             <el-timeline-item
-              v-for="(month, idx) in [6, 12, 24]" :key="idx"
+              v-for="(month, idx) in ([6, 12, 24] as const)" :key="idx"
               :color="hasFollowupData(detailRow, month) ? '#67c23a' : '#909399'"
             >
               <template #dot>
@@ -795,7 +795,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       </template>
     </el-dialog>
 
-    <!-- 分级诊疗弹窗 -->
+    <!-- 转诊弹窗 -->
     <ReferralDialog
       v-if="tierCareRow"
       v-model="tierCareVisible"

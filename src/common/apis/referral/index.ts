@@ -45,7 +45,7 @@ export interface SendReferralParams {
   receiverOrgId: number
 }
 
-/** 发起分级诊疗推送 */
+/** 发起转诊推送 */
 export function sendReferralApi(data: SendReferralParams) {
   return request<ApiResponseData<null>>({
     url: "referral/send",
@@ -79,7 +79,7 @@ export function resendReferralApi(id: number) {
   })
 }
 
-/** 查询某条业务关联的分级诊疗列表 */
+/** 查询某条业务关联的转诊列表 */
 export function getReferralListApi(bizId: number, bizType: string) {
   return request<ApiResponseData<ReferralRecord[]>>({
     url: "referral/list",
@@ -88,7 +88,7 @@ export function getReferralListApi(bizId: number, bizType: string) {
   })
 }
 
-/** 当前用户已发送的分级诊疗分页列表 */
+/** 当前用户已发送的转诊分页列表 */
 export function getSentReferralListApi(params: { pageNum: number, size: number }) {
   return request<ApiResponseData<{ records: SentReferralVO[], total: number }>>({
     url: "referral/sent",

@@ -46,7 +46,7 @@ function handleReset() {
   handleSearch()
 }
 
-// 分级诊疗
+// 转诊
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -347,7 +347,7 @@ watch(
               删除
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              分级诊疗
+              转诊
             </el-button>
           </template>
         </el-table-column>
@@ -663,7 +663,7 @@ watch(
       </template>
     </el-dialog>
 
-    <!-- 分级诊疗弹窗 -->
+    <!-- 转诊弹窗 -->
     <ReferralDialog
       v-if="tierCareRow"
       v-model="tierCareVisible"

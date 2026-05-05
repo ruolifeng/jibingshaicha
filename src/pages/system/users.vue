@@ -63,7 +63,7 @@ const formData = reactive({
   realName: "",
   role: 6,
   orgName: "",
-  departmentId: null as number | null
+  departmentId: undefined as number | undefined
 })
 
 function openCreateDialog() {
@@ -75,7 +75,7 @@ function openCreateDialog() {
   formData.realName = ""
   formData.role = 6
   formData.orgName = ""
-  formData.departmentId = null
+  formData.departmentId = undefined
   dialogVisible.value = true
 }
 
@@ -88,7 +88,7 @@ function openEditDialog(row: any) {
   formData.realName = row.realName || ""
   formData.role = row.role
   formData.orgName = row.orgName || ""
-  formData.departmentId = row.departmentId || null
+  formData.departmentId = row.departmentId || undefined
   dialogVisible.value = true
 }
 

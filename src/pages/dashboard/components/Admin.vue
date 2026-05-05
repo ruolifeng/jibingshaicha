@@ -101,7 +101,7 @@ function fmt(n: number) {
   return n.toFixed(1)
 }
 
-/** 计算通知单/分级诊疗进度条宽度 */
+/** 计算通知单/转诊进度条宽度 */
 function barWidth(val: number, total: number) {
   if (!total) return "0%"
   return `${Math.min((val / total) * 100, 100).toFixed(1)}%`
@@ -360,11 +360,11 @@ const noticeMaxSent = computed(() =>
         </div>
       </el-col>
 
-      <!-- 分级诊疗统计 -->
+      <!-- 转诊统计 -->
       <el-col :xs="24" :sm="12">
         <div class="msg-card">
           <div class="msg-card-title">
-            <el-icon><Connection /></el-icon>分级诊疗发送情况
+            <el-icon><Connection /></el-icon>转诊发送情况
           </div>
 
           <div class="referral-stats">
@@ -450,7 +450,7 @@ const noticeMaxSent = computed(() =>
             <el-icon><WarningFilled /></el-icon>
             <span>
               {{ messageStats.referralSent - messageStats.referralConfirmed - messageStats.referralRejected }}
-              条分级诊疗待对方确认
+              条转诊待对方确认
             </span>
           </div>
         </div>
@@ -879,7 +879,7 @@ const noticeMaxSent = computed(() =>
   background: var(--el-border-color-lighter);
 }
 
-// 分级诊疗
+// 转诊
 .referral-stats {
   display: flex;
   align-items: center;

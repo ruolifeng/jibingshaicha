@@ -3,6 +3,7 @@ package cn.luyou.model;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -388,4 +389,9 @@ public class ScreeningCloseContact extends BaseEntity {
     /** 所属部门ID */
     @ExcelIgnore
     private Long departmentId;
+
+    /** 是否已发送通知单（非数据库字段，查询时动态填充） */
+    @ExcelIgnore
+    @TableField(exist = false)
+    private Boolean noticeSent;
 }

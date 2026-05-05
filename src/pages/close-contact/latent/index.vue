@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
+import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 /**
  * 密接人群 — 潜伏感染者管理
@@ -52,7 +53,7 @@ onMounted(async () => {
   } catch { /* ignore */ }
 })
 
-// ==================== 分级诊疗 ====================
+// ==================== 转诊 ====================
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -334,6 +335,7 @@ async function handleSaveSupervision() {
 
 const supervisionDetailVisible = ref(false)
 const supervisionDetailData = ref<any>(null)
+const supervisionPrintVisible = ref(false)
 
 async function viewSupervision(row: any) {
   try {
@@ -601,18 +603,28 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-table-column label="操作" fixed="right" min-width="380">
           <template #default="{ row }">
             <!-- 步骤1: 确认预防治疗 -->
-            <el-button type="primary" size="small" @click="openTreatmentDecision(row)">
+            <el-button v-permission="'closeContact:latent:treatmentDecision'" type="primary" size="small" @click="openTreatmentDecision(row)">
               {{ row.hasPreventiveTreatment ? '修改预防治疗' : '确认预防治疗' }}
             </el-button>
 
-            <!-- 步骤2: 发送通知单 -->
+            <!-- 步骤2: 发送通知单（已发送后隐藏，改为显示已发送状态） -->
             <el-button
+              v-if="!row.noticeSent"
+              v-permission="'closeContact:latent:sendNotice'"
               type="success"
               size="small"
               :disabled="!row.hasPreventiveTreatment || row.hasPreventiveTreatment !== '开展'"
               @click="openNoticeDialog(row)"
             >
               发送通知单
+            </el-button>
+            <el-button
+              v-else
+              type="success"
+              size="small"
+              disabled
+            >
+              已发送通知单
             </el-button>
 
             <!-- 查看通知单 -->
@@ -622,6 +634,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
 
             <!-- 步骤3: 填写督导表（已开展预防治疗） -->
             <el-button
+              v-permission="'closeContact:latent:supervision'"
               type="warning"
               size="small"
               :disabled="!row.hasPreventiveTreatment || row.hasPreventiveTreatment !== '开展'"
@@ -637,6 +650,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
 
             <!-- 步骤4: 设置预计完成时间 -->
             <el-button
+              v-permission="'closeContact:latent:setExpectedDate'"
               type="primary"
               size="small"
               :disabled="row.hasPreventiveTreatment !== '开展'"
@@ -648,6 +662,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             <!-- 步骤5: 到期确认（仅在设置了预计时间且已到期后显示） -->
             <el-button
               v-if="row.expectedTreatmentEndDate && !row.treatmentCompleted && isOverdue(row.expectedTreatmentEndDate)"
+              v-permission="'closeContact:latent:confirmTreatment'"
               type="danger"
               size="small"
               @click="openConfirmTreatment(row)"
@@ -665,7 +680,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
               查看随访详情
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              分级诊疗
+              转诊
             </el-button>
           </template>
         </el-table-column>
@@ -776,13 +791,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
                 {{ row.threeMonthFinalResult }}
               </el-tag>
             </div>
-            <el-button v-else type="primary" size="small" @click="openThreeMonthCheck(row)">
+            <el-button v-else v-permission="'closeContact:latent:check'" type="primary" size="small" @click="openThreeMonthCheck(row)">
               录入3月复查
             </el-button>
-          </template>
-        </el-table-column>
-        <el-table-column label="流程状态">
-          <template #default="{ row }">
             <el-tag v-if="CC_STATUS_MAP[row.ccStatus]" :type="tagType(CC_STATUS_MAP[row.ccStatus].type)" size="small">
               {{ CC_STATUS_MAP[row.ccStatus].label }}
             </el-tag>
@@ -792,6 +803,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
           <template #default="{ row }">
             <el-button
               v-if="row.threeMonthCheckDate"
+              v-permission="'closeContact:latent:check'"
               type="warning"
               link
               size="small"
@@ -799,7 +811,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             >
               修改3月复查
             </el-button>
-            <el-button v-else type="primary" link size="small" @click="openThreeMonthCheck(row)">
+            <el-button v-else v-permission="'closeContact:latent:check'" type="primary" link size="small" @click="openThreeMonthCheck(row)">
               录入3月复查
             </el-button>
           </template>
@@ -814,7 +826,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
       </div>
     </el-card>
 
-    <!-- 分级诊疗弹窗 -->
+    <!-- 转诊弹窗 -->
     <ReferralDialog
       v-if="tierCareRow"
       v-model="tierCareVisible"
@@ -1143,7 +1155,18 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
         <el-table-column prop="content" label="督导内容" />
         <el-table-column prop="remark" label="备注" />
       </el-table>
+      <template #footer>
+        <el-button @click="supervisionDetailVisible = false">
+          关闭
+        </el-button>
+        <el-button type="primary" @click="supervisionPrintVisible = true">
+          打印 / 保存PDF
+        </el-button>
+      </template>
     </el-dialog>
+
+    <!-- 督导表打印预览 -->
+    <PrintSupervision v-model:visible="supervisionPrintVisible" :data="supervisionDetailData" />
 
     <!-- ==================== 弹窗：发送通知单 ==================== -->
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
@@ -1316,7 +1339,8 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
       </el-descriptions>
       <template #footer>
         <el-button
-          v-if="noticeDetailData?.status === 1 && userStore.userRole === 6"
+          v-if="noticeDetailData?.status === 1"
+          v-permission="'closeContact:latent:confirmNotice'"
           type="primary"
           @click="handleConfirmNotice(noticeDetailData.id)"
         >

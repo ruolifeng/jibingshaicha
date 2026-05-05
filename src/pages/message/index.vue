@@ -29,9 +29,9 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   notice_timeout: "通知单超时",
   supervision_timeout: "督导表超时",
   visit_timeout: "随访超时",
-  referral_receive: "待确认分级诊疗",
-  referral_confirmed: "分级诊疗已接收",
-  referral_rejected: "分级诊疗已被拒绝"
+  referral_receive: "待确认转诊",
+  referral_confirmed: "转诊已接收",
+  referral_rejected: "转诊已被拒绝"
 }
 
 function getMessageTypeTagType(type: string) {
@@ -80,7 +80,7 @@ async function handleReceiveNotice(row: any) {
   } catch { /* handled */ }
 }
 
-// ====== 分级诊疗：消息中确认/拒绝 ======
+// ====== 转诊：消息中确认/拒绝 ======
 const rejectDialogVisible = ref(false)
 const rejectingRow = ref<any>(null)
 const rejectReason = ref("")
@@ -93,14 +93,14 @@ function openRejectDialog(row: any) {
 
 async function handleConfirmReferral(row: any) {
   if (!row.bizId) {
-    ElMessage.warning("分级诊疗记录编号缺失")
+    ElMessage.warning("转诊记录编号缺失")
     return
   }
   try {
     await confirmReferralFromMessageApi(row.bizId)
     await markMessageReadApi(row.id)
     row.isRead = 1
-    ElMessage.success("已确认接收分级诊疗信息")
+    ElMessage.success("已确认接收转诊信息")
   } catch { /* handled */ }
 }
 
@@ -112,7 +112,7 @@ async function handleRejectReferral() {
     await markMessageReadApi(row.id)
     row.isRead = 1
     rejectDialogVisible.value = false
-    ElMessage.success("已拒绝分级诊疗")
+    ElMessage.success("已拒绝转诊")
   } catch { /* handled */ }
 }
 
@@ -170,7 +170,7 @@ watch(
   { immediate: true }
 )
 
-// ====== 已发送分级诊疗 ======
+// ====== 已发送转诊 ======
 const {
   paginationData: referralPagination,
   handleCurrentChange: referralHandleCurrentChange,
@@ -265,7 +265,7 @@ const activeTab = ref("received")
                 >
                   接收通知单
                 </el-button>
-                <!-- 分级诊疗确认/拒绝 -->
+                <!-- 转诊确认/拒绝 -->
                 <template v-if="row.type === 'referral_receive' && !row.isRead">
                   <el-button type="success" size="small" @click="handleConfirmReferral(row)">
                     确认接收
@@ -355,8 +355,8 @@ const activeTab = ref("received")
           </div>
         </el-tab-pane>
 
-        <!-- 已发送分级诊疗 -->
-        <el-tab-pane label="已发送分级诊疗" name="referral">
+        <!-- 已发送转诊 -->
+        <el-tab-pane label="已发送转诊" name="referral">
           <el-table v-loading="referralLoading" :data="referralTableData" border stripe>
             <el-table-column prop="subjectName" label="对象姓名" width="110" />
             <el-table-column label="类型" width="160">
@@ -411,8 +411,8 @@ const activeTab = ref("received")
       </el-tabs>
     </el-card>
 
-    <!-- 拒绝分级诊疗弹窗 -->
-    <el-dialog v-model="rejectDialogVisible" title="拒绝分级诊疗" width="400px" append-to-body>
+    <!-- 拒绝转诊弹窗 -->
+    <el-dialog v-model="rejectDialogVisible" title="拒绝转诊" width="400px" append-to-body>
       <el-form label-width="80px">
         <el-form-item label="拒绝原因">
           <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因（选填）" />

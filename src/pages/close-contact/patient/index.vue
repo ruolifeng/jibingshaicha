@@ -56,7 +56,7 @@ onMounted(() => {
   loadLevel5Users()
 })
 
-// ==================== 分级诊疗 ====================
+// ==================== 转诊 ====================
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -636,7 +636,7 @@ watch(
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接人群 — 患者管理</span>
           <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleImportEpidemic">
-            <el-button type="warning" v-permission="'patient:importEpidemic'">
+            <el-button type="warning" v-permission="'closeContact:patient:importEpidemic'">
               导入大疫情表
             </el-button>
           </el-upload>
@@ -687,24 +687,24 @@ watch(
                 查看详情
               </el-button>
               <template v-if="row.noticeStatus === null || row.noticeStatus === undefined">
-                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
+                <el-button v-permission="'closeContact:patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
                   填写通知单
                 </el-button>
               </template>
               <template v-else-if="row.noticeStatus === 0">
-                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
+                <el-button v-permission="'closeContact:patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
                   填写通知单
                 </el-button>
-                <el-button v-permission="'patient:sendNotice'" type="success" link size="small" @click="openNoticeDialog(row)">
+                <el-button v-permission="'closeContact:patient:sendNotice'" type="success" link size="small" @click="openNoticeDialog(row)">
                   发送通知单
                 </el-button>
               </template>
               <template v-else-if="row.noticeStatus === 2">
-                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
+                <el-button v-permission="'closeContact:patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
                   发送通知单
                 </el-button>
               </template>
-              <el-button v-permission="'patient:firstVisit'" type="success" link size="small" :disabled="!!row.hasFirstVisit" @click="openFirstVisitDialog(row)">
+              <el-button v-permission="'closeContact:patient:firstVisit'" type="success" link size="small" :disabled="!!row.hasFirstVisit" @click="openFirstVisitDialog(row)">
                 填写首次随访
               </el-button>
               <el-dropdown trigger="click" @command="(cmd: string) => handleActionCommand(cmd, row)">
@@ -734,7 +734,7 @@ watch(
                 </template>
               </el-dropdown>
               <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-                分级诊疗
+                转诊
               </el-button>
             </div>
           </template>
@@ -758,7 +758,7 @@ watch(
     <!-- 筛查详情弹窗 -->
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="closeContact" :data="screeningDetailData" />
 
-    <!-- 分级诊疗弹窗 -->
+    <!-- 转诊弹窗 -->
     <ReferralDialog
       v-if="tierCareRow"
       v-model="tierCareVisible"
@@ -1031,7 +1031,7 @@ watch(
       <template #footer>
         <el-button
           v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6"
-          v-permission="'patient:confirmNotice'"
+          v-permission="'closeContact:patient:confirmNotice'"
           type="primary"
           @click="handleConfirmNotice(noticeDetailData.id)"
         >

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 public interface LatentInfectionService extends IService<LatentInfection> {
@@ -39,4 +40,10 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     /** 结案归档（按期检查通过后） */
     void closeCase(Long id);
+
+    /**
+     * 对导入时已包含确诊/疑似肺结核诊断的潜伏感染记录进行自动转诊处理：
+     * 创建对应患者记录并将潜伏感染记录标记为已转诊归档，避免数据丢失。
+     */
+    void autoReferralForDirectDiagnosis(List<LatentInfection> latents);
 }

@@ -36,6 +36,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,22 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     private static final List<String> DIAGNOSIS_TO_PATIENT = Arrays.asList("疑似肺结核", "确诊患者");
 
+    /**
+     * 首次诊断结果（diagnosisFirst）→ 转诊编码（referralResult）映射。
+     * 录入胸片诊断或批量导入胸片诊断后，根据该映射自动驱动转诊流程，
+     * 与"诊断"按钮 referral() 方法的语义保持一致。
+     */
+    private static final Map<String, String> DIAGNOSIS_TO_REFERRAL;
+    static {
+        Map<String, String> m = new HashMap<>();
+        m.put("排除", "excluded");
+        m.put("其他", "other");
+        m.put("确诊患者", "confirmed");
+        m.put("疑似肺结核", "suspected");
+        m.put("潜伏感染者", "latent");
+        DIAGNOSIS_TO_REFERRAL = java.util.Collections.unmodifiableMap(m);
+    }
+
     @Override
     public IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
@@ -65,8 +82,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived)
-                // 潜伏感染列表始终排除确诊患者/疑似肺结核，这些数据属于患者管理模块
-                .notIn(LatentInfection::getDiagnosisResult, Arrays.asList("确诊患者", "疑似肺结核"));
+                // 潜伏感染列表始终排除确诊患者/疑似肺结核，这些数据属于患者管理模块。
+                // 注意：SQL 中 NULL NOT IN (...) 结果为 NULL（即被过滤掉），
+                // 必须显式放行 diagnosisResult 为 NULL 的记录（导入后未录入诊断的待诊断数据）。
+                .and(w -> w.isNull(LatentInfection::getDiagnosisResult)
+                        .or()
+                        .notIn(LatentInfection::getDiagnosisResult, Arrays.asList("确诊患者", "疑似肺结核")));
 
         // referralResult 过滤：pending = 查尚未转诊的记录；具体值 = 精确匹配
         if ("pending".equals(referralResult)) {
@@ -247,18 +268,30 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             xrayDate = LocalDate.parse(xrayDateObj.toString(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         }
 
-        // 精确更新胸片与诊断字段，避免回写无关字段
+        // 写入胸片字段与首次诊断（diagnosisResult 由后续联动转诊决定，不在此处直接写入，
+        // 避免数据被过早过滤而从待诊断/患者管理列表中"消失"）
         lambdaUpdate()
                 .eq(LatentInfection::getId, entity.getId())
                 .set(LatentInfection::getHasChestXray, hasXray)
                 .set(LatentInfection::getChestXrayDate, xrayDate)
                 .set(LatentInfection::getChestXrayResult, xrayResult)
                 .set(LatentInfection::getDiagnosisFirst, diagnosisFirst)
-                .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
                 .update();
 
         // V4 sheet2：胸片与诊断同步回写到筛查表
         writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
+
+        // 根据首次诊断自动驱动转诊：
+        //  - 排除/其他       → 归档
+        //  - 确诊患者/疑似肺结核 → 创建患者档案 + 归档（数据进入患者管理）
+        //  - 潜伏感染者      → 进入潜伏感染管理（不归档）
+        // 与 referral() 的语义一致，避免再让用户多点一次"诊断"按钮。
+        String referralCode = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
+        if (referralCode != null) {
+            // 重新加载，确保后续 updateById 写回的字段最新
+            LatentInfection refreshed = getById(id);
+            applyReferralOutcome(refreshed, referralCode, null);
+        }
     }
 
     /**
@@ -372,17 +405,23 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             LocalDate xrayDate = parseDateCell(row.get(xrayDateIdx));
             String xrayResult = getStrCell(row, xrayResultIdx);
 
-            // 使用精确字段更新，避免 updateById 回写无关字段
+            // 仅写入胸片字段与首次诊断；diagnosisResult 由后续联动转诊设置
             lambdaUpdate()
                     .eq(LatentInfection::getId, entity.getId())
                     .set(StrUtil.isNotBlank(hasXray), LatentInfection::getHasChestXray, hasXray)
                     .set(xrayDate != null, LatentInfection::getChestXrayDate, xrayDate)
                     .set(StrUtil.isNotBlank(xrayResult), LatentInfection::getChestXrayResult, xrayResult)
                     .set(LatentInfection::getDiagnosisFirst, diagnosisFirst)
-                    .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
                     .update();
 
             writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
+
+            // 与单条录入保持一致：根据 diagnosisFirst 自动驱动转诊
+            String referralCode = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
+            if (referralCode != null) {
+                LatentInfection refreshed = getById(entity.getId());
+                applyReferralOutcome(refreshed, referralCode, null);
+            }
             updated++;
         }
         log.info("批量导入胸片诊断，populationType={}，成功更新 {} 条", populationType, updated);
@@ -412,6 +451,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片诊断结果为「" + entity.getDiagnosisFirst() + "」，不可转诊为潜伏感染者，请选择正确的转诊结果");
         }
 
+        applyReferralOutcome(entity, result, remark);
+    }
+
+    /**
+     * 执行转诊后的状态变更：写入 referralResult/diagnosisResult，
+     * 必要时创建患者档案并将潜伏感染记录归档。
+     * 注意：方法只负责状态写入，不做参数合法性校验，调用方须自行校验。
+     */
+    private void applyReferralOutcome(LatentInfection entity, String result, String remark) {
         entity.setReferralResult(result);
         entity.setReferralRemark(remark);
 
@@ -428,47 +476,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             }
             case "confirmed", "suspected" -> {
                 entity.setDiagnosisResult("confirmed".equals(result) ? "确诊患者" : "疑似肺结核");
-                Patient.PatientBuilder pb = Patient.builder()
-                        .screeningId(entity.getScreeningId())
-                        .latentInfectionId(entity.getId())
-                        .populationType(entity.getPopulationType())
-                        .name(entity.getName())
-                        .gender(entity.getGender())
-                        .age(entity.getAge())
-                        .idNumber(entity.getIdNumber())
-                        .phone(entity.getPhone())
-                        .diagnosisResult(entity.getDiagnosisResult())
-                        .source("confirmed")
-                        .archived(0)
-                        .departmentId(entity.getDepartmentId());
-                // 从筛查表补全患者档案字段
-                String popType = entity.getPopulationType();
-                if ("school".equals(popType) && entity.getScreeningId() != null) {
-                    ScreeningSchool s = screeningSchoolMapper.selectById(entity.getScreeningId());
-                    if (s != null) {
-                        pb.birthDate(s.getBirthDate()).idType(s.getIdType())
-                          .ethnicity(s.getEthnicity())
-                          .householdAddress(s.getHouseholdAddress())
-                          .currentAddress(s.getCurrentAddress());
-                    }
-                } else if ("keyPopulation".equals(popType) && entity.getScreeningId() != null) {
-                    ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(entity.getScreeningId());
-                    if (k != null) {
-                        pb.birthDate(k.getBirthDate()).idType(k.getIdType())
-                          .ethnicity(k.getEthnicity())
-                          .householdAddress(k.getHouseholdAddress())
-                          .currentAddress(k.getCurrentAddress());
-                    }
-                } else if ("closeContact".equals(popType) && entity.getScreeningId() != null) {
-                    ScreeningCloseContact c = screeningCloseContactMapper.selectById(entity.getScreeningId());
-                    if (c != null) {
-                        // ScreeningCloseContact 无 birthDate/idType 字段，患者档案中留空
-                        pb.ethnicity(c.getEthnicity())
-                          .householdAddress(c.getHouseholdAddress())
-                          .currentAddress(c.getCurrentAddress());
-                    }
-                }
-                patientService.save(pb.build());
+                createPatientFromLatent(entity);
                 entity.setArchived(1);
                 entity.setArchivedTime(LocalDateTime.now());
             }
@@ -477,6 +485,60 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
 
         updateById(entity);
+    }
+
+    /**
+     * 根据潜伏感染记录创建对应的患者档案，并从筛查表补全人口学字段。
+     * 幂等：若该 latentInfectionId 已存在患者记录则直接跳过。
+     */
+    private void createPatientFromLatent(LatentInfection entity) {
+        boolean alreadyExists = patientService.lambdaQuery()
+                .eq(Patient::getLatentInfectionId, entity.getId())
+                .exists();
+        if (alreadyExists) return;
+
+        Patient.PatientBuilder pb = Patient.builder()
+                .screeningId(entity.getScreeningId())
+                .latentInfectionId(entity.getId())
+                .populationType(entity.getPopulationType())
+                .name(entity.getName())
+                .gender(entity.getGender())
+                .age(entity.getAge())
+                .idNumber(entity.getIdNumber())
+                .phone(entity.getPhone())
+                .diagnosisResult(entity.getDiagnosisResult())
+                .source("confirmed")
+                .archived(0)
+                .departmentId(entity.getDepartmentId());
+
+        String popType = entity.getPopulationType();
+        if ("school".equals(popType) && entity.getScreeningId() != null) {
+            ScreeningSchool s = screeningSchoolMapper.selectById(entity.getScreeningId());
+            if (s != null) {
+                pb.birthDate(s.getBirthDate()).idType(s.getIdType())
+                  .ethnicity(s.getEthnicity())
+                  .householdAddress(s.getHouseholdAddress())
+                  .currentAddress(s.getCurrentAddress());
+            }
+        } else if ("keyPopulation".equals(popType) && entity.getScreeningId() != null) {
+            ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(entity.getScreeningId());
+            if (k != null) {
+                pb.birthDate(k.getBirthDate()).idType(k.getIdType())
+                  .ethnicity(k.getEthnicity())
+                  .householdAddress(k.getHouseholdAddress())
+                  .currentAddress(k.getCurrentAddress());
+            }
+        } else if ("closeContact".equals(popType) && entity.getScreeningId() != null) {
+            ScreeningCloseContact c = screeningCloseContactMapper.selectById(entity.getScreeningId());
+            if (c != null) {
+                // ScreeningCloseContact 无 birthDate/idType 字段，患者档案中留空
+                pb.ethnicity(c.getEthnicity())
+                  .householdAddress(c.getHouseholdAddress())
+                  .currentAddress(c.getCurrentAddress());
+            }
+        }
+
+        patientService.save(pb.build());
     }
 
     @Override
@@ -503,6 +565,31 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         entity.setArchived(1);
         entity.setArchivedTime(LocalDateTime.now());
         updateById(entity);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void autoReferralForDirectDiagnosis(List<LatentInfection> latents) {
+        for (LatentInfection entity : latents) {
+            String diagnosisFirst = entity.getDiagnosisFirst();
+            if (!DIAGNOSIS_TO_PATIENT.contains(diagnosisFirst)) continue;
+
+            // 设置诊断结果用于患者档案；若已存在对应患者记录则跳过创建
+            entity.setDiagnosisResult(diagnosisFirst);
+            createPatientFromLatent(entity);
+
+            // 将潜伏感染记录标记为已转诊归档
+            String referralResult = "确诊患者".equals(diagnosisFirst) ? "confirmed" : "suspected";
+            lambdaUpdate()
+                    .eq(LatentInfection::getId, entity.getId())
+                    .set(LatentInfection::getReferralResult, referralResult)
+                    .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
+                    .set(LatentInfection::getArchived, 1)
+                    .set(LatentInfection::getArchivedTime, LocalDateTime.now())
+                    .update();
+
+            log.info("导入时自动转诊 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);
+        }
     }
 
     private String getStrCell(Map<String, Object> row, int index) {

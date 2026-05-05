@@ -67,7 +67,7 @@ export function remindNoticeApi(id: number) {
   })
 }
 
-// ====== 分级诊疗相关 ======
+// ====== 转诊相关 ======
 
 export interface SentReferralVO {
   id: number
@@ -89,7 +89,7 @@ export interface SentReferralVO {
   rejectReason: string | null
 }
 
-/** 在消息页确认接收分级诊疗 */
+/** 在消息页确认接收转诊 */
 export function confirmReferralFromMessageApi(referralId: number) {
   return request<ApiResponseData<null>>({
     url: `referral/confirm/${referralId}`,
@@ -97,7 +97,7 @@ export function confirmReferralFromMessageApi(referralId: number) {
   })
 }
 
-/** 在消息页拒绝分级诊疗 */
+/** 在消息页拒绝转诊 */
 export function rejectReferralFromMessageApi(referralId: number, rejectReason?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/reject/${referralId}`,
@@ -106,7 +106,7 @@ export function rejectReferralFromMessageApi(referralId: number, rejectReason?: 
   })
 }
 
-/** 查询当前用户已发送的分级诊疗列表 */
+/** 查询当前用户已发送的转诊列表 */
 export function getSentReferralListApi(params: { pageNum: number, size: number }) {
   return request<ApiResponseData<{ records: SentReferralVO[], total: number }>>({
     url: "referral/sent",

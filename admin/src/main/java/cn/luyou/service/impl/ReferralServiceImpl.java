@@ -46,6 +46,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
 
     @Override
     public void send(Referral referral) {
+        referral.setSenderId(BaseContext.getCurrentId());
         referral.setStatus(1);
         referral.setSentTime(LocalDateTime.now());
         save(referral);
