@@ -8,9 +8,13 @@ import cn.luyou.model.EpidemicReport;
 import cn.luyou.model.FirstVisit;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.model.ScreeningKeyPopulation;
+import cn.luyou.model.ScreeningSchool;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.PatientMapper;
+import cn.luyou.mapper.ScreeningKeyPopulationMapper;
+import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
@@ -46,6 +50,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final ObjectMapper objectMapper;
     private final NoticeMapper noticeMapper;
     private final FirstVisitMapper firstVisitMapper;
+    private final ScreeningSchoolMapper screeningSchoolMapper;
+    private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
 
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
@@ -62,6 +68,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
+        fillScreeningXrayData(result.getRecords(), populationType);
         return result;
     }
 
@@ -75,6 +82,47 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .map(FirstVisit::getPatientId)
                 .collect(Collectors.toList());
         patients.forEach(p -> p.setHasFirstVisit(visitedIds.contains(p.getId())));
+    }
+
+    /** 从筛查表关联填充胸片检查日期和结果（仅转诊确诊患者有 screeningId） */
+    private void fillScreeningXrayData(List<Patient> patients, String populationType) {
+        if (patients == null || patients.isEmpty()) return;
+        List<Long> screeningIds = patients.stream()
+                .filter(p -> p.getScreeningId() != null)
+                .map(Patient::getScreeningId)
+                .distinct()
+                .collect(Collectors.toList());
+        if (screeningIds.isEmpty()) return;
+
+        if ("school".equals(populationType)) {
+            List<ScreeningSchool> schools = screeningSchoolMapper.selectBatchIds(screeningIds);
+            Map<Long, ScreeningSchool> schoolMap = schools.stream()
+                    .collect(Collectors.toMap(ScreeningSchool::getId, s -> s));
+            patients.forEach(p -> {
+                ScreeningSchool s = schoolMap.get(p.getScreeningId());
+                if (s != null) {
+                    p.setChestXrayDate(s.getChestXrayDate());
+                    p.setChestXrayResult(s.getChestXrayResult());
+                    p.setScreenDate(s.getScreenDate());
+                    p.setScreenMethod(s.getScreenMethod());
+                    p.setInfectionResult(s.getInfectionResult());
+                }
+            });
+        } else if ("key_population".equals(populationType)) {
+            List<ScreeningKeyPopulation> keyPops = screeningKeyPopulationMapper.selectBatchIds(screeningIds);
+            Map<Long, ScreeningKeyPopulation> keyPopMap = keyPops.stream()
+                    .collect(Collectors.toMap(ScreeningKeyPopulation::getId, k -> k));
+            patients.forEach(p -> {
+                ScreeningKeyPopulation k = keyPopMap.get(p.getScreeningId());
+                if (k != null) {
+                    p.setChestXrayDate(k.getChestXrayDate());
+                    p.setChestXrayResult(k.getChestXrayResult());
+                    p.setScreenDate(k.getScreenDate());
+                    p.setScreenMethod(k.getScreenMethod());
+                    p.setInfectionResult(k.getInfectionResult());
+                }
+            });
+        }
     }
 
     /** 批量查询患者通知单状态并填充到每条记录 */

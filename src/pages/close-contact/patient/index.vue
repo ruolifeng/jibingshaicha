@@ -24,7 +24,8 @@ import {
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
-  VISIT_METHOD_OPTIONS
+  VISIT_METHOD_OPTIONS,
+  FOLLOW_UP_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { getScreeningCloseContactDetailApi } from "@/pages/close-contact/screening/apis"
@@ -213,7 +214,7 @@ function openNoticeDialog(row: any) {
       chestXrayDate: "",
       chestXrayResult: "",
       treatmentInstitution: "",
-      issuedTime: "",
+      issuedTime: new Date().toISOString().slice(0, 10),
       patientType: "",
       managementMethod: "",
       treatmentPlan: "",
@@ -1286,7 +1287,7 @@ watch(
         </el-form-item>
         <el-form-item label="随访方式">
           <el-radio-group v-model="followUpForm.visitMethod">
-            <el-radio v-for="item in VISIT_METHOD_OPTIONS" :key="item" :value="item">
+            <el-radio v-for="item in FOLLOW_UP_METHOD_OPTIONS" :key="item" :value="item">
               {{ item }}
             </el-radio>
           </el-radio-group>

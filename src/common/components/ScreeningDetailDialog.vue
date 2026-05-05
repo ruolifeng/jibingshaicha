@@ -105,7 +105,7 @@ const dialogTitle = computed(() => {
             {{ data.infectionResult }}
           </el-descriptions-item>
           <el-descriptions-item label="感染判定">
-            {{ data.isLatent === 1 ? "阳性（潜伏管理）" : "阴性" }}
+            {{ data.isLatent === 1 ? "阳性" : "阴性" }}
           </el-descriptions-item>
           <el-descriptions-item label="是否进行胸片">
             {{ data.hasChestXray || "-" }}
@@ -226,7 +226,7 @@ const dialogTitle = computed(() => {
             {{ data.infectionResult }}
           </el-descriptions-item>
           <el-descriptions-item label="感染判定">
-            {{ data.isLatent === 1 ? "阳性（潜伏管理）" : "阴性" }}
+            {{ data.isLatent === 1 ? "阳性" : "阴性" }}
           </el-descriptions-item>
           <el-descriptions-item label="是否进行胸片">
             {{ data.hasChestXray || "-" }}

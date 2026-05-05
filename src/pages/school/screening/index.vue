@@ -464,17 +464,26 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="既往结核病史">
-              <el-input v-model="editForm.tbHistory" />
+              <el-select v-model="editForm.tbHistory" style="width:100%" clearable>
+                <el-option label="有" value="有" />
+                <el-option label="无" value="无" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="密切接触史">
-              <el-input v-model="editForm.closeContactHistory" />
+              <el-select v-model="editForm.closeContactHistory" style="width:100%" clearable>
+                <el-option label="有" value="有" />
+                <el-option label="无" value="无" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="可疑症状">
-              <el-input v-model="editForm.suspiciousSymptoms" />
+              <el-select v-model="editForm.suspiciousSymptoms" style="width:100%" clearable>
+                <el-option label="有" value="有" />
+                <el-option label="无" value="无" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -485,7 +494,10 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="是否进行感染筛">
-              <el-input v-model="editForm.hasInfectionScreen" />
+              <el-select v-model="editForm.hasInfectionScreen" style="width:100%" clearable>
+                <el-option label="是" value="是" />
+                <el-option label="否" value="否" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -525,7 +537,10 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="是否进行胸片检查">
-              <el-input v-model="editForm.hasChestXray" />
+              <el-select v-model="editForm.hasChestXray" style="width:100%" clearable>
+                <el-option label="是" value="是" />
+                <el-option label="否" value="否" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -535,7 +550,11 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="胸片结果">
-              <el-input v-model="editForm.chestXrayResult" />
+              <el-select v-model="editForm.chestXrayResult" style="width:100%" clearable>
+                <el-option label="正常" value="正常" />
+                <el-option label="异常" value="异常" />
+                <el-option label="未查" value="未查" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="24">

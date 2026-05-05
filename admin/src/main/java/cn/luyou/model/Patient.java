@@ -53,4 +53,24 @@ public class Patient extends BaseEntity {
     /** 是否已填写首次随访（非数据库字段，查询时填充） */
     @TableField(exist = false)
     private Boolean hasFirstVisit;
+
+    /** 胸片检查日期（非数据库字段，从筛查表关联填充） */
+    @TableField(exist = false)
+    private LocalDate chestXrayDate;
+
+    /** 胸片检查结果（非数据库字段，从筛查表关联填充） */
+    @TableField(exist = false)
+    private String chestXrayResult;
+
+    /** 感染筛查日期（非数据库字段，从筛查表关联填充） */
+    @TableField(exist = false)
+    private LocalDate screenDate;
+
+    /** 感染检查方法（非数据库字段，从筛查表关联填充） */
+    @TableField(exist = false)
+    private String screenMethod;
+
+    /** 感染筛查结果（非数据库字段，从筛查表关联填充） */
+    @TableField(exist = false)
+    private String infectionResult;
 }

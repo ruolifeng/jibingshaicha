@@ -24,7 +24,8 @@ import {
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
-  VISIT_METHOD_OPTIONS
+  VISIT_METHOD_OPTIONS,
+  FOLLOW_UP_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
@@ -130,6 +131,10 @@ const noticeForm = reactive({
   crowdCategory: "",
   currentAddress: "",
   householdAddress: "",
+  // 感染筛查
+  infectionDate: "",
+  infectionMethod: "",
+  infectionResultValue: "",
   chestXrayDate: "",
   chestXrayResult: "",
   treatmentInstitution: "",
@@ -162,6 +167,9 @@ function openNoticeDialog(row: any) {
           crowdCategory: notice.crowdCategory || "",
           currentAddress: notice.currentAddress || "",
           householdAddress: notice.householdAddress || "",
+          infectionDate: notice.infectionDate || noticeRow.value?.screenDate || "",
+          infectionMethod: notice.infectionMethod || noticeRow.value?.screenMethod || "",
+          infectionResultValue: notice.infectionResultValue || noticeRow.value?.infectionResult || "",
           chestXrayDate: notice.chestXrayDate || "",
           chestXrayResult: notice.chestXrayResult || "",
           treatmentInstitution: notice.treatmentInstitution || "",
@@ -190,10 +198,13 @@ function openNoticeDialog(row: any) {
       crowdCategory: "",
       currentAddress: row.currentAddress || "",
       householdAddress: row.householdAddress || "",
+      infectionDate: row.screenDate || "",
+      infectionMethod: row.screenMethod || "",
+      infectionResultValue: row.infectionResult || "",
       chestXrayDate: "",
       chestXrayResult: "",
       treatmentInstitution: "",
-      issuedTime: "",
+      issuedTime: new Date().toISOString().slice(0, 10),
       patientType: "",
       managementMethod: "",
       treatmentPlan: "",
@@ -1283,7 +1294,7 @@ watch(
         </el-form-item>
         <el-form-item label="随访方式">
           <el-radio-group v-model="followUpForm.visitMethod">
-            <el-radio v-for="item in VISIT_METHOD_OPTIONS" :key="item" :value="item">
+            <el-radio v-for="item in FOLLOW_UP_METHOD_OPTIONS" :key="item" :value="item">
               {{ item }}
             </el-radio>
           </el-radio-group>

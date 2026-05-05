@@ -24,7 +24,8 @@ import {
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
-  VISIT_METHOD_OPTIONS
+  VISIT_METHOD_OPTIONS,
+  FOLLOW_UP_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
@@ -133,6 +134,10 @@ const noticeForm = reactive({
   // 地址信息
   currentAddress: "",
   householdAddress: "",
+  // 感染筛查
+  infectionDate: "",
+  infectionMethod: "",
+  infectionResultValue: "",
   // 胸片
   chestXrayDate: "",
   chestXrayResult: "",
@@ -168,6 +173,9 @@ function openNoticeDialog(row: any) {
           crowdCategory: notice.crowdCategory || "",
           currentAddress: notice.currentAddress || "",
           householdAddress: notice.householdAddress || "",
+          infectionDate: notice.infectionDate || noticeRow.value?.screenDate || "",
+          infectionMethod: notice.infectionMethod || noticeRow.value?.screenMethod || "",
+          infectionResultValue: notice.infectionResultValue || noticeRow.value?.infectionResult || "",
           chestXrayDate: notice.chestXrayDate || "",
           chestXrayResult: notice.chestXrayResult || "",
           treatmentInstitution: notice.treatmentInstitution || "",
@@ -189,17 +197,20 @@ function openNoticeDialog(row: any) {
     Object.assign(noticeForm, {
       idNumber: row.idNumber || "",
       gender: row.gender || "",
-      birthDate: "",
+      birthDate: row.birthDate || "",
       age: row.age || null,
       ethnicity: row.ethnicity || "",
       phone: row.phone || "",
       crowdCategory: "",
       currentAddress: row.currentAddress || "",
       householdAddress: row.householdAddress || "",
-      chestXrayDate: "",
-      chestXrayResult: "",
+      infectionDate: row.screenDate || "",
+      infectionMethod: row.screenMethod || "",
+      infectionResultValue: row.infectionResult || "",
+      chestXrayDate: row.chestXrayDate || "",
+      chestXrayResult: row.chestXrayResult || "",
       treatmentInstitution: "",
-      issuedTime: "",
+      issuedTime: new Date().toISOString().slice(0, 10),
       patientType: "",
       managementMethod: "",
       treatmentPlan: "",
@@ -1291,7 +1302,7 @@ watch(
         </el-form-item>
         <el-form-item label="随访方式">
           <el-radio-group v-model="followUpForm.visitMethod">
-            <el-radio v-for="item in VISIT_METHOD_OPTIONS" :key="item" :value="item">
+            <el-radio v-for="item in FOLLOW_UP_METHOD_OPTIONS" :key="item" :value="item">
               {{ item }}
             </el-radio>
           </el-radio-group>

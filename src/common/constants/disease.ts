@@ -167,8 +167,11 @@ export const ACTIVE_ROUND_MAP: Record<number, string> = {
 
 // ==================== 患者随访相关 ====================
 
-/** 随访方式 */
+/** 随访方式（首次入户随访，必须上门） */
 export const VISIT_METHOD_OPTIONS = ["门诊", "家庭"]
+
+/** 后续随访方式（可电话随访） */
+export const FOLLOW_UP_METHOD_OPTIONS = ["门诊", "家庭", "电话"]
 
 /** 痰菌情况 */
 export const SPUTUM_STATUS_OPTIONS = ["阳性", "阴性", "未查痰"]
