@@ -384,6 +384,9 @@ watch(
         <el-table-column prop="screenMethod" label="筛查方法" />
         <el-table-column prop="screenResult" label="筛查结果" />
         <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column prop="hasChestXray" label="首次（是否胸片）" min-width="110" />
+        <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" min-width="100" />
         <!-- 预防性治疗情况（督导表归档后同步） -->
         <el-table-column prop="preventivePlan" label="预防性治疗方案" />
         <el-table-column prop="preventiveStartDate" label="治疗开始时间" />

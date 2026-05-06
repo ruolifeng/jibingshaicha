@@ -8,11 +8,13 @@ import cn.luyou.model.EpidemicReport;
 import cn.luyou.model.FirstVisit;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.PatientMapper;
+import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.EpidemicReportService;
@@ -52,6 +54,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final FirstVisitMapper firstVisitMapper;
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
+    private final ScreeningCloseContactMapper screeningCloseContactMapper;
 
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
@@ -63,7 +66,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .eq(archived != null, Patient::getArchived, archived)
                 .orderByDesc(Patient::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            Integer currentRole = BaseContext.getCurrentRole();
+            if (currentRole != null && currentRole == 6) {
+                // 五级管理员：只能看到发给自己的通知单所关联的患者记录
+                Long userId = BaseContext.getCurrentId();
+                wrapper.inSql(Patient::getId,
+                        "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
+                                + " AND notice_type = 'patient' AND deleted = 0");
+            } else {
+                wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            }
         }
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
@@ -108,7 +120,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     p.setInfectionResult(s.getInfectionResult());
                 }
             });
-        } else if ("key_population".equals(populationType)) {
+        } else if ("keyPopulation".equals(populationType)) {
             List<ScreeningKeyPopulation> keyPops = screeningKeyPopulationMapper.selectBatchIds(screeningIds);
             Map<Long, ScreeningKeyPopulation> keyPopMap = keyPops.stream()
                     .collect(Collectors.toMap(ScreeningKeyPopulation::getId, k -> k));
@@ -120,6 +132,18 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     p.setScreenDate(k.getScreenDate());
                     p.setScreenMethod(k.getScreenMethod());
                     p.setInfectionResult(k.getInfectionResult());
+                }
+            });
+        } else if ("closeContact".equals(populationType)) {
+            List<ScreeningCloseContact> closeContacts = screeningCloseContactMapper.selectBatchIds(screeningIds);
+            Map<Long, ScreeningCloseContact> closeContactMap = closeContacts.stream()
+                    .collect(Collectors.toMap(ScreeningCloseContact::getId, c -> c));
+            patients.forEach(p -> {
+                ScreeningCloseContact c = closeContactMap.get(p.getScreeningId());
+                if (c != null) {
+                    // 密接人群胸片字段为 imagingDate/imagingResult，统一映射到 Patient 的 chestXrayDate/chestXrayResult
+                    p.setChestXrayDate(c.getImagingDate());
+                    p.setChestXrayResult(c.getImagingResult());
                 }
             });
         }
@@ -280,7 +304,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
         if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            Integer currentRole = BaseContext.getCurrentRole();
+            if (currentRole != null && currentRole == 6) {
+                Long userId = BaseContext.getCurrentId();
+                wrapper.inSql(Patient::getId,
+                        "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
+                                + " AND notice_type = 'patient' AND deleted = 0");
+            } else {
+                wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            }
         }
         return page(new Page<>(page, size), wrapper);
     }

@@ -368,6 +368,7 @@ const noticeForm = reactive({
   chestXrayDate: "",
   chestXrayResult: "",
   treatmentPlan: "",
+  customPlanDetail: "",
   treatmentInstitution: "",
   issuedTime: "",
   receiverOrgId: undefined as number | undefined
@@ -396,6 +397,7 @@ function openNoticeDialog(row: any) {
     chestXrayDate: row.imagingDate || "",
     chestXrayResult: row.imagingResult || "",
     treatmentPlan: row.preventivePlan || "",
+    customPlanDetail: "",
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
     receiverOrgId: undefined
@@ -414,6 +416,7 @@ async function handleSendNotice() {
       bizId: noticeRow.value.id,
       patientName: noticeRow.value.name,
       ...noticeForm,
+      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
       senderId: userStore.userId
     })
     ElMessage.success("通知单发送成功")
@@ -1260,6 +1263,9 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
           <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
             <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
+          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
         </el-form-item>
         <el-form-item label="接收单位">
           <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width:100%">

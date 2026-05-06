@@ -9,6 +9,7 @@ import {
   deleteScreeningCloseContactApi,
   exportScreeningCloseContactApi,
   getScreeningCloseContactListApi,
+  submitThreeMonthCheckApi,
   updateScreeningCloseContactApi,
   uploadScreeningCloseContactApi
 } from "./apis"
@@ -284,7 +285,7 @@ function viewDetail(row: any) {
 }
 
 /** 判断随访月份是否有数据 */
-function hasFollowupData(row: any, month: 6 | 12 | 24): boolean {
+function hasFollowupData(row: any, month: number): boolean {
   const key = `followup${month}Result`
   return !!row[key]
 }
@@ -299,6 +300,45 @@ function getFollowupTag(result: string): string {
 }
 
 watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { immediate: true })
+
+// ==================== 3月复查 ====================
+const threeMonthDialogVisible = ref(false)
+const threeMonthRow = ref<any>(null)
+const threeMonthSubmitting = ref(false)
+const threeMonthForm = reactive({
+  checkDate: "",
+  checkResult: "",
+  finalResult: "" as "阴性" | "阳性" | ""
+})
+
+function openThreeMonthDialog(row: any) {
+  threeMonthRow.value = row
+  threeMonthForm.checkDate = ""
+  threeMonthForm.checkResult = ""
+  threeMonthForm.finalResult = ""
+  threeMonthDialogVisible.value = true
+}
+
+async function handleThreeMonthSubmit() {
+  if (!threeMonthForm.checkDate || !threeMonthForm.checkResult || !threeMonthForm.finalResult) {
+    ElMessage.warning("请填写完整的复查信息")
+    return
+  }
+  if (threeMonthSubmitting.value) return
+  threeMonthSubmitting.value = true
+  try {
+    await submitThreeMonthCheckApi(threeMonthRow.value.id, {
+      checkDate: threeMonthForm.checkDate,
+      checkResult: threeMonthForm.checkResult,
+      finalResult: threeMonthForm.finalResult
+    })
+    ElMessage.success("3月复查结果已提交")
+    threeMonthDialogVisible.value = false
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    threeMonthSubmitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -398,6 +438,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-table-column prop="registrationDate" label="登记日期" min-width="100" />
         <el-table-column prop="infectionCheckMethod" label="感染检测方法" min-width="120" />
         <el-table-column prop="infectionCheckResult" label="感染检测结果" min-width="80" />
+        <el-table-column prop="imagingDate" label="影像检查日期" min-width="110" />
+        <el-table-column prop="imagingResult" label="影像结果" min-width="100" />
         <el-table-column label="最终筛查结果" min-width="120" fixed="right">
           <template #default="{ row }">
             <el-tag v-if="row.finalScreeningResult" :type="tagType(getFinalResultTag(row.finalScreeningResult))" size="small">
@@ -438,7 +480,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="260">
+        <el-table-column label="操作" fixed="right" width="320">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">
               详情
@@ -451,6 +493,15 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
               转诊
+            </el-button>
+            <el-button
+              v-if="row.ccStatus === 6"
+              type="success"
+              link
+              size="small"
+              @click="openThreeMonthDialog(row)"
+            >
+              填写3月复查
             </el-button>
           </template>
         </el-table-column>
@@ -737,8 +788,34 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-tab-pane>
         <el-tab-pane label="随访情况">
           <el-timeline>
+            <!-- 3月复查（针对初次筛查阴性/未做的记录） -->
             <el-timeline-item
-              v-for="(month, idx) in ([6, 12, 24] as const)" :key="idx"
+              :color="detailRow.threeMonthCheckDate ? '#67c23a' : '#909399'"
+            >
+              <template #dot>
+                <el-icon v-if="detailRow.threeMonthCheckDate" color="#67c23a">
+                  <CircleCheck />
+                </el-icon>
+                <el-icon v-else color="#909399">
+                  <Clock />
+                </el-icon>
+              </template>
+              <div class="mb-2">
+                <span class="font-bold">3月复查</span>
+              </div>
+              <template v-if="detailRow.threeMonthCheckDate">
+                <el-tag :type="detailRow.threeMonthFinalResult === '阴性' ? 'success' : 'danger'" size="small">
+                  {{ detailRow.threeMonthFinalResult }}
+                </el-tag>
+                <span class="ml-2 text-sm text-gray-500">检测结果：{{ detailRow.threeMonthCheckResult }}</span>
+                <span class="ml-2 text-sm text-gray-500">复查日期：{{ detailRow.threeMonthCheckDate }}</span>
+              </template>
+              <template v-else>
+                <span class="text-gray-400 text-sm">尚未完成</span>
+              </template>
+            </el-timeline-item>
+            <el-timeline-item
+              v-for="month in [6, 12, 24]" :key="month"
               :color="hasFollowupData(detailRow, month) ? '#67c23a' : '#909399'"
             >
               <template #dot>
@@ -791,6 +868,42 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       <template #footer>
         <el-button @click="detailVisible = false">
           关闭
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 3月复查弹窗 -->
+    <el-dialog v-model="threeMonthDialogVisible" title="填写3月复查结果" width="480px" :close-on-click-modal="false">
+      <el-form label-width="110px">
+        <el-form-item label="复查日期" required>
+          <el-date-picker
+            v-model="threeMonthForm.checkDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="请选择复查日期"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="感染检测结果" required>
+          <el-input v-model="threeMonthForm.checkResult" placeholder="请输入感染检测结果（如 PPD阴性、IGRA阴性等）" />
+        </el-form-item>
+        <el-form-item label="最终判定结果" required>
+          <el-radio-group v-model="threeMonthForm.finalResult">
+            <el-radio value="阴性">
+              阴性（结束流程）
+            </el-radio>
+            <el-radio value="阳性">
+              阳性（转入潜伏感染流程）
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="threeMonthDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="threeMonthSubmitting" @click="handleThreeMonthSubmit">
+          提交
         </el-button>
       </template>
     </el-dialog>

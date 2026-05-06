@@ -1107,3 +1107,14 @@ CREATE TABLE IF NOT EXISTS `department` (
     `deleted`     TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='部门表';
+
+-- ==================== 五级(6)菜单页面权限补全 ====================
+-- 五级管理员需要能进入潜伏感染和患者管理页面，才能执行督导/随访/确认通知单等操作
+-- 赋予三条主线的父菜单 + 潜伏感染 + 患者管理 + 历史患者 菜单权限（仅页面访问，不含写操作按钮）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 6, p.id FROM `permission` p
+WHERE p.code IN (
+  'school', 'school:latent', 'school:patient', 'school:history',
+  'keyPopulation', 'keyPopulation:latent', 'keyPopulation:patient', 'keyPopulation:history',
+  'closeContact', 'closeContact:latent', 'closeContact:patient', 'closeContact:history'
+);

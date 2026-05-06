@@ -575,7 +575,20 @@ const printPatientName = ref("")
 async function openPrintNotice(row: any) {
   try {
     const { data } = await getNoticeListByBizApi(row.id, "patient")
-    printNoticeData.value = data?.[0] || row
+    const notice = data?.[0]
+    if (notice) {
+      // 通知单中对应字段为空时，回退使用筛查记录中的原始字段
+      printNoticeData.value = {
+        ...notice,
+        infectionDate: notice.infectionDate || row.screenDate || "",
+        infectionMethod: notice.infectionMethod || row.screenMethod || "",
+        infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
+        chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
+        chestXrayResult: notice.chestXrayResult || row.chestXrayResult || ""
+      }
+    } else {
+      printNoticeData.value = row
+    }
     printNoticeVisible.value = true
   } catch {
     printNoticeData.value = row

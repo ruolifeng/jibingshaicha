@@ -98,7 +98,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         wrapper.orderByDesc(LatentInfection::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(LatentInfection::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            Integer currentRole = BaseContext.getCurrentRole();
+            if (currentRole != null && currentRole == 6) {
+                // 五级管理员：只能看到发给自己的通知单所关联的潜伏感染记录
+                Long userId = BaseContext.getCurrentId();
+                wrapper.inSql(LatentInfection::getId,
+                        "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
+                                + " AND notice_type = 'latent' AND deleted = 0");
+            } else {
+                wrapper.eq(LatentInfection::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            }
         }
         IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);
 

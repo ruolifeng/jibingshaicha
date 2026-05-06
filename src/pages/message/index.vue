@@ -76,6 +76,7 @@ async function handleReceiveNotice(row: any) {
     await confirmNoticeFromMessageApi(row.bizId)
     await markMessageReadApi(row.id)
     row.isRead = 1
+    row.type = "notice_confirmed"
     ElMessage.success("通知单接收成功")
   } catch { /* handled */ }
 }
@@ -100,6 +101,7 @@ async function handleConfirmReferral(row: any) {
     await confirmReferralFromMessageApi(row.bizId)
     await markMessageReadApi(row.id)
     row.isRead = 1
+    row.type = "referral_confirmed"
     ElMessage.success("已确认接收转诊信息")
   } catch { /* handled */ }
 }
@@ -111,6 +113,7 @@ async function handleRejectReferral() {
     await rejectReferralFromMessageApi(row.bizId, rejectReason.value || undefined)
     await markMessageReadApi(row.id)
     row.isRead = 1
+    row.type = "referral_rejected"
     rejectDialogVisible.value = false
     ElMessage.success("已拒绝转诊")
   } catch { /* handled */ }

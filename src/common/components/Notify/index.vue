@@ -10,6 +10,7 @@ const router = useRouter()
 
 /** 后端消息类型到展示配置的映射 */
 const TYPE_CONFIG: Record<string, { label: string, status: NotifyItem["status"] }> = {
+  notice_receive: { label: "待接收通知单", status: "warning" },
   notice_timeout: { label: "通知单超时", status: "danger" },
   supervision_timeout: { label: "督导表超时", status: "warning" },
   visit_timeout: { label: "随访超时", status: "warning" },
@@ -33,13 +34,39 @@ const rawList = ref<any[]>([])
 
 const loading = ref(false)
 
+/** 每次会话只弹一次待接收通知单提醒 */
+const pendingNoticeAlerted = ref(false)
+
 let timer: ReturnType<typeof setInterval> | null = null
 
-/** 拉取未读数量 */
+/** 检查是否有待接收通知单，有则弹窗提醒 */
+async function checkPendingNotice() {
+  if (pendingNoticeAlerted.value) return
+  try {
+    const { data } = await getMessageListApi({ page: 1, size: 50, isRead: 0 })
+    const records: any[] = data?.records || []
+    const pendingCount = records.filter(item => item.type === "notice_receive").length
+    if (pendingCount > 0) {
+      pendingNoticeAlerted.value = true
+      ElNotification({
+        title: "待接收通知单",
+        message: `您有 ${pendingCount} 条通知单待接收，点击前往消息中心处理`,
+        type: "warning",
+        duration: 8000,
+        onClick: () => router.push("/message")
+      })
+    }
+  } catch { /* 静默失败 */ }
+}
+
+/** 拉取未读数量，数量 > 0 时顺带检查待接收通知单 */
 async function fetchUnreadCount() {
   try {
     const { data } = await getUnreadCountApi()
     unreadCount.value = data || 0
+    if (unreadCount.value > 0) {
+      checkPendingNotice()
+    }
   } catch { /* 静默失败，避免打扰用户 */ }
 }
 
