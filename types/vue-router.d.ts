@@ -13,6 +13,11 @@ declare module "vue-router" {
      */
     title?: string
     /**
+     * @description 设置该路由在顶部标签页（TagsView）中展示的名字，优先级高于 title
+     * @description 适用于需要在标签页中区分同名子菜单的场景，例如"学校-潜伏感染"
+     */
+    tagTitle?: string
+    /**
      * @description 设置该路由的图标，记得将 svg 导入 src/common/assets/icons
      */
     svgIcon?: SvgName

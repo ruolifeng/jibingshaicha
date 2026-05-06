@@ -78,31 +78,31 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "screening",
         component: () => import("@/pages/school/screening/index.vue"),
         name: "SchoolScreening",
-        meta: { title: "筛查管理", keepAlive: true, permission: "school:screening" }
+        meta: { title: "筛查管理", tagTitle: "学校-筛查管理", keepAlive: true, permission: "school:screening" }
       },
       {
         path: "suspected",
         component: () => import("@/pages/school/suspected/index.vue"),
         name: "SchoolSuspected",
-        meta: { title: "待诊断", keepAlive: true, permission: "school:suspected" }
+        meta: { title: "待诊断", tagTitle: "学校-待诊断", keepAlive: true, permission: "school:suspected" }
       },
       {
         path: "latent",
         component: () => import("@/pages/school/latent/index.vue"),
         name: "SchoolLatent",
-        meta: { title: "潜伏感染", keepAlive: true, permission: "school:latent" }
+        meta: { title: "潜伏感染", tagTitle: "学校-潜伏感染", keepAlive: true, permission: "school:latent" }
       },
       {
         path: "patient",
         component: () => import("@/pages/school/patient/index.vue"),
         name: "SchoolPatient",
-        meta: { title: "患者管理", keepAlive: true, permission: "school:patient" }
+        meta: { title: "患者管理", tagTitle: "学校-患者管理", keepAlive: true, permission: "school:patient" }
       },
       {
         path: "patient/history",
         component: () => import("@/pages/school/patient/history.vue"),
         name: "SchoolPatientHistory",
-        meta: { title: "历史患者", keepAlive: true, permission: "school:history" }
+        meta: { title: "历史患者", tagTitle: "学校-历史患者", keepAlive: true, permission: "school:history" }
       }
     ]
   },
@@ -121,31 +121,31 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "screening",
         component: () => import("@/pages/key-population/screening/index.vue"),
         name: "KeyPopulationScreening",
-        meta: { title: "筛查管理", keepAlive: true, permission: "keyPopulation:screening" }
+        meta: { title: "筛查管理", tagTitle: "重点-筛查管理", keepAlive: true, permission: "keyPopulation:screening" }
       },
       {
         path: "suspected",
         component: () => import("@/pages/key-population/suspected/index.vue"),
         name: "KeyPopulationSuspected",
-        meta: { title: "待诊断", keepAlive: true, permission: "keyPopulation:suspected" }
+        meta: { title: "待诊断", tagTitle: "重点-待诊断", keepAlive: true, permission: "keyPopulation:suspected" }
       },
       {
         path: "latent",
         component: () => import("@/pages/key-population/latent/index.vue"),
         name: "KeyPopulationLatent",
-        meta: { title: "潜伏感染", keepAlive: true, permission: "keyPopulation:latent" }
+        meta: { title: "潜伏感染", tagTitle: "重点-潜伏感染", keepAlive: true, permission: "keyPopulation:latent" }
       },
       {
         path: "patient",
         component: () => import("@/pages/key-population/patient/index.vue"),
         name: "KeyPopulationPatient",
-        meta: { title: "患者管理", keepAlive: true, permission: "keyPopulation:patient" }
+        meta: { title: "患者管理", tagTitle: "重点-患者管理", keepAlive: true, permission: "keyPopulation:patient" }
       },
       {
         path: "patient/history",
         component: () => import("@/pages/key-population/patient/history.vue"),
         name: "KeyPopulationPatientHistory",
-        meta: { title: "历史患者", keepAlive: true, permission: "keyPopulation:history" }
+        meta: { title: "历史患者", tagTitle: "重点-历史患者", keepAlive: true, permission: "keyPopulation:history" }
       }
     ]
   },
@@ -164,31 +164,31 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "screening",
         component: () => import("@/pages/close-contact/screening/index.vue"),
         name: "CloseContactScreening",
-        meta: { title: "筛查管理", keepAlive: true, permission: "closeContact:screening" }
+        meta: { title: "筛查管理", tagTitle: "密接-筛查管理", keepAlive: true, permission: "closeContact:screening" }
       },
       {
         path: "suspected",
         component: () => import("@/pages/close-contact/suspected/index.vue"),
         name: "CloseContactSuspected",
-        meta: { title: "待诊断", keepAlive: true, permission: "closeContact:suspected" }
+        meta: { title: "待诊断", tagTitle: "密接-待诊断", keepAlive: true, permission: "closeContact:suspected" }
       },
       {
         path: "latent",
         component: () => import("@/pages/close-contact/latent/index.vue"),
         name: "CloseContactLatent",
-        meta: { title: "潜伏感染", keepAlive: true, permission: "closeContact:latent" }
+        meta: { title: "潜伏感染", tagTitle: "密接-潜伏感染", keepAlive: true, permission: "closeContact:latent" }
       },
       {
         path: "patient",
         component: () => import("@/pages/close-contact/patient/index.vue"),
         name: "CloseContactPatient",
-        meta: { title: "患者管理", keepAlive: true, permission: "closeContact:patient" }
+        meta: { title: "患者管理", tagTitle: "密接-患者管理", keepAlive: true, permission: "closeContact:patient" }
       },
       {
         path: "patient/history",
         component: () => import("@/pages/close-contact/patient/history.vue"),
         name: "CloseContactPatientHistory",
-        meta: { title: "历史患者", keepAlive: true, permission: "closeContact:history" }
+        meta: { title: "历史患者", tagTitle: "密接-历史患者", keepAlive: true, permission: "closeContact:history" }
       }
     ]
   },
