@@ -726,13 +726,13 @@ watch(
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="followUp">
+                    <el-dropdown-item v-permission="'closeContact:patient:followUp'" command="followUp">
                       填写后续随访表
                     </el-dropdown-item>
                     <el-dropdown-item command="followUpList">
                       随访记录
                     </el-dropdown-item>
-                    <el-dropdown-item command="medication" divided>
+                    <el-dropdown-item v-permission="'closeContact:patient:medication'" command="medication" divided>
                       填写服药管理
                     </el-dropdown-item>
                     <el-dropdown-item command="printNotice" divided>

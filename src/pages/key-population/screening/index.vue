@@ -119,6 +119,24 @@ const editForm = ref<Record<string, any>>({})
 const editMode = ref<"create" | "edit">("edit")
 const detailVisible = ref(false)
 const detailRow = ref<any>(null)
+const editFormRef = ref()
+
+const requiredRule = [{ required: true, message: "此项为必填项", trigger: "change" }]
+const editRules = {
+  hasSuspiciousSymptoms: requiredRule,
+  cough: requiredRule,
+  hemoptysis: requiredRule,
+  fever: requiredRule,
+  chestPain: requiredRule,
+  nightSweats: requiredRule,
+  appetiteLoss: requiredRule,
+  fatigue: requiredRule,
+  weightLoss: requiredRule,
+  hasInfectionScreen: requiredRule,
+  infectionResult: requiredRule,
+  hasChestXray: requiredRule,
+  chestXrayResult: requiredRule
+}
 
 function getEmptyEditForm() {
   return {
@@ -184,6 +202,11 @@ function viewDetail(row: any) {
 }
 
 async function handleSave() {
+  try {
+    await editFormRef.value?.validate()
+  } catch {
+    return
+  }
   editSaving.value = true
   try {
     if (editMode.value === "create") {
@@ -434,8 +457,8 @@ watch(
     </el-card>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false">
-      <el-form :model="editForm" label-width="120px" class="edit-form">
+    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false" @closed="editFormRef?.resetFields()">
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="120px" class="edit-form">
         <el-divider content-position="left">
           基本信息
         </el-divider>
@@ -543,8 +566,8 @@ watch(
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="6">
-            <el-form-item label="可疑症状">
-              <el-select v-model="editForm.hasSuspiciousSymptoms" style="width:100%" clearable>
+            <el-form-item label="可疑症状" prop="hasSuspiciousSymptoms">
+              <el-select v-model="editForm.hasSuspiciousSymptoms" style="width:100%">
                 <el-option label="有" value="有" />
                 <el-option label="无" value="无" />
               </el-select>
@@ -562,8 +585,8 @@ watch(
               { label: '体重减轻', key: 'weightLoss' },
             ]" :key="item.key"
           >
-            <el-form-item :label="item.label">
-              <el-select v-model="editForm[item.key]" style="width:100%" clearable>
+            <el-form-item :label="item.label" :prop="item.key">
+              <el-select v-model="editForm[item.key]" style="width:100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -576,8 +599,8 @@ watch(
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行感染筛">
-              <el-select v-model="editForm.hasInfectionScreen" style="width:100%" clearable>
+            <el-form-item label="是否进行感染筛" prop="hasInfectionScreen">
+              <el-select v-model="editForm.hasInfectionScreen" style="width:100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -599,8 +622,8 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="16">
-            <el-form-item label="感染筛查结果">
-              <el-select v-model="editForm.infectionResult" style="width:100%" clearable>
+            <el-form-item label="感染筛查结果" prop="infectionResult">
+              <el-select v-model="editForm.infectionResult" style="width:100%">
                 <el-option label="PPD阴性" value="PPD阴性" />
                 <el-option label="PPD+" value="PPD+" />
                 <el-option label="PPD++" value="PPD++" />
@@ -619,8 +642,8 @@ watch(
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行胸片检查">
-              <el-select v-model="editForm.hasChestXray" style="width:100%" clearable>
+            <el-form-item label="是否进行胸片检查" prop="hasChestXray">
+              <el-select v-model="editForm.hasChestXray" style="width:100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -632,8 +655,8 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="胸片结果">
-              <el-select v-model="editForm.chestXrayResult" style="width:100%" clearable>
+            <el-form-item label="胸片结果" prop="chestXrayResult">
+              <el-select v-model="editForm.chestXrayResult" style="width:100%">
                 <el-option label="正常" value="正常" />
                 <el-option label="异常" value="异常" />
                 <el-option label="未查" value="未查" />

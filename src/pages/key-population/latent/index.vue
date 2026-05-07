@@ -384,6 +384,7 @@ const supervisionForm = reactive({
   treatmentStartDate: "",
   treatmentEndDate: "",
   treatmentPlan: "",
+  customPlanDetail: "",
   supervisionRecords: [] as { time: string, content: string, method: string, remark: string }[],
   interruptMedication: "",
   interruptCount: null as number | null,
@@ -406,6 +407,7 @@ function openSupervisionDialog(row: any) {
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
   supervisionForm.treatmentPlan = ""
+  supervisionForm.customPlanDetail = ""
   supervisionForm.supervisionRecords = [{ time: "", content: "", method: "", remark: "" }]
   supervisionForm.interruptMedication = ""
   supervisionForm.interruptCount = null
@@ -440,7 +442,11 @@ async function handleSaveSupervision() {
       currentAddress: supervisionForm.currentAddress || undefined,
       treatmentStartDate: supervisionForm.treatmentStartDate,
       treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
-      treatmentPlan: supervisionForm.treatmentPlan,
+      treatmentPlan: supervisionForm.treatmentPlan === "个体化方案"
+        ? supervisionForm.customPlanDetail
+          ? `个体化方案：${supervisionForm.customPlanDetail}`
+          : "个体化方案"
+        : supervisionForm.treatmentPlan,
       supervisionRecords: supervisionForm.supervisionRecords.length > 0
         ? JSON.stringify(supervisionForm.supervisionRecords)
         : undefined,
@@ -1084,6 +1090,13 @@ watch(
               <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" clearable style="width: 100%">
                 <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row v-if="supervisionForm.treatmentPlan === '个体化方案'">
+          <el-col :span="24">
+            <el-form-item label="方案详情">
+              <el-input v-model="supervisionForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
             </el-form-item>
           </el-col>
         </el-row>

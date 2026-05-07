@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
+import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintNotice from "@@/components/PrintNotice.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
@@ -173,7 +174,7 @@ function openNoticeDialog(row: any) {
           chestXrayDate: notice.chestXrayDate || "",
           chestXrayResult: notice.chestXrayResult || "",
           treatmentInstitution: notice.treatmentInstitution || "",
-          issuedTime: notice.issuedTime || "",
+          issuedTime: notice.issuedTime || new Date().toISOString().slice(0, 10),
           patientType: notice.patientType || "",
           managementMethod: notice.managementMethod || "",
           treatmentPlan: notice.treatmentPlan || "",
@@ -589,25 +590,39 @@ const printVisitData = ref<any>(null)
 const printPatientName = ref("")
 
 async function openPrintNotice(row: any) {
+  const today = new Date().toISOString().slice(0, 10)
   try {
     const { data } = await getNoticeListByBizApi(row.id, "patient")
     const notice = data?.[0]
     if (notice) {
-      // 通知单中对应字段为空时，回退使用筛查记录中的原始字段
       printNoticeData.value = {
         ...notice,
         infectionDate: notice.infectionDate || row.screenDate || "",
         infectionMethod: notice.infectionMethod || row.screenMethod || "",
         infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
         chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
-        chestXrayResult: notice.chestXrayResult || row.chestXrayResult || ""
+        chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
+        issuedTime: notice.issuedTime || today
       }
     } else {
-      printNoticeData.value = row
+      // 未发送通知单时，用筛查行数据填充，字段名映射到打印组件期望的字段
+      printNoticeData.value = {
+        ...row,
+        infectionDate: row.screenDate || "",
+        infectionMethod: row.screenMethod || "",
+        infectionResultValue: row.infectionResult || "",
+        issuedTime: today
+      }
     }
     printNoticeVisible.value = true
   } catch {
-    printNoticeData.value = row
+    printNoticeData.value = {
+      ...row,
+      infectionDate: row.screenDate || "",
+      infectionMethod: row.screenMethod || "",
+      infectionResultValue: row.infectionResult || "",
+      issuedTime: today
+    }
     printNoticeVisible.value = true
   }
 }
@@ -739,13 +754,13 @@ watch(
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="followUp">
+                    <el-dropdown-item v-permission="'keyPopulation:patient:followUp'" command="followUp">
                       填写后续随访表
                     </el-dropdown-item>
                     <el-dropdown-item command="followUpList">
                       随访记录
                     </el-dropdown-item>
-                    <el-dropdown-item command="medication" divided>
+                    <el-dropdown-item v-permission="'keyPopulation:patient:medication'" command="medication" divided>
                       填写服药管理
                     </el-dropdown-item>
                     <el-dropdown-item command="printNotice" divided>
@@ -1243,61 +1258,10 @@ watch(
     </el-dialog>
 
     <!-- 首次随访详情 -->
-    <el-dialog v-model="firstVisitDetailVisible" title="首次入户随访记录详情" width="860px">
-      <el-descriptions v-if="firstVisitDetailData" :column="3" border size="small">
-        <el-descriptions-item label="随访时间">
-          {{ firstVisitDetailData.visitDate }}
-        </el-descriptions-item>
-        <el-descriptions-item label="随访方式">
-          {{ firstVisitDetailData.visitMethod || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="患者类型">
-          {{ firstVisitDetailData.patientType || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="痰菌情况">
-          {{ firstVisitDetailData.sputumStatus || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="耐药情况">
-          {{ firstVisitDetailData.drugResistance || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="督导人员">
-          {{ firstVisitDetailData.supervisor || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="症状及体征" :span="3">
-          {{ firstVisitDetailData.symptoms || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="化疗方案">
-          {{ firstVisitDetailData.chemotherapy || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="用法">
-          {{ firstVisitDetailData.medicationUsage || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="药品剂型">
-          {{ firstVisitDetailData.drugForm || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="单独居室">
-          {{ firstVisitDetailData.separateRoom || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="通风情况">
-          {{ firstVisitDetailData.ventilation || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="吸烟量">
-          {{ firstVisitDetailData.smokingAmount || "-" }} 支/天
-        </el-descriptions-item>
-        <el-descriptions-item label="饮酒量">
-          {{ firstVisitDetailData.drinkingAmount || "-" }} 两/天
-        </el-descriptions-item>
-        <el-descriptions-item label="下次随访">
-          {{ firstVisitDetailData.nextVisitDate || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="评估医生">
-          {{ firstVisitDetailData.doctorSignature || "-" }}
-        </el-descriptions-item>
-        <el-descriptions-item label="填写时间" :span="3">
-          {{ firstVisitDetailData.createTime }}
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-dialog>
+    <FirstVisitDetailDialog
+      v-model:visible="firstVisitDetailVisible"
+      :visit-data="firstVisitDetailData"
+    />
 
     <!-- 后续随访弹窗 -->
     <el-dialog v-model="followUpDialogVisible" title="填写后续随访记录" width="560px">

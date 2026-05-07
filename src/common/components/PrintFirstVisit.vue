@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 /** 肺结核患者第一次入户随访记录表打印组件 */
-defineProps<{
+import { SYMPTOM_OPTIONS } from "@@/constants/disease"
+
+const props = defineProps<{
   visible: boolean
   visitData: Record<string, any> | null
   patientName?: string
@@ -9,6 +11,41 @@ defineProps<{
 const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
 }>()
+
+/** 将存储的症状 value 列表（逗号分隔）转换为可读标签 */
+const symptomLabels = computed(() => {
+  const raw = props.visitData?.symptoms
+  if (!raw) return "-"
+  const valueMap = Object.fromEntries(SYMPTOM_OPTIONS.map(o => [o.value, o.label]))
+  return raw
+    .split(",")
+    .map((v: string) => valueMap[v.trim()] ?? v.trim())
+    .filter(Boolean)
+    .join("、") || "-"
+})
+
+/** 解析教育项目（存储为 JSON 字符串） */
+const parsedEducationItems = computed<[string, string][]>(() => {
+  const raw = props.visitData?.educationItems
+  if (!raw) return []
+  let obj: Record<string, string> = {}
+  if (typeof raw === "string") {
+    try { obj = JSON.parse(raw) } catch { return [] }
+  } else {
+    obj = raw as Record<string, string>
+  }
+  return Object.entries(obj) as [string, string][]
+})
+
+/** 将教育项目每两个分为一组，用于双列渲染 */
+const educationRows = computed<[string, string][][]>(() => {
+  const items = parsedEducationItems.value
+  const rows: [string, string][][] = []
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2) as [string, string][])
+  }
+  return rows
+})
 
 function handlePrint() {
   window.print()
@@ -19,7 +56,7 @@ function handlePrint() {
   <el-dialog
     :model-value="visible"
     title="预览 — 肺结核患者第一次入户随访记录表"
-    width="760px"
+    width="820px"
     @update:model-value="emit('update:visible', $event)"
   >
     <div id="print-visit-content" class="print-area">
@@ -28,68 +65,108 @@ function handlePrint() {
       </h2>
       <table class="visit-table">
         <tbody>
+          <!-- 基本信息 -->
+          <tr class="section-header">
+            <td colspan="6">基本信息</td>
+          </tr>
           <tr>
             <th>患者姓名</th>
             <td>{{ patientName || visitData?.patientName }}</td>
-            <th>随访日期</th>
+            <th>随访时间</th>
             <td>{{ visitData?.visitDate }}</td>
-          </tr>
-          <tr>
             <th>随访方式</th>
             <td>{{ visitData?.visitMethod }}</td>
-            <th>督导人员</th>
-            <td>{{ visitData?.supervisorType }}</td>
           </tr>
           <tr>
-            <th>症状及体征</th>
-            <td colspan="3">
-              {{ visitData?.symptoms }}
-            </td>
-          </tr>
-          <tr>
-            <th>化疗方案</th>
-            <td>{{ visitData?.chemotherapyPlan }}</td>
-            <th>用法</th>
-            <td>{{ visitData?.medicationUsage }}</td>
-          </tr>
-          <tr>
-            <th>药品剂型</th>
-            <td>{{ visitData?.drugForm }}</td>
-            <th>取药地点</th>
-            <td>{{ visitData?.medicationLocation }}</td>
-          </tr>
-          <tr>
-            <th>取药时间</th>
-            <td>{{ visitData?.medicationPickTime }}</td>
-            <th>居室通风</th>
-            <td>{{ visitData?.ventilation }}</td>
-          </tr>
-          <tr>
+            <th>患者类型</th>
+            <td>{{ visitData?.patientType }}</td>
             <th>痰菌情况</th>
             <td>{{ visitData?.sputumStatus }}</td>
             <th>耐药情况</th>
             <td>{{ visitData?.drugResistance }}</td>
           </tr>
           <tr>
-            <th>健康教育内容</th>
-            <td colspan="3">
-              <span v-if="visitData?.educationItems">
-                {{ typeof visitData.educationItems === 'string'
-                  ? visitData.educationItems
-                  : Object.entries(visitData.educationItems).map(([k, v]) => `${k}：${v}`).join('；') }}
-              </span>
+            <th>症状及体征</th>
+            <td colspan="3">{{ symptomLabels }}</td>
+            <th>其他症状</th>
+            <td>{{ visitData?.otherSymptoms }}</td>
+          </tr>
+
+          <!-- 用药情况 -->
+          <tr class="section-header">
+            <td colspan="6">用药情况</td>
+          </tr>
+          <tr>
+            <th>化疗方案</th>
+            <td>{{ visitData?.chemotherapy }}</td>
+            <th>用法</th>
+            <td>{{ visitData?.medicationUsage }}</td>
+            <th>督导人员</th>
+            <td>{{ visitData?.supervisor }}</td>
+          </tr>
+          <tr>
+            <th>药品剂型</th>
+            <td colspan="5">{{ visitData?.drugForm }}</td>
+          </tr>
+
+          <!-- 居住环境与生活方式 -->
+          <tr class="section-header">
+            <td colspan="6">居住环境与生活方式</td>
+          </tr>
+          <tr>
+            <th>单独居室</th>
+            <td>{{ visitData?.separateRoom }}</td>
+            <th>通风情况</th>
+            <td>{{ visitData?.ventilation }}</td>
+            <th>吸烟(支/天)</th>
+            <td>{{ visitData?.smokingAmount }}</td>
+          </tr>
+          <tr>
+            <th>饮酒(两/天)</th>
+            <td>{{ visitData?.drinkingAmount }}</td>
+            <th>取药地点</th>
+            <td>{{ visitData?.medicationLocation }}</td>
+            <th>取药时间</th>
+            <td>{{ visitData?.medicationPickTime }}</td>
+          </tr>
+
+          <!-- 健康教育及培训 -->
+          <tr class="section-header">
+            <td colspan="6">健康教育及培训</td>
+          </tr>
+          <template v-if="educationRows.length > 0">
+            <tr v-for="(row, rIdx) in educationRows" :key="rIdx">
+              <th>{{ row[0][0] }}</th>
+              <td>{{ row[0][1] }}</td>
+              <template v-if="row[1]">
+                <th>{{ row[1][0] }}</th>
+                <td colspan="3">
+                  {{ row[1][1] }}
+                </td>
+              </template>
+              <template v-else>
+                <td colspan="4" />
+              </template>
+            </tr>
+          </template>
+          <tr v-else>
+            <td colspan="6" class="empty-cell">
+              —
             </td>
+          </tr>
+
+          <!-- 其他 -->
+          <tr class="section-header">
+            <td colspan="6">其他</td>
           </tr>
           <tr>
             <th>下次随访时间</th>
-            <td>{{ visitData?.nextVisitDate }}</td>
+            <td colspan="2">
+              {{ visitData?.nextVisitDate }}
+            </td>
             <th>评估医生签名</th>
-            <td>{{ visitData?.doctorSignature }}</td>
-          </tr>
-          <tr>
-            <th>备注</th>
-            <td colspan="3">
-              {{ visitData?.remark }}
+            <td colspan="2">
+              {{ visitData?.doctorSignature }}
             </td>
           </tr>
         </tbody>
@@ -124,15 +201,30 @@ function handlePrint() {
 
   th,
   td {
-    border: 1px solid #ddd;
-    padding: 8px 12px;
-    font-size: 14px;
+    border: 1px solid #ccc;
+    padding: 7px 10px;
+    font-size: 13px;
+    vertical-align: middle;
   }
 
   th {
     background: #f5f7fa;
-    width: 110px;
     white-space: nowrap;
+    font-weight: 600;
+    width: 100px;
+  }
+
+  .section-header td {
+    background: #e8f0fe;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 5px 10px;
+    color: #1a3a6b;
+  }
+
+  .empty-cell {
+    text-align: center;
+    color: #999;
   }
 }
 </style>
@@ -142,18 +234,21 @@ function handlePrint() {
   body > *:not(#print-visit-content) {
     display: none !important;
   }
-  .el-dialog__wrapper {
-    position: static !important;
-  }
-  .el-dialog {
-    box-shadow: none !important;
-  }
+
+  .el-overlay,
   .el-dialog__header,
   .el-dialog__footer {
     display: none !important;
   }
+
   #print-visit-content {
     display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 16px;
+    background: #fff;
   }
 }
 </style>
