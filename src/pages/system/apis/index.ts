@@ -24,3 +24,20 @@ export function assignRolePermissionsApi(role: number, permissionIds: number[]) 
     data: { role, permissionIds }
   })
 }
+
+/** 获取用户额外分配的权限 ID（与角色权限合并生效） */
+export function getUserPermissionIdsApi(userId: number) {
+  return request<ApiResponseData<number[]>>({
+    url: `permission/user/${userId}`,
+    method: "get"
+  })
+}
+
+/** 全量替换某用户的额外权限 */
+export function assignUserPermissionsApi(userId: number, permissionIds: number[]) {
+  return request<ApiResponseData<null>>({
+    url: "permission/assign-user",
+    method: "post",
+    data: { userId, permissionIds }
+  })
+}

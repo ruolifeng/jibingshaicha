@@ -1,6 +1,13 @@
 <script lang="ts" setup>
-import { ROLE_OPTIONS } from "@@/constants/disease"
-import { assignRolePermissionsApi, getPermissionTreeApi, getRolePermissionIdsApi } from "./apis"
+import { getUserListApi } from "@@/apis/users"
+import { ROLE_MAP, ROLE_OPTIONS } from "@@/constants/disease"
+import {
+  assignRolePermissionsApi,
+  assignUserPermissionsApi,
+  getPermissionTreeApi,
+  getRolePermissionIdsApi,
+  getUserPermissionIdsApi
+} from "./apis"
 
 const permissionTree = ref<any[]>([])
 const loading = ref(false)
@@ -15,19 +22,15 @@ async function loadPermissionTree() {
   }
 }
 
-// 当前选中的角色
+const activeTab = ref<"role" | "user">("role")
+
+// ---------- 角色权限 ----------
 const selectedRole = ref<number>(2)
-
-// 角色拥有的权限 ID（已勾选）
-const checkedIds = ref<number[]>([])
-
 const treeRef = ref<any>(null)
 
 async function loadRolePermissions() {
   try {
     const { data } = await getRolePermissionIdsApi(selectedRole.value)
-    checkedIds.value = data || []
-    // 只设置叶子节点为 checked（el-tree 会自动推导父节点）
     await nextTick()
     if (treeRef.value) {
       treeRef.value.setCheckedKeys(filterLeafIds(permissionTree.value, data || []))
@@ -35,7 +38,73 @@ async function loadRolePermissions() {
   } catch { /* handled */ }
 }
 
-/** 从全部权限树中筛出叶子节点 ID（el-tree 要求只设置叶子节点的 checked） */
+async function handleSaveRole() {
+  if (!treeRef.value) return
+  const checked = treeRef.value.getCheckedKeys() as number[]
+  const halfChecked = treeRef.value.getHalfCheckedKeys() as number[]
+  const allIds = [...checked, ...halfChecked]
+  try {
+    await assignRolePermissionsApi(selectedRole.value, allIds)
+    ElMessage.success("角色权限已保存")
+  } catch { /* handled */ }
+}
+
+watch(selectedRole, () => {
+  if (activeTab.value === "role" && permissionTree.value.length > 0) {
+    loadRolePermissions()
+  }
+})
+
+// ---------- 用户额外权限（与角色权限合并） ----------
+const userList = ref<any[]>([])
+const selectedUserId = ref<number | undefined>()
+const userTreeRef = ref<any>(null)
+
+async function loadUserOptions() {
+  try {
+    const { data } = await getUserListApi({ page: 1, size: 500 })
+    userList.value = data?.records ?? []
+  } catch { /* handled */ }
+}
+
+async function loadUserExtraPermissions() {
+  if (!selectedUserId.value) return
+  try {
+    const { data } = await getUserPermissionIdsApi(selectedUserId.value)
+    await nextTick()
+    if (userTreeRef.value) {
+      userTreeRef.value.setCheckedKeys(filterLeafIds(permissionTree.value, data || []))
+    }
+  } catch { /* handled */ }
+}
+
+async function handleSaveUserPerms() {
+  if (!selectedUserId.value || !userTreeRef.value) {
+    ElMessage.warning("请先选择用户")
+    return
+  }
+  const checked = userTreeRef.value.getCheckedKeys() as number[]
+  const halfChecked = userTreeRef.value.getHalfCheckedKeys() as number[]
+  const allIds = [...checked, ...halfChecked]
+  try {
+    await assignUserPermissionsApi(selectedUserId.value, allIds)
+    ElMessage.success("用户额外权限已保存（登录后生效）")
+  } catch { /* handled */ }
+}
+
+watch(selectedUserId, () => {
+  if (activeTab.value === "user" && selectedUserId.value && permissionTree.value.length > 0) {
+    loadUserExtraPermissions()
+  }
+})
+
+watch(activeTab, (t: "role" | "user") => {
+  if (t === "user" && permissionTree.value.length > 0 && selectedUserId.value) {
+    nextTick(() => loadUserExtraPermissions())
+  }
+})
+
+/** 只勾选叶子节点 ID（el-tree 要求） */
 function filterLeafIds(tree: any[], allIds: number[]): number[] {
   const leafIds: number[] = []
   function walk(nodes: any[]) {
@@ -51,24 +120,14 @@ function filterLeafIds(tree: any[], allIds: number[]): number[] {
   return leafIds
 }
 
-async function handleSave() {
-  if (!treeRef.value) return
-  const checked = treeRef.value.getCheckedKeys() as number[]
-  const halfChecked = treeRef.value.getHalfCheckedKeys() as number[]
-  const allIds = [...checked, ...halfChecked]
-  try {
-    await assignRolePermissionsApi(selectedRole.value, allIds)
-    ElMessage.success("权限分配成功")
-    checkedIds.value = allIds
-  } catch { /* handled */ }
+function userLabel(row: any) {
+  const rn = ROLE_MAP[row.role] || ""
+  return `${row.username}${rn ? ` · ${rn}` : ""}`
 }
-
-watch(selectedRole, () => {
-  if (permissionTree.value.length > 0) loadRolePermissions()
-})
 
 onMounted(async () => {
   await loadPermissionTree()
+  await loadUserOptions()
   loadRolePermissions()
 })
 
@@ -89,43 +148,89 @@ function getTypeColor(type: number): "primary" | "warning" {
         </div>
       </template>
 
-      <el-alert type="info" :closable="false" class="mb-4">
-        选择角色后，在下方权限树中勾选该角色可访问的菜单和操作，点击「保存」生效。超级管理员默认拥有所有权限。
-      </el-alert>
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="按角色分配" name="role">
+          <el-alert type="info" :closable="false" class="mb-4">
+            选择角色后在权限树中勾选菜单与操作，保存后为该角色默认权限。超级管理员不受此限制。
+          </el-alert>
+          <div class="flex flex-wrap items-center gap-4 mb-4">
+            <span class="font-bold">角色：</span>
+            <el-radio-group v-model="selectedRole">
+              <el-radio-button v-for="item in ROLE_OPTIONS" :key="item.value" :value="item.value" :disabled="item.value === 1">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <el-button type="primary" @click="handleSaveRole" :disabled="selectedRole === 1">
+              保存角色权限
+            </el-button>
+          </div>
+          <div class="perm-tree-wrapper">
+            <el-tree
+              ref="treeRef"
+              v-loading="loading"
+              :data="permissionTree"
+              show-checkbox
+              node-key="id"
+              default-expand-all
+              :props="{ label: 'name', children: 'children' }"
+            >
+              <template #default="{ data }">
+                <span class="perm-tree-node">
+                  <span>{{ data.name }}</span>
+                  <el-tag :type="getTypeColor(data.type)" size="small" class="ml-2">{{ getTypeTag(data.type) }}</el-tag>
+                  <span class="perm-code">{{ data.code }}</span>
+                </span>
+              </template>
+            </el-tree>
+          </div>
+        </el-tab-pane>
 
-      <div class="flex items-center gap-4 mb-4">
-        <span class="font-bold">选择角色：</span>
-        <el-radio-group v-model="selectedRole">
-          <el-radio-button v-for="item in ROLE_OPTIONS" :key="item.value" :value="item.value" :disabled="item.value === 1">
-            {{ item.label }}
-          </el-radio-button>
-        </el-radio-group>
-        <el-button type="primary" @click="handleSave" :disabled="selectedRole === 1">
-          保存权限
-        </el-button>
-      </div>
-
-      <el-divider />
-
-      <div class="perm-tree-wrapper">
-        <el-tree
-          ref="treeRef"
-          v-loading="loading"
-          :data="permissionTree"
-          show-checkbox
-          node-key="id"
-          default-expand-all
-          :props="{ label: 'name', children: 'children' }"
-        >
-          <template #default="{ data }">
-            <span class="perm-tree-node">
-              <span>{{ data.name }}</span>
-              <el-tag :type="getTypeColor(data.type)" size="small" class="ml-2">{{ getTypeTag(data.type) }}</el-tag>
-              <span class="perm-code">{{ data.code }}</span>
-            </span>
-          </template>
-        </el-tree>
-      </div>
+        <el-tab-pane label="按用户追加" name="user">
+          <el-alert type="warning" :closable="false" class="mb-4">
+            此处配置的是<strong>在用户所属角色权限基础上的额外权限</strong>（并集）。保存后请让用户重新登录或刷新页面以加载最新权限。超级管理员无需配置。
+          </el-alert>
+          <div class="flex flex-wrap items-center gap-4 mb-4">
+            <span class="font-bold">用户：</span>
+            <el-select
+              v-model="selectedUserId"
+              filterable
+              clearable
+              placeholder="选择用户"
+              style="width: 280px"
+            >
+              <el-option
+                v-for="u in userList"
+                :key="u.id"
+                :label="userLabel(u)"
+                :value="u.id"
+                :disabled="u.role === 1"
+              />
+            </el-select>
+            <el-button type="primary" :disabled="!selectedUserId" @click="handleSaveUserPerms">
+              保存用户额外权限
+            </el-button>
+          </div>
+          <div class="perm-tree-wrapper">
+            <el-tree
+              ref="userTreeRef"
+              v-loading="loading"
+              :data="permissionTree"
+              show-checkbox
+              node-key="id"
+              default-expand-all
+              :props="{ label: 'name', children: 'children' }"
+            >
+              <template #default="{ data }">
+                <span class="perm-tree-node">
+                  <span>{{ data.name }}</span>
+                  <el-tag :type="getTypeColor(data.type)" size="small" class="ml-2">{{ getTypeTag(data.type) }}</el-tag>
+                  <span class="perm-code">{{ data.code }}</span>
+                </span>
+              </template>
+            </el-tree>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
   </div>
 </template>
@@ -134,15 +239,15 @@ function getTypeColor(type: number): "primary" | "warning" {
 .mb-4 {
   margin-bottom: 16px;
 }
-.gap-4 {
-  gap: 16px;
-}
 .ml-2 {
   margin-left: 8px;
 }
+.gap-4 {
+  gap: 16px;
+}
 
 .perm-tree-wrapper {
-  max-height: 600px;
+  max-height: 560px;
   overflow-y: auto;
 }
 

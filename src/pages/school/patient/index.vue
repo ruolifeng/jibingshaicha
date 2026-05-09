@@ -115,6 +115,12 @@ async function handleImportEpidemic(uploadFile: any) {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const submitting = ref(false)
+const noticeFormRef = ref()
+const noticeFormRules = {
+  patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
+  managementMethod: [{ required: true, message: "请选择管理方式", trigger: "change" }],
+  receiverOrgId: [{ required: true, message: "请选择接收单位", trigger: "change" }]
+}
 
 /** 患者超期判断：建档超过3天仍未归档且无首次随访记录 */
 function getPatientRowClass({ row }: { row: any }) {
@@ -230,6 +236,11 @@ function openNoticeDialog(row: any) {
 
 async function handleSendNotice() {
   if (submitting.value) return
+  try {
+    await noticeFormRef.value?.validate()
+  } catch {
+    return
+  }
   submitting.value = true
   try {
     await sendNoticeApi({
@@ -780,7 +791,7 @@ watch(
 
     <!-- 患者通知单弹窗 -->
     <el-dialog v-model="noticeDialogVisible" title="填写患者通知单" width="680px">
-      <el-form :model="noticeForm" label-width="110px">
+      <el-form ref="noticeFormRef" :model="noticeForm" :rules="noticeFormRules" label-width="110px">
         <el-divider content-position="left">
           基本信息
         </el-divider>
@@ -850,14 +861,14 @@ watch(
         </el-row>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="患者类型">
+            <el-form-item label="患者类型" prop="patientType" required>
               <el-select v-model="noticeForm.patientType" style="width: 100%">
                 <el-option v-for="item in PATIENT_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="管理方式">
+            <el-form-item label="管理方式" prop="managementMethod" required>
               <el-select v-model="noticeForm.managementMethod" style="width: 100%">
                 <el-option v-for="item in PATIENT_MANAGEMENT_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
@@ -941,7 +952,7 @@ watch(
         <el-form-item label="其他注意事项">
           <el-input v-model="noticeForm.otherNotes" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="接收单位">
+        <el-form-item label="接收单位" prop="receiverOrgId" required>
           <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
             <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
           </el-select>
@@ -1025,6 +1036,14 @@ watch(
         </el-descriptions-item>
         <el-descriptions-item v-if="noticeDetailData.otherNotes" label="其他注意事项" :span="2">
           {{ noticeDetailData.otherNotes }}
+        </el-descriptions-item>
+        <el-descriptions-item label="下发人">
+          {{ noticeDetailData.senderName || "-" }}
+          <span v-if="noticeDetailData.senderOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.senderOrgName }}）</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="接收人">
+          {{ noticeDetailData.receiverName || "-" }}
+          <span v-if="noticeDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.receiverOrgName }}）</span>
         </el-descriptions-item>
         <el-descriptions-item label="发送时间">
           {{ noticeDetailData.sentTime }}

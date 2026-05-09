@@ -45,4 +45,22 @@ public class PermissionController {
         permissionService.assignRolePermissions(role, permissionIds);
         return ResultRes.success(null);
     }
+
+    @Operation(summary = "获取用户额外分配的权限ID（不含角色默认权限）")
+    @GetMapping("/user/{userId}")
+    public ResultResponse<List<Long>> getUserPermissions(@PathVariable Long userId) {
+        return ResultRes.success(permissionService.getUserPermissionIds(userId));
+    }
+
+    @Operation(summary = "分配用户额外权限（全量替换，与角色权限合并生效）")
+    @PostMapping("/assign-user")
+    public ResultResponse<Void> assignUser(@RequestBody Map<String, Object> params) {
+        userService.checkPermission(1);
+        long userId = ((Number) params.get("userId")).longValue();
+        @SuppressWarnings("unchecked")
+        List<Number> ids = (List<Number>) params.get("permissionIds");
+        List<Long> permissionIds = ids == null ? List.of() : ids.stream().map(Number::longValue).toList();
+        permissionService.assignUserPermissions(userId, permissionIds);
+        return ResultRes.success(null);
+    }
 }

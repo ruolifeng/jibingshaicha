@@ -12,6 +12,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.FollowUpVisitService;
@@ -51,6 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMapper, ScreeningSchool>
         implements ScreeningSchoolService {
 
+    private final DepartmentService departmentService;
     private final LatentInfectionService latentInfectionService;
     private final PatientService patientService;
     private final NoticeService noticeService;
@@ -225,7 +227,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
                 .orderByDesc(ScreeningSchool::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(ScreeningSchool::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+            wrapper.in(ScreeningSchool::getDepartmentId, deptIds);
         }
         return page(new Page<>(page, size), wrapper);
     }
@@ -274,8 +277,14 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);
     }
 
-    /** 判断是否包含可直接同步的胸片检查与诊断数据 */
+    /**
+     * 判断是否包含可直接同步的胸片检查与诊断数据。
+     * 感染筛查阴性 + 胸片正常时直接结束流程，不进入待诊断。
+     */
     private boolean hasDirectXrayAndDiagnosis(ScreeningSchool data) {
+        if (!isPositive(data.getInfectionResult()) && "正常".equals(data.getChestXrayResult())) {
+            return false;
+        }
         return "是".equals(data.getHasChestXray()) && StrUtil.isNotBlank(data.getDiagnosisFirst());
     }
 

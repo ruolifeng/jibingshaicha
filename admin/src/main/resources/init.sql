@@ -934,9 +934,9 @@ CREATE TABLE IF NOT EXISTS `referral` (
     KEY `idx_receiver` (`receiver_org_id`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分级诊疗推送记录表';
 
--- 为分级诊疗操作权限添加预设（各模块均可配置）
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`)
-VALUES ('referral', '分级诊疗', 'button', NULL);
+-- 为分级诊疗操作权限添加预设（各模块均可配置；挂到系统消息下便于权限树展示与分配）
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+VALUES ('referral', '分级诊疗', 2, 5, 50);
 
 -- 确保全部角色均拥有分级诊疗权限（幂等）
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -1021,92 +1021,32 @@ WHERE p.code IN (
   'closeContact:patient:followUp','closeContact:patient:medication'
 );
 
--- ==================== V8：重点人群/密接人群 潜伏感染 & 患者管理 独立按钮级权限 ====================
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
--- 重点人群 潜伏感染 按钮（挂在 keyPopulation:latent=21 下）
-(220, 'keyPopulation:latent:sendNotice',    '发送潜伏者通知单', 2, 21, 1),
-(221, 'keyPopulation:latent:confirmNotice', '确认接收通知单',   2, 21, 2),
-(222, 'keyPopulation:latent:supervision',   '填写督导表',       2, 21, 3),
-(223, 'keyPopulation:latent:followUp',      '潜伏电话随访',     2, 21, 4),
-(224, 'keyPopulation:latent:check',         '潜伏按期检查',     2, 21, 5),
-(225, 'keyPopulation:latent:closeCase',     '潜伏结案归档',     2, 21, 6),
--- 密接人群 潜伏感染 按钮（挂在 closeContact:latent=31 下）
-(320, 'closeContact:latent:treatmentDecision', '确认预防治疗',     2, 31, 1),
-(321, 'closeContact:latent:sendNotice',        '发送通知单',       2, 31, 2),
-(322, 'closeContact:latent:confirmNotice',     '确认接收通知单',   2, 31, 3),
-(323, 'closeContact:latent:supervision',       '填写督导表',       2, 31, 4),
-(324, 'closeContact:latent:setExpectedDate',   '设置预计完成时间', 2, 31, 5),
-(325, 'closeContact:latent:confirmTreatment',  '确认治疗完成',     2, 31, 6),
-(326, 'closeContact:latent:check',             '录入随访复查',     2, 31, 7),
--- 重点人群 患者管理 按钮（挂在 keyPopulation:patient=22 下）
-(230, 'keyPopulation:patient:importEpidemic', '导入大疫情表',       2, 22, 1),
-(231, 'keyPopulation:patient:sendNotice',     '发送患者通知单',     2, 22, 2),
-(232, 'keyPopulation:patient:confirmNotice',  '确认接收患者通知单', 2, 22, 3),
-(233, 'keyPopulation:patient:firstVisit',     '首次随访',           2, 22, 4),
-(234, 'keyPopulation:patient:followUp',       '后续随访',           2, 22, 5),
-(235, 'keyPopulation:patient:medication',     '服药管理',           2, 22, 6),
--- 密接人群 患者管理 按钮（挂在 closeContact:patient=32 下）
-(330, 'closeContact:patient:importEpidemic', '导入大疫情表',       2, 32, 1),
-(331, 'closeContact:patient:sendNotice',     '发送患者通知单',     2, 32, 2),
-(332, 'closeContact:patient:confirmNotice',  '确认接收患者通知单', 2, 32, 3),
-(333, 'closeContact:patient:firstVisit',     '首次随访',           2, 32, 4),
-(334, 'closeContact:patient:followUp',       '后续随访',           2, 32, 5),
-(335, 'closeContact:patient:medication',     '服药管理',           2, 32, 6);
-
--- 超级管理员及一~三级：获得全部新按钮权限
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
-FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
-CROSS JOIN `permission` p
-WHERE p.code IN (
-  'keyPopulation:latent:sendNotice','keyPopulation:latent:confirmNotice','keyPopulation:latent:supervision',
-  'keyPopulation:latent:followUp','keyPopulation:latent:check','keyPopulation:latent:closeCase',
-  'closeContact:latent:treatmentDecision','closeContact:latent:sendNotice','closeContact:latent:confirmNotice',
-  'closeContact:latent:supervision','closeContact:latent:setExpectedDate','closeContact:latent:confirmTreatment','closeContact:latent:check',
-  'keyPopulation:patient:importEpidemic','keyPopulation:patient:sendNotice','keyPopulation:patient:confirmNotice',
-  'keyPopulation:patient:firstVisit','keyPopulation:patient:followUp','keyPopulation:patient:medication',
-  'closeContact:patient:importEpidemic','closeContact:patient:sendNotice','closeContact:patient:confirmNotice',
-  'closeContact:patient:firstVisit','closeContact:patient:followUp','closeContact:patient:medication'
-);
-
--- 四级(5)：操作权限（发送/督导/随访/检查/结案/治疗决策/导入）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 5, p.id FROM `permission` p
-WHERE p.code IN (
-  'keyPopulation:latent:sendNotice','keyPopulation:latent:supervision',
-  'keyPopulation:latent:followUp','keyPopulation:latent:check','keyPopulation:latent:closeCase',
-  'closeContact:latent:treatmentDecision','closeContact:latent:sendNotice',
-  'closeContact:latent:supervision','closeContact:latent:setExpectedDate','closeContact:latent:check',
-  'keyPopulation:patient:importEpidemic','keyPopulation:patient:sendNotice',
-  'keyPopulation:patient:firstVisit','keyPopulation:patient:followUp','keyPopulation:patient:medication',
-  'closeContact:patient:importEpidemic','closeContact:patient:sendNotice',
-  'closeContact:patient:firstVisit','closeContact:patient:followUp','closeContact:patient:medication'
-);
-
--- 五级(6)：接收确认 + 督导 + 随访操作权限
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, p.id FROM `permission` p
-WHERE p.code IN (
-  'keyPopulation:latent:confirmNotice','keyPopulation:latent:supervision',
-  'keyPopulation:latent:followUp','keyPopulation:latent:check',
-  'closeContact:latent:confirmNotice','closeContact:latent:supervision',
-  'closeContact:latent:confirmTreatment','closeContact:latent:check',
-  'keyPopulation:patient:confirmNotice','keyPopulation:patient:firstVisit',
-  'keyPopulation:patient:followUp','keyPopulation:patient:medication',
-  'closeContact:patient:confirmNotice','closeContact:patient:firstVisit',
-  'closeContact:patient:followUp','closeContact:patient:medication'
-);
-
 -- ==================== 部门表 ====================
 CREATE TABLE IF NOT EXISTS `department` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT,
     `name`        VARCHAR(128) NOT NULL COMMENT '部门名称',
     `description` VARCHAR(256) DEFAULT NULL COMMENT '部门描述',
+    `parent_id`   BIGINT       DEFAULT NULL COMMENT '上级部门ID，NULL表示市级顶级',
+    `level`       TINYINT      NOT NULL DEFAULT 1 COMMENT '1市级 2区县 3社区',
     `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`     TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='部门表';
+
+-- 为已存在的部门表补充字段（若列已存在会报错，忽略即可）
+ALTER TABLE `department` ADD COLUMN `parent_id` BIGINT DEFAULT NULL COMMENT '上级部门ID，NULL表示市级顶级';
+ALTER TABLE `department` ADD COLUMN `level` TINYINT NOT NULL DEFAULT 1 COMMENT '1市级 2区县 3社区';
+
+CREATE TABLE IF NOT EXISTS `user_permission` (
+    `id`             BIGINT   NOT NULL AUTO_INCREMENT,
+    `user_id`        BIGINT   NOT NULL COMMENT '用户ID',
+    `permission_id`  BIGINT   NOT NULL COMMENT '权限ID',
+    `create_time`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_perm` (`user_id`, `permission_id`),
+    KEY `idx_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户额外权限（与角色权限合并）';
 
 -- ==================== 五级(6)菜单页面权限补全 ====================
 -- 五级管理员需要能进入潜伏感染和患者管理页面，才能执行督导/随访/确认通知单等操作
@@ -1118,3 +1058,25 @@ WHERE p.code IN (
   'keyPopulation', 'keyPopulation:latent', 'keyPopulation:patient', 'keyPopulation:history',
   'closeContact', 'closeContact:latent', 'closeContact:patient', 'closeContact:history'
 );
+
+-- ==================== V9：重点人群潜伏权限与分级诊疗在权限树中可见 ====================
+-- 1）与学校人群一致：重点人群「潜伏感染」下补充追踪、胸片、转诊（诊断）按钮权限
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(226, 'keyPopulation:latent:track', '追踪', 2, 21, 1),
+(227, 'keyPopulation:latent:xray', '录入胸片诊断', 2, 21, 2),
+(228, 'keyPopulation:latent:referral', '转诊', 2, 21, 3);
+UPDATE `permission` SET `sort` = CASE `id`
+  WHEN 220 THEN 4 WHEN 221 THEN 5 WHEN 222 THEN 6 WHEN 223 THEN 7 WHEN 224 THEN 8 WHEN 225 THEN 9
+  END WHERE `id` IN (220, 221, 222, 223, 224, 225);
+-- 2）统一 referral 记录：挂到「系统消息」下、类型为按钮（兼容旧库错误 type / parent）
+UPDATE `permission` SET `parent_id` = 5, `sort` = 50, `type` = 2 WHERE `code` = 'referral';
+-- 首批角色权限写入若早于 referral 权限行，超级管理员 role_permission 可能缺少 referral，此处补全
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` = 'referral';
+-- 3）角色授权（与学校 latent:track / latent:xray / latent:referral 范围一致：一至四级）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'keyPopulation:latent:referral');
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) r
+CROSS JOIN `permission` p
+WHERE p.code IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'keyPopulation:latent:referral');

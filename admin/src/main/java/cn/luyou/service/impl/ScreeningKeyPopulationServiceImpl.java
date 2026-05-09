@@ -12,6 +12,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.FollowUpVisitService;
@@ -52,6 +53,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyPopulationMapper, ScreeningKeyPopulation>
         implements ScreeningKeyPopulationService {
 
+    private final DepartmentService departmentService;
     private final LatentInfectionService latentInfectionService;
     private final PatientService patientService;
     private final NoticeService noticeService;
@@ -250,7 +252,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         }
         wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(ScreeningKeyPopulation::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+            wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
         }
         return page(new Page<>(page, size), wrapper);
     }

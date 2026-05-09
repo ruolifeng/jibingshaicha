@@ -20,7 +20,7 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
-import { idCardRule, phoneRule } from "@@/utils/validate"
+import { phoneRule } from "@@/utils/validate"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -224,7 +224,7 @@ async function handleReferral() {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const noticeFormRef = ref()
-const noticeFormRules = { idNumber: [idCardRule()], phone: [phoneRule()] }
+const noticeFormRules = { phone: [phoneRule()] }
 const noticeForm = reactive({
   idNumber: "",
   gender: "",
@@ -1081,6 +1081,14 @@ watch(
         </el-descriptions-item>
         <el-descriptions-item label="下发时间">
           {{ noticeDetailData.issuedTime || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="下发人">
+          {{ noticeDetailData.senderName || "-" }}
+          <span v-if="noticeDetailData.senderOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.senderOrgName }}）</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="接收人">
+          {{ noticeDetailData.receiverName || "-" }}
+          <span v-if="noticeDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.receiverOrgName }}）</span>
         </el-descriptions-item>
         <el-descriptions-item label="发送时间">
           {{ noticeDetailData.sentTime }}

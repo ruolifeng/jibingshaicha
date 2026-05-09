@@ -11,6 +11,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.FollowUpVisitService;
@@ -60,6 +61,7 @@ import java.util.stream.Collectors;
 public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningCloseContactMapper, ScreeningCloseContact>
         implements ScreeningCloseContactService {
 
+    private final DepartmentService departmentService;
     private final PatientService patientService;
     private final NoticeService noticeService;
     private final SupervisionFormService supervisionFormService;
@@ -283,7 +285,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 .eq(StrUtil.isNotBlank(finalScreeningResult), ScreeningCloseContact::getFinalScreeningResult, finalScreeningResult)
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(ScreeningCloseContact::getDepartmentId, BaseContext.getCurrentDepartmentId());
+            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+            wrapper.in(ScreeningCloseContact::getDepartmentId, deptIds);
         }
         IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);
 

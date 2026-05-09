@@ -14,6 +14,7 @@ import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
@@ -48,6 +49,7 @@ import java.util.Set;
 public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMapper, LatentInfection>
         implements LatentInfectionService {
 
+    private final DepartmentService departmentService;
     private final PatientService patientService;
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
@@ -106,7 +108,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
                                 + " AND notice_type = 'latent' AND deleted = 0");
             } else {
-                wrapper.eq(LatentInfection::getDepartmentId, BaseContext.getCurrentDepartmentId());
+                List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+                wrapper.in(LatentInfection::getDepartmentId, deptIds);
             }
         }
         IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);

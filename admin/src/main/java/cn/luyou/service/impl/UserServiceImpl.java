@@ -125,16 +125,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user.getRole() == 1) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不能删除超级管理员");
         }
+        permissionService.removeAllUserPermissions(id);
         removeById(id);
     }
 
     @Override
     public List<UserInfoVO> getLevel5Users() {
+        // 通知单/转诊接收单位为五级机构（role=6），不限部门，允许跨部门发送
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
                 .eq(User::getRole, 6);
-        if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(User::getDepartmentId, BaseContext.getCurrentDepartmentId());
-        }
         List<User> users = list(wrapper);
         return users.stream().map(this::buildUserInfoVO).toList();
     }
@@ -155,7 +154,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user.getRole() == 1) {
             roleList.add("admin");
         }
-        List<String> permissions = permissionService.getRolePermissionCodes(user.getRole());
+        List<String> permissions = permissionService.getEffectivePermissionCodes(user.getRole(), user.getId());
         return UserInfoVO.builder()
                 .id(user.getId())
                 .username(user.getUsername())

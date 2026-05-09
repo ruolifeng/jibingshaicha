@@ -226,10 +226,35 @@ function getLatentTag(isLatent: number) {
   return isLatent === 1 ? "danger" : "success"
 }
 
+/** 感染筛查结果是否为阳性（阳性才需要填写诊断结果） */
+const POSITIVE_RESULTS = ["PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"]
+const isEditInfectionPositive = computed(() => POSITIVE_RESULTS.includes(editForm.value.infectionResult))
+
+/**
+ * 是否显示诊断结果字段：感染阴性 + 胸片正常时直接结束流程，无需诊断。
+ * 感染阳性，或感染阴性但胸片异常/未查时，才需要填写诊断结果。
+ */
+const isEditDiagnosisRequired = computed(() => {
+  if (isEditInfectionPositive.value) return true
+  const xrayResult = editForm.value.chestXrayResult
+  // 胸片正常则流程结束，无需诊断
+  return xrayResult && xrayResult !== "正常"
+})
+
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
   fetchData,
   { immediate: true }
+)
+
+// 感染筛查结果或胸片结果变化时，若不满足诊断条件则清空诊断结果
+watch(
+  [() => editForm.value.infectionResult, () => editForm.value.chestXrayResult],
+  () => {
+    if (!isEditDiagnosisRequired.value) {
+      editForm.value.diagnosisFirst = ""
+    }
+  }
 )
 </script>
 
@@ -561,7 +586,7 @@ watch(
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="24">
+          <el-col v-if="isEditDiagnosisRequired" :span="24">
             <el-form-item label="首次诊断结果">
               <el-input v-model="editForm.diagnosisFirst" />
             </el-form-item>

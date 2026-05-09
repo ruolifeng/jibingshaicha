@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import type { SentNoticeVO, SentReferralVO } from "./apis"
+import { NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { usePagination } from "@@/composables/usePagination"
+import { getNoticeDetailApi } from "@/pages/school/latent/apis"
 import {
   confirmNoticeFromMessageApi,
   confirmReferralFromMessageApi,
@@ -10,7 +12,6 @@ import {
   markMessageReadApi,
   rejectReferralFromMessageApi,
   remindNoticeApi
-
 } from "./apis"
 
 defineOptions({ name: "Message" })
@@ -79,6 +80,27 @@ async function handleReceiveNotice(row: any) {
     row.type = "notice_confirmed"
     ElMessage.success("通知单接收成功")
   } catch { /* handled */ }
+}
+
+// ==================== 通知单详情查看 ====================
+const noticeDetailVisible = ref(false)
+const noticeDetailData = ref<any>(null)
+const noticeDetailLoading = ref(false)
+
+async function viewNoticeDetail(row: any) {
+  if (!row.bizId) {
+    ElMessage.warning("通知单编号缺失")
+    return
+  }
+  noticeDetailLoading.value = true
+  noticeDetailVisible.value = true
+  noticeDetailData.value = null
+  try {
+    const { data } = await getNoticeDetailApi(row.bizId)
+    noticeDetailData.value = data
+  } catch { /* handled */ } finally {
+    noticeDetailLoading.value = false
+  }
 }
 
 // ====== 转诊：消息中确认/拒绝 ======
@@ -257,17 +279,22 @@ const activeTab = ref("received")
               </template>
             </el-table-column>
             <el-table-column prop="createTime" label="时间" width="170" />
-            <el-table-column label="操作" fixed="right" width="220">
+            <el-table-column label="操作" fixed="right" width="260">
               <template #default="{ row }">
-                <!-- 通知单接收 -->
-                <el-button
-                  v-if="row.type === 'notice_receive' && !row.isRead"
-                  type="primary"
-                  size="small"
-                  @click="handleReceiveNotice(row)"
-                >
-                  接收通知单
-                </el-button>
+                <!-- 通知单查看 & 接收 -->
+                <template v-if="row.type === 'notice_receive' || row.type === 'notice_confirmed'">
+                  <el-button type="info" size="small" link @click="viewNoticeDetail(row)">
+                    查看通知单
+                  </el-button>
+                  <el-button
+                    v-if="row.type === 'notice_receive' && !row.isRead"
+                    type="primary"
+                    size="small"
+                    @click="handleReceiveNotice(row)"
+                  >
+                    接收通知单
+                  </el-button>
+                </template>
                 <!-- 转诊确认/拒绝 -->
                 <template v-if="row.type === 'referral_receive' && !row.isRead">
                   <el-button type="success" size="small" @click="handleConfirmReferral(row)">
@@ -427,6 +454,92 @@ const activeTab = ref("received")
         </el-button>
         <el-button type="danger" @click="handleRejectReferral">
           确认拒绝
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 通知单详情弹窗 -->
+    <el-dialog v-model="noticeDetailVisible" title="通知单详情" width="680px" append-to-body>
+      <div v-loading="noticeDetailLoading" style="min-height: 80px">
+        <el-descriptions v-if="noticeDetailData" :column="2" border>
+          <el-descriptions-item label="姓名">
+            {{ noticeDetailData.patientName }}
+          </el-descriptions-item>
+          <el-descriptions-item label="身份证">
+            {{ noticeDetailData.idNumber || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="性别">
+            {{ noticeDetailData.gender || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="年龄">
+            {{ noticeDetailData.age || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="联系方式">
+            {{ noticeDetailData.phone || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="民族">
+            {{ noticeDetailData.ethnicity || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="人群分类">
+            {{ noticeDetailData.crowdCategory || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="现居住地址" :span="2">
+            {{ noticeDetailData.currentAddress || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="户籍地址" :span="2">
+            {{ noticeDetailData.householdAddress || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="感染检测时间">
+            {{ noticeDetailData.infectionDate || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="检查方法">
+            {{ noticeDetailData.infectionMethod || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="感染检查结果" :span="2">
+            {{ noticeDetailData.infectionResultValue || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="胸片检查时间">
+            {{ noticeDetailData.chestXrayDate || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="胸片检查结果">
+            {{ noticeDetailData.chestXrayResult || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="治疗方案" :span="2">
+            {{ noticeDetailData.treatmentPlan || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="noticeDetailData.customPlanDetail" label="方案详情" :span="2">
+            {{ noticeDetailData.customPlanDetail }}
+          </el-descriptions-item>
+          <el-descriptions-item label="治疗机构">
+            {{ noticeDetailData.treatmentInstitution || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="下发时间">
+            {{ noticeDetailData.issuedTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="下发人">
+            {{ noticeDetailData.senderName || "-" }}
+            <span v-if="noticeDetailData.senderOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.senderOrgName }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="接收人">
+            {{ noticeDetailData.receiverName || "-" }}
+            <span v-if="noticeDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.receiverOrgName }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="发送时间">
+            {{ noticeDetailData.sentTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="noticeDetailData.status === 2 ? 'success' : 'warning'" size="small">
+              {{ NOTICE_STATUS_MAP[noticeDetailData.status] || "-" }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="确认时间">
+            {{ noticeDetailData.confirmedTime }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="noticeDetailVisible = false">
+          关闭
         </el-button>
       </template>
     </el-dialog>

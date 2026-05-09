@@ -1,10 +1,21 @@
 import { request } from "@/http/axios"
 
+/** 部门层级：1 市级 → 2 区县 → 3 社区（数据范围按上级可见全部下级，同级区县互不可见） */
 export interface Department {
   id?: number
   name: string
   description?: string
+  parentId?: number | null
+  /** 1 市级 2 区县 3 社区 */
+  level?: number
   createTime?: string
+}
+
+export type DepartmentPayload = {
+  name: string
+  description?: string
+  parentId?: number | null
+  level: number
 }
 
 /** 部门列表 */
@@ -16,7 +27,7 @@ export function getDepartmentListApi() {
 }
 
 /** 创建部门 */
-export function createDepartmentApi(data: { name: string, description?: string }) {
+export function createDepartmentApi(data: DepartmentPayload) {
   return request<ApiResponseData<null>>({
     url: "department/create",
     method: "post",
@@ -25,7 +36,7 @@ export function createDepartmentApi(data: { name: string, description?: string }
 }
 
 /** 更新部门 */
-export function updateDepartmentApi(data: { id: number, name: string, description?: string }) {
+export function updateDepartmentApi(data: DepartmentPayload & { id: number }) {
   return request<ApiResponseData<null>>({
     url: "department/update",
     method: "put",

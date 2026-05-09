@@ -17,6 +17,7 @@ import cn.luyou.mapper.PatientMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
 public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         implements PatientService {
 
+    private final DepartmentService departmentService;
     private final EpidemicReportService epidemicReportService;
     private final ObjectMapper objectMapper;
     private final NoticeMapper noticeMapper;
@@ -74,7 +76,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
                                 + " AND notice_type = 'patient' AND deleted = 0");
             } else {
-                wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+                List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+                wrapper.in(Patient::getDepartmentId, deptIds);
             }
         }
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
@@ -311,7 +314,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
                                 + " AND notice_type = 'patient' AND deleted = 0");
             } else {
-                wrapper.eq(Patient::getDepartmentId, BaseContext.getCurrentDepartmentId());
+                List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+                wrapper.in(Patient::getDepartmentId, deptIds);
             }
         }
         return page(new Page<>(page, size), wrapper);
