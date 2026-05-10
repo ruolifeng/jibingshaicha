@@ -1080,3 +1080,27 @@ INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) r
 CROSS JOIN `permission` p
 WHERE p.code IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'keyPopulation:latent:referral');
+
+-- ==================== V10：待诊断菜单权限 + 一二级用户权限管理访问 ====================
+-- 新增三条主线"待诊断"菜单权限（挂在各自主线父节点下，sort=2，位于筛查管理之后）
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(14, 'school:suspected',        '待诊断', 1, 1, 2),
+(24, 'keyPopulation:suspected', '待诊断', 1, 2, 2),
+(34, 'closeContact:suspected',  '待诊断', 1, 3, 2);
+
+-- 调整后续子菜单排序（潜伏感染 3、患者管理 4、历史患者 5）
+UPDATE `permission` SET `sort` = 3 WHERE `code` IN ('school:latent', 'keyPopulation:latent', 'closeContact:latent');
+UPDATE `permission` SET `sort` = 4 WHERE `code` IN ('school:patient', 'keyPopulation:patient', 'closeContact:patient');
+UPDATE `permission` SET `sort` = 5 WHERE `code` IN ('school:history', 'keyPopulation:history', 'closeContact:history');
+
+-- 超级管理员获得所有新权限（幂等）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` IN ('school:suspected', 'keyPopulation:suspected', 'closeContact:suspected');
+
+-- 待诊断权限默认不分配给任何角色，由超级管理员或一二级用户通过"权限管理"界面手动分配
+
+-- 一级(role=2)、二级(role=3) 获得权限管理页面访问权：system 父菜单 + system:permissions + permission:assign
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3) r
+CROSS JOIN `permission` p
+WHERE p.code IN ('system', 'system:permissions', 'permission:assign');

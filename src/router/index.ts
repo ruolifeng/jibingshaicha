@@ -233,7 +233,8 @@ export const dynamicRoutes: RouteRecordRaw[] = [
     meta: {
       title: "系统管理",
       elIcon: "Setting",
-      roles: ["admin"],
+      // roles 限制移至各子路由，父路由仅通过 permission 码控制可见性
+      // 一二级用户拥有 system 权限后可见此菜单（仅展示其有权访问的子项）
       permission: "system"
     },
     children: [
@@ -253,7 +254,8 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         path: "permissions",
         component: () => import("@/pages/system/permissions.vue"),
         name: "SystemPermissions",
-        meta: { title: "权限管理", roles: ["admin"], permission: "system:permissions" }
+        // 不设 roles 限制，由 permission 码控制：一二级用户拥有 system:permissions 权限即可访问
+        meta: { title: "权限管理", permission: "system:permissions" }
       },
       {
         path: "backup",

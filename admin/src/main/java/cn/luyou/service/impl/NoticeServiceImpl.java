@@ -133,6 +133,42 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     }
 
     @Override
+    public List<Notice> listByBizWithUsers(Long bizId, String noticeType) {
+        List<Notice> notices = lambdaQuery()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .orderByDesc(Notice::getCreateTime)
+                .list();
+        if (notices.isEmpty()) {
+            return notices;
+        }
+        // 批量查询下发人与接收人信息
+        Set<Long> userIds = notices.stream()
+                .flatMap(n -> {
+                    java.util.stream.Stream.Builder<Long> b = java.util.stream.Stream.builder();
+                    if (n.getSenderId() != null) b.accept(n.getSenderId());
+                    if (n.getReceiverOrgId() != null) b.accept(n.getReceiverOrgId());
+                    return b.build();
+                })
+                .collect(Collectors.toSet());
+        Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        notices.forEach(n -> {
+            User sender = userMap.get(n.getSenderId());
+            if (sender != null) {
+                n.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());
+                n.setSenderOrgName(sender.getOrgName());
+            }
+            User receiver = userMap.get(n.getReceiverOrgId());
+            if (receiver != null) {
+                n.setReceiverName(receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername());
+                n.setReceiverOrgName(receiver.getOrgName());
+            }
+        });
+        return notices;
+    }
+
+    @Override
     public void remind(Long id) {
         Notice notice = getById(id);
         if (notice == null) {

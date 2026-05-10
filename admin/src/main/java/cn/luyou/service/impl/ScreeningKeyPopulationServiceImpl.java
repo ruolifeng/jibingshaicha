@@ -253,7 +253,20 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
+            // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
+            List<Long> referredIds = referralService.lambdaQuery()
+                    .eq(Referral::getModuleType, "screening")
+                    .eq(Referral::getPopulationType, "key")
+                    .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
+                    .eq(Referral::getStatus, 2)
+                    .list()
+                    .stream().map(Referral::getBizId).toList();
+            if (referredIds.isEmpty()) {
+                wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
+            } else {
+                wrapper.and(w -> w.in(ScreeningKeyPopulation::getDepartmentId, deptIds)
+                        .or().in(ScreeningKeyPopulation::getId, referredIds));
+            }
         }
         return page(new Page<>(page, size), wrapper);
     }

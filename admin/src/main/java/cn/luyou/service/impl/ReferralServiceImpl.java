@@ -6,6 +6,7 @@ import cn.luyou.mapper.ReferralMapper;
 import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.Referral;
 import cn.luyou.model.User;
+import cn.luyou.model.vo.ReferralDetailVO;
 import cn.luyou.model.vo.SentReferralVO;
 import cn.luyou.service.ReferralService;
 import cn.luyou.service.SysMessageService;
@@ -150,6 +151,49 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
             sysMessageService.sendMessage(referral.getReceiverOrgId(), title, content,
                     "referral_receive", referral.getId());
         }
+    }
+
+    @Override
+    public ReferralDetailVO detail(Long id) {
+        Referral referral = getById(id);
+        if (referral == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "分级诊疗记录不存在");
+        }
+
+        ReferralDetailVO vo = new ReferralDetailVO();
+        vo.setId(referral.getId());
+        vo.setBizType(referral.getBizType());
+        vo.setPopulationType(referral.getPopulationType());
+        vo.setModuleType(referral.getModuleType());
+        vo.setSubjectName(referral.getSubjectName());
+        vo.setSummary(referral.getSummary());
+        vo.setSenderId(referral.getSenderId());
+        vo.setReceiverOrgId(referral.getReceiverOrgId());
+        vo.setStatus(referral.getStatus());
+        vo.setSentTime(referral.getSentTime());
+        vo.setConfirmedTime(referral.getConfirmedTime());
+        vo.setRejectedTime(referral.getRejectedTime());
+        vo.setRejectReason(referral.getRejectReason());
+
+        // 填充发送方与接收方用户信息
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        if (referral.getSenderId() != null) ids.add(referral.getSenderId());
+        if (referral.getReceiverOrgId() != null) ids.add(referral.getReceiverOrgId());
+        if (!ids.isEmpty()) {
+            Map<Long, User> userMap = userMapper.selectBatchIds(ids).stream()
+                    .collect(Collectors.toMap(User::getId, u -> u));
+            User sender = userMap.get(referral.getSenderId());
+            if (sender != null) {
+                vo.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());
+                vo.setSenderOrgName(sender.getOrgName());
+            }
+            User receiver = userMap.get(referral.getReceiverOrgId());
+            if (receiver != null) {
+                vo.setReceiverName(receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername());
+                vo.setReceiverOrgName(receiver.getOrgName());
+            }
+        }
+        return vo;
     }
 
     @Override

@@ -228,7 +228,20 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .orderByDesc(ScreeningSchool::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            wrapper.in(ScreeningSchool::getDepartmentId, deptIds);
+            // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
+            List<Long> referredIds = referralService.lambdaQuery()
+                    .eq(Referral::getModuleType, "screening")
+                    .eq(Referral::getPopulationType, "school")
+                    .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
+                    .eq(Referral::getStatus, 2)
+                    .list()
+                    .stream().map(Referral::getBizId).toList();
+            if (referredIds.isEmpty()) {
+                wrapper.in(ScreeningSchool::getDepartmentId, deptIds);
+            } else {
+                wrapper.and(w -> w.in(ScreeningSchool::getDepartmentId, deptIds)
+                        .or().in(ScreeningSchool::getId, referredIds));
+            }
         }
         return page(new Page<>(page, size), wrapper);
     }

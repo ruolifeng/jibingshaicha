@@ -29,6 +29,7 @@ import {
   FOLLOW_UP_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
+import { idCardRule } from "@@/utils/validate"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import { confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -115,6 +116,7 @@ const noticeRow = ref<any>(null)
 const submitting = ref(false)
 const noticeFormRef = ref()
 const noticeFormRules = {
+  idNumber: [idCardRule()],
   patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
   managementMethod: [{ required: true, message: "请选择管理方式", trigger: "change" }],
   receiverOrgId: [{ required: true, message: "请选择接收单位", trigger: "change" }]
@@ -828,7 +830,7 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="身份证">
+            <el-form-item label="身份证" prop="idNumber">
               <el-input v-model="noticeForm.idNumber" />
             </el-form-item>
           </el-col>

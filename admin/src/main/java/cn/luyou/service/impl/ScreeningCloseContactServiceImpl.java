@@ -286,7 +286,20 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            wrapper.in(ScreeningCloseContact::getDepartmentId, deptIds);
+            // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
+            List<Long> referredIds = referralService.lambdaQuery()
+                    .eq(Referral::getModuleType, "screening")
+                    .eq(Referral::getPopulationType, "close")
+                    .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
+                    .eq(Referral::getStatus, 2)
+                    .list()
+                    .stream().map(Referral::getBizId).toList();
+            if (referredIds.isEmpty()) {
+                wrapper.in(ScreeningCloseContact::getDepartmentId, deptIds);
+            } else {
+                wrapper.and(w -> w.in(ScreeningCloseContact::getDepartmentId, deptIds)
+                        .or().in(ScreeningCloseContact::getId, referredIds));
+            }
         }
         IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);
 

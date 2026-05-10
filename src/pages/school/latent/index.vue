@@ -20,7 +20,7 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
-import { phoneRule } from "@@/utils/validate"
+import { idCardRule, phoneRule } from "@@/utils/validate"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -224,7 +224,7 @@ async function handleReferral() {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const noticeFormRef = ref()
-const noticeFormRules = { phone: [phoneRule()] }
+const noticeFormRules = { idNumber: [idCardRule()], phone: [phoneRule()] }
 const noticeForm = reactive({
   idNumber: "",
   gender: "",

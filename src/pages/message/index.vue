@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { SentNoticeVO, SentReferralVO } from "./apis"
+import type { ReferralDetailVO, SentNoticeVO, SentReferralVO } from "./apis"
 import { NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { usePagination } from "@@/composables/usePagination"
 import { getNoticeDetailApi } from "@/pages/school/latent/apis"
@@ -7,6 +7,7 @@ import {
   confirmNoticeFromMessageApi,
   confirmReferralFromMessageApi,
   getMessageListApi,
+  getReferralDetailApi,
   getSentNoticeListApi,
   getSentReferralListApi,
   markMessageReadApi,
@@ -139,6 +140,37 @@ async function handleRejectReferral() {
     rejectDialogVisible.value = false
     ElMessage.success("已拒绝转诊")
   } catch { /* handled */ }
+}
+
+// ==================== 转诊详情查看 ====================
+const referralDetailVisible = ref(false)
+const referralDetailData = ref<ReferralDetailVO | null>(null)
+const referralDetailLoading = ref(false)
+
+/** 解析 summary JSON，提取可读字段 */
+function parseSummary(summary: string | null | undefined): Record<string, string> {
+  if (!summary) return {}
+  try {
+    return JSON.parse(summary) as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+async function viewReferralDetail(row: any) {
+  if (!row.bizId) {
+    ElMessage.warning("转诊记录编号缺失")
+    return
+  }
+  referralDetailLoading.value = true
+  referralDetailVisible.value = true
+  referralDetailData.value = null
+  try {
+    const { data } = await getReferralDetailApi(row.bizId)
+    referralDetailData.value = data
+  } catch { /* handled */ } finally {
+    referralDetailLoading.value = false
+  }
 }
 
 watch(
@@ -279,7 +311,7 @@ const activeTab = ref("received")
               </template>
             </el-table-column>
             <el-table-column prop="createTime" label="时间" width="170" />
-            <el-table-column label="操作" fixed="right" width="260">
+            <el-table-column label="操作" fixed="right" width="300">
               <template #default="{ row }">
                 <!-- 通知单查看 & 接收 -->
                 <template v-if="row.type === 'notice_receive' || row.type === 'notice_confirmed'">
@@ -295,14 +327,19 @@ const activeTab = ref("received")
                     接收通知单
                   </el-button>
                 </template>
-                <!-- 转诊确认/拒绝 -->
-                <template v-if="row.type === 'referral_receive' && !row.isRead">
-                  <el-button type="success" size="small" @click="handleConfirmReferral(row)">
-                    确认接收
+                <!-- 转诊查看详情 & 确认/拒绝 -->
+                <template v-if="row.type === 'referral_receive' || row.type === 'referral_confirmed' || row.type === 'referral_rejected'">
+                  <el-button type="info" size="small" link @click="viewReferralDetail(row)">
+                    查看详情
                   </el-button>
-                  <el-button type="danger" size="small" @click="openRejectDialog(row)">
-                    拒绝
-                  </el-button>
+                  <template v-if="row.type === 'referral_receive' && !row.isRead">
+                    <el-button type="success" size="small" @click="handleConfirmReferral(row)">
+                      确认接收
+                    </el-button>
+                    <el-button type="danger" size="small" @click="openRejectDialog(row)">
+                      拒绝
+                    </el-button>
+                  </template>
                 </template>
                 <el-button v-if="!row.isRead" type="primary" size="small" link @click="handleMarkRead(row)">
                   标为已读
@@ -454,6 +491,63 @@ const activeTab = ref("received")
         </el-button>
         <el-button type="danger" @click="handleRejectReferral">
           确认拒绝
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 转诊详情弹窗 -->
+    <el-dialog v-model="referralDetailVisible" title="转诊详情" width="680px" append-to-body>
+      <div v-loading="referralDetailLoading" style="min-height: 80px">
+        <el-descriptions v-if="referralDetailData" :column="2" border>
+          <el-descriptions-item label="筛查对象">
+            {{ referralDetailData.subjectName || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="人群类型">
+            {{ POPULATION_TYPE_MAP[referralDetailData.populationType] || referralDetailData.populationType }}
+          </el-descriptions-item>
+          <el-descriptions-item label="模块">
+            {{ MODULE_TYPE_MAP[referralDetailData.moduleType] || referralDetailData.moduleType }}
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag
+              :type="referralDetailData.status === 2 ? 'success' : referralDetailData.status === 3 ? 'danger' : 'warning'"
+              size="small"
+            >
+              {{ referralDetailData.status === 2 ? "已接收" : referralDetailData.status === 3 ? "已拒绝" : "待确认" }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="发送方" :span="2">
+            {{ referralDetailData.senderName || "-" }}
+            <span v-if="referralDetailData.senderOrgName" class="text-gray-400 ml-1">（{{ referralDetailData.senderOrgName }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="接收方" :span="2">
+            {{ referralDetailData.receiverName || "-" }}
+            <span v-if="referralDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ referralDetailData.receiverOrgName }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="发送时间">
+            {{ referralDetailData.sentTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="接收时间">
+            {{ referralDetailData.confirmedTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="referralDetailData.rejectReason" label="拒绝原因" :span="2">
+            {{ referralDetailData.rejectReason }}
+          </el-descriptions-item>
+          <!-- 业务摘要字段（动态渲染） -->
+          <template v-if="referralDetailData.summary">
+            <el-descriptions-item
+              v-for="(val, key) in parseSummary(referralDetailData.summary)"
+              :key="key"
+              :label="String(key)"
+            >
+              {{ val || "-" }}
+            </el-descriptions-item>
+          </template>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="referralDetailVisible = false">
+          关闭
         </el-button>
       </template>
     </el-dialog>

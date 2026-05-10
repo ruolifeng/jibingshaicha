@@ -34,26 +34,41 @@ const rawList = ref<any[]>([])
 
 const loading = ref(false)
 
-/** 每次会话只弹一次待接收通知单提醒 */
-const pendingNoticeAlerted = ref(false)
+/** 已弹窗提醒过的消息 ID 集合，避免同一条通知重复弹窗 */
+const alertedIds = ref<Set<number>>(new Set())
 
 let timer: ReturnType<typeof setInterval> | null = null
 
-/** 检查是否有待接收通知单，有则弹窗提醒 */
+/** 检查是否有新的待接收通知单，有则逐条弹窗提醒 */
 async function checkPendingNotice() {
-  if (pendingNoticeAlerted.value) return
   try {
     const { data } = await getMessageListApi({ page: 1, size: 50, isRead: 0 })
     const records: any[] = data?.records || []
-    const pendingCount = records.filter(item => item.type === "notice_receive").length
-    if (pendingCount > 0) {
-      pendingNoticeAlerted.value = true
+    const newPending = records.filter(
+      item => item.type === "notice_receive" && !alertedIds.value.has(item.id)
+    )
+    if (newPending.length === 0) return
+    // 将新消息 ID 加入已提醒集合
+    newPending.forEach(item => alertedIds.value.add(item.id))
+    // 超过 3 条合并为一条提醒，避免弹窗轰炸
+    if (newPending.length > 3) {
       ElNotification({
         title: "待接收通知单",
-        message: `您有 ${pendingCount} 条通知单待接收，点击前往消息中心处理`,
+        message: `您有 ${newPending.length} 条新通知单待接收，请前往消息中心处理`,
         type: "warning",
-        duration: 8000,
+        duration: 10000,
         onClick: () => router.push("/message")
+      })
+    }
+    else {
+      newPending.forEach(item => {
+        ElNotification({
+          title: "待接收通知单",
+          message: item.content || "您有新通知单待接收，请前往消息中心处理",
+          type: "warning",
+          duration: 10000,
+          onClick: () => router.push("/message")
+        })
       })
     }
   } catch { /* 静默失败 */ }

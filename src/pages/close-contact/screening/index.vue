@@ -456,7 +456,7 @@ async function handleThreeMonthSubmit() {
           </template>
         </el-table-column>
         <!-- 随访完成情况 -->
-        <el-table-column label="6月随访" width="90" fixed="right">
+        <el-table-column label="6月随访" width="90">
           <template #default="{ row }">
             <el-tag v-if="hasFollowupData(row, 6)" :type="tagType(getFollowupTag(row.followup6Result))" size="small">
               {{ row.followup6Result }}
@@ -464,7 +464,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="12月随访" width="90" fixed="right">
+        <el-table-column label="12月随访" width="90">
           <template #default="{ row }">
             <el-tag v-if="hasFollowupData(row, 12)" :type="tagType(getFollowupTag(row.followup12Result))" size="small">
               {{ row.followup12Result }}
@@ -472,7 +472,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="24月随访" width="90" fixed="right">
+        <el-table-column label="24月随访" width="90">
           <template #default="{ row }">
             <el-tag v-if="hasFollowupData(row, 24)" :type="tagType(getFollowupTag(row.followup24Result))" size="small">
               {{ row.followup24Result }}
@@ -480,7 +480,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="320">
+        <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">
               详情

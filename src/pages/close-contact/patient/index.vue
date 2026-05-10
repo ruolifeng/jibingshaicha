@@ -28,6 +28,7 @@ import {
   FOLLOW_UP_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
+import { idCardRule } from "@@/utils/validate"
 import { getScreeningCloseContactDetailApi } from "@/pages/close-contact/screening/apis"
 import { confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -141,6 +142,8 @@ function getPatientRowClass({ row }: { row: any }) {
   return ""
 }
 
+const noticeFormRef = ref()
+const noticeFormRules = { idNumber: [idCardRule()] }
 const noticeForm = reactive({
   idNumber: "",
   gender: "",
@@ -781,7 +784,7 @@ watch(
     />
 
     <el-dialog v-model="noticeDialogVisible" title="填写患者通知单" width="680px">
-      <el-form :model="noticeForm" label-width="110px">
+      <el-form ref="noticeFormRef" :model="noticeForm" :rules="noticeFormRules" label-width="110px">
         <el-divider content-position="left">
           基本信息
         </el-divider>
@@ -792,7 +795,7 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="身份证">
+            <el-form-item label="身份证" prop="idNumber">
               <el-input v-model="noticeForm.idNumber" />
             </el-form-item>
           </el-col>

@@ -3,6 +3,7 @@ package cn.luyou.controller;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Referral;
+import cn.luyou.model.vo.ReferralDetailVO;
 import cn.luyou.model.vo.SentReferralVO;
 import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
@@ -51,6 +52,12 @@ public class ReferralController {
     public ResultResponse<Void> resend(@PathVariable Long id) {
         referralService.resend(id);
         return ResultRes.success(null);
+    }
+
+    @Operation(summary = "查询转诊详情（含发送方/接收方信息）")
+    @GetMapping("/{id}")
+    public ResultResponse<ReferralDetailVO> detail(@PathVariable Long id) {
+        return ResultRes.success(referralService.detail(id));
     }
 
     @Operation(summary = "查询业务记录关联的分级诊疗列表")

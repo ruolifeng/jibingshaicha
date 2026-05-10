@@ -1,6 +1,7 @@
 package cn.luyou.service;
 
 import cn.luyou.model.Referral;
+import cn.luyou.model.vo.ReferralDetailVO;
 import cn.luyou.model.vo.SentReferralVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -11,6 +12,9 @@ public interface ReferralService extends IService<Referral> {
 
     /** 发起分级诊疗推送 */
     void send(Referral referral);
+
+    /** 查询转诊详情（含发送方/接收方用户信息） */
+    ReferralDetailVO detail(Long id);
 
     /** 接收方确认接收 */
     void confirm(Long id);

@@ -6,7 +6,6 @@ import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.service.NoticeService;
 import cn.luyou.utils.BaseContext;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,16 +49,12 @@ public class NoticeController {
         return ResultRes.success(noticeService.getById(id));
     }
 
-    @Operation(summary = "查询业务关联的通知单列表")
+    @Operation(summary = "查询业务关联的通知单列表（含下发人/接收人名称）")
     @GetMapping("/list")
     public ResultResponse<List<Notice>> listByBiz(
             @RequestParam Long bizId,
             @RequestParam String noticeType) {
-        LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Notice::getBizId, bizId)
-                .eq(Notice::getNoticeType, noticeType)
-                .orderByDesc(Notice::getCreateTime);
-        return ResultRes.success(noticeService.list(wrapper));
+        return ResultRes.success(noticeService.listByBizWithUsers(bizId, noticeType));
     }
 
     @Operation(summary = "查询当前用户已发送的通知单列表（含发送者/接收者信息）")

@@ -9,11 +9,9 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
  * ① 活动性肺结核  → 自动进患者管理（此页不展示）
  * ② 潜伏感染者    → 是否进行预防治疗？
  *    - 是 → 填写督导表 + 设置预计完成治疗时间 → 到期确认（完成→归档，未完成→随访监测）
- *    - 否 → 进入6/12/24月随访监测
- * ③ 未做          → 6/12/24月随访监测
- * ④ 未发现异常    → 3月复查
- *    - 阴性 → 结束
- *    - 阳性 → 转入②（ccStatus=8→2）
+ *    - 否 → 进入监测随访流程（见待诊断-监测随访页）
+ *
+ * 注：未做/未发现异常两类人群的随访监测已移至【待诊断-监测随访】页面管理
  */
 import { usePagination } from "@@/composables/usePagination"
 import {
@@ -27,11 +25,12 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
+import { idCardRule } from "@@/utils/validate"
 import {
   confirmTreatmentApi,
+  getScreeningCloseContactDetailApi,
   getScreeningCloseContactListApi,
   setExpectedEndDateApi,
-  submitThreeMonthCheckApi,
   updateScreeningCloseContactApi
 } from "@/pages/close-contact/screening/apis"
 import {
@@ -67,17 +66,7 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
-/** 当前展示的 Tab：潜伏感染者 / 未做 / 未发现异常 */
-const activeTab = ref<"latent" | "notDone" | "normal">("latent")
-
 const searchForm = reactive({ name: "", idNumber: "" })
-
-/** Tab 对应的 finalScreeningResult */
-const TAB_RESULT_MAP: Record<string, string> = {
-  latent: "潜伏感染者",
-  notDone: "未做",
-  normal: "未发现异常"
-}
 
 /** ccStatus 描述 */
 const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
@@ -105,7 +94,7 @@ async function fetchData() {
       size: paginationData.pageSize,
       name: searchForm.name || undefined,
       idNumber: searchForm.idNumber || undefined,
-      finalScreeningResult: TAB_RESULT_MAP[activeTab.value]
+      finalScreeningResult: "潜伏感染者"
     })
     tableData.value = data.records
     total.value = data.total
@@ -124,7 +113,7 @@ function handleReset() {
   handleSearch()
 }
 
-watch([activeTab, () => paginationData.currentPage, () => paginationData.pageSize], fetchData, { immediate: true })
+watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData, { immediate: true })
 
 const submitting = ref(false)
 
@@ -352,6 +341,8 @@ async function viewSupervision(row: any) {
 // ==================== 通知单 ====================
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
+const noticeFormRef = ref()
+const noticeFormRules = { idNumber: [idCardRule()] }
 const noticeForm = reactive({
   idNumber: "",
   gender: "",
@@ -452,49 +443,6 @@ async function handleConfirmNotice(noticeId: number) {
   } catch { /* cancelled */ }
 }
 
-// ==================== 3月复查（未发现异常流程）====================
-const threeMonthCheckVisible = ref(false)
-const threeMonthCheckRow = ref<any>(null)
-const threeMonthForm = reactive({
-  checkDate: "",
-  checkResult: "",
-  finalResult: "阴性" as "阴性" | "阳性"
-})
-
-function openThreeMonthCheck(row: any) {
-  threeMonthCheckRow.value = row
-  Object.assign(threeMonthForm, {
-    checkDate: row.threeMonthCheckDate || "",
-    checkResult: row.threeMonthCheckResult || "",
-    finalResult: row.threeMonthFinalResult || "阴性"
-  })
-  threeMonthCheckVisible.value = true
-}
-
-async function handleSubmitThreeMonthCheck() {
-  if (!threeMonthForm.checkDate) {
-    ElMessage.warning("请选择复查日期")
-    return
-  }
-  submitting.value = true
-  try {
-    await submitThreeMonthCheckApi(threeMonthCheckRow.value.id, {
-      checkDate: threeMonthForm.checkDate,
-      checkResult: threeMonthForm.checkResult,
-      finalResult: threeMonthForm.finalResult
-    })
-    ElMessage.success(
-      threeMonthForm.finalResult === "阴性"
-        ? "3月复查阴性，已判定为非潜伏感染者，流程结束"
-        : "3月复查阳性，已转入潜伏感染者管理流程"
-    )
-    threeMonthCheckVisible.value = false
-    fetchData()
-  } catch { /* handled */ } finally {
-    submitting.value = false
-  }
-}
-
 // ==================== 随访监测详情 ====================
 const followupDetailVisible = ref(false)
 const followupDetailRow = ref<any>(null)
@@ -502,20 +450,6 @@ const followupDetailRow = ref<any>(null)
 function viewFollowupDetail(row: any) {
   followupDetailRow.value = row
   followupDetailVisible.value = true
-}
-
-/** 判断随访是否有数据 */
-function hasFollowup(row: any, month: number) {
-  return !!row[`followup${month}Result`]
-}
-
-/** 检查随访中是否出现活动性肺结核，返回最早的月份或 null */
-function checkActiveInFollowup(row: any): number | null {
-  for (const m of [6, 12, 24]) {
-    const r = row[`followup${m}Result`]
-    if (r && r.includes("活动性肺结核")) return m
-  }
-  return null
 }
 
 /** 判断日期是否已过期 */
@@ -532,17 +466,74 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
   const allowed = ["primary", "success", "info", "warning", "danger"]
   return (allowed.includes(t) ? t : "info") as "primary" | "success" | "info" | "warning" | "danger"
 }
+
+// ==================== 随访结果手动录入 ====================
+const followupInputVisible = ref(false)
+const followupInputMonth = ref<6 | 12 | 24>(6)
+const followupInputRow = ref<any>(null)
+const followupInputForm = reactive({
+  screenDate: "",
+  symptom1: "",
+  imagingMethod: "",
+  imagingResult: "",
+  sputumMethod: "",
+  sputumResult: "",
+  result: ""
+})
+
+const FOLLOWUP_RESULT_OPTIONS = ["活动性肺结核", "潜伏感染者", "未发现异常", "其他"]
+
+function openFollowupInput(row: any, month: number) {
+  followupInputRow.value = row
+  followupInputMonth.value = month as 6 | 12 | 24
+  Object.assign(followupInputForm, {
+    screenDate: row[`followup${month}ScreenDate`] || "",
+    symptom1: row[`followup${month}Symptom1`] || "",
+    imagingMethod: row[`followup${month}ImagingMethod`] || "",
+    imagingResult: row[`followup${month}ImagingResult`] || "",
+    sputumMethod: row[`followup${month}SputumMethod`] || "",
+    sputumResult: row[`followup${month}SputumResult`] || "",
+    result: row[`followup${month}Result`] || ""
+  })
+  followupInputVisible.value = true
+}
+
+async function handleSaveFollowupInput() {
+  if (!followupInputForm.result) {
+    ElMessage.warning("请选择筛查结果")
+    return
+  }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    const month = followupInputMonth.value
+    await updateScreeningCloseContactApi(followupInputRow.value.id, {
+      ...followupInputRow.value,
+      [`followup${month}ScreenDate`]: followupInputForm.screenDate || undefined,
+      [`followup${month}Symptom1`]: followupInputForm.symptom1 || undefined,
+      [`followup${month}ImagingMethod`]: followupInputForm.imagingMethod || undefined,
+      [`followup${month}ImagingResult`]: followupInputForm.imagingResult || undefined,
+      [`followup${month}SputumMethod`]: followupInputForm.sputumMethod || undefined,
+      [`followup${month}SputumResult`]: followupInputForm.sputumResult || undefined,
+      [`followup${month}Result`]: followupInputForm.result
+    })
+    ElMessage.success(`${month}月随访结果已保存`)
+    followupInputVisible.value = false
+    // 刷新详情弹窗中的数据
+    const { data } = await getScreeningCloseContactDetailApi(followupInputRow.value.id)
+    if (data) {
+      followupDetailRow.value = data
+      followupInputRow.value = data
+    }
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
   <div class="app-container">
-    <!-- Tab 切换 -->
-    <el-tabs v-model="activeTab" type="card" class="mb-4" @tab-change="() => { paginationData.currentPage = 1; fetchData() }">
-      <el-tab-pane label="潜伏感染者" name="latent" />
-      <el-tab-pane label="未做（随访监测）" name="notDone" />
-      <el-tab-pane label="未发现异常" name="normal" />
-    </el-tabs>
-
     <!-- 搜索栏 -->
     <el-card shadow="never" class="mb-4">
       <el-form :model="searchForm" inline>
@@ -563,8 +554,8 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
       </el-form>
     </el-card>
 
-    <!-- ==================== Tab: 潜伏感染者 ==================== -->
-    <el-card v-if="activeTab === 'latent'" shadow="never">
+    <!-- 潜伏感染者管理 -->
+    <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接潜伏感染者管理</span>
@@ -684,138 +675,6 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
               转诊
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div class="mt-4 flex justify-end">
-        <el-pagination
-          v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange" @size-change="handleSizeChange"
-        />
-      </div>
-    </el-card>
-
-    <!-- ==================== Tab: 未做 / 随访监测 ==================== -->
-    <el-card v-else-if="activeTab === 'notDone'" shadow="never">
-      <template #header>
-        <span class="text-lg font-bold">密接人群 — 未做（6/12/24月随访监测）</span>
-      </template>
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="idNumber" label="身份证号" min-width="150" />
-        <el-table-column prop="registrationDate" label="登记日期" />
-        <el-table-column prop="sourcePatientName" label="原患者" />
-        <el-table-column label="6月随访">
-          <template #default="{ row }">
-            <div>
-              <div class="text-xs text-gray-400">
-                到期：{{ row.followup6DueDate || '—' }}
-              </div>
-              <el-tag v-if="row.followup6Result" :type="tagType(getFollowupTag(row.followup6Result))" size="small">
-                {{ row.followup6Result }}
-              </el-tag>
-              <span v-else class="text-gray-400 text-xs">待完成</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="12月随访">
-          <template #default="{ row }">
-            <div>
-              <div class="text-xs text-gray-400">
-                到期：{{ row.followup12DueDate || '—' }}
-              </div>
-              <el-tag v-if="row.followup12Result" :type="tagType(getFollowupTag(row.followup12Result))" size="small">
-                {{ row.followup12Result }}
-              </el-tag>
-              <span v-else class="text-gray-400 text-xs">待完成</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="24月随访">
-          <template #default="{ row }">
-            <div>
-              <div class="text-xs text-gray-400">
-                到期：{{ row.followup24DueDate || '—' }}
-              </div>
-              <el-tag v-if="row.followup24Result" :type="tagType(getFollowupTag(row.followup24Result))" size="small">
-                {{ row.followup24Result }}
-              </el-tag>
-              <span v-else class="text-gray-400 text-xs">待完成</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="活动性肺结核轮次">
-          <template #default="{ row }">
-            <span v-if="checkActiveInFollowup(row)" class="text-danger font-bold">
-              第{{ checkActiveInFollowup(row) }}月 → 已进患者管理
-            </span>
-            <span v-else-if="hasFollowup(row, 24)" class="text-success">全部完成，已归档</span>
-            <span v-else class="text-gray-400">监测中</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" fixed="right" width="120">
-          <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="viewFollowupDetail(row)">
-              查看详情
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div class="mt-4 flex justify-end">
-        <el-pagination
-          v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange" @size-change="handleSizeChange"
-        />
-      </div>
-    </el-card>
-
-    <!-- ==================== Tab: 未发现异常 ==================== -->
-    <el-card v-else-if="activeTab === 'normal'" shadow="never">
-      <template #header>
-        <span class="text-lg font-bold">密接人群 — 未发现异常（3月后复查）</span>
-      </template>
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="idNumber" label="身份证号" min-width="150" />
-        <el-table-column prop="registrationDate" label="登记日期" />
-        <el-table-column prop="sourcePatientName" label="原患者" />
-        <el-table-column prop="infectionCheckMethod" label="初次感染检测方法" />
-        <el-table-column prop="infectionCheckResult" label="初次感染检测结果" />
-        <el-table-column label="3月复查">
-          <template #default="{ row }">
-            <div v-if="row.threeMonthCheckDate">
-              <div class="text-xs text-gray-400">
-                复查日期：{{ row.threeMonthCheckDate }}
-              </div>
-              <el-tag :type="row.threeMonthFinalResult === '阴性' ? 'success' : 'danger'" size="small">
-                {{ row.threeMonthFinalResult }}
-              </el-tag>
-            </div>
-            <el-button v-else v-permission="'closeContact:latent:check'" type="primary" size="small" @click="openThreeMonthCheck(row)">
-              录入3月复查
-            </el-button>
-            <el-tag v-if="CC_STATUS_MAP[row.ccStatus]" :type="tagType(CC_STATUS_MAP[row.ccStatus].type)" size="small">
-              {{ CC_STATUS_MAP[row.ccStatus].label }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" fixed="right" width="140">
-          <template #default="{ row }">
-            <el-button
-              v-if="row.threeMonthCheckDate"
-              v-permission="'closeContact:latent:check'"
-              type="warning"
-              link
-              size="small"
-              @click="openThreeMonthCheck(row)"
-            >
-              修改3月复查
-            </el-button>
-            <el-button v-else v-permission="'closeContact:latent:check'" type="primary" link size="small" @click="openThreeMonthCheck(row)">
-              录入3月复查
             </el-button>
           </template>
         </el-table-column>
@@ -1173,7 +1032,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
 
     <!-- ==================== 弹窗：发送通知单 ==================== -->
     <el-dialog v-model="noticeDialogVisible" title="填写潜伏感染者通知单" width="680px">
-      <el-form :model="noticeForm" label-width="110px">
+      <el-form ref="noticeFormRef" :model="noticeForm" :rules="noticeFormRules" label-width="110px">
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="姓名">
@@ -1181,7 +1040,7 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="身份证">
+            <el-form-item label="身份证" prop="idNumber">
               <el-input v-model="noticeForm.idNumber" />
             </el-form-item>
           </el-col>
@@ -1358,46 +1217,6 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
       </template>
     </el-dialog>
 
-    <!-- ==================== 弹窗：3月复查 ==================== -->
-    <el-dialog v-model="threeMonthCheckVisible" title="录入3月复查感染检测结果" width="500px">
-      <el-form :model="threeMonthForm" label-width="130px">
-        <el-form-item label="姓名">
-          <el-input :value="threeMonthCheckRow?.name" disabled />
-        </el-form-item>
-        <el-form-item label="3月复查日期">
-          <el-date-picker v-model="threeMonthForm.checkDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="复查感染检测结果">
-          <el-input v-model="threeMonthForm.checkResult" placeholder="如：PPD阴性、EC阴性、IGRA阴性等" />
-        </el-form-item>
-        <el-form-item label="最终判定">
-          <el-radio-group v-model="threeMonthForm.finalResult">
-            <el-radio value="阴性">
-              阴性（非潜伏感染者，流程结束）
-            </el-radio>
-            <el-radio value="阳性">
-              阳性（转入潜伏感染者管理流程）
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-alert
-          v-if="threeMonthForm.finalResult === '阳性'"
-          title="判定为阳性后，该记录将自动转入【潜伏感染者】流程，请切换至【潜伏感染者】Tab进行后续操作"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="mt-2"
-        />
-      </el-form>
-      <template #footer>
-        <el-button @click="threeMonthCheckVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitThreeMonthCheck">
-          提交复查结果
-        </el-button>
-      </template>
-    </el-dialog>
 
     <!-- ==================== 弹窗：随访监测详情 ==================== -->
     <el-dialog v-model="followupDetailVisible" :title="`${followupDetailRow?.name} — 随访监测详情`" width="680px">
@@ -1407,9 +1226,20 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
           :key="month"
           :color="followupDetailRow[`followup${month}Result`] === '活动性肺结核' ? '#f56c6c' : followupDetailRow[`followup${month}Result`] ? '#67c23a' : '#909399'"
         >
-          <div class="mb-2">
-            <span class="font-bold text-base">{{ month }}月随访</span>
-            <span class="ml-3 text-sm text-gray-400">到期日期：{{ followupDetailRow[`followup${month}DueDate`] || '—' }}</span>
+          <div class="mb-2 flex items-center justify-between">
+            <div>
+              <span class="font-bold text-base">{{ month }}月随访</span>
+              <span class="ml-3 text-sm text-gray-400">到期日期：{{ followupDetailRow[`followup${month}DueDate`] || '—' }}</span>
+            </div>
+            <el-button
+              v-permission="'closeContact:latent:followup'"
+              :type="followupDetailRow[`followup${month}Result`] ? 'warning' : 'primary'"
+              size="small"
+              link
+              @click="openFollowupInput(followupDetailRow, month)"
+            >
+              {{ followupDetailRow[`followup${month}Result`] ? '修改随访结果' : '录入随访结果' }}
+            </el-button>
           </div>
           <template v-if="followupDetailRow[`followup${month}Result`]">
             <el-descriptions :column="2" border size="small">
@@ -1439,13 +1269,74 @@ function tagType(t: string): "primary" | "success" | "info" | "warning" | "dange
             </el-descriptions>
           </template>
           <template v-else>
-            <span class="text-gray-400 text-sm">尚未完成，可通过导入更新后的Excel补充数据</span>
+            <span class="text-gray-400 text-sm">尚未完成，可手动录入或通过导入Excel补充</span>
           </template>
         </el-timeline-item>
       </el-timeline>
       <template #footer>
         <el-button @click="followupDetailVisible = false">
           关闭
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ==================== 弹窗：随访结果录入 ==================== -->
+    <el-dialog
+      v-model="followupInputVisible"
+      :title="`录入 ${followupInputMonth} 月随访结果 — ${followupInputRow?.name}`"
+      width="560px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="followupInputForm" label-width="110px">
+        <el-form-item label="实际筛查日期">
+          <el-date-picker
+            v-model="followupInputForm.screenDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="请选择筛查日期"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="结核症状">
+          <el-input v-model="followupInputForm.symptom1" placeholder="如：咳嗽、无症状等" />
+        </el-form-item>
+        <el-form-item label="影像检查方法">
+          <el-input v-model="followupInputForm.imagingMethod" placeholder="如：胸片、CT等" />
+        </el-form-item>
+        <el-form-item label="影像检查结果">
+          <el-input v-model="followupInputForm.imagingResult" placeholder="如：未见异常、右上肺阴影等" />
+        </el-form-item>
+        <el-form-item label="病原学方法">
+          <el-input v-model="followupInputForm.sputumMethod" placeholder="如：痰涂片、分子生物学等" />
+        </el-form-item>
+        <el-form-item label="病原学结果">
+          <el-input v-model="followupInputForm.sputumResult" placeholder="如：阴性、阳性等" />
+        </el-form-item>
+        <el-form-item label="筛查结果" required>
+          <el-select v-model="followupInputForm.result" placeholder="请选择筛查结果" style="width: 100%">
+            <el-option
+              v-for="opt in FOLLOWUP_RESULT_OPTIONS"
+              :key="opt"
+              :label="opt"
+              :value="opt"
+            />
+          </el-select>
+        </el-form-item>
+        <el-alert
+          v-if="followupInputForm.result === '活动性肺结核'"
+          title="判定为活动性肺结核后，该记录将自动进入患者管理流程"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="mt-1"
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="followupInputVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveFollowupInput">
+          保存随访结果
         </el-button>
       </template>
     </el-dialog>

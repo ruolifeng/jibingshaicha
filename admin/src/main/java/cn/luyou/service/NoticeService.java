@@ -5,6 +5,8 @@ import cn.luyou.model.vo.SentNoticeVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 public interface NoticeService extends IService<Notice> {
 
     /** 保存通知单草稿（status=0，可重复保存/覆盖） */
@@ -21,4 +23,7 @@ public interface NoticeService extends IService<Notice> {
 
     /** 手动催促接收方接收通知单 */
     void remind(Long id);
+
+    /** 查询业务关联通知单列表（含下发人/接收人名称） */
+    List<Notice> listByBizWithUsers(Long bizId, String noticeType);
 }

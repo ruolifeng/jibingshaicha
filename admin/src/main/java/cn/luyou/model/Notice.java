@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -81,6 +82,19 @@ public class Notice extends BaseEntity {
     // ===== 流转字段 =====
     private Long senderId;
     private Long receiverOrgId;
+
+    /** 非数据库字段：下发人姓名（接口查询时填充） */
+    @TableField(exist = false)
+    private String senderName;
+    /** 非数据库字段：下发人机构名称 */
+    @TableField(exist = false)
+    private String senderOrgName;
+    /** 非数据库字段：接收人姓名 */
+    @TableField(exist = false)
+    private String receiverName;
+    /** 非数据库字段：接收人机构名称 */
+    @TableField(exist = false)
+    private String receiverOrgName;
     /** 状态：1已发送 2已确认 */
     private Integer status;
     private LocalDateTime sentTime;
