@@ -167,12 +167,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "筛查管理", tagTitle: "密接-筛查管理", keepAlive: true, permission: "closeContact:screening" }
       },
       {
-        path: "suspected",
-        component: () => import("@/pages/close-contact/suspected/index.vue"),
-        name: "CloseContactSuspected",
-        meta: { title: "待诊断", tagTitle: "密接-待诊断", keepAlive: true, permission: "closeContact:suspected" }
-      },
-      {
         path: "latent",
         component: () => import("@/pages/close-contact/latent/index.vue"),
         name: "CloseContactLatent",
@@ -189,6 +183,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/close-contact/patient/history.vue"),
         name: "CloseContactPatientHistory",
         meta: { title: "历史患者", tagTitle: "密接-历史患者", keepAlive: true, permission: "closeContact:history" }
+      },
+      {
+        path: "follow-up",
+        component: () => import("@/pages/close-contact/follow-up/index.vue"),
+        name: "CloseContactFollowUp",
+        meta: { title: "随访监测", tagTitle: "密接-随访监测", keepAlive: true, permission: "closeContact:followUp" }
       }
     ]
   },

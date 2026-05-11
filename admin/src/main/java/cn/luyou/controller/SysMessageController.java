@@ -42,4 +42,12 @@ public class SysMessageController {
         Long userId = BaseContext.getCurrentId();
         return ResultRes.success(sysMessageService.getUnreadCount(userId));
     }
+
+    @Operation(summary = "删除消息")
+    @DeleteMapping("/{id}")
+    public ResultResponse<Void> delete(@PathVariable Long id) {
+        Long userId = BaseContext.getCurrentId();
+        sysMessageService.deleteMessage(id, userId);
+        return ResultRes.success(null);
+    }
 }

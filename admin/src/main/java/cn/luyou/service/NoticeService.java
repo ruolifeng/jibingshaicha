@@ -26,4 +26,7 @@ public interface NoticeService extends IService<Notice> {
 
     /** 查询业务关联通知单列表（含下发人/接收人名称） */
     List<Notice> listByBizWithUsers(Long bizId, String noticeType);
+
+    /** 查询通知单详情（含下发人/接收人名称） */
+    Notice getDetailWithUsers(Long id);
 }

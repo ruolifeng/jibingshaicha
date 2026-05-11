@@ -46,7 +46,7 @@ public class NoticeController {
     @Operation(summary = "通知单详情")
     @GetMapping("/detail/{id}")
     public ResultResponse<Notice> detail(@PathVariable Long id) {
-        return ResultRes.success(noticeService.getById(id));
+        return ResultRes.success(noticeService.getDetailWithUsers(id));
     }
 
     @Operation(summary = "查询业务关联的通知单列表（含下发人/接收人名称）")

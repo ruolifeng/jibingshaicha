@@ -1,5 +1,7 @@
 package cn.luyou.service.impl;
 
+import cn.luyou.common.customError.ServiceException;
+import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.SysMessageMapper;
 import cn.luyou.service.SysMessageService;
@@ -50,6 +52,18 @@ public class SysMessageServiceImpl extends ServiceImpl<SysMessageMapper, SysMess
         wrapper.eq(SysMessage::getReceiverId, receiverId)
                 .eq(SysMessage::getIsRead, 0);
         return count(wrapper);
+    }
+
+    @Override
+    public void deleteMessage(Long id, Long currentUserId) {
+        SysMessage msg = getById(id);
+        if (msg == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "消息不存在");
+        }
+        if (!msg.getReceiverId().equals(currentUserId)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无权删除他人消息");
+        }
+        removeById(id);
     }
 
 }

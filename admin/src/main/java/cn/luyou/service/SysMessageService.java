@@ -18,4 +18,7 @@ public interface SysMessageService extends IService<SysMessage> {
 
     /** 获取未读消息数 */
     long getUnreadCount(Long receiverId);
+
+    /** 删除消息（仅消息归属人可删） */
+    void deleteMessage(Long id, Long currentUserId);
 }

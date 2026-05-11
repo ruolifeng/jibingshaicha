@@ -33,6 +33,14 @@ export function getUnreadCountApi() {
   })
 }
 
+/** 删除消息 */
+export function deleteMessageApi(id: number) {
+  return request<ApiResponseData<null>>({
+    url: `message/${id}`,
+    method: "delete"
+  })
+}
+
 export interface SentNoticeVO {
   id: number
   noticeType: string

@@ -6,6 +6,7 @@ import { getNoticeDetailApi } from "@/pages/school/latent/apis"
 import {
   confirmNoticeFromMessageApi,
   confirmReferralFromMessageApi,
+  deleteMessageApi,
   getMessageListApi,
   getReferralDetailApi,
   getSentNoticeListApi,
@@ -67,6 +68,19 @@ async function handleMarkRead(row: any) {
     row.isRead = 1
     ElMessage.success("已标记为已读")
   } catch { /* handled */ }
+}
+
+async function handleDeleteMessage(row: any) {
+  try {
+    await ElMessageBox.confirm("确认删除该消息？删除后不可恢复。", "删除消息", {
+      confirmButtonText: "确认删除",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    await deleteMessageApi(row.id)
+    ElMessage.success("消息已删除")
+    await fetchData()
+  } catch { /* cancelled or handled */ }
 }
 
 async function handleReceiveNotice(row: any) {
@@ -343,6 +357,9 @@ const activeTab = ref("received")
                 </template>
                 <el-button v-if="!row.isRead" type="primary" size="small" link @click="handleMarkRead(row)">
                   标为已读
+                </el-button>
+                <el-button type="danger" size="small" link @click="handleDeleteMessage(row)">
+                  删除
                 </el-button>
               </template>
             </el-table-column>

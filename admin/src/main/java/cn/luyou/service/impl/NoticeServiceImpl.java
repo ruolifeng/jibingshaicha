@@ -169,6 +169,32 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     }
 
     @Override
+    public Notice getDetailWithUsers(Long id) {
+        Notice notice = getById(id);
+        if (notice == null) {
+            return null;
+        }
+        Set<Long> userIds = new java.util.HashSet<>();
+        if (notice.getSenderId() != null) userIds.add(notice.getSenderId());
+        if (notice.getReceiverOrgId() != null) userIds.add(notice.getReceiverOrgId());
+        if (!userIds.isEmpty()) {
+            Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
+                    .collect(Collectors.toMap(User::getId, u -> u));
+            User sender = userMap.get(notice.getSenderId());
+            if (sender != null) {
+                notice.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());
+                notice.setSenderOrgName(sender.getOrgName());
+            }
+            User receiver = userMap.get(notice.getReceiverOrgId());
+            if (receiver != null) {
+                notice.setReceiverName(receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername());
+                notice.setReceiverOrgName(receiver.getOrgName());
+            }
+        }
+        return notice;
+    }
+
+    @Override
     public void remind(Long id) {
         Notice notice = getById(id);
         if (notice == null) {
