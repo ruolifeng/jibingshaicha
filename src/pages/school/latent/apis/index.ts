@@ -1,5 +1,20 @@
 import { request } from "@/http/axios"
 
+/** 导出潜伏感染管理列表（学校/重点人群） */
+export function exportLatentListApi(params: {
+  populationType: string
+  name?: string
+  idNumber?: string
+  archived?: number
+}) {
+  return request<Blob>({
+    url: "export/latent-list",
+    method: "get",
+    params,
+    responseType: "blob"
+  })
+}
+
 /** 分页查询潜伏感染数据 */
 export function getLatentListApi(params: {
   page: number

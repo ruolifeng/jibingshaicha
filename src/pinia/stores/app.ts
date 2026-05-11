@@ -47,7 +47,13 @@ export const useAppStore = defineStore("app", () => {
     device.value = value
   }
 
-  return { device, sidebar, toggleSidebar, closeSidebar, toggleDevice }
+  // 右侧设置面板开关
+  const rightPanelOpened = ref(false)
+  const toggleRightPanel = () => {
+    rightPanelOpened.value = !rightPanelOpened.value
+  }
+
+  return { device, sidebar, toggleSidebar, closeSidebar, toggleDevice, rightPanelOpened, toggleRightPanel }
 })
 
 /**

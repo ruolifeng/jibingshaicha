@@ -1,5 +1,19 @@
 import { request } from "@/http/axios"
 
+/** 导出患者管理列表（学校/重点人群） */
+export function exportPatientListApi(params: {
+  populationType: string
+  name?: string
+  idNumber?: string
+}) {
+  return request<Blob>({
+    url: "export/patient-list",
+    method: "get",
+    params,
+    responseType: "blob"
+  })
+}
+
 /** 患者列表 */
 export function getPatientListApi(params: {
   page: number

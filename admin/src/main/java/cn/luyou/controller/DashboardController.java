@@ -148,13 +148,19 @@ public class DashboardController {
                         .eq(ScreeningCloseContact::getUploadBatch, batch)
                         : new LambdaQueryWrapper<>()
         );
+        // 密接潜伏感染者直接从 screening_close_contact 统计（与密接潜伏感染菜单保持一致）
+        long closeLatent = closeContactService.count(
+                new LambdaQueryWrapper<ScreeningCloseContact>()
+                        .eq(ScreeningCloseContact::getFinalScreeningResult, "潜伏感染者")
+                        .eq(hasBatch, ScreeningCloseContact::getUploadBatch, batch)
+        );
         List<Object> closeIds = hasBatch
                 ? closeContactService.listObjs(new LambdaQueryWrapper<ScreeningCloseContact>()
                         .select(ScreeningCloseContact::getId)
                         .eq(ScreeningCloseContact::getUploadBatch, batch))
                 : null;
         data.put("closeContact", buildPopStats(closeTotal,
-                countLatent("closeContact", hasBatch, closeIds),
+                closeLatent,
                 countPatient("closeContact", hasBatch, closeIds)));
 
         return ResultRes.success(data);
@@ -191,10 +197,15 @@ public class DashboardController {
 
     // ===== 内部辅助方法 =====
 
+    /**
+     * 统计学校/重点人群的潜伏感染者数量。
+     * 与潜伏感染菜单保持一致：仅统计转诊结果为"latent"的记录。
+     */
     private long countLatent(String populationType, boolean hasBatch, List<Object> ids) {
         if (hasBatch && (ids == null || ids.isEmpty())) return 0L;
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
-                .eq(LatentInfection::getPopulationType, populationType);
+                .eq(LatentInfection::getPopulationType, populationType)
+                .eq(LatentInfection::getReferralResult, "latent");
         if (hasBatch) {
             wrapper.in(LatentInfection::getScreeningId, ids);
         }

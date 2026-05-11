@@ -5,7 +5,7 @@ import ThemeSwitch from "@@/components/ThemeSwitch/index.vue"
 import Notify from "@@/components/Notify/index.vue"
 import { useDevice } from "@@/composables/useDevice"
 import { useLayoutMode } from "@@/composables/useLayoutMode"
-import { UserFilled } from "@element-plus/icons-vue"
+import { Setting, UserFilled } from "@element-plus/icons-vue"
 import { useAppStore } from "@/pinia/stores/app"
 import { useSettingsStore } from "@/pinia/stores/settings"
 import { useUserStore } from "@/pinia/stores/user"
@@ -23,7 +23,7 @@ const userStore = useUserStore()
 
 const settingsStore = useSettingsStore()
 
-const { showThemeSwitch, showScreenfull, showSearchMenu } = storeToRefs(settingsStore)
+const { showThemeSwitch, showScreenfull, showSearchMenu, showSettings } = storeToRefs(settingsStore)
 
 /** 切换侧边栏 */
 function toggleSidebar() {
@@ -52,6 +52,11 @@ function logout() {
       <Screenfull v-if="showScreenfull" class="right-menu-item" />
       <ThemeSwitch v-if="showThemeSwitch" class="right-menu-item" />
       <Notify class="right-menu-item" />
+      <el-tooltip v-if="showSettings" effect="dark" content="布局设置" placement="bottom">
+        <el-icon class="right-menu-item settings-icon" :size="20" @click="appStore.toggleRightPanel">
+          <Setting />
+        </el-icon>
+      </el-tooltip>
       <el-dropdown>
         <div class="right-menu-item user">
           <el-avatar :icon="UserFilled" :size="30" />
@@ -135,6 +140,9 @@ function logout() {
       span {
         font-size: 16px;
       }
+    }
+    .settings-icon {
+      cursor: pointer;
     }
   }
 }

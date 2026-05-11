@@ -185,10 +185,10 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "历史患者", tagTitle: "密接-历史患者", keepAlive: true, permission: "closeContact:history" }
       },
       {
-        path: "follow-up",
-        component: () => import("@/pages/close-contact/follow-up/index.vue"),
-        name: "CloseContactFollowUp",
-        meta: { title: "随访监测", tagTitle: "密接-随访监测", keepAlive: true, permission: "closeContact:followUp" }
+        path: "monitoring",
+        component: () => import("@/pages/close-contact/suspected/index.vue"),
+        name: "CloseContactMonitoring",
+        meta: { title: "监测随访", tagTitle: "密接-监测随访", keepAlive: true, permission: "closeContact:followUp" }
       }
     ]
   },

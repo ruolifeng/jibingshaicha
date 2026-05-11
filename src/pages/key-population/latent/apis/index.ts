@@ -1,6 +1,7 @@
 export {
   closeCaseApi,
   confirmNoticeApi,
+  exportLatentListApi,
   getCheckListApi,
   getFollowUpListApi,
   getLatentListApi,

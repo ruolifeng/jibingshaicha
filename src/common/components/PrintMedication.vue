@@ -297,20 +297,32 @@ function handlePrint() {
     margin: 10mm;
   }
 
-  body > *:not(#print-medication-content) {
+  /* Dialog 通过 teleport 挂载到 body 下的 .el-overlay，
+     需保留 .el-overlay，隐藏其他所有 body 直接子元素 */
+  body > *:not(.el-overlay) {
     display: none !important;
   }
 
-  .el-dialog__wrapper,
+  /* 将弹窗容器由固定定位转为普通流，去除遮罩背景 */
   .el-overlay {
     position: static !important;
-    background: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .el-overlay-dialog {
+    position: static !important;
+    overflow: visible !important;
+    display: block !important;
+    height: auto !important;
   }
 
   .el-dialog {
     box-shadow: none !important;
-    width: 100% !important;
     margin: 0 !important;
+    width: 100% !important;
+    max-height: none !important;
   }
 
   .el-dialog__header,
@@ -318,9 +330,10 @@ function handlePrint() {
     display: none !important;
   }
 
-  #print-medication-content {
-    display: block !important;
+  .el-dialog__body {
     padding: 0 !important;
+    overflow: visible !important;
+    max-height: none !important;
   }
 
   .year-selector {

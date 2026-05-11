@@ -1,6 +1,7 @@
 export {
   archivePatientApi,
   completeMedicationApi,
+  exportPatientListApi,
   getFirstVisitApi,
   getFollowUpListApi,
   getMedicationApi,

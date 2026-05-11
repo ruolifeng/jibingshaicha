@@ -25,8 +25,8 @@ const loading = ref(false)
 
 /** 登录表单数据 */
 const loginFormData: LoginRequestData = reactive({
-  username: "admin",
-  password: "123456"
+  username: "",
+  password: ""
 })
 
 /** 登录表单校验规则 */
@@ -66,7 +66,7 @@ function handleLogin() {
     <Owl :close-eyes="isFocus" />
     <div class="login-card">
       <div class="title">
-        <img src="@@/assets/images/layouts/logo-text-2.png">
+        <span class="app-title">筛查管理</span>
       </div>
       <div class="content">
         <el-form ref="loginFormRef" :model="loginFormData" :rules="loginFormRules" @keyup.enter="handleLogin">
@@ -127,9 +127,12 @@ function handleLogin() {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 150px;
-      img {
-        height: 100%;
+      height: 120px;
+      .app-title {
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--el-color-primary);
+        letter-spacing: 4px;
       }
     }
     .content {

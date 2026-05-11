@@ -1,8 +1,13 @@
 package cn.luyou.controller;
 
+import cn.hutool.core.util.StrUtil;
+import cn.luyou.model.LatentInfection;
+import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
+import cn.luyou.service.LatentInfectionService;
+import cn.luyou.service.PatientService;
 import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.ScreeningSchoolService;
@@ -37,6 +42,8 @@ public class ExportController {
     private final ScreeningSchoolService screeningSchoolService;
     private final ScreeningKeyPopulationService keyPopulationService;
     private final ScreeningCloseContactService closeContactService;
+    private final LatentInfectionService latentInfectionService;
+    private final PatientService patientService;
 
     /** 大汇总表：三类人群筛查数据合并导出 */
     @Operation(summary = "大汇总表导出")
@@ -186,6 +193,125 @@ public class ExportController {
         }).collect(Collectors.toList());
 
         writeExcel(response, populationType + "_自定义导出", filteredRows);
+    }
+
+    /** 潜伏感染管理列表导出（学校/重点人群） */
+    @Operation(summary = "潜伏感染管理列表导出")
+    @GetMapping("/latent-list")
+    public void exportLatentList(
+            @RequestParam String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) Integer archived,
+            HttpServletResponse response) throws IOException {
+
+        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
+                .eq(LatentInfection::getPopulationType, populationType)
+                .eq(LatentInfection::getReferralResult, "latent")
+                .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
+                .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                .eq(archived != null, LatentInfection::getArchived, archived)
+                .orderByDesc(LatentInfection::getCreateTime);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        latentInfectionService.list(wrapper).forEach(r -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("姓名", r.getName());
+            row.put("性别", r.getGender());
+            row.put("年龄", r.getAge());
+            row.put("证件号", r.getIdNumber());
+            row.put("联系电话", r.getPhone());
+            row.put("感染筛查结果", r.getInfectionResult());
+            row.put("胸片结果", r.getChestXrayResult());
+            row.put("诊断结果", r.getDiagnosisFirst());
+            row.put("追踪状态", resolveTrackingStatus(r.getTrackingStatus()));
+            row.put("转诊结果", resolveReferralResult(r.getReferralResult()));
+            row.put("治疗阶段", resolveTreatmentPhase(r.getTreatmentPhase()));
+            row.put("服药状态", resolveMedicationStatus(r.getMedicationStatus()));
+            row.put("是否归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "未归档");
+            rows.add(row);
+        });
+
+        String popLabel = "school".equals(populationType) ? "学校人群" : "重点人群";
+        writeExcel(response, popLabel + "_潜伏感染管理", rows);
+    }
+
+    /** 患者管理列表导出（学校/重点人群） */
+    @Operation(summary = "患者管理列表导出")
+    @GetMapping("/patient-list")
+    public void exportPatientList(
+            @RequestParam String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            HttpServletResponse response) throws IOException {
+
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
+                .eq(Patient::getPopulationType, populationType)
+                .like(StrUtil.isNotBlank(name), Patient::getName, name)
+                .like(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
+                .orderByDesc(Patient::getCreateTime);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        patientService.list(wrapper).forEach(r -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("姓名", r.getName());
+            row.put("性别", r.getGender());
+            row.put("年龄", r.getAge());
+            row.put("证件号", r.getIdNumber());
+            row.put("联系电话", r.getPhone());
+            row.put("诊断结果", r.getDiagnosisResult());
+            row.put("来源", "confirmed".equals(r.getSource()) ? "诊断确诊" : "大疫情导入");
+            row.put("户籍地址", r.getHouseholdAddress());
+            row.put("现住址", r.getCurrentAddress());
+            row.put("是否归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "未归档");
+            rows.add(row);
+        });
+
+        String popLabel = "school".equals(populationType) ? "学校人群" : "重点人群";
+        writeExcel(response, popLabel + "_患者管理", rows);
+    }
+
+    private String resolveTrackingStatus(Integer status) {
+        if (status == null) return "-";
+        return switch (status) {
+            case 0 -> "待追踪";
+            case 1 -> "到位";
+            case 2 -> "未到位";
+            case 3 -> "其他";
+            case 4 -> "强制结束";
+            default -> String.valueOf(status);
+        };
+    }
+
+    private String resolveReferralResult(String result) {
+        if (result == null) return "-";
+        return switch (result) {
+            case "excluded" -> "排除";
+            case "other" -> "其他";
+            case "confirmed" -> "确诊患者";
+            case "suspected" -> "疑似肺结核";
+            case "latent" -> "潜伏感染者";
+            default -> result;
+        };
+    }
+
+    private String resolveTreatmentPhase(Integer phase) {
+        if (phase == null) return "未开始";
+        return switch (phase) {
+            case 0 -> "未开始";
+            case 1 -> "预防治疗中";
+            case 2 -> "已结案";
+            default -> String.valueOf(phase);
+        };
+    }
+
+    private String resolveMedicationStatus(Integer status) {
+        if (status == null) return "-";
+        return switch (status) {
+            case 1 -> "按要求服药";
+            case 2 -> "不服药";
+            default -> String.valueOf(status);
+        };
     }
 
     /** 将重点人群多个分类字段拼接为可读字符串 */

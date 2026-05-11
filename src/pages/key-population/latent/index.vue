@@ -26,6 +26,7 @@ import { useUserStore } from "@/pinia/stores/user"
 import {
   closeCaseApi,
   confirmNoticeApi,
+  exportLatentListApi,
   getCheckListApi,
   getFollowUpListApi,
   getLatentListApi,
@@ -98,6 +99,31 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.archived = undefined
   handleSearch()
+}
+
+const exporting = ref(false)
+async function handleExport() {
+  try {
+    exporting.value = true
+    const res = await exportLatentListApi({
+      populationType: POPULATION_TYPE,
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined,
+      archived: searchForm.archived
+    })
+    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "重点人群_潜伏感染管理.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
 }
 
 const submitting = ref(false)
@@ -668,7 +694,12 @@ watch(
 
     <el-card shadow="never">
       <template #header>
-        <span class="text-lg font-bold">重点人群 — 潜伏感染管理</span>
+        <div class="flex items-center justify-between">
+          <span class="text-lg font-bold">重点人群 — 潜伏感染管理</span>
+          <el-button type="success" :loading="exporting" @click="handleExport">
+            导出 Excel
+          </el-button>
+        </div>
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">

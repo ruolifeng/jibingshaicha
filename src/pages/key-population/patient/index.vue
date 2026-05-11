@@ -38,6 +38,7 @@ import {
   getFirstVisitApi,
   getFollowUpListApi,
   getMedicationApi,
+  exportPatientListApi,
   getPatientListApi,
   importEpidemicApi,
   saveFirstVisitApi,
@@ -100,6 +101,30 @@ function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
   handleSearch()
+}
+
+const exporting = ref(false)
+async function handleExport() {
+  try {
+    exporting.value = true
+    const res = await exportPatientListApi({
+      populationType: "keyPopulation",
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined
+    })
+    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "重点人群_患者管理.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
 }
 
 async function handleImportEpidemic(uploadFile: any) {
@@ -687,11 +712,16 @@ watch(
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">重点人群 — 患者管理</span>
-          <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleImportEpidemic">
-            <el-button type="warning" v-permission="'keyPopulation:patient:importEpidemic'">
-              导入大疫情表
+          <div class="flex gap-2">
+            <el-button type="success" :loading="exporting" @click="handleExport">
+              导出 Excel
             </el-button>
-          </el-upload>
+            <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleImportEpidemic">
+              <el-button type="warning" v-permission="'keyPopulation:patient:importEpidemic'">
+                导入大疫情表
+              </el-button>
+            </el-upload>
+          </div>
         </div>
       </template>
 

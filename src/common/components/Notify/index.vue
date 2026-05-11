@@ -39,37 +39,62 @@ const alertedIds = ref<Set<number>>(new Set())
 
 let timer: ReturnType<typeof setInterval> | null = null
 
-/** 检查是否有新的待接收通知单，有则逐条弹窗提醒 */
+/** 是否正在显示提醒弹窗，避免重复弹出 */
+const alertVisible = ref(false)
+
+/** 弹出消息提醒弹窗（通用），串行避免重复弹出 */
+async function showAlert(title: string, msgContent: string) {
+  alertVisible.value = true
+  try {
+    await ElMessageBox.alert(msgContent, title, {
+      type: "warning",
+      dangerouslyUseHTMLString: true,
+      confirmButtonText: "前往消息中心",
+      center: true,
+      closeOnClickModal: false,
+      closeOnPressEscape: false,
+      showClose: false
+    })
+    router.push("/message")
+  } catch {
+    // 用户关闭弹窗（不应出现，因为 showClose: false）
+  } finally {
+    alertVisible.value = false
+  }
+}
+
+/** 检查是否有新的未读消息，有则以居中模态弹窗提醒 */
 async function checkPendingNotice() {
+  if (alertVisible.value) return
   try {
     const { data } = await getMessageListApi({ page: 1, size: 50, isRead: 0 })
     const records: any[] = data?.records || []
-    const newPending = records.filter(
+
+    // 1. 待接收通知单（notice_receive）
+    const newPendingReceive = records.filter(
       item => item.type === "notice_receive" && !alertedIds.value.has(item.id)
     )
-    if (newPending.length === 0) return
-    // 将新消息 ID 加入已提醒集合
-    newPending.forEach(item => alertedIds.value.add(item.id))
-    // 超过 3 条合并为一条提醒，避免弹窗轰炸
-    if (newPending.length > 3) {
-      ElNotification({
-        title: "待接收通知单",
-        message: `您有 ${newPending.length} 条新通知单待接收，请前往消息中心处理`,
-        type: "warning",
-        duration: 10000,
-        onClick: () => router.push("/message")
-      })
+    if (newPendingReceive.length > 0) {
+      newPendingReceive.forEach(item => alertedIds.value.add(item.id))
+      const count = newPendingReceive.length
+      const msgContent = count === 1
+        ? (newPendingReceive[0].content || "您有 1 条新通知单待接收，请前往消息中心处理。")
+        : `您有 <strong>${count}</strong> 条未处理待收通知单，请前往消息中心逐一处理。`
+      await showAlert("待接收通知单", msgContent)
+      return
     }
-    else {
-      newPending.forEach(item => {
-        ElNotification({
-          title: "待接收通知单",
-          message: item.content || "您有新通知单待接收，请前往消息中心处理",
-          type: "warning",
-          duration: 10000,
-          onClick: () => router.push("/message")
-        })
-      })
+
+    // 2. 通知单超时提醒（notice_timeout）—— 48h 未确认接收
+    const newTimeout = records.filter(
+      item => item.type === "notice_timeout" && !alertedIds.value.has(item.id)
+    )
+    if (newTimeout.length > 0) {
+      newTimeout.forEach(item => alertedIds.value.add(item.id))
+      const count = newTimeout.length
+      const msgContent = count === 1
+        ? (newTimeout[0].content || "有通知单超过 48 小时未确认接收，请前往消息中心查看。")
+        : `您有 <strong>${count}</strong> 条通知单超时未确认，请前往消息中心处理。`
+      await showAlert("通知单超时提醒", msgContent)
     }
   } catch { /* 静默失败 */ }
 }

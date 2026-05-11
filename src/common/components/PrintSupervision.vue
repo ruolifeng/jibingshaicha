@@ -215,20 +215,25 @@ function handlePrint() {
 
 <style lang="scss">
 @media print {
-  /* 仅保留督导表内容区，隐藏其他所有元素 */
-  body > *:not(#el-popper-container-1) {
+  /* Dialog 通过 teleport 挂载到 body 下的 .el-overlay，
+     需保留 .el-overlay，隐藏其他所有 body 直接子元素 */
+  body > *:not(.el-overlay) {
     display: none !important;
   }
 
+  /* 将弹窗容器由固定定位转为普通流，去除遮罩背景 */
   .el-overlay {
     position: static !important;
-    background: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+    height: auto !important;
   }
 
-  .el-dialog__wrapper,
   .el-overlay-dialog {
     position: static !important;
     overflow: visible !important;
+    display: block !important;
+    height: auto !important;
   }
 
   .el-dialog {
@@ -245,10 +250,8 @@ function handlePrint() {
 
   .el-dialog__body {
     padding: 0 !important;
-  }
-
-  #print-supervision-content {
-    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
   }
 }
 </style>
