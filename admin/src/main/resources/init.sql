@@ -885,7 +885,7 @@ WHERE `role` = 6
       'school','keyPopulation','closeContact','statistics',
       'school:screening','school:suspected','school:latent','school:patient','school:history',
       'keyPopulation:screening','keyPopulation:suspected','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
-      'closeContact:screening','closeContact:suspected','closeContact:latent','closeContact:patient','closeContact:history',
+      'closeContact:screening','closeContact:followUp','closeContact:latent','closeContact:patient','closeContact:history',
       'screening:upload','screening:create','screening:export','screening:edit','screening:delete',
       'keyPopulation:screening:upload','keyPopulation:screening:create','keyPopulation:screening:export','keyPopulation:screening:edit','keyPopulation:screening:delete',
       'closeContact:screening:upload','closeContact:screening:create','closeContact:screening:export','closeContact:screening:edit','closeContact:screening:delete',
@@ -1084,9 +1084,9 @@ WHERE p.code IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'key
 -- ==================== V10：待诊断菜单权限 + 一二级用户权限管理访问 ====================
 -- 新增三条主线"待诊断"菜单权限（挂在各自主线父节点下，sort=2，位于筛查管理之后）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(14, 'school:suspected',        '待诊断', 1, 1, 2),
-(24, 'keyPopulation:suspected', '待诊断', 1, 2, 2),
-(34, 'closeContact:suspected',  '待诊断', 1, 3, 2);
+(14, 'school:suspected',        '待诊断',   1, 1, 2),
+(24, 'keyPopulation:suspected', '待诊断',   1, 2, 2),
+(34, 'closeContact:followUp',   '监测随访', 1, 3, 6);
 
 -- 调整后续子菜单排序（潜伏感染 3、患者管理 4、历史患者 5）
 UPDATE `permission` SET `sort` = 3 WHERE `code` IN ('school:latent', 'keyPopulation:latent', 'closeContact:latent');
@@ -1095,12 +1095,23 @@ UPDATE `permission` SET `sort` = 5 WHERE `code` IN ('school:history', 'keyPopula
 
 -- 超级管理员获得所有新权限（幂等）
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` IN ('school:suspected', 'keyPopulation:suspected', 'closeContact:suspected');
+SELECT 1, `id` FROM `permission` WHERE `code` IN ('school:suspected', 'keyPopulation:suspected', 'closeContact:followUp');
 
--- 待诊断权限默认不分配给任何角色，由超级管理员或一二级用户通过"权限管理"界面手动分配
+-- 待诊断/监测随访权限默认不分配给其他角色，由超级管理员通过"权限管理"界面手动分配
 
 -- 一级(role=2)、二级(role=3) 获得权限管理页面访问权：system 父菜单 + system:permissions + permission:assign
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3) r
 CROSS JOIN `permission` p
 WHERE p.code IN ('system', 'system:permissions', 'permission:assign');
+
+-- ==================== V11：密接人群-待诊断权限重命名为监测随访 ====================
+-- closeContact:suspected（待诊断）已从密接人群菜单移除，
+-- 对应页面改为监测随访（closeContact:followUp），排在历史患者之后
+UPDATE `permission`
+SET `code` = 'closeContact:followUp', `name` = '监测随访', `sort` = 6
+WHERE `code` = 'closeContact:suspected';
+
+-- 超级管理员补充获得更新后权限（幂等）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` = 'closeContact:followUp';
