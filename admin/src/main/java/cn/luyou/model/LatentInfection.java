@@ -64,6 +64,10 @@ public class LatentInfection extends BaseEntity {
     @TableField(exist = false)
     private Boolean noticeSent;
 
+    /** 督导表是否已完成（status=2，非持久化字段） */
+    @TableField(exist = false)
+    private Boolean supervisionCompleted;
+
     // ===== 通知单自动回填字段（非持久化）=====
     @TableField(exist = false)
     private LocalDate birthDate;

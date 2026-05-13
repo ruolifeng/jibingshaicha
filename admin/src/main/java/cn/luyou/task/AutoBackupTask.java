@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 定时自动备份任务
@@ -45,12 +47,25 @@ public class AutoBackupTask {
             Path dir = Paths.get(backupDir);
             if (!Files.exists(dir)) Files.createDirectories(dir);
 
-            String dbName = datasourceUrl.replaceAll(".*/(\\w+)(\\?.*)?$", "$1");
+            // 从 JDBC URL 解析 host、port、dbName
+            // 格式：jdbc:mysql://host:port/dbName?params
+            Pattern pattern = Pattern.compile("jdbc:mysql://([^:/]+)(?::(\\d+))?/(\\w+)");
+            Matcher matcher = pattern.matcher(datasourceUrl);
+            String dbHost = "localhost";
+            String dbPort = "3306";
+            String dbName = "disease_monitor";
+            if (matcher.find()) {
+                dbHost = matcher.group(1);
+                dbPort = matcher.group(2) != null ? matcher.group(2) : "3306";
+                dbName = matcher.group(3);
+            }
+
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             String filePath = backupDir + "/auto_backup_" + dbName + "_" + timestamp + ".sql";
 
             ProcessBuilder pb = new ProcessBuilder(
-                    "mysqldump", "-u", dbUser, "-p" + dbPassword, "--single-transaction", dbName
+                    "mysqldump", "-h", dbHost, "--port", dbPort,
+                    "-u", dbUser, "-p" + dbPassword, "--single-transaction", dbName
             );
             pb.redirectOutput(new File(filePath));
             pb.redirectError(ProcessBuilder.Redirect.DISCARD);

@@ -1,0 +1,68 @@
+services:
+  # ==================== MySQL 数据库 ====================
+  mysql:
+    image: mysql:8.0
+    container_name: disease_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_change_me
+      MYSQL_DATABASE: disease_monitor
+      MYSQL_USER: disease_monitor
+      MYSQL_PASSWORD: GNKTtzExjRyBptXa
+      TZ: Asia/Shanghai
+    volumes:
+      # 数据持久化
+      - mysql_data:/var/lib/mysql
+      # 首次启动自动初始化数据库结构
+      - ./admin/src/main/resources/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "disease_monitor", "-pGNKTtzExjRyBptXa"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ==================== Spring Boot 后端 ====================
+  backend:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: disease_backend
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      # 覆盖 application-prod.yaml 中的数据库地址，指向 Docker 内部容器名
+      # 注意：& 是 YAML 锚点语法，含 & 的值必须用引号包裹
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/disease_monitor?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: disease_monitor
+      SPRING_DATASOURCE_PASSWORD: GNKTtzExjRyBptXa
+      # 覆盖 application-prod.yaml 中的占位 JWT 密钥，请替换为随机长字符串
+      JWT_SECRET: "please-replace-with-a-random-secret-key-at-least-32-chars"
+    volumes:
+      # 上传文件和备份目录挂载到宿主机，防止数据丢失
+      - backend_uploads:/app/uploads
+      - backend_backups:/app/backups
+    ports:
+      - "9652:9652"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ==================== Vue 前端（Nginx） ====================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: disease_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  backend_uploads:
+  backend_backups:

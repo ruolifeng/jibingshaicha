@@ -153,11 +153,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         // 注意：diagnosisResult 不在此处预填，需操作员在"待诊断"页面点击"诊断"后由
         // referral 流程写入；否则会被潜伏列表的 diagnosisResult 过滤器排除，
         // 导致导入的确诊/疑似记录在"待诊断"中不可见。
+        // 无论导入数据是否已含胸片与诊断，trackingStatus 始终初始化为 0（待追踪）。
+        // 操作员需手动完成追踪流程后，才可进行诊断。
+        // 若导入数据已含 diagnosisFirst，追踪到位后系统会直接显示"诊断"按钮，无需重复录入胸片。
         List<LatentInfection> latentList = toInsert.stream()
                 .filter(d -> d.getIsLatent() == 1)
-                .map(d -> {
-                    boolean directXray = hasDirectXrayAndDiagnosis(d);
-                    return LatentInfection.builder()
+                .map(d -> LatentInfection.builder()
                             .screeningId(d.getId())
                             .populationType("school")
                             .name(d.getName())
@@ -166,7 +167,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .age(d.getAge())
                             .phone(d.getPhone())
                             .infectionResult(d.getInfectionResult())
-                            .trackingStatus(directXray ? 1 : 0)
+                            .trackingStatus(0)
                             .notInPlaceCount(0)
                             .archived(0)
                             .hasChestXray(d.getHasChestXray())
@@ -174,8 +175,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .chestXrayResult(d.getChestXrayResult())
                             .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
-                            .build();
-                })
+                            .build())
                 .toList();
         // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建
         List<LatentInfection> latentFromUpdated = toUpdate.stream()
@@ -184,9 +184,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                         .eq(LatentInfection::getScreeningId, d.getId())
                         .eq(LatentInfection::getPopulationType, "school")
                         .exists())
-                .map(d -> {
-                    boolean directXray = hasDirectXrayAndDiagnosis(d);
-                    return LatentInfection.builder()
+                .map(d -> LatentInfection.builder()
                             .screeningId(d.getId())
                             .populationType("school")
                             .name(d.getName())
@@ -195,7 +193,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .age(d.getAge())
                             .phone(d.getPhone())
                             .infectionResult(d.getInfectionResult())
-                            .trackingStatus(directXray ? 1 : 0)
+                            .trackingStatus(0)
                             .notInPlaceCount(0)
                             .archived(0)
                             .hasChestXray(d.getHasChestXray())
@@ -203,8 +201,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .chestXrayResult(d.getChestXrayResult())
                             .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
-                            .build();
-                })
+                            .build())
                 .toList();
         List<LatentInfection> allLatent = new ArrayList<>(latentList);
         allLatent.addAll(latentFromUpdated);
@@ -262,7 +259,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         save(data);
 
         if (data.getIsLatent() == 1) {
-            // diagnosisResult 不在此预填，由"待诊断"页面诊断后由 referral 流程写入
+            // diagnosisResult 不在此预填，由"待诊断"页面诊断后由 referral 流程写入。
+            // trackingStatus 始终初始化为 0，操作员需手动完成追踪后才可进行诊断。
             LatentInfection latent = LatentInfection.builder()
                     .screeningId(data.getId())
                     .populationType("school")
@@ -272,7 +270,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .age(data.getAge())
                     .phone(data.getPhone())
                     .infectionResult(data.getInfectionResult())
-                    .trackingStatus(directXray ? 1 : 0)
+                    .trackingStatus(0)
                     .notInPlaceCount(0)
                     .archived(0)
                     .hasChestXray(data.getHasChestXray())

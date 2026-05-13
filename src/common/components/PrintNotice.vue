@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { printElement } from "@@/utils/print"
+
 /** 通用通知单打印组件（潜伏者通知单 / 患者通知单） */
 const props = defineProps<{
   visible: boolean
@@ -10,11 +12,11 @@ const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
 }>()
 
-function handlePrint() {
-  window.print()
-}
-
 const title = computed(() => props.noticeType === "patient" ? "肺结核患者管理通知单" : "结核病潜伏感染者预防性治疗通知单")
+
+function handlePrint() {
+  printElement("print-notice-content", title.value)
+}
 </script>
 
 <template>
@@ -151,48 +153,5 @@ const title = computed(() => props.noticeType === "patient" ? "肺结核患者�
   margin-top: 32px;
   font-size: 14px;
   color: #303133;
-}
-</style>
-
-<style lang="scss">
-@media print {
-  /* Dialog 通过 teleport 挂载到 body 下的 .el-overlay，
-     需保留 .el-overlay，隐藏其他所有 body 直接子元素 */
-  body > *:not(.el-overlay) {
-    display: none !important;
-  }
-
-  /* 将弹窗容器由固定定位转为普通流，去除遮罩背景 */
-  .el-overlay {
-    position: static !important;
-    background: transparent !important;
-    overflow: visible !important;
-    height: auto !important;
-  }
-
-  .el-overlay-dialog {
-    position: static !important;
-    overflow: visible !important;
-    display: block !important;
-    height: auto !important;
-  }
-
-  .el-dialog {
-    box-shadow: none !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-height: none !important;
-  }
-
-  .el-dialog__header,
-  .el-dialog__footer {
-    display: none !important;
-  }
-
-  .el-dialog__body {
-    padding: 0 !important;
-    overflow: visible !important;
-    max-height: none !important;
-  }
 }
 </style>

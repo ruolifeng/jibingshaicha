@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { printElement } from "@@/utils/print"
+
 /** 肺结核患者治疗记录卡打印组件（12个月服药情况表） */
 const props = defineProps<{
   visible: boolean
@@ -61,7 +63,11 @@ const totalCheckedDays = computed(() => {
 })
 
 function handlePrint() {
-  window.print()
+  printElement(
+    "print-medication-content",
+    "肺结核患者治疗记录卡",
+    "@page { size: A4 landscape; margin: 10mm; }"
+  )
 }
 </script>
 
@@ -289,55 +295,3 @@ function handlePrint() {
 }
 </style>
 
-<style lang="scss">
-@media print {
-  /* 横向打印以容纳 32 列宽表格 */
-  @page {
-    size: A4 landscape;
-    margin: 10mm;
-  }
-
-  /* Dialog 通过 teleport 挂载到 body 下的 .el-overlay，
-     需保留 .el-overlay，隐藏其他所有 body 直接子元素 */
-  body > *:not(.el-overlay) {
-    display: none !important;
-  }
-
-  /* 将弹窗容器由固定定位转为普通流，去除遮罩背景 */
-  .el-overlay {
-    position: static !important;
-    background: transparent !important;
-    overflow: visible !important;
-    height: auto !important;
-  }
-
-  .el-overlay-dialog {
-    position: static !important;
-    overflow: visible !important;
-    display: block !important;
-    height: auto !important;
-  }
-
-  .el-dialog {
-    box-shadow: none !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-height: none !important;
-  }
-
-  .el-dialog__header,
-  .el-dialog__footer {
-    display: none !important;
-  }
-
-  .el-dialog__body {
-    padding: 0 !important;
-    overflow: visible !important;
-    max-height: none !important;
-  }
-
-  .year-selector {
-    display: none !important;
-  }
-}
-</style>

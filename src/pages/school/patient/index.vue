@@ -121,8 +121,8 @@ async function handleExport() {
     a.click()
     URL.revokeObjectURL(url)
     ElMessage.success("导出成功")
-  } catch {
-    ElMessage.error("导出失败")
+  } catch (err: any) {
+    ElMessage.error(err?.message || "导出失败")
   } finally {
     exporting.value = false
   }

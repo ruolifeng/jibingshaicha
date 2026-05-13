@@ -342,7 +342,10 @@ async function viewSupervision(row: any) {
 const noticeDialogVisible = ref(false)
 const noticeRow = ref<any>(null)
 const noticeFormRef = ref()
-const noticeFormRules = { idNumber: [idCardRule()] }
+const noticeFormRules = {
+  receiverOrgId: [{ required: true, message: "请选择接收单位", trigger: "change" }],
+  idNumber: [idCardRule()]
+}
 const noticeForm = reactive({
   idNumber: "",
   gender: "",
@@ -1126,8 +1129,8 @@ async function handleSaveFollowupInput() {
         <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
           <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
         </el-form-item>
-        <el-form-item label="接收单位">
-          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width:100%">
+        <el-form-item label="接收单位" prop="receiverOrgId">
+          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择接收单位（必填）" filterable style="width:100%">
             <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
           </el-select>
         </el-form-item>

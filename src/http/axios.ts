@@ -23,12 +23,31 @@ function createInstance() {
   )
   // 响应拦截器（可根据具体业务作出相应的调整）
   instance.interceptors.response.use(
-    (response) => {
+    async (response) => {
       // apiData 是 api 返回的数据
       const apiData = response.data
-      // 二进制数据则直接返回
+      // 二进制数据需额外检查：若服务端实际返回了 JSON 错误体，则提取错误信息并拒绝
+      // 判断依据：Content-Type 为 application/json，或 blob 体积极小（< 1024 B，不可能是有效 Excel）
       const responseType = response.config.responseType
-      if (responseType === "blob" || responseType === "arraybuffer") return apiData
+      if (responseType === "blob" || responseType === "arraybuffer") {
+        if (apiData instanceof Blob) {
+          const isJsonContentType = apiData.type.includes("application/json")
+          const isTinyBlob = apiData.size < 1024
+          if (isJsonContentType || isTinyBlob) {
+            const text = await apiData.text()
+            try {
+              const json = JSON.parse(text)
+              if (json.code !== undefined && json.code !== 200) {
+                // 只 reject，不在拦截器显示 ElMessage，让调用方统一处理提示
+                return Promise.reject(new Error(json.msg || "服务器错误"))
+              }
+            } catch {
+              // 解析失败说明是正常的小 blob，继续走正常流程
+            }
+          }
+        }
+        return apiData
+      }
       // 这个 code 是和后端约定的业务 code
       const code = apiData.code
       // 如果没有 code, 代表这不是项目后端开发的 api

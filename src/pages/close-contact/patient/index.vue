@@ -143,7 +143,10 @@ function getPatientRowClass({ row }: { row: any }) {
 }
 
 const noticeFormRef = ref()
-const noticeFormRules = { idNumber: [idCardRule()] }
+const noticeFormRules = {
+  receiverOrgId: [{ required: true, message: "请选择接收单位", trigger: "change" }],
+  idNumber: [idCardRule()]
+}
 const noticeForm = reactive({
   idNumber: "",
   gender: "",
@@ -945,8 +948,8 @@ watch(
         <el-form-item label="其他注意事项">
           <el-input v-model="noticeForm.otherNotes" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="接收单位">
-          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择五级机构" filterable style="width: 100%">
+        <el-form-item label="接收单位" prop="receiverOrgId">
+          <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择接收单位（必填）" filterable style="width: 100%">
             <el-option v-for="u in level5Users" :key="u.id" :label="`${u.realName || u.username} - ${u.orgName || '未设置机构'}`" :value="u.id" />
           </el-select>
         </el-form-item>

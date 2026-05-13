@@ -14,6 +14,8 @@ import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.luyou.mapper.SupervisionFormMapper;
+import cn.luyou.model.SupervisionForm;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
@@ -55,6 +57,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
     private final NoticeMapper noticeMapper;
+    private final SupervisionFormMapper supervisionFormMapper;
 
     private static final List<String> DIAGNOSIS_TO_PATIENT = Arrays.asList("疑似肺结核", "确诊患者");
 
@@ -124,7 +127,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .toList();
         records.forEach(this::fillNoticeAutoFields);
         if (latentIds.isEmpty()) {
-            records.forEach(r -> r.setNoticeSent(false));
+            records.forEach(r -> {
+                r.setNoticeSent(false);
+                r.setSupervisionCompleted(false);
+            });
             return result;
         }
 
@@ -137,6 +143,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         ).stream().map(cn.luyou.model.Notice::getBizId).toList());
 
         records.forEach(r -> r.setNoticeSent(sentBizIds.contains(r.getId())));
+
+        // 补充督导表完成状态：status=2 表示已归档完成，不再允许重新填写
+        Set<Long> completedSupervisionIds = new HashSet<>(supervisionFormMapper.selectList(
+                new LambdaQueryWrapper<SupervisionForm>()
+                        .in(SupervisionForm::getLatentInfectionId, latentIds)
+                        .eq(SupervisionForm::getStatus, 2)
+                        .select(SupervisionForm::getLatentInfectionId)
+        ).stream().map(SupervisionForm::getLatentInfectionId).toList());
+        records.forEach(r -> r.setSupervisionCompleted(completedSupervisionIds.contains(r.getId())));
+
         return result;
     }
 

@@ -6,17 +6,20 @@ import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
+import cn.luyou.model.SupervisionForm;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.ScreeningSchoolService;
+import cn.luyou.service.SupervisionFormService;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,13 +29,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Tag(name = "数据导出")
 @RestController
 @RequestMapping("/export")
@@ -44,6 +51,9 @@ public class ExportController {
     private final ScreeningCloseContactService closeContactService;
     private final LatentInfectionService latentInfectionService;
     private final PatientService patientService;
+    private final SupervisionFormService supervisionFormService;
+
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /** 大汇总表：三类人群筛查数据合并导出 */
     @Operation(summary = "大汇总表导出")
@@ -195,7 +205,7 @@ public class ExportController {
         writeExcel(response, populationType + "_自定义导出", filteredRows);
     }
 
-    /** 潜伏感染管理列表导出（学校/重点人群） */
+    /** 潜伏感染管理列表导出（学校/重点人群），字段与模板表头保持一致 */
     @Operation(summary = "潜伏感染管理列表导出")
     @GetMapping("/latent-list")
     public void exportLatentList(
@@ -205,38 +215,158 @@ public class ExportController {
             @RequestParam(required = false) Integer archived,
             HttpServletResponse response) throws IOException {
 
-        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
-                .eq(LatentInfection::getPopulationType, populationType)
-                .eq(LatentInfection::getReferralResult, "latent")
-                .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
-                .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
-                .eq(archived != null, LatentInfection::getArchived, archived)
-                .orderByDesc(LatentInfection::getCreateTime);
+        log.info("[导出] 潜伏感染列表 populationType={} name={} idNumber={} archived={}", populationType, name, idNumber, archived);
+        try {
+            LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
+                    .eq(LatentInfection::getPopulationType, populationType)
+                    .eq(LatentInfection::getReferralResult, "latent")
+                    .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
+                    .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                    .eq(archived != null, LatentInfection::getArchived, archived)
+                    .orderByDesc(LatentInfection::getCreateTime);
 
-        List<Map<String, Object>> rows = new ArrayList<>();
-        latentInfectionService.list(wrapper).forEach(r -> {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("姓名", r.getName());
-            row.put("性别", r.getGender());
-            row.put("年龄", r.getAge());
-            row.put("证件号", r.getIdNumber());
-            row.put("联系电话", r.getPhone());
-            row.put("感染筛查结果", r.getInfectionResult());
-            row.put("胸片结果", r.getChestXrayResult());
-            row.put("诊断结果", r.getDiagnosisFirst());
-            row.put("追踪状态", resolveTrackingStatus(r.getTrackingStatus()));
-            row.put("转诊结果", resolveReferralResult(r.getReferralResult()));
-            row.put("治疗阶段", resolveTreatmentPhase(r.getTreatmentPhase()));
-            row.put("服药状态", resolveMedicationStatus(r.getMedicationStatus()));
-            row.put("是否归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "未归档");
-            rows.add(row);
-        });
+            List<LatentInfection> latentList = latentInfectionService.list(wrapper);
 
-        String popLabel = "school".equals(populationType) ? "学校人群" : "重点人群";
-        writeExcel(response, popLabel + "_潜伏感染管理", rows);
+            // 批量查询筛查原表（减少 N+1 查询）
+            List<Long> screeningIds = latentList.stream()
+                    .filter(l -> l.getScreeningId() != null)
+                    .map(LatentInfection::getScreeningId)
+                    .distinct().collect(Collectors.toList());
+
+            // 批量查询督导表（取每条潜伏记录最新的已归档督导表）
+            List<Long> latentIds = latentList.stream().map(LatentInfection::getId).collect(Collectors.toList());
+            Map<Long, SupervisionForm> supervisionMap = new HashMap<>();
+            if (!latentIds.isEmpty()) {
+                supervisionFormService.lambdaQuery()
+                        .in(SupervisionForm::getLatentInfectionId, latentIds)
+                        .eq(SupervisionForm::getStatus, 2)
+                        .orderByDesc(SupervisionForm::getId)
+                        .list()
+                        .forEach(sv -> supervisionMap.putIfAbsent(sv.getLatentInfectionId(), sv));
+            }
+
+            List<Map<String, Object>> rows = new ArrayList<>();
+            String popLabel = "school".equals(populationType) ? "学校人群" : "重点人群";
+
+            if ("school".equals(populationType)) {
+                Map<Long, ScreeningSchool> screeningMap = screeningIds.isEmpty() ? new HashMap<>() :
+                        screeningSchoolService.listByIds(screeningIds).stream()
+                                .collect(Collectors.toMap(ScreeningSchool::getId, s -> s));
+                int seq = 1;
+                for (LatentInfection r : latentList) {
+                    ScreeningSchool s = r.getScreeningId() != null ? screeningMap.get(r.getScreeningId()) : null;
+                    SupervisionForm sv = supervisionMap.get(r.getId());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("序号", seq++);
+                    row.put("年份", s != null ? s.getYear() : "");
+                    row.put("市（州）", s != null ? s.getCity() : "");
+                    row.put("县（市、区）", s != null ? s.getDistrict() : "");
+                    row.put("姓名", r.getName());
+                    row.put("性别", r.getGender());
+                    row.put("出生日期", formatDate(s != null ? s.getBirthDate() : null));
+                    row.put("年龄", r.getAge());
+                    row.put("证件类型", s != null ? s.getIdType() : "");
+                    row.put("证件号", r.getIdNumber());
+                    row.put("民族", s != null ? s.getEthnicity() : "");
+                    row.put("联系电话", r.getPhone());
+                    row.put("户籍所在地（XX市XX县、区）", s != null ? s.getHouseholdAddress() : "");
+                    row.put("现地址", s != null ? s.getCurrentAddress() : "");
+                    row.put("学校类型", s != null ? s.getSchoolType() : "");
+                    row.put("学校名称", s != null ? s.getSchoolName() : "");
+                    row.put("班级（院系）", s != null ? s.getClassName() : "");
+                    row.put("既往结核病史", s != null ? s.getTbHistory() : "");
+                    row.put("密切接触史", s != null ? s.getCloseContactHistory() : "");
+                    row.put("结核病可疑症状", s != null ? s.getSuspiciousSymptoms() : "");
+                    row.put("是否进行感染筛", s != null ? s.getHasInfectionScreen() : "");
+                    row.put("感染筛查日期", formatDate(s != null ? s.getScreenDate() : null));
+                    row.put("方法", s != null ? s.getScreenMethod() : "");
+                    row.put("结果（PPD：mmXmm；EC及IGRA：阳性/阴性）", s != null ? s.getScreenResult() : "");
+                    row.put("感染筛查结果", s != null ? s.getInfectionResult() : r.getInfectionResult());
+                    row.put("是否进行胸片检查", r.getHasChestXray());
+                    row.put("胸片检查日期", formatDate(r.getChestXrayDate()));
+                    row.put("胸片结果", r.getChestXrayResult());
+                    row.put("诊断结果-首次", r.getDiagnosisFirst());
+                    row.put("诊断结果-半年后", s != null ? s.getDiagnosisHalfYear() : "");
+                    row.put("诊断结果-一年后", s != null ? s.getDiagnosisOneYear() : "");
+                    row.put("是否进行预防性治疗", sv != null ? "是" : "");
+                    row.put("预防性治疗方案", sv != null ? sv.getTreatmentPlan() : "");
+                    row.put("预防性治疗开始时间", formatDate(sv != null ? sv.getTreatmentStartDate() : null));
+                    row.put("预防性治疗完成时间", formatDate(sv != null ? sv.getTreatmentEndDate() : null));
+                    row.put("预防性治疗结果", sv != null ? sv.getPreventiveResult() : "");
+                    row.put("预防性治疗期间随访管理人员", sv != null ? sv.getPreventiveManager() : "");
+                    rows.add(row);
+                }
+            } else {
+                Map<Long, ScreeningKeyPopulation> screeningMap = screeningIds.isEmpty() ? new HashMap<>() :
+                        keyPopulationService.listByIds(screeningIds).stream()
+                                .collect(Collectors.toMap(ScreeningKeyPopulation::getId, s -> s));
+                int seq = 1;
+                for (LatentInfection r : latentList) {
+                    ScreeningKeyPopulation s = r.getScreeningId() != null ? screeningMap.get(r.getScreeningId()) : null;
+                    SupervisionForm sv = supervisionMap.get(r.getId());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("序号", seq++);
+                    row.put("年份", s != null ? s.getYear() : "");
+                    row.put("市（州）", s != null ? s.getCity() : "");
+                    row.put("县（市、区）", s != null ? s.getDistrict() : "");
+                    row.put("姓名", r.getName());
+                    row.put("性别", r.getGender());
+                    row.put("出生日期", formatDate(s != null ? s.getBirthDate() : null));
+                    row.put("年龄", r.getAge());
+                    row.put("证件类型", s != null ? s.getIdType() : "");
+                    row.put("证件号", r.getIdNumber());
+                    row.put("民族", s != null ? s.getEthnicity() : "");
+                    row.put("联系电话", r.getPhone());
+                    row.put("户籍所在地（XX市XX县、区）", s != null ? s.getHouseholdAddress() : "");
+                    row.put("乡镇（社区）", s != null ? s.getTownshipCommunity() : "");
+                    row.put("现住址", s != null ? s.getCurrentAddress() : "");
+                    row.put("密接", s != null ? s.getCrowdCategoryClose() : "");
+                    row.put("学生", s != null ? s.getCrowdCategoryStudent() : "");
+                    row.put("教职工", s != null ? s.getCrowdCategoryTeacher() : "");
+                    row.put("老年人", s != null ? s.getCrowdCategoryElder() : "");
+                    row.put("糖尿病", s != null ? s.getCrowdCategoryDiabetes() : "");
+                    row.put("双感", s != null ? s.getCrowdCategoryDual() : "");
+                    row.put("既往结核史", s != null ? s.getCrowdCategoryTbHist() : "");
+                    row.put("非重点人群", s != null ? s.getCrowdCategoryNormal() : "");
+                    row.put("是否有可疑症状", s != null ? s.getHasSuspiciousSymptoms() : "");
+                    row.put("咳嗽咳痰", s != null ? s.getCough() : "");
+                    row.put("咯血或血痰", s != null ? s.getHemoptysis() : "");
+                    row.put("发热", s != null ? s.getFever() : "");
+                    row.put("胸痛", s != null ? s.getChestPain() : "");
+                    row.put("夜间盗汗", s != null ? s.getNightSweats() : "");
+                    row.put("食欲不振", s != null ? s.getAppetiteLoss() : "");
+                    row.put("乏力", s != null ? s.getFatigue() : "");
+                    row.put("体重减轻", s != null ? s.getWeightLoss() : "");
+                    row.put("是否进行感染筛", s != null ? s.getHasInfectionScreen() : "");
+                    row.put("感染筛查日期", formatDate(s != null ? s.getScreenDate() : null));
+                    row.put("感染筛查方法", s != null ? s.getScreenMethod() : "");
+                    row.put("结果（PPD：mmXmm；EC及IGRA：阳性/阴性）", s != null ? s.getScreenResult() : "");
+                    row.put("感染筛查结果", s != null ? s.getInfectionResult() : r.getInfectionResult());
+                    row.put("是否进行胸片检查", r.getHasChestXray());
+                    row.put("胸片检查日期", formatDate(r.getChestXrayDate()));
+                    row.put("胸片结果", r.getChestXrayResult());
+                    row.put("诊断结果-首次", r.getDiagnosisFirst());
+                    row.put("诊断结果-半年后", s != null ? s.getDiagnosisHalfYear() : "");
+                    row.put("诊断结果-一年后", s != null ? s.getDiagnosisOneYear() : "");
+                    row.put("是否进行预防性治疗", sv != null ? "是" : "");
+                    row.put("预防性治疗方案", sv != null ? sv.getTreatmentPlan() : "");
+                    row.put("预防性治疗开始时间", formatDate(sv != null ? sv.getTreatmentStartDate() : null));
+                    row.put("预防性治疗完成时间", formatDate(sv != null ? sv.getTreatmentEndDate() : null));
+                    row.put("预防性治疗结果", sv != null ? sv.getPreventiveResult() : "");
+                    row.put("预防性治疗期间随访管理人员", sv != null ? sv.getPreventiveManager() : "");
+                    rows.add(row);
+                }
+            }
+
+            log.info("[导出] 潜伏感染列表查询到 {} 条记录", rows.size());
+            writeExcel(response, popLabel + "_潜伏感染管理", rows);
+        } catch (Exception e) {
+            log.error("[导出] 潜伏感染列表导出失败 populationType={}", populationType, e);
+            throw e;
+        }
     }
 
-    /** 患者管理列表导出（学校/重点人群） */
+    /** 患者管理列表导出（学校/重点人群），字段与模板表头保持一致 */
     @Operation(summary = "患者管理列表导出")
     @GetMapping("/patient-list")
     public void exportPatientList(
@@ -245,73 +375,137 @@ public class ExportController {
             @RequestParam(required = false) String idNumber,
             HttpServletResponse response) throws IOException {
 
-        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
-                .eq(Patient::getPopulationType, populationType)
-                .like(StrUtil.isNotBlank(name), Patient::getName, name)
-                .like(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
-                .orderByDesc(Patient::getCreateTime);
+        log.info("[导出] 患者列表 populationType={} name={} idNumber={}", populationType, name, idNumber);
+        try {
+            LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
+                    .eq(Patient::getPopulationType, populationType)
+                    .like(StrUtil.isNotBlank(name), Patient::getName, name)
+                    .like(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
+                    .orderByDesc(Patient::getCreateTime);
 
-        List<Map<String, Object>> rows = new ArrayList<>();
-        patientService.list(wrapper).forEach(r -> {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("姓名", r.getName());
-            row.put("性别", r.getGender());
-            row.put("年龄", r.getAge());
-            row.put("证件号", r.getIdNumber());
-            row.put("联系电话", r.getPhone());
-            row.put("诊断结果", r.getDiagnosisResult());
-            row.put("来源", "confirmed".equals(r.getSource()) ? "诊断确诊" : "大疫情导入");
-            row.put("户籍地址", r.getHouseholdAddress());
-            row.put("现住址", r.getCurrentAddress());
-            row.put("是否归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "未归档");
-            rows.add(row);
-        });
+            List<Patient> patientList = patientService.list(wrapper);
 
-        String popLabel = "school".equals(populationType) ? "学校人群" : "重点人群";
-        writeExcel(response, popLabel + "_患者管理", rows);
+            // 批量查询筛查原表
+            List<Long> screeningIds = patientList.stream()
+                    .filter(p -> p.getScreeningId() != null)
+                    .map(Patient::getScreeningId)
+                    .distinct().collect(Collectors.toList());
+
+            List<Map<String, Object>> rows = new ArrayList<>();
+            String popLabel = "school".equals(populationType) ? "学校人群" : "重点人群";
+
+            if ("school".equals(populationType)) {
+                Map<Long, ScreeningSchool> screeningMap = screeningIds.isEmpty() ? new HashMap<>() :
+                        screeningSchoolService.listByIds(screeningIds).stream()
+                                .collect(Collectors.toMap(ScreeningSchool::getId, s -> s));
+                int seq = 1;
+                for (Patient p : patientList) {
+                    ScreeningSchool s = p.getScreeningId() != null ? screeningMap.get(p.getScreeningId()) : null;
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("序号", seq++);
+                    row.put("年份", s != null ? s.getYear() : "");
+                    row.put("市（州）", s != null ? s.getCity() : "");
+                    row.put("县（市、区）", s != null ? s.getDistrict() : "");
+                    row.put("姓名", p.getName());
+                    row.put("性别", p.getGender());
+                    row.put("出生日期", formatDate(p.getBirthDate() != null ? p.getBirthDate() : (s != null ? s.getBirthDate() : null)));
+                    row.put("年龄", p.getAge());
+                    row.put("证件类型", p.getIdType() != null ? p.getIdType() : (s != null ? s.getIdType() : ""));
+                    row.put("证件号", p.getIdNumber());
+                    row.put("民族", p.getEthnicity() != null ? p.getEthnicity() : (s != null ? s.getEthnicity() : ""));
+                    row.put("联系电话", p.getPhone());
+                    row.put("户籍所在地（XX市XX县、区）", p.getHouseholdAddress() != null ? p.getHouseholdAddress() : (s != null ? s.getHouseholdAddress() : ""));
+                    row.put("现地址", p.getCurrentAddress() != null ? p.getCurrentAddress() : (s != null ? s.getCurrentAddress() : ""));
+                    row.put("学校类型", s != null ? s.getSchoolType() : "");
+                    row.put("学校名称", s != null ? s.getSchoolName() : "");
+                    row.put("班级（院系）", s != null ? s.getClassName() : "");
+                    row.put("既往结核病史", s != null ? s.getTbHistory() : "");
+                    row.put("密切接触史", s != null ? s.getCloseContactHistory() : "");
+                    row.put("结核病可疑症状", s != null ? s.getSuspiciousSymptoms() : "");
+                    row.put("是否进行感染筛", s != null ? s.getHasInfectionScreen() : "");
+                    row.put("感染筛查日期", formatDate(s != null ? s.getScreenDate() : null));
+                    row.put("方法", s != null ? s.getScreenMethod() : "");
+                    row.put("结果（PPD：mmXmm；EC及IGRA：阳性/阴性）", s != null ? s.getScreenResult() : "");
+                    row.put("感染筛查结果", s != null ? s.getInfectionResult() : "");
+                    row.put("是否进行胸片检查", s != null ? s.getHasChestXray() : "");
+                    row.put("胸片检查日期", formatDate(s != null ? s.getChestXrayDate() : null));
+                    row.put("胸片结果", s != null ? s.getChestXrayResult() : "");
+                    row.put("诊断结果-首次", s != null ? s.getDiagnosisFirst() : "");
+                    row.put("诊断结果-半年后", s != null ? s.getDiagnosisHalfYear() : "");
+                    row.put("诊断结果-一年后", s != null ? s.getDiagnosisOneYear() : "");
+                    row.put("最终诊断结果", p.getDiagnosisResult());
+                    row.put("患者来源", "confirmed".equals(p.getSource()) ? "诊断确诊" : "大疫情导入");
+                    row.put("是否归档", Integer.valueOf(1).equals(p.getArchived()) ? "已归档" : "未归档");
+                    rows.add(row);
+                }
+            } else {
+                Map<Long, ScreeningKeyPopulation> screeningMap = screeningIds.isEmpty() ? new HashMap<>() :
+                        keyPopulationService.listByIds(screeningIds).stream()
+                                .collect(Collectors.toMap(ScreeningKeyPopulation::getId, s -> s));
+                int seq = 1;
+                for (Patient p : patientList) {
+                    ScreeningKeyPopulation s = p.getScreeningId() != null ? screeningMap.get(p.getScreeningId()) : null;
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("序号", seq++);
+                    row.put("年份", s != null ? s.getYear() : "");
+                    row.put("市（州）", s != null ? s.getCity() : "");
+                    row.put("县（市、区）", s != null ? s.getDistrict() : "");
+                    row.put("姓名", p.getName());
+                    row.put("性别", p.getGender());
+                    row.put("出生日期", formatDate(p.getBirthDate() != null ? p.getBirthDate() : (s != null ? s.getBirthDate() : null)));
+                    row.put("年龄", p.getAge());
+                    row.put("证件类型", p.getIdType() != null ? p.getIdType() : (s != null ? s.getIdType() : ""));
+                    row.put("证件号", p.getIdNumber());
+                    row.put("民族", p.getEthnicity() != null ? p.getEthnicity() : (s != null ? s.getEthnicity() : ""));
+                    row.put("联系电话", p.getPhone());
+                    row.put("户籍所在地（XX市XX县、区）", p.getHouseholdAddress() != null ? p.getHouseholdAddress() : (s != null ? s.getHouseholdAddress() : ""));
+                    row.put("乡镇（社区）", s != null ? s.getTownshipCommunity() : "");
+                    row.put("现住址", p.getCurrentAddress() != null ? p.getCurrentAddress() : (s != null ? s.getCurrentAddress() : ""));
+                    row.put("密接", s != null ? s.getCrowdCategoryClose() : "");
+                    row.put("学生", s != null ? s.getCrowdCategoryStudent() : "");
+                    row.put("教职工", s != null ? s.getCrowdCategoryTeacher() : "");
+                    row.put("老年人", s != null ? s.getCrowdCategoryElder() : "");
+                    row.put("糖尿病", s != null ? s.getCrowdCategoryDiabetes() : "");
+                    row.put("双感", s != null ? s.getCrowdCategoryDual() : "");
+                    row.put("既往结核史", s != null ? s.getCrowdCategoryTbHist() : "");
+                    row.put("非重点人群", s != null ? s.getCrowdCategoryNormal() : "");
+                    row.put("是否有可疑症状", s != null ? s.getHasSuspiciousSymptoms() : "");
+                    row.put("咳嗽咳痰", s != null ? s.getCough() : "");
+                    row.put("咯血或血痰", s != null ? s.getHemoptysis() : "");
+                    row.put("发热", s != null ? s.getFever() : "");
+                    row.put("胸痛", s != null ? s.getChestPain() : "");
+                    row.put("夜间盗汗", s != null ? s.getNightSweats() : "");
+                    row.put("食欲不振", s != null ? s.getAppetiteLoss() : "");
+                    row.put("乏力", s != null ? s.getFatigue() : "");
+                    row.put("体重减轻", s != null ? s.getWeightLoss() : "");
+                    row.put("是否进行感染筛", s != null ? s.getHasInfectionScreen() : "");
+                    row.put("感染筛查日期", formatDate(s != null ? s.getScreenDate() : null));
+                    row.put("感染筛查方法", s != null ? s.getScreenMethod() : "");
+                    row.put("结果（PPD：mmXmm；EC及IGRA：阳性/阴性）", s != null ? s.getScreenResult() : "");
+                    row.put("感染筛查结果", s != null ? s.getInfectionResult() : "");
+                    row.put("是否进行胸片检查", s != null ? s.getHasChestXray() : "");
+                    row.put("胸片检查日期", formatDate(s != null ? s.getChestXrayDate() : null));
+                    row.put("胸片结果", s != null ? s.getChestXrayResult() : "");
+                    row.put("诊断结果-首次", s != null ? s.getDiagnosisFirst() : "");
+                    row.put("诊断结果-半年后", s != null ? s.getDiagnosisHalfYear() : "");
+                    row.put("诊断结果-一年后", s != null ? s.getDiagnosisOneYear() : "");
+                    row.put("最终诊断结果", p.getDiagnosisResult());
+                    row.put("患者来源", "confirmed".equals(p.getSource()) ? "诊断确诊" : "大疫情导入");
+                    row.put("是否归档", Integer.valueOf(1).equals(p.getArchived()) ? "已归档" : "未归档");
+                    rows.add(row);
+                }
+            }
+
+            log.info("[导出] 患者列表查询到 {} 条记录", rows.size());
+            writeExcel(response, popLabel + "_患者管理", rows);
+        } catch (Exception e) {
+            log.error("[导出] 患者列表导出失败 populationType={}", populationType, e);
+            throw e;
+        }
     }
 
-    private String resolveTrackingStatus(Integer status) {
-        if (status == null) return "-";
-        return switch (status) {
-            case 0 -> "待追踪";
-            case 1 -> "到位";
-            case 2 -> "未到位";
-            case 3 -> "其他";
-            case 4 -> "强制结束";
-            default -> String.valueOf(status);
-        };
-    }
-
-    private String resolveReferralResult(String result) {
-        if (result == null) return "-";
-        return switch (result) {
-            case "excluded" -> "排除";
-            case "other" -> "其他";
-            case "confirmed" -> "确诊患者";
-            case "suspected" -> "疑似肺结核";
-            case "latent" -> "潜伏感染者";
-            default -> result;
-        };
-    }
-
-    private String resolveTreatmentPhase(Integer phase) {
-        if (phase == null) return "未开始";
-        return switch (phase) {
-            case 0 -> "未开始";
-            case 1 -> "预防治疗中";
-            case 2 -> "已结案";
-            default -> String.valueOf(phase);
-        };
-    }
-
-    private String resolveMedicationStatus(Integer status) {
-        if (status == null) return "-";
-        return switch (status) {
-            case 1 -> "按要求服药";
-            case 2 -> "不服药";
-            default -> String.valueOf(status);
-        };
+    private String formatDate(LocalDate date) {
+        return date != null ? date.format(DATE_FMT) : "";
     }
 
     /** 将重点人群多个分类字段拼接为可读字符串 */

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 /** 肺结核患者第一次入户随访记录表打印组件 */
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
+import { printElement } from "@@/utils/print"
 
 const props = defineProps<{
   visible: boolean
@@ -48,7 +49,7 @@ const educationRows = computed<[string, string][][]>(() => {
 })
 
 function handlePrint() {
-  window.print()
+  printElement("print-visit-content", "肺结核患者第一次入户随访记录表")
 }
 </script>
 
@@ -229,45 +230,3 @@ function handlePrint() {
 }
 </style>
 
-<style lang="scss">
-@media print {
-  /* Dialog 通过 teleport 挂载到 body 下的 .el-overlay，
-     需保留 .el-overlay，隐藏其他所有 body 直接子元素 */
-  body > *:not(.el-overlay) {
-    display: none !important;
-  }
-
-  /* 将弹窗容器由固定定位转为普通流，去除遮罩背景 */
-  .el-overlay {
-    position: static !important;
-    background: transparent !important;
-    overflow: visible !important;
-    height: auto !important;
-  }
-
-  .el-overlay-dialog {
-    position: static !important;
-    overflow: visible !important;
-    display: block !important;
-    height: auto !important;
-  }
-
-  .el-dialog {
-    box-shadow: none !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-height: none !important;
-  }
-
-  .el-dialog__header,
-  .el-dialog__footer {
-    display: none !important;
-  }
-
-  .el-dialog__body {
-    padding: 0 !important;
-    overflow: visible !important;
-    max-height: none !important;
-  }
-}
-</style>
