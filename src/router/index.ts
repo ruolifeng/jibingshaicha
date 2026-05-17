@@ -217,6 +217,19 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "系统消息", elIcon: "Bell", permission: "message" }
       }
     ]
+  },
+  {
+    path: "/data-cleaning",
+    component: Layouts,
+    meta: { permission: "dataCleaning" },
+    children: [
+      {
+        path: "",
+        component: () => import("@/pages/data-cleaning/index.vue"),
+        name: "DataCleaning",
+        meta: { title: "数据清洗", elIcon: "MagicStick", permission: "dataCleaning" }
+      }
+    ]
   }
 ]
 

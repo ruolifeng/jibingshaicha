@@ -599,6 +599,7 @@ INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VAL
 (4,  'statistics',      '统计分析',   1, 0, 4),
 (5,  'message',         '系统消息',   1, 0, 5),
 (6,  'system',          '系统管理',   1, 0, 6),
+(7,  'dataCleaning',    '数据清洗',   1, 0, 7),
 -- 学校人群子菜单
 (10, 'school:screening',        '筛查管理',     1, 1, 1),
 (11, 'school:latent',           '潜伏感染',     1, 1, 2),
@@ -1104,6 +1105,15 @@ INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3) r
 CROSS JOIN `permission` p
 WHERE p.code IN ('system', 'system:permissions', 'permission:assign');
+
+-- ==================== V12：新增数据清洗菜单权限 ====================
+-- 菜单权限已在初始化权限数据中声明，此处补充角色授权。
+-- 默认授予 1-4 级（监管与业务执行角色），5级按需在权限管理中分配
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
+CROSS JOIN `permission` p
+WHERE p.code = 'dataCleaning';
 
 -- ==================== V11：密接人群-待诊断权限重命名为监测随访 ====================
 -- closeContact:suspected（待诊断）已从密接人群菜单移除，
