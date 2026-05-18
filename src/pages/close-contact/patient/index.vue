@@ -1,5 +1,7 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
+import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
+import ImageUploader from "@@/components/ImageUploader.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintNotice from "@@/components/PrintNotice.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
@@ -24,8 +26,7 @@ import {
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
-  VISIT_METHOD_OPTIONS,
-  FOLLOW_UP_METHOD_OPTIONS
+  VISIT_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { idCardRule } from "@@/utils/validate"
@@ -40,7 +41,6 @@ import {
   getPatientListApi,
   importEpidemicApi,
   saveFirstVisitApi,
-  saveFollowUpApi,
   saveMedicationApi
 } from "./apis"
 
@@ -328,7 +328,10 @@ const firstVisitForm = reactive({
   medicationPickTime: "",
   educationItems: {} as Record<string, string>,
   nextVisitDate: "",
-  doctorSignature: ""
+  doctorSignature: "",
+  // V15 新增
+  remarks: "",
+  attachmentUrls: ""
 })
 
 function openFirstVisitDialog(row: any) {
@@ -353,7 +356,9 @@ function openFirstVisitDialog(row: any) {
     medicationPickTime: "",
     educationItems: {},
     nextVisitDate: "",
-    doctorSignature: ""
+    doctorSignature: "",
+    remarks: "",
+    attachmentUrls: ""
   })
   firstVisitDialogVisible.value = true
 }
@@ -390,28 +395,13 @@ async function viewFirstVisit(row: any) {
   } catch { /* handled */ }
 }
 
-// ==================== 后续随访 ====================
+// ==================== 后续随访（V15：通用弹窗组件） ====================
 const followUpDialogVisible = ref(false)
 const followUpRow = ref<any>(null)
-const followUpForm = reactive({ visitDate: "", visitMethod: "", visitSituation: "", remarks: "" })
 
 function openFollowUpDialog(row: any) {
   followUpRow.value = row
-  Object.assign(followUpForm, { visitDate: "", visitMethod: "", visitSituation: "", remarks: "" })
   followUpDialogVisible.value = true
-}
-
-async function handleSaveFollowUp() {
-  try {
-    await saveFollowUpApi({
-      patientId: followUpRow.value.id,
-      populationType: "closeContact",
-      ...followUpForm
-    })
-    ElMessage.success("后续随访保存成功")
-    followUpDialogVisible.value = false
-    fetchData()
-  } catch { /* handled */ }
 }
 
 // ==================== 后续随访列表查看 ====================
@@ -1227,6 +1217,16 @@ watch(
             </el-form-item>
           </el-col>
         </el-row>
+
+        <el-divider content-position="left">
+          备注与附件
+        </el-divider>
+        <el-form-item label="备注">
+          <el-input v-model="firstVisitForm.remarks" type="textarea" :rows="2" placeholder="请填写" />
+        </el-form-item>
+        <el-form-item label="附件（2~6张图片）">
+          <ImageUploader v-model="firstVisitForm.attachmentUrls" :min="2" :max="6" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="firstVisitDialogVisible = false">
@@ -1295,35 +1295,14 @@ watch(
       </el-descriptions>
     </el-dialog>
 
-    <!-- 后续随访弹窗 -->
-    <el-dialog v-model="followUpDialogVisible" title="填写后续随访记录" width="560px">
-      <el-form :model="followUpForm" label-width="100px">
-        <el-form-item label="随访时间">
-          <el-date-picker v-model="followUpForm.visitDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="随访方式">
-          <el-radio-group v-model="followUpForm.visitMethod">
-            <el-radio v-for="item in FOLLOW_UP_METHOD_OPTIONS" :key="item" :value="item">
-              {{ item }}
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="随访情况">
-          <el-input v-model="followUpForm.visitSituation" type="textarea" :rows="4" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="followUpForm.remarks" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="followUpDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" @click="handleSaveFollowUp">
-          保存
-        </el-button>
-      </template>
-    </el-dialog>
+    <!-- 后续随访弹窗（V15：通用组件，按《后续随访服务记录表》模板） -->
+    <FollowUpVisitDialog
+      v-model:visible="followUpDialogVisible"
+      :patient-id="followUpRow?.id ?? null"
+      :patient-name="followUpRow?.name"
+      population-type="closeContact"
+      @saved="fetchData"
+    />
 
     <!-- 后续随访记录列表 -->
     <el-dialog v-model="followUpListVisible" title="患者随访汇总表" width="800px">

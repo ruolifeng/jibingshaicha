@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
@@ -57,9 +58,38 @@ public class LatentInfectionController {
         return ResultRes.success(null);
     }
 
-    // ==================== V4 新增：录入胸片+诊断 ====================
+    // ==================== V13 拆分：胸片 / 诊断 两个独立接口 ====================
 
-    @Operation(summary = "手动录入胸片检查与首次诊断结果（V4 追踪到位后步骤）")
+    @Operation(summary = "录入胸片检查结果（V13 拆分；仅写胸片字段，不写诊断）")
+    @PostMapping("/xray-only")
+    @OperationLog(type = "update", module = "latent", action = "录入胸片结果")
+    public ResultResponse<Void> saveXrayOnly(@RequestBody Map<String, Object> body) {
+        if (body.get("id") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id");
+        }
+        Long id = Long.valueOf(body.get("id").toString());
+        latentInfectionService.saveXrayOnly(id, body);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "录入首次诊断结果（V13 拆分；仅写诊断字段，并按映射触发转诊）")
+    @PostMapping("/diagnosis")
+    @OperationLog(type = "update", module = "latent", action = "录入诊断结果")
+    public ResultResponse<Void> saveDiagnosis(@RequestBody Map<String, Object> body) {
+        if (body.get("id") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id");
+        }
+        Long id = Long.valueOf(body.get("id").toString());
+        latentInfectionService.saveDiagnosisOnly(id, body);
+        return ResultRes.success(null);
+    }
+
+    /**
+     * @deprecated V13 起拆分为 {@code /xray-only} + {@code /diagnosis}。
+     *             本接口保留用于旧前端和批量导入工具的兼容。
+     */
+    @Deprecated
+    @Operation(summary = "[兼容] 手动录入胸片检查与首次诊断结果（一次性同时写入）")
     @PostMapping("/xray")
     public ResultResponse<Void> saveXray(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null) {
@@ -72,6 +102,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "批量导入胸片+诊断 Excel（按证件号匹配更新）")
     @PostMapping("/xray/import")
+    @OperationLog(type = "import", module = "latent", action = "批量导入胸片+诊断")
     public ResultResponse<Integer> importXray(
             @RequestParam("file") MultipartFile file,
             @RequestParam String populationType) {

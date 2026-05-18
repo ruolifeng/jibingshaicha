@@ -1,0 +1,89 @@
+package cn.luyou.model;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+/**
+ * 推介追踪记录表（V17）
+ * biz_mode=recommend 为推介流程，biz_mode=track 为直接追踪流程
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@TableName("referral_tracking")
+public class ReferralTracking extends BaseEntity {
+
+    /** 业务模式：recommend=推介 / track=追踪 */
+    private String bizMode;
+
+    // ===== 基本信息（手动录入）=====
+    private String name;
+    private String gender;
+    private LocalDate birthDate;
+    private Integer age;
+    private String idType;
+    private String idNumber;
+    private String ethnicity;
+    private String phone;
+    private String householdAddress;
+    private String currentAddress;
+    private String crowdCategory;
+
+    // ===== 推介专用字段（bizMode=recommend 时使用）=====
+    /** 接收推介的三/四级用户ID */
+    private Long receiverUserId;
+    /** 接收推介的用户所在部门ID（自动派生） */
+    private Long receiverDeptId;
+    /** 推介状态：0未发送 1已发送 2已接受 3已拒绝 */
+    private Integer recommendStatus;
+    private String rejectedReason;
+    private LocalDateTime recommendSentTime;
+    private LocalDateTime recommendConfirmTime;
+
+    // ===== 追踪 =====
+    /** 追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束 */
+    private Integer trackingStatus;
+    private Integer notInPlaceCount;
+    private String trackingRemark;
+
+    // ===== 到位后补录 =====
+    private String hasInfectionScreen;
+    private LocalDate screenDate;
+    private String screenMethod;
+    private String screenResult;
+    private String infectionResult;
+    private String hasChestXray;
+    private LocalDate chestXrayDate;
+    private String chestXrayResult;
+    /** 症状筛查 JSON（键值对形式存储多个症状及结果） */
+    private String symptomsJson;
+
+    // ===== 诊断 =====
+    /** 诊断结果：排除 / 确诊患者 / 潜伏感染者 / 其他 */
+    private String diagnosisResult;
+    private LocalDateTime diagnosisTime;
+
+    // ===== 归集去向 =====
+    private Integer archived;
+    /** 确诊患者时对应的 patient.id */
+    private Long targetPatientId;
+    /** 潜伏感染者时对应的 latent_infection.id */
+    private Long targetLatentId;
+
+    private Long departmentId;
+    private Long creatorId;
+
+    // ===== 非持久化字段（查询时填充）=====
+    @TableField(exist = false)
+    private String receiverUserName;
+}

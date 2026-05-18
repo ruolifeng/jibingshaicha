@@ -1125,3 +1125,290 @@ WHERE `code` = 'closeContact:suspected';
 -- 超级管理员补充获得更新后权限（幂等）
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT 1, `id` FROM `permission` WHERE `code` = 'closeContact:followUp';
+
+-- ==================== V13：操作日志（P1 重构阶段） ====================
+
+CREATE TABLE IF NOT EXISTS `operation_log` (
+    `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`        BIGINT       DEFAULT NULL COMMENT '操作人ID',
+    `user_name`      VARCHAR(64)  DEFAULT NULL COMMENT '操作人用户名',
+    `real_name`      VARCHAR(64)  DEFAULT NULL COMMENT '操作人真实姓名',
+    `department_id`  BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `role`           TINYINT      DEFAULT NULL COMMENT '角色：1-6',
+    `op_type`        VARCHAR(16)  NOT NULL  COMMENT '操作类型：login=登录 import=导入 delete=删除 update=修改 export=导出 create=新增(扩展) logout=登出(扩展)',
+    `op_module`      VARCHAR(64)  DEFAULT NULL COMMENT '业务模块：screening/latent/patient/referral/system/...',
+    `op_action`      VARCHAR(256) DEFAULT NULL COMMENT '动作描述',
+    `biz_id`         BIGINT       DEFAULT NULL COMMENT '关联业务ID',
+    `biz_type`       VARCHAR(64)  DEFAULT NULL COMMENT '关联业务类型',
+    `request_method` VARCHAR(8)   DEFAULT NULL COMMENT 'HTTP方法',
+    `request_url`    VARCHAR(256) DEFAULT NULL COMMENT '请求URL',
+    `request_params` TEXT         DEFAULT NULL COMMENT '请求参数（JSON，敏感字段已脱敏）',
+    `ip`             VARCHAR(64)  DEFAULT NULL COMMENT '客户端IP',
+    `user_agent`     VARCHAR(256) DEFAULT NULL COMMENT '客户端 UA',
+    `result_status`  TINYINT      NOT NULL DEFAULT 1 COMMENT '1成功 0失败',
+    `error_message`  TEXT         DEFAULT NULL COMMENT '失败错误信息',
+    `cost_ms`        BIGINT       DEFAULT NULL COMMENT '耗时（毫秒）',
+    `create_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`        TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_user` (`user_id`),
+    KEY `idx_op_type` (`op_type`),
+    KEY `idx_create_time` (`create_time`),
+    KEY `idx_module` (`op_module`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统操作日志表（V13）';
+
+-- 操作日志菜单与按钮权限码（挂在系统管理=6 下）
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(63,  'system:operationLog',   '操作日志', 1, 6,  4),
+(150, 'operationLog:export',   '导出操作日志', 2, 63, 1),
+(151, 'operationLog:filter',   '筛选操作日志', 2, 63, 2);
+
+-- 超级管理员获得全部操作日志权限（幂等）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` IN ('system:operationLog', 'operationLog:export', 'operationLog:filter');
+
+-- 一级/二级用户默认可查看操作日志（不可导出，导出需权限管理单独分配）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3) r
+CROSS JOIN `permission` p
+WHERE p.code IN ('system:operationLog', 'operationLog:filter');
+
+-- ==================== V14：胸片与诊断按钮拆分（P2 重构阶段） ====================
+-- 原 latent:xray 同时覆盖胸片+诊断两件事；V14 拆为两个独立操作：
+--   latent:xray       —— 仅录入胸片结果
+--   latent:diagnosis  —— 仅录入诊断结果（提交后自动驱动转诊）
+-- 重点人群同步增加 keyPopulation:latent:diagnosis；密接的胸片/诊断流程不同，本阶段不动。
+
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(152, 'latent:diagnosis',                '录入诊断结果', 2, 11, 10),
+(153, 'keyPopulation:latent:diagnosis',  '录入诊断结果', 2, 21, 4);
+
+-- 重命名旧权限（仅改名称，code 保持以保兼容）：latent:xray 显式表达"仅胸片"
+UPDATE `permission` SET `name` = '录入胸片结果' WHERE `code` = 'latent:xray';
+UPDATE `permission` SET `name` = '录入胸片结果' WHERE `code` = 'keyPopulation:latent:xray';
+
+-- 超级管理员获得新权限（幂等）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` IN ('latent:diagnosis', 'keyPopulation:latent:diagnosis');
+
+-- 权限迁移：现有持有 *:latent:xray 权限的角色，自动获得对应 *:latent:diagnosis 权限
+-- （按方案 v1.2 §10.3 ✅2 决策：旧权限保留，新权限自动赋予）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT rp.role, p_new.id
+FROM `role_permission` rp
+JOIN `permission` p_old ON rp.permission_id = p_old.id AND p_old.code = 'latent:xray'
+JOIN `permission` p_new ON p_new.code = 'latent:diagnosis';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT rp.role, p_new.id
+FROM `role_permission` rp
+JOIN `permission` p_old ON rp.permission_id = p_old.id AND p_old.code = 'keyPopulation:latent:xray'
+JOIN `permission` p_new ON p_new.code = 'keyPopulation:latent:diagnosis';
+
+-- 同步迁移用户级别权限（user_permission 表）
+INSERT IGNORE INTO `user_permission` (`user_id`, `permission_id`)
+SELECT up.user_id, p_new.id
+FROM `user_permission` up
+JOIN `permission` p_old ON up.permission_id = p_old.id AND p_old.code = 'latent:xray'
+JOIN `permission` p_new ON p_new.code = 'latent:diagnosis';
+
+INSERT IGNORE INTO `user_permission` (`user_id`, `permission_id`)
+SELECT up.user_id, p_new.id
+FROM `user_permission` up
+JOIN `permission` p_old ON up.permission_id = p_old.id AND p_old.code = 'keyPopulation:latent:xray'
+JOIN `permission` p_new ON p_new.code = 'keyPopulation:latent:diagnosis';
+
+-- ==================== V15：首次/后续随访 备注+附件 & 后续随访按新模板重建 (P3 重构阶段) ====================
+-- 用户要求："患者管理模块首次入户随访管理，后续随访管理需要增加备注，并可以上传2~6张照片作为附件。"
+--              "后续随访表更改为现在的后续随访表，可多次填写。"（新模板：后续随访服务记录表.xlsx）
+-- 设计原则：保留原字段不删除，向上兼容历史数据；新增字段按 v1.2 §3.3.5 落地。
+
+-- ---------- first_visit：补 remarks + attachment_urls ----------
+ALTER TABLE `first_visit`
+    ADD COLUMN `remarks`         TEXT DEFAULT NULL COMMENT 'V15 备注'           AFTER `doctor_signature`,
+    ADD COLUMN `attachment_urls` TEXT DEFAULT NULL COMMENT 'V15 附件图片URL JSON数组(2~6张)' AFTER `remarks`;
+
+-- ---------- follow_up_visit：按新 Excel 模板《后续随访服务记录表》扩展全部字段 ----------
+-- 旧字段 visit_situation / remarks / attachment_url 保留兼容，新前端不再使用。
+-- 字段命名严格对齐 v1.2 §3.3.5 表格。
+ALTER TABLE `follow_up_visit`
+    ADD COLUMN `treatment_month`           INT          DEFAULT NULL COMMENT 'V15 治疗月序（第X月）'        AFTER `visit_date`,
+    ADD COLUMN `supervisor`                VARCHAR(16)  DEFAULT NULL COMMENT 'V15 督导人员 1医生/2家属/3自服药/4其他' AFTER `treatment_month`,
+    ADD COLUMN `supervisor_other`          VARCHAR(64)  DEFAULT NULL COMMENT 'V15 督导人员-其他'           AFTER `supervisor`,
+    ADD COLUMN `symptoms`                  VARCHAR(64)  DEFAULT NULL COMMENT 'V15 症状及体征（多选0-11,逗号分隔）' AFTER `visit_method`,
+    ADD COLUMN `symptoms_other`            VARCHAR(256) DEFAULT NULL COMMENT 'V15 症状-其它'               AFTER `symptoms`,
+    ADD COLUMN `smoking_amount`            VARCHAR(16)  DEFAULT NULL COMMENT 'V15 吸烟（支/天）'           AFTER `symptoms_other`,
+    ADD COLUMN `drinking_amount`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 饮酒（两/天）'           AFTER `smoking_amount`,
+    ADD COLUMN `chemotherapy_plan`         VARCHAR(256) DEFAULT NULL COMMENT 'V15 化疗方案'               AFTER `drinking_amount`,
+    ADD COLUMN `medication_usage`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 用法 1每日/2间歇'        AFTER `chemotherapy_plan`,
+    ADD COLUMN `drug_form`                 VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药品剂型 1固定剂量/2散装/3板式/4注射' AFTER `medication_usage`,
+    ADD COLUMN `missed_doses`              INT          DEFAULT NULL COMMENT 'V15 漏服药次数'             AFTER `drug_form`,
+    ADD COLUMN `adverse_reaction`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药物不良反应 1无/2有'    AFTER `missed_doses`,
+    ADD COLUMN `adverse_reaction_detail`   VARCHAR(256) DEFAULT NULL COMMENT 'V15 不良反应详情'           AFTER `adverse_reaction`,
+    ADD COLUMN `complication`              VARCHAR(16)  DEFAULT NULL COMMENT 'V15 并发症或合并症 1无/2有' AFTER `adverse_reaction_detail`,
+    ADD COLUMN `complication_detail`       VARCHAR(256) DEFAULT NULL COMMENT 'V15 并发症详情'             AFTER `complication`,
+    ADD COLUMN `referral_department`       VARCHAR(64)  DEFAULT NULL COMMENT 'V15 转诊-科别'              AFTER `complication_detail`,
+    ADD COLUMN `referral_reason`           VARCHAR(256) DEFAULT NULL COMMENT 'V15 转诊-原因'              AFTER `referral_department`,
+    ADD COLUMN `referral_two_week_result`  VARCHAR(256) DEFAULT NULL COMMENT 'V15 2周内随访结果'          AFTER `referral_reason`,
+    ADD COLUMN `handling_opinion`          TEXT         DEFAULT NULL COMMENT 'V15 处理意见'               AFTER `referral_two_week_result`,
+    ADD COLUMN `next_visit_date`           DATE         DEFAULT NULL COMMENT 'V15 下次随访时间'           AFTER `handling_opinion`,
+    ADD COLUMN `doctor_signature`          VARCHAR(64)  DEFAULT NULL COMMENT 'V15 随访医生签名'           AFTER `next_visit_date`,
+    ADD COLUMN `stop_treatment_date`       DATE         DEFAULT NULL COMMENT 'V15 停止治疗时间'           AFTER `doctor_signature`,
+    ADD COLUMN `stop_treatment_reason`     VARCHAR(32)  DEFAULT NULL COMMENT 'V15 停止治疗原因 完成疗程/死亡/丢失/转入耐多药' AFTER `stop_treatment_date`,
+    ADD COLUMN `should_visit_count`        INT          DEFAULT NULL COMMENT 'V15 全程管理-应访视次数'     AFTER `stop_treatment_reason`,
+    ADD COLUMN `actual_visit_count`        INT          DEFAULT NULL COMMENT 'V15 全程管理-实际访视次数'   AFTER `should_visit_count`,
+    ADD COLUMN `should_dose_count`         INT          DEFAULT NULL COMMENT 'V15 全程管理-应服药次数'     AFTER `actual_visit_count`,
+    ADD COLUMN `actual_dose_count`         INT          DEFAULT NULL COMMENT 'V15 全程管理-实际服药次数'   AFTER `should_dose_count`,
+    ADD COLUMN `medication_rate`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 服药率（%）'             AFTER `actual_dose_count`,
+    ADD COLUMN `evaluator_signature`       VARCHAR(64)  DEFAULT NULL COMMENT 'V15 评估医生签名'           AFTER `medication_rate`,
+    ADD COLUMN `attachment_urls`           TEXT         DEFAULT NULL COMMENT 'V15 附件图片URL JSON数组(2~6张)' AFTER `attachment_url`;
+
+-- ==================== V16：P4 重构阶段 — 常规筛查、聚合菜单、患者删除、新权限 ====================
+
+-- ---------- 1. screening_key_population 增加 source_type 列（区分重点人群 vs 常规筛查） ----------
+-- DEFAULT 'keyPopulation' 保证存量数据不受影响。
+ALTER TABLE `screening_key_population`
+    ADD COLUMN `source_type` VARCHAR(32) NOT NULL DEFAULT 'keyPopulation'
+        COMMENT 'V16 数据来源：keyPopulation=重点人群 / regular=常规筛查'
+        AFTER `upload_batch`;
+
+-- ---------- 2. 新增权限码（V16 新增菜单对应的权限） ----------
+INSERT IGNORE INTO `permission` (`permission_code`, `description`)
+VALUES
+    -- 筛查管理（一级）
+    ('screening',                           '筛查管理菜单'),
+    -- 常规筛查
+    ('regular:screening',                   '常规筛查-筛查导入'),
+    ('regular:screening:create',            '常规筛查-新增记录'),
+    ('regular:screening:edit',              '常规筛查-编辑记录'),
+    ('regular:screening:delete',            '常规筛查-删除记录'),
+    ('regular:screening:upload',            '常规筛查-上传Excel'),
+    ('regular:screening:export',            '常规筛查-导出'),
+    ('regular:suspected',                   '常规筛查-待诊断'),
+    ('regular:suspected:track',             '常规筛查-追踪操作'),
+    ('regular:suspected:xray',             '常规筛查-录入胸片'),
+    ('regular:suspected:diagnosis',        '常规筛查-录入诊断'),
+    -- 大疫情导入筛查
+    ('epidemic:screening',                  '大疫情导入筛查菜单'),
+    -- 聚合潜伏感染者管理
+    ('latentManagement',                    '潜伏感染者管理菜单'),
+    ('latentManagement:notice',             '潜伏感染者-通知单管理'),
+    ('latentManagement:track',              '潜伏感染者-追踪'),
+    ('latentManagement:xray',              '潜伏感染者-录入胸片'),
+    ('latentManagement:diagnosis',         '潜伏感染者-录入诊断'),
+    ('latentManagement:referral',           '潜伏感染者-转诊'),
+    ('latentManagement:close',             '潜伏感染者-归档'),
+    ('latentManagement:supervision',        '潜伏感染者-督导表管理'),
+    -- 聚合患者管理
+    ('patientManagement',                   '患者管理菜单'),
+    ('patientManagement:notice',            '患者管理-通知单管理'),
+    ('patientManagement:firstVisit',        '患者管理-首次随访'),
+    ('patientManagement:followUp',          '患者管理-后续随访'),
+    ('patientManagement:medication',        '患者管理-服药管理'),
+    ('patientManagement:specialDisease',    '患者管理-专病网导入'),
+    ('patientManagement:history',           '患者管理-历史患者'),
+    ('patientManagement:referral',          '患者管理-转诊'),
+    ('patientManagement:delete',            '患者管理-删除患者');
+
+-- ---------- 3. 将新权限赋给超级管理员角色（若有）和一级/二级管理员 ----------
+-- 仅在 role_permission 表不存在时插入，避免重复。
+INSERT IGNORE INTO `role_permission` (`role_id`, `permission_id`)
+SELECT r.id, p.id
+FROM `role` r
+         CROSS JOIN `permission` p
+WHERE r.role_level IN (1, 2)   -- 一级、二级管理员获得全部新权限
+  AND p.permission_code IN (
+    'screening', 'regular:screening', 'regular:screening:create', 'regular:screening:edit',
+    'regular:screening:delete', 'regular:screening:upload', 'regular:screening:export',
+    'regular:suspected', 'regular:suspected:track', 'regular:suspected:xray', 'regular:suspected:diagnosis',
+    'epidemic:screening',
+    'latentManagement', 'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
+    'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
+    'patientManagement', 'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
+    'patientManagement:medication', 'patientManagement:specialDisease', 'patientManagement:history',
+    'patientManagement:referral', 'patientManagement:delete'
+  );
+
+-- ==================== V17：P5 推介追踪模块 ====================
+
+-- ---------- 1. 推介追踪记录表 ----------
+CREATE TABLE IF NOT EXISTS `referral_tracking` (
+    `id`                     BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    `biz_mode`               VARCHAR(16)   NOT NULL                  COMMENT 'recommend=推介 / track=追踪',
+    -- 基本信息（手动录入）
+    `name`                   VARCHAR(64),
+    `gender`                 VARCHAR(10),
+    `birth_date`             DATE,
+    `age`                    INT,
+    `id_type`                VARCHAR(32),
+    `id_number`              VARCHAR(64),
+    `ethnicity`              VARCHAR(32),
+    `phone`                  VARCHAR(32),
+    `household_address`      VARCHAR(256),
+    `current_address`        VARCHAR(256),
+    `crowd_category`         VARCHAR(128)                            COMMENT '人群分类',
+    -- 推介专用字段（biz_mode=recommend 时使用）
+    `receiver_user_id`       BIGINT                                  COMMENT '接收推介的三/四级用户ID',
+    `receiver_dept_id`       BIGINT                                  COMMENT '接收推介的用户所在部门ID（自动派生）',
+    `recommend_status`       TINYINT                                 COMMENT '0未发送 1已发送 2已接受 3已拒绝',
+    `rejected_reason`        VARCHAR(256),
+    `recommend_sent_time`    DATETIME,
+    `recommend_confirm_time` DATETIME,
+    -- 追踪状态
+    `tracking_status`        TINYINT       NOT NULL DEFAULT 0        COMMENT '0待追踪 1到位 2未到位 3其他 4强制结束',
+    `not_in_place_count`     INT           NOT NULL DEFAULT 0,
+    `tracking_remark`        TEXT,
+    -- 到位后补录
+    `has_infection_screen`   VARCHAR(10),
+    `screen_date`            DATE,
+    `screen_method`          VARCHAR(64),
+    `screen_result`          VARCHAR(128),
+    `infection_result`       VARCHAR(128),
+    `has_chest_xray`         VARCHAR(10),
+    `chest_xray_date`        DATE,
+    `chest_xray_result`      VARCHAR(128),
+    `symptoms_json`          TEXT,
+    -- 诊断
+    `diagnosis_result`       VARCHAR(64)                             COMMENT '排除/确诊患者/潜伏感染者/其他',
+    `diagnosis_time`         DATETIME,
+    -- 归集去向
+    `archived`               TINYINT       NOT NULL DEFAULT 0,
+    `target_patient_id`      BIGINT,
+    `target_latent_id`       BIGINT,
+    -- 操作人/部门
+    `department_id`          BIGINT,
+    `creator_id`             BIGINT,
+    `create_time`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                TINYINT       NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推介追踪记录表（V17）';
+
+-- ---------- 2. 推介追踪权限码 ----------
+INSERT IGNORE INTO `permission` (`permission_code`, `description`)
+VALUES
+    ('referralManagement',              '推介追踪管理菜单'),
+    ('referralManagement:recommend',    '推介追踪-推介子菜单'),
+    ('referralManagement:track',        '推介追踪-追踪子菜单'),
+    ('referralManagement:create',       '推介追踪-新增记录'),
+    ('referralManagement:send',         '推介追踪-发送推介通知'),
+    ('referralManagement:confirm',      '推介追踪-确认/拒绝推介'),
+    ('referralManagement:trackOperate', '推介追踪-操作追踪状态'),
+    ('referralManagement:xray',         '推介追踪-录入胸片'),
+    ('referralManagement:diagnosis',    '推介追踪-录入诊断'),
+    ('referralManagement:delete',       '推介追踪-删除记录');
+
+-- ---------- 3. 将推介追踪权限赋给一级/二级管理员 ----------
+INSERT IGNORE INTO `role_permission` (`role_id`, `permission_id`)
+SELECT r.id, p.id
+FROM `role` r
+         CROSS JOIN `permission` p
+WHERE r.role_level IN (1, 2)
+  AND p.permission_code IN (
+    'referralManagement', 'referralManagement:recommend', 'referralManagement:track',
+    'referralManagement:create', 'referralManagement:send', 'referralManagement:confirm',
+    'referralManagement:trackOperate', 'referralManagement:xray', 'referralManagement:diagnosis',
+    'referralManagement:delete'
+  );
+

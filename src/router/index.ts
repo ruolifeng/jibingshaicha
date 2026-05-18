@@ -14,37 +14,24 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: "/redirect",
     component: Layouts,
-    meta: {
-      hidden: true
-    },
-    children: [
-      {
-        path: ":path(.*)",
-        component: () => import("@/pages/redirect/index.vue")
-      }
-    ]
+    meta: { hidden: true },
+    children: [{ path: ":path(.*)", component: () => import("@/pages/redirect/index.vue") }]
   },
   {
     path: "/403",
     component: () => import("@/pages/error/403.vue"),
-    meta: {
-      hidden: true
-    }
+    meta: { hidden: true }
   },
   {
     path: "/404",
     component: () => import("@/pages/error/404.vue"),
-    meta: {
-      hidden: true
-    },
+    meta: { hidden: true },
     alias: "/:pathMatch(.*)*"
   },
   {
     path: "/login",
     component: () => import("@/pages/login/index.vue"),
-    meta: {
-      hidden: true
-    }
+    meta: { hidden: true }
   },
   {
     path: "/",
@@ -55,110 +42,168 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "dashboard",
         component: () => import("@/pages/dashboard/index.vue"),
         name: "Dashboard",
-        meta: {
-          title: "首页",
-          svgIcon: "dashboard",
-          affix: true
-        }
+        meta: { title: "首页", svgIcon: "dashboard", affix: true }
       }
     ]
   },
+
+  // ==================== V2 新增：筛查管理（聚合 4 个子模块） ====================
   {
-    path: "/school",
+    path: "/screening",
     component: Layouts,
-    redirect: "/school/screening",
-    name: "School",
-    meta: {
-      title: "学校人群",
-      elIcon: "School",
-      permission: "school"
-    },
+    redirect: "/screening/school/screening",
+    name: "Screening",
+    meta: { title: "筛查管理", elIcon: "Search", permission: "screening" },
     children: [
+      // ── 学生筛查 ──
       {
-        path: "screening",
+        path: "school/screening",
         component: () => import("@/pages/school/screening/index.vue"),
-        name: "SchoolScreening",
-        meta: { title: "筛查管理", tagTitle: "学校-筛查管理", keepAlive: true, permission: "school:screening" }
+        name: "ScreeningSchool",
+        meta: { title: "筛查导入", tagTitle: "学生-筛查导入", keepAlive: true, permission: "school:screening" }
       },
       {
-        path: "suspected",
+        path: "school/suspected",
         component: () => import("@/pages/school/suspected/index.vue"),
-        name: "SchoolSuspected",
-        meta: { title: "待诊断", tagTitle: "学校-待诊断", keepAlive: true, permission: "school:suspected" }
+        name: "ScreeningSchoolSuspected",
+        meta: { title: "待诊断", tagTitle: "学生-待诊断", keepAlive: true, permission: "school:suspected" }
       },
+      // ── 重点人群筛查 ──
       {
-        path: "latent",
-        component: () => import("@/pages/school/latent/index.vue"),
-        name: "SchoolLatent",
-        meta: { title: "潜伏感染", tagTitle: "学校-潜伏感染", keepAlive: true, permission: "school:latent" }
-      },
-      {
-        path: "patient",
-        component: () => import("@/pages/school/patient/index.vue"),
-        name: "SchoolPatient",
-        meta: { title: "患者管理", tagTitle: "学校-患者管理", keepAlive: true, permission: "school:patient" }
-      },
-      {
-        path: "patient/history",
-        component: () => import("@/pages/school/patient/history.vue"),
-        name: "SchoolPatientHistory",
-        meta: { title: "历史患者", tagTitle: "学校-历史患者", keepAlive: true, permission: "school:history" }
-      }
-    ]
-  },
-  {
-    path: "/key-population",
-    component: Layouts,
-    redirect: "/key-population/screening",
-    name: "KeyPopulation",
-    meta: {
-      title: "重点人群",
-      elIcon: "UserFilled",
-      permission: "keyPopulation"
-    },
-    children: [
-      {
-        path: "screening",
+        path: "key-population/screening",
         component: () => import("@/pages/key-population/screening/index.vue"),
-        name: "KeyPopulationScreening",
-        meta: { title: "筛查管理", tagTitle: "重点-筛查管理", keepAlive: true, permission: "keyPopulation:screening" }
+        name: "ScreeningKeyPopulation",
+        meta: { title: "筛查导入", tagTitle: "重点-筛查导入", keepAlive: true, permission: "keyPopulation:screening" }
       },
       {
-        path: "suspected",
+        path: "key-population/suspected",
         component: () => import("@/pages/key-population/suspected/index.vue"),
-        name: "KeyPopulationSuspected",
+        name: "ScreeningKeyPopulationSuspected",
         meta: { title: "待诊断", tagTitle: "重点-待诊断", keepAlive: true, permission: "keyPopulation:suspected" }
       },
+      // ── 常规筛查（新增） ──
       {
-        path: "latent",
-        component: () => import("@/pages/key-population/latent/index.vue"),
-        name: "KeyPopulationLatent",
-        meta: { title: "潜伏感染", tagTitle: "重点-潜伏感染", keepAlive: true, permission: "keyPopulation:latent" }
+        path: "regular/screening",
+        component: () => import("@/pages/regular/screening/index.vue"),
+        name: "ScreeningRegular",
+        meta: { title: "筛查导入", tagTitle: "常规-筛查导入", keepAlive: true, permission: "regular:screening" }
       },
       {
-        path: "patient",
-        component: () => import("@/pages/key-population/patient/index.vue"),
-        name: "KeyPopulationPatient",
-        meta: { title: "患者管理", tagTitle: "重点-患者管理", keepAlive: true, permission: "keyPopulation:patient" }
+        path: "regular/suspected",
+        component: () => import("@/pages/regular/suspected/index.vue"),
+        name: "ScreeningRegularSuspected",
+        meta: { title: "待诊断", tagTitle: "常规-待诊断", keepAlive: true, permission: "regular:suspected" }
       },
+      // ── 大疫情导入筛查（占位，新增） ──
       {
-        path: "patient/history",
-        component: () => import("@/pages/key-population/patient/history.vue"),
-        name: "KeyPopulationPatientHistory",
-        meta: { title: "历史患者", tagTitle: "重点-历史患者", keepAlive: true, permission: "keyPopulation:history" }
+        path: "epidemic",
+        component: () => import("@/pages/epidemic/index.vue"),
+        name: "ScreeningEpidemic",
+        meta: { title: "大疫情导入筛查", tagTitle: "大疫情导入筛查", keepAlive: true, permission: "epidemic:screening" }
       }
     ]
   },
+
+  // ==================== V2 新增：潜伏感染者管理（聚合，不含密接） ====================
+  {
+    path: "/latent-management",
+    component: Layouts,
+    redirect: "/latent-management/notice",
+    name: "LatentManagement",
+    meta: { title: "潜伏感染者管理", elIcon: "Timer", permission: "latentManagement" },
+    children: [
+      {
+        path: "notice",
+        component: () => import("@/pages/latent-management/notice.vue"),
+        name: "LatentManagementNotice",
+        meta: { title: "通知单管理", tagTitle: "潜伏-通知单管理", keepAlive: true, permission: "latentManagement:notice" }
+      },
+      {
+        path: "supervision",
+        component: () => import("@/pages/latent-management/supervision.vue"),
+        name: "LatentManagementSupervision",
+        meta: { title: "督导表管理", tagTitle: "潜伏-督导表管理", keepAlive: true, permission: "latentManagement:supervision" }
+      }
+    ]
+  },
+
+  // ==================== V2 新增：患者管理（聚合，每个功能独立子菜单） ====================
+  {
+    path: "/patient-management",
+    component: Layouts,
+    redirect: "/patient-management/notice",
+    name: "PatientManagement",
+    meta: { title: "患者管理", elIcon: "User", permission: "patientManagement" },
+    children: [
+      {
+        path: "notice",
+        component: () => import("@/pages/patient-management/notice.vue"),
+        name: "PatientManagementNotice",
+        meta: { title: "通知单管理", tagTitle: "患者-通知单管理", keepAlive: true, permission: "patientManagement:notice" }
+      },
+      {
+        path: "first-visit",
+        component: () => import("@/pages/patient-management/first-visit.vue"),
+        name: "PatientManagementFirstVisit",
+        meta: { title: "首次随访", tagTitle: "患者-首次随访", keepAlive: true, permission: "patientManagement:firstVisit" }
+      },
+      {
+        path: "follow-up",
+        component: () => import("@/pages/patient-management/follow-up.vue"),
+        name: "PatientManagementFollowUp",
+        meta: { title: "后续随访", tagTitle: "患者-后续随访", keepAlive: true, permission: "patientManagement:followUp" }
+      },
+      {
+        path: "medication",
+        component: () => import("@/pages/patient-management/medication.vue"),
+        name: "PatientManagementMedication",
+        meta: { title: "服药管理", tagTitle: "患者-服药管理", keepAlive: true, permission: "patientManagement:medication" }
+      },
+      {
+        path: "special-disease",
+        component: () => import("@/pages/patient-management/special-disease.vue"),
+        name: "PatientManagementSpecialDisease",
+        meta: { title: "专病网导入", tagTitle: "患者-专病网导入", keepAlive: true, permission: "patientManagement:specialDisease" }
+      },
+      {
+        path: "history",
+        component: () => import("@/pages/patient-management/history.vue"),
+        name: "PatientManagementHistory",
+        meta: { title: "历史患者", tagTitle: "患者-历史患者", keepAlive: true, permission: "patientManagement:history" }
+      }
+    ]
+  },
+
+  // ==================== V17 新增：推介追踪管理（推介 + 追踪两个子菜单） ====================
+  {
+    path: "/referral-management",
+    component: Layouts,
+    redirect: "/referral-management/recommend",
+    name: "ReferralManagement",
+    meta: { title: "推介追踪管理", elIcon: "Share", permission: "referralManagement" },
+    children: [
+      {
+        path: "recommend",
+        component: () => import("@/pages/referral-management/recommend/index.vue"),
+        name: "ReferralRecommend",
+        meta: { title: "推介", tagTitle: "推介追踪-推介", keepAlive: true, permission: "referralManagement:recommend" }
+      },
+      {
+        path: "track",
+        component: () => import("@/pages/referral-management/track/index.vue"),
+        name: "ReferralTrack",
+        meta: { title: "追踪", tagTitle: "推介追踪-追踪", keepAlive: true, permission: "referralManagement:track" }
+      }
+    ]
+  },
+
+  // ==================== 密接人群管理（保留独立主线，去掉患者管理/历史患者子菜单，确诊患者汇入聚合患者管理） ====================
   {
     path: "/close-contact",
     component: Layouts,
     redirect: "/close-contact/screening",
     name: "CloseContact",
-    meta: {
-      title: "密接人群",
-      elIcon: "Connection",
-      permission: "closeContact"
-    },
+    meta: { title: "密接人群管理", elIcon: "Connection", permission: "closeContact" },
     children: [
       {
         path: "screening",
@@ -173,18 +218,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "潜伏感染", tagTitle: "密接-潜伏感染", keepAlive: true, permission: "closeContact:latent" }
       },
       {
-        path: "patient",
-        component: () => import("@/pages/close-contact/patient/index.vue"),
-        name: "CloseContactPatient",
-        meta: { title: "患者管理", tagTitle: "密接-患者管理", keepAlive: true, permission: "closeContact:patient" }
-      },
-      {
-        path: "patient/history",
-        component: () => import("@/pages/close-contact/patient/history.vue"),
-        name: "CloseContactPatientHistory",
-        meta: { title: "历史患者", tagTitle: "密接-历史患者", keepAlive: true, permission: "closeContact:history" }
-      },
-      {
         path: "monitoring",
         component: () => import("@/pages/close-contact/suspected/index.vue"),
         name: "CloseContactMonitoring",
@@ -192,6 +225,39 @@ export const constantRoutes: RouteRecordRaw[] = [
       }
     ]
   },
+
+  // ==================== 旧路由保留（向后兼容，菜单隐藏）====================
+  // 保留 /school、/key-population 旧路径以防历史 URL 直链失效
+  {
+    path: "/school",
+    component: Layouts,
+    redirect: "/school/screening",
+    name: "School",
+    meta: { hidden: true, title: "学校人群（旧）", permission: "school" },
+    children: [
+      { path: "screening", component: () => import("@/pages/school/screening/index.vue"), name: "SchoolScreening", meta: { hidden: true, title: "筛查管理", permission: "school:screening" } },
+      { path: "suspected", component: () => import("@/pages/school/suspected/index.vue"), name: "SchoolSuspected", meta: { hidden: true, title: "待诊断", permission: "school:suspected" } },
+      { path: "latent", component: () => import("@/pages/school/latent/index.vue"), name: "SchoolLatent", meta: { hidden: true, title: "潜伏感染", permission: "school:latent" } },
+      { path: "patient", component: () => import("@/pages/school/patient/index.vue"), name: "SchoolPatient", meta: { hidden: true, title: "患者管理", permission: "school:patient" } },
+      { path: "patient/history", component: () => import("@/pages/school/patient/history.vue"), name: "SchoolPatientHistory", meta: { hidden: true, title: "历史患者", permission: "school:history" } }
+    ]
+  },
+  {
+    path: "/key-population",
+    component: Layouts,
+    redirect: "/key-population/screening",
+    name: "KeyPopulation",
+    meta: { hidden: true, title: "重点人群（旧）", permission: "keyPopulation" },
+    children: [
+      { path: "screening", component: () => import("@/pages/key-population/screening/index.vue"), name: "KeyPopulationScreening", meta: { hidden: true, title: "筛查管理", permission: "keyPopulation:screening" } },
+      { path: "suspected", component: () => import("@/pages/key-population/suspected/index.vue"), name: "KeyPopulationSuspected", meta: { hidden: true, title: "待诊断", permission: "keyPopulation:suspected" } },
+      { path: "latent", component: () => import("@/pages/key-population/latent/index.vue"), name: "KeyPopulationLatent", meta: { hidden: true, title: "潜伏感染", permission: "keyPopulation:latent" } },
+      { path: "patient", component: () => import("@/pages/key-population/patient/index.vue"), name: "KeyPopulationPatient", meta: { hidden: true, title: "患者管理", permission: "keyPopulation:patient" } },
+      { path: "patient/history", component: () => import("@/pages/key-population/patient/history.vue"), name: "KeyPopulationPatientHistory", meta: { hidden: true, title: "历史患者", permission: "keyPopulation:history" } }
+    ]
+  },
+
+  // ==================== 统计分析 ====================
   {
     path: "/statistics",
     component: Layouts,
@@ -205,6 +271,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       }
     ]
   },
+  // ==================== 系统消息 ====================
   {
     path: "/message",
     component: Layouts,
@@ -218,6 +285,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       }
     ]
   },
+  // ==================== 数据清洗 ====================
   {
     path: "/data-cleaning",
     component: Layouts,
@@ -275,6 +343,13 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/system/backup.vue"),
         name: "SystemBackup",
         meta: { title: "数据备份", roles: ["admin"], permission: "system:backup" }
+      },
+      {
+        path: "operation-log",
+        component: () => import("@/pages/system/operation-log.vue"),
+        name: "SystemOperationLog",
+        // 不设 roles，由 permission 码控制可见性（一/二级用户也可访问）
+        meta: { title: "操作日志", permission: "system:operationLog" }
       }
     ]
   }

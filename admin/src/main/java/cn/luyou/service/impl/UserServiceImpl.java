@@ -139,6 +139,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    public List<UserInfoVO> getLevel34Users() {
+        // 三级（role=4）、四级（role=5）用户，用于推介追踪接收人选择
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .in(User::getRole, java.util.Arrays.asList(4, 5));
+        List<User> users = list(wrapper);
+        return users.stream().map(this::buildUserInfoVO).toList();
+    }
+
+    @Override
     public void checkPermission(int requiredMinRole) {
         Long userId = BaseContext.getCurrentId();
         User user = getById(userId);

@@ -8,11 +8,30 @@ import org.springframework.web.multipart.MultipartFile;
 
 public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopulation> {
 
-    ImportResult uploadAndParse(MultipartFile file);
+    /**
+     * 上传并解析 Excel（sourceType 默认 'keyPopulation'，常规筛查传 'regular'）
+     */
+    ImportResult uploadAndParse(MultipartFile file, String sourceType);
+
+    /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
+    @Deprecated
+    default ImportResult uploadAndParse(MultipartFile file) {
+        return uploadAndParse(file, "keyPopulation");
+    }
 
     IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
                                              String phone, String district, String townshipCommunity,
-                                             String crowdCategory, String screenMethod, Integer isLatent);
+                                             String crowdCategory, String screenMethod, Integer isLatent,
+                                             String sourceType);
+
+    /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
+    @Deprecated
+    default IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
+                                                    String phone, String district, String townshipCommunity,
+                                                    String crowdCategory, String screenMethod, Integer isLatent) {
+        return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
+                crowdCategory, screenMethod, isLatent, "keyPopulation");
+    }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */
     void createScreening(ScreeningKeyPopulation data);

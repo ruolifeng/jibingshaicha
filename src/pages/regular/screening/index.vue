@@ -1,0 +1,854 @@
+<script lang="ts" setup>
+import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { usePagination } from "@@/composables/usePagination"
+import { batchDeleteScreeningRegularApi, createScreeningRegularApi, deleteScreeningRegularApi, exportScreeningRegularApi, getScreeningRegularListApi, updateScreeningRegularApi, uploadScreeningRegularApi } from "./apis"
+
+const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+
+const loading = ref(false)
+const tableData = ref<any[]>([])
+const total = ref(0)
+
+const searchForm = reactive({
+  name: "",
+  idNumber: "",
+  district: "",
+  townshipCommunity: "",
+  phone: "",
+  crowdCategory: "",
+  screenMethod: "",
+  isLatent: undefined as number | undefined
+})
+
+async function fetchData() {
+  loading.value = true
+  try {
+    const { data } = await getScreeningRegularListApi({
+      page: paginationData.currentPage,
+      size: paginationData.pageSize,
+      ...searchForm
+    })
+    tableData.value = data.records
+    total.value = data.total
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleSearch() {
+  paginationData.currentPage = 1
+  fetchData()
+}
+
+function handleReset() {
+  searchForm.name = ""
+  searchForm.idNumber = ""
+  searchForm.district = ""
+  searchForm.townshipCommunity = ""
+  searchForm.phone = ""
+  searchForm.crowdCategory = ""
+  searchForm.screenMethod = ""
+  searchForm.isLatent = undefined
+  handleSearch()
+}
+
+// 转诊
+const tierCareVisible = ref(false)
+const tierCareRow = ref<any>(null)
+function openTierCare(row: any) {
+  tierCareRow.value = row
+  tierCareVisible.value = true
+}
+
+/** Excel 上传 */
+const uploadRef = ref()
+const importResultVisible = ref(false)
+const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const selectedRows = ref<any[]>([])
+
+async function handleUpload(uploadFile: any) {
+  try {
+    const { data } = await uploadScreeningRegularApi(uploadFile.raw)
+    importResult.value = data
+    importResultVisible.value = true
+    fetchData()
+  } catch {
+    ElMessage.error("上传失败")
+  }
+}
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+/** 导出 Excel（支持导出全部或勾选项） */
+async function handleExport(ids?: number[]) {
+  try {
+    await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    const res = await exportScreeningRegularApi(ids)
+    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "常规筛查数据.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
+  }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map((item: any) => item.id).filter(Boolean)
+  if (ids.length === 0) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport(ids)
+}
+
+/** 编辑弹窗 */
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editForm = ref<Record<string, any>>({})
+const editMode = ref<"create" | "edit">("edit")
+const detailVisible = ref(false)
+const detailRow = ref<any>(null)
+const editFormRef = ref()
+
+const requiredRule = [{ required: true, message: "此项为必填项", trigger: "change" }]
+const editRules = {
+  hasSuspiciousSymptoms: requiredRule,
+  cough: requiredRule,
+  hemoptysis: requiredRule,
+  fever: requiredRule,
+  chestPain: requiredRule,
+  nightSweats: requiredRule,
+  appetiteLoss: requiredRule,
+  fatigue: requiredRule,
+  weightLoss: requiredRule,
+  hasInfectionScreen: requiredRule,
+  infectionResult: requiredRule,
+  hasChestXray: requiredRule,
+  chestXrayResult: requiredRule
+}
+
+function getEmptyEditForm() {
+  return {
+    year: "",
+    city: "",
+    district: "",
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: undefined,
+    idType: "",
+    idNumber: "",
+    ethnicity: "",
+    phone: "",
+    householdAddress: "",
+    townshipCommunity: "",
+    currentAddress: "",
+    crowdCategoryClose: "否",
+    crowdCategoryStudent: "否",
+    crowdCategoryTeacher: "否",
+    crowdCategoryElder: "否",
+    crowdCategoryDiabetes: "否",
+    crowdCategoryDual: "否",
+    crowdCategoryTbHist: "否",
+    crowdCategoryNormal: "否",
+    hasSuspiciousSymptoms: "",
+    cough: "",
+    hemoptysis: "",
+    fever: "",
+    chestPain: "",
+    nightSweats: "",
+    appetiteLoss: "",
+    fatigue: "",
+    weightLoss: "",
+    hasInfectionScreen: "",
+    screenDate: "",
+    screenMethod: "",
+    screenResult: "",
+    infectionResult: "",
+    hasChestXray: "",
+    chestXrayDate: "",
+    chestXrayResult: "",
+    diagnosisFirst: "",
+    remark: ""
+  }
+}
+
+function handleCreate() {
+  editMode.value = "create"
+  editForm.value = getEmptyEditForm()
+  editVisible.value = true
+}
+
+function handleEdit(row: any) {
+  editMode.value = "edit"
+  editForm.value = { ...row }
+  editVisible.value = true
+}
+
+function viewDetail(row: any) {
+  detailRow.value = row
+  detailVisible.value = true
+}
+
+async function handleSave() {
+  try {
+    await editFormRef.value?.validate()
+  } catch {
+    return
+  }
+  editSaving.value = true
+  try {
+    if (editMode.value === "create") {
+      await createScreeningRegularApi(editForm.value)
+      ElMessage.success("新增成功")
+    } else {
+      await updateScreeningRegularApi(editForm.value.id, editForm.value)
+      ElMessage.success("保存成功")
+    }
+    editVisible.value = false
+    fetchData()
+  } catch {
+    ElMessage.error(editMode.value === "create" ? "新增失败" : "保存失败")
+  } finally {
+    editSaving.value = false
+  }
+}
+
+/** 删除筛查记录（级联删除后续所有数据） */
+async function handleDelete(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除「${row.name}」的筛查记录吗？删除后其对应的潜伏感染、患者管理等所有关联数据将一并删除，且不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    await deleteScreeningRegularApi(row.id)
+    ElMessage.success("删除成功")
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除失败")
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条筛查记录吗？删除后所有关联数据将一并删除，且不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    const ids = selectedRows.value.map((r: any) => r.id)
+    await batchDeleteScreeningRegularApi(ids)
+    ElMessage.success(`成功删除 ${ids.length} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("批量删除失败")
+  }
+}
+
+/** 判定结果标签颜色 */
+function getLatentTag(isLatent: number) {
+  return isLatent === 1 ? "danger" : "success"
+}
+
+watch(
+  () => [paginationData.currentPage, paginationData.pageSize],
+  fetchData,
+  { immediate: true }
+)
+</script>
+
+<template>
+  <div class="app-container">
+    <!-- 搜索栏 -->
+    <el-card shadow="never" class="mb-4">
+      <el-form :model="searchForm" inline>
+        <el-form-item label="姓名">
+          <el-input v-model="searchForm.name" placeholder="请输入姓名" clearable />
+        </el-form-item>
+        <el-form-item label="证件号">
+          <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="searchForm.phone" placeholder="请输入手机号" clearable />
+        </el-form-item>
+        <el-form-item label="区县">
+          <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
+        </el-form-item>
+        <el-form-item label="乡镇/社区">
+          <el-input v-model="searchForm.townshipCommunity" placeholder="请输入乡镇/社区" clearable />
+        </el-form-item>
+        <el-form-item label="人群分类">
+          <el-select v-model="searchForm.crowdCategory" placeholder="全部" clearable style="width: 140px">
+            <el-option label="密接" value="密接" />
+            <el-option label="学生" value="学生" />
+            <el-option label="教职工" value="教职工" />
+            <el-option label="老年人" value="老年人" />
+            <el-option label="糖尿病" value="糖尿病" />
+            <el-option label="双感" value="双感" />
+            <el-option label="既往结核史" value="既往结核史" />
+            <el-option label="非重点人群" value="非重点人群" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="感染筛查方法">
+          <el-select v-model="searchForm.screenMethod" placeholder="全部" clearable style="width: 120px">
+            <el-option label="PPD" value="PPD" />
+            <el-option label="IGRA" value="IGRA" />
+            <el-option label="EC" value="EC" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="判定结果">
+          <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
+            <el-option label="待确诊" :value="1" />
+            <el-option label="正常" :value="0" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- 操作栏 + 表格 -->
+    <el-card shadow="never">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <span class="text-lg font-bold">常规筛查数据</span>
+          <div class="flex gap-2">
+            <el-button v-permission="'regular:screening:create'" type="success" @click="handleCreate">
+              新增数据
+            </el-button>
+            <el-button v-permission="'regular:screening:export'" @click="() => handleExport()">
+              导出全部
+            </el-button>
+            <el-button v-permission="'regular:screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">
+              导出勾选
+            </el-button>
+            <el-button v-permission="'regular:screening:delete'" type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
+              批量删除
+            </el-button>
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".xlsx,.xls"
+              :on-change="handleUpload"
+            >
+              <el-button type="primary" v-permission="'regular:screening:upload'">
+                上传 Excel
+              </el-button>
+            </el-upload>
+          </div>
+        </div>
+      </template>
+
+      <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="50" fixed />
+        <el-table-column prop="name" label="姓名" fixed />
+        <el-table-column prop="year" label="年份" width="80" />
+        <el-table-column prop="city" label="市（州）" />
+        <el-table-column prop="district" label="区县" />
+        <el-table-column prop="gender" label="性别" width="70" />
+        <el-table-column prop="birthDate" label="出生日期" width="110" />
+        <el-table-column prop="age" label="年龄" width="70" />
+        <el-table-column prop="idType" label="证件类型" />
+        <el-table-column prop="idNumber" label="证件号" width="180" />
+        <el-table-column prop="ethnicity" label="民族" width="80" />
+        <el-table-column prop="phone" label="联系电话" width="130" />
+        <el-table-column prop="householdAddress" label="户籍地址" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="townshipCommunity" label="乡镇/社区" />
+        <el-table-column prop="currentAddress" label="现住址" min-width="160" show-overflow-tooltip />
+        <!-- V4 人群分类：各列独立 -->
+        <el-table-column label="人群分类">
+          <template #default="{ row }">
+            <span v-if="row.crowdCategoryClose === '是'" class="mr-1"><el-tag size="small">密接</el-tag></span>
+            <span v-if="row.crowdCategoryStudent === '是'" class="mr-1"><el-tag size="small">学生</el-tag></span>
+            <span v-if="row.crowdCategoryTeacher === '是'" class="mr-1"><el-tag size="small">教职工</el-tag></span>
+            <span v-if="row.crowdCategoryElder === '是'" class="mr-1"><el-tag size="small">老年人</el-tag></span>
+            <span v-if="row.crowdCategoryDiabetes === '是'" class="mr-1"><el-tag size="small">糖尿病</el-tag></span>
+            <span v-if="row.crowdCategoryDual === '是'" class="mr-1"><el-tag size="small">双感</el-tag></span>
+            <span v-if="row.crowdCategoryTbHist === '是'" class="mr-1"><el-tag size="small">既往结核</el-tag></span>
+            <span v-if="row.crowdCategoryNormal === '是'" class="mr-1"><el-tag size="small">非重点</el-tag></span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="hasSuspiciousSymptoms" label="可疑症状" />
+        <el-table-column prop="cough" label="咳嗽咳痰" />
+        <el-table-column prop="hemoptysis" label="咯血或血痰" />
+        <el-table-column prop="fever" label="发热" />
+        <el-table-column prop="chestPain" label="胸痛" />
+        <el-table-column prop="nightSweats" label="夜间盗汗" />
+        <el-table-column prop="appetiteLoss" label="食欲不振" />
+        <el-table-column prop="fatigue" label="乏力" />
+        <el-table-column prop="weightLoss" label="体重减轻" />
+        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" />
+        <el-table-column prop="screenDate" label="感染筛查日期" />
+        <el-table-column prop="screenMethod" label="筛查方法" />
+        <el-table-column prop="screenResult" label="筛查结果" />
+        <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column prop="hasChestXray" label="首次（是否胸片）" min-width="110" />
+        <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" min-width="100" />
+        <el-table-column prop="diagnosisResult" label="首次诊断结果" min-width="110" />
+        <!-- 预防性治疗情况（督导表归档后同步） -->
+        <el-table-column prop="preventivePlan" label="预防性治疗方案" />
+        <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
+        <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
+        <el-table-column prop="preventiveResult" label="治疗结果" />
+        <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
+        <el-table-column label="待确诊" fixed="right">
+          <template #default="{ row }">
+            <el-tag :type="getLatentTag(row.isLatent)" size="small">
+              {{ row.isLatent === 1 ? "待确诊" : "正常" }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" />
+        <el-table-column label="操作" fixed="right" width="260">
+          <template #default="{ row }">
+            <el-button type="info" link size="small" @click="viewDetail(row)">
+              查看详情
+            </el-button>
+            <el-button v-permission="'regular:screening:edit'" type="primary" link size="small" @click="handleEdit(row)">
+              编辑
+            </el-button>
+            <el-button v-permission="'regular:screening:delete'" type="danger" link size="small" @click="handleDelete(row)">
+              删除
+            </el-button>
+            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
+              转诊
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <div class="mt-4 flex justify-end">
+        <el-pagination
+          v-model:current-page="paginationData.currentPage"
+          v-model:page-size="paginationData.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="handleCurrentChange"
+          @size-change="handleSizeChange"
+        />
+      </div>
+    </el-card>
+
+    <!-- 编辑弹窗 -->
+    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false" @closed="editFormRef?.resetFields()">
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="120px" class="edit-form">
+        <el-divider content-position="left">
+          基本信息
+        </el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="年份">
+              <el-input v-model="editForm.year" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="市（州）">
+              <el-input v-model="editForm.city" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="区县">
+              <el-input v-model="editForm.district" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="姓名">
+              <el-input v-model="editForm.name" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="性别">
+              <el-select v-model="editForm.gender" style="width:100%">
+                <el-option label="男" value="男" /><el-option label="女" value="女" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="出生日期">
+              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="年龄">
+              <el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="证件类型">
+              <el-input v-model="editForm.idType" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="证件号">
+              <el-input v-model="editForm.idNumber" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="民族">
+              <el-input v-model="editForm.ethnicity" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="联系电话">
+              <el-input v-model="editForm.phone" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="16">
+            <el-form-item label="户籍地址">
+              <el-input v-model="editForm.householdAddress" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="乡镇/社区">
+              <el-input v-model="editForm.townshipCommunity" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="现住址">
+              <el-input v-model="editForm.currentAddress" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">
+          人群分类
+        </el-divider>
+        <el-row :gutter="16">
+          <el-col
+            :span="6" v-for="item in [
+              { label: '密接', key: 'crowdCategoryClose' },
+              { label: '学生', key: 'crowdCategoryStudent' },
+              { label: '教职工', key: 'crowdCategoryTeacher' },
+              { label: '老年人', key: 'crowdCategoryElder' },
+              { label: '糖尿病', key: 'crowdCategoryDiabetes' },
+              { label: '双感', key: 'crowdCategoryDual' },
+              { label: '既往结核史', key: 'crowdCategoryTbHist' },
+              { label: '非重点人群', key: 'crowdCategoryNormal' },
+            ]" :key="item.key"
+          >
+            <el-form-item :label="item.label">
+              <el-select v-model="editForm[item.key]" style="width:100%">
+                <el-option label="是" value="是" /><el-option label="否" value="否" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">
+          症状筛查
+        </el-divider>
+        <el-row :gutter="16">
+          <el-col :span="6">
+            <el-form-item label="可疑症状" prop="hasSuspiciousSymptoms">
+              <el-select v-model="editForm.hasSuspiciousSymptoms" style="width:100%">
+                <el-option label="有" value="有" />
+                <el-option label="无" value="无" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col
+            :span="6" v-for="item in [
+              { label: '咳嗽咳痰', key: 'cough' },
+              { label: '咯血或血痰', key: 'hemoptysis' },
+              { label: '发热', key: 'fever' },
+              { label: '胸痛', key: 'chestPain' },
+              { label: '夜间盗汗', key: 'nightSweats' },
+              { label: '食欲不振', key: 'appetiteLoss' },
+              { label: '乏力', key: 'fatigue' },
+              { label: '体重减轻', key: 'weightLoss' },
+            ]" :key="item.key"
+          >
+            <el-form-item :label="item.label" :prop="item.key">
+              <el-select v-model="editForm[item.key]" style="width:100%">
+                <el-option label="是" value="是" />
+                <el-option label="否" value="否" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">
+          感染筛查
+        </el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="是否进行感染筛" prop="hasInfectionScreen">
+              <el-select v-model="editForm.hasInfectionScreen" style="width:100%">
+                <el-option label="是" value="是" />
+                <el-option label="否" value="否" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="感染筛查日期">
+              <el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="筛查方法">
+              <el-input v-model="editForm.screenMethod" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="筛查结果">
+              <el-input v-model="editForm.screenResult" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="16">
+            <el-form-item label="感染筛查结果" prop="infectionResult">
+              <el-select v-model="editForm.infectionResult" style="width:100%">
+                <el-option label="PPD阴性" value="PPD阴性" />
+                <el-option label="PPD+" value="PPD+" />
+                <el-option label="PPD++" value="PPD++" />
+                <el-option label="PPD+++" value="PPD+++" />
+                <el-option label="EC阴性" value="EC阴性" />
+                <el-option label="EC阳性" value="EC阳性" />
+                <el-option label="IGRA阴性" value="IGRA阴性" />
+                <el-option label="IGRA阳性" value="IGRA阳性" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">
+          胸片与诊断
+        </el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="是否进行胸片检查" prop="hasChestXray">
+              <el-select v-model="editForm.hasChestXray" style="width:100%">
+                <el-option label="是" value="是" />
+                <el-option label="否" value="否" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="胸片检查日期">
+              <el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="胸片结果" prop="chestXrayResult">
+              <el-select v-model="editForm.chestXrayResult" style="width:100%">
+                <el-option label="正常" value="正常" />
+                <el-option label="异常" value="异常" />
+                <el-option label="未查" value="未查" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="首次诊断结果">
+              <el-input v-model="editForm.diagnosisFirst" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">
+          备注
+        </el-divider>
+        <el-form-item label="备注">
+          <el-input v-model="editForm.remark" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="editSaving" @click="handleSave">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 详情弹窗 -->
+    <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} - 详情`" width="980px">
+      <el-descriptions v-if="detailRow" :column="3" border>
+        <el-descriptions-item label="年份">
+          {{ detailRow.year }}
+        </el-descriptions-item>
+        <el-descriptions-item label="市（州）">
+          {{ detailRow.city }}
+        </el-descriptions-item>
+        <el-descriptions-item label="区县">
+          {{ detailRow.district }}
+        </el-descriptions-item>
+        <el-descriptions-item label="乡镇/社区">
+          {{ detailRow.townshipCommunity }}
+        </el-descriptions-item>
+        <el-descriptions-item label="姓名">
+          {{ detailRow.name }}
+        </el-descriptions-item>
+        <el-descriptions-item label="性别">
+          {{ detailRow.gender }}
+        </el-descriptions-item>
+        <el-descriptions-item label="出生日期">
+          {{ detailRow.birthDate }}
+        </el-descriptions-item>
+        <el-descriptions-item label="年龄">
+          {{ detailRow.age }}
+        </el-descriptions-item>
+        <el-descriptions-item label="证件类型">
+          {{ detailRow.idType }}
+        </el-descriptions-item>
+        <el-descriptions-item label="证件号">
+          {{ detailRow.idNumber }}
+        </el-descriptions-item>
+        <el-descriptions-item label="民族">
+          {{ detailRow.ethnicity }}
+        </el-descriptions-item>
+        <el-descriptions-item label="联系电话">
+          {{ detailRow.phone }}
+        </el-descriptions-item>
+        <el-descriptions-item label="人群分类" :span="3">
+          <span v-if="detailRow.crowdCategoryClose === '是'">密接 </span>
+          <span v-if="detailRow.crowdCategoryStudent === '是'">学生 </span>
+          <span v-if="detailRow.crowdCategoryTeacher === '是'">教职工 </span>
+          <span v-if="detailRow.crowdCategoryElder === '是'">老年人 </span>
+          <span v-if="detailRow.crowdCategoryDiabetes === '是'">糖尿病 </span>
+          <span v-if="detailRow.crowdCategoryDual === '是'">双感 </span>
+          <span v-if="detailRow.crowdCategoryTbHist === '是'">既往结核史 </span>
+          <span v-if="detailRow.crowdCategoryNormal === '是'">非重点人群 </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="可疑症状">
+          {{ detailRow.hasSuspiciousSymptoms }}
+        </el-descriptions-item>
+        <el-descriptions-item label="咳嗽咳痰">
+          {{ detailRow.cough }}
+        </el-descriptions-item>
+        <el-descriptions-item label="咯血或血痰">
+          {{ detailRow.hemoptysis }}
+        </el-descriptions-item>
+        <el-descriptions-item label="发热">
+          {{ detailRow.fever }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸痛">
+          {{ detailRow.chestPain }}
+        </el-descriptions-item>
+        <el-descriptions-item label="夜间盗汗">
+          {{ detailRow.nightSweats }}
+        </el-descriptions-item>
+        <el-descriptions-item label="食欲不振">
+          {{ detailRow.appetiteLoss }}
+        </el-descriptions-item>
+        <el-descriptions-item label="乏力">
+          {{ detailRow.fatigue }}
+        </el-descriptions-item>
+        <el-descriptions-item label="体重减轻">
+          {{ detailRow.weightLoss }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否进行感染筛">
+          {{ detailRow.hasInfectionScreen }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染筛查日期">
+          {{ detailRow.screenDate }}
+        </el-descriptions-item>
+        <el-descriptions-item label="筛查方法">
+          {{ detailRow.screenMethod }}
+        </el-descriptions-item>
+        <el-descriptions-item label="筛查结果">
+          {{ detailRow.screenResult }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染筛查结果">
+          {{ detailRow.infectionResult }}
+        </el-descriptions-item>
+        <el-descriptions-item label="判定结果">
+          {{ detailRow.isLatent === 1 ? "待确诊" : "正常" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否进行胸片检查">
+          {{ detailRow.hasChestXray }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸片检查日期">
+          {{ detailRow.chestXrayDate }}
+        </el-descriptions-item>
+        <el-descriptions-item label="胸片结果">
+          {{ detailRow.chestXrayResult }}
+        </el-descriptions-item>
+        <el-descriptions-item label="首次诊断结果" :span="3">
+          {{ detailRow.diagnosisFirst }}
+        </el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="3">
+          {{ detailRow.householdAddress }}
+        </el-descriptions-item>
+        <el-descriptions-item label="现住址" :span="3">
+          {{ detailRow.currentAddress }}
+        </el-descriptions-item>
+        <el-descriptions-item label="备注" :span="3">
+          {{ detailRow.remark || "-" }}
+        </el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <el-button @click="detailVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 转诊弹窗 -->
+    <ReferralDialog
+      v-if="tierCareRow"
+      v-model="tierCareVisible"
+      :biz-id="tierCareRow.id"
+      biz-type="screening_key"
+      population-type="key"
+      module-type="screening"
+      :subject-name="tierCareRow.name || ''"
+    />
+
+    <!-- 导入结果弹窗 -->
+    <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
+      <el-alert :title="`成功导入 ${importResult.successCount} 条数据`" type="success" :closable="false" class="mb-3" />
+      <template v-if="importResult.errors.length > 0">
+        <el-alert :title="`发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
+        <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
+          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="msg" label="错误信息" />
+        </el-table>
+      </template>
+      <template #footer>
+        <el-button type="primary" @click="importResultVisible = false">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<style lang="scss" scoped>
+.mb-4 {
+  margin-bottom: 16px;
+}
+.mt-4 {
+  margin-top: 16px;
+}
+.edit-form {
+  padding: 0 8px;
+}
+</style>

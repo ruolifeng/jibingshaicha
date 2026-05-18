@@ -24,8 +24,27 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /**
      * 录入胸片检查与首次诊断结果（V4 追踪到位后新增步骤）
      * diagnosisFirst 取值：排除/疑似肺结核/潜伏感染者/确诊患者/其他
+     *
+     * @deprecated V13 起拆分为 {@link #saveXrayOnly(Long, Map)} 与 {@link #saveDiagnosisOnly(Long, Map)}
+     *             两个独立操作；本方法保留用于：1) 批量导入；2) 旧前端兼容（同时传胸片+诊断时）。
      */
+    @Deprecated
     void saveXrayAndDiagnosis(Long id, Map<String, Object> data);
+
+    /**
+     * 仅录入胸片检查结果（V13 拆分新增）
+     * 字段：hasChestXray / chestXrayDate / chestXrayResult
+     * <p>不修改 diagnosisFirst，不触发转诊。
+     */
+    void saveXrayOnly(Long id, Map<String, Object> data);
+
+    /**
+     * 仅录入首次诊断结果（V13 拆分新增）
+     * 字段：diagnosisFirst（必填）
+     * <p>会按映射自动驱动后续转诊：排除/其他 → 归档；潜伏感染者 → 留在潜伏管理；
+     *    疑似肺结核/确诊患者 → 创建患者档案并归档。
+     */
+    void saveDiagnosisOnly(Long id, Map<String, Object> data);
 
     /**
      * 批量导入胸片+诊断 Excel（含 Z-AE 列，按证件号匹配）

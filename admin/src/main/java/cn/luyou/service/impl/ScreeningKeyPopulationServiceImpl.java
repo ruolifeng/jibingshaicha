@@ -72,7 +72,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     );
 
     @Override
-    public ImportResult uploadAndParse(MultipartFile file) {
+    public ImportResult uploadAndParse(MultipartFile file, String sourceType) {
+        final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
         String batchId = IdUtil.fastSimpleUUID();
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
@@ -94,6 +95,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     boolean directXray = hasDirectXrayAndDiagnosis(data);
                     data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
                     data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+                    data.setSourceType(resolvedSourceType);
                     dataList.add(data);
                 }
                 @Override
@@ -165,9 +167,11 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> {
                     boolean directXray = hasDirectXrayAndDiagnosis(d);
+                    // sourceType 决定 populationType（regular→regular；其余→keyPopulation）
+                    String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
                     return LatentInfection.builder()
                             .screeningId(d.getId())
-                            .populationType("keyPopulation")
+                            .populationType(popType)
                             .name(d.getName())
                             .idNumber(d.getIdNumber())
                             .gender(d.getGender())
@@ -190,13 +194,14 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .filter(d -> d.getIsLatent() == 1)
                 .filter(d -> !latentInfectionService.lambdaQuery()
                         .eq(LatentInfection::getScreeningId, d.getId())
-                        .eq(LatentInfection::getPopulationType, "keyPopulation")
+                        .in(LatentInfection::getPopulationType, "keyPopulation", "regular")
                         .exists())
                 .map(d -> {
                     boolean directXray = hasDirectXrayAndDiagnosis(d);
+                    String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
                     return LatentInfection.builder()
                             .screeningId(d.getId())
-                            .populationType("keyPopulation")
+                            .populationType(popType)
                             .name(d.getName())
                             .idNumber(d.getIdNumber())
                             .gender(d.getGender())
@@ -227,9 +232,13 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     @Override
     public IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
                                                     String phone, String district, String townshipCommunity,
-                                                    String crowdCategory, String screenMethod, Integer isLatent) {
+                                                    String crowdCategory, String screenMethod, Integer isLatent,
+                                                    String sourceType) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
-        wrapper.like(StrUtil.isNotBlank(name), ScreeningKeyPopulation::getName, name)
+        // sourceType 为空时默认只查 keyPopulation（向后兼容），传 regular 时查常规
+        String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
+        wrapper.eq(ScreeningKeyPopulation::getSourceType, resolvedSource)
+                .like(StrUtil.isNotBlank(name), ScreeningKeyPopulation::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningKeyPopulation::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), ScreeningKeyPopulation::getPhone, phone)
                 .eq(StrUtil.isNotBlank(district), ScreeningKeyPopulation::getDistrict, district)

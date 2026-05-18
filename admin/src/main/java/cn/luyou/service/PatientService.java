@@ -20,4 +20,7 @@ public interface PatientService extends IService<Patient> {
     IPage<Patient> queryHistoryPage(int page, int size, String populationType,
                                      String name, String idNumber,
                                      String startTime, String endTime);
+
+    /** 删除患者（级联软删首次随访、后续随访、服药记录、通知单） */
+    void deletePatient(Long id);
 }

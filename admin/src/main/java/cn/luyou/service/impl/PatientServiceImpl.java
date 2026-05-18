@@ -6,12 +6,16 @@ import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.EpidemicReport;
 import cn.luyou.model.FirstVisit;
+import cn.luyou.model.FollowUpVisit;
+import cn.luyou.model.MedicationManagement;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.mapper.FirstVisitMapper;
+import cn.luyou.mapper.FollowUpVisitMapper;
+import cn.luyou.mapper.MedicationManagementMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.PatientMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
@@ -54,6 +58,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final ObjectMapper objectMapper;
     private final NoticeMapper noticeMapper;
     private final FirstVisitMapper firstVisitMapper;
+    private final FollowUpVisitMapper followUpVisitMapper;
+    private final MedicationManagementMapper medicationManagementMapper;
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
@@ -319,6 +325,31 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             }
         }
         return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deletePatient(Long id) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        // 级联软删：首次随访
+        firstVisitMapper.delete(new LambdaQueryWrapper<FirstVisit>()
+                .eq(FirstVisit::getPatientId, id));
+        // 级联软删：后续随访
+        followUpVisitMapper.delete(new LambdaQueryWrapper<FollowUpVisit>()
+                .eq(FollowUpVisit::getPatientId, id));
+        // 级联软删：服药管理
+        medicationManagementMapper.delete(new LambdaQueryWrapper<MedicationManagement>()
+                .eq(MedicationManagement::getPatientId, id));
+        // 级联软删：通知单
+        noticeMapper.delete(new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getBizId, id)
+                .eq(Notice::getNoticeType, "patient"));
+        // 删除患者本体（MyBatis-Plus 逻辑删除：设 deleted=1）
+        removeById(id);
+        log.info("删除患者 id={} 及其级联数据", id);
     }
 
     /**

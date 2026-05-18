@@ -28,14 +28,16 @@ public class ScreeningKeyPopulationController {
 
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
 
-    @Operation(summary = "上传重点人群筛查Excel")
+    @Operation(summary = "上传重点人群/常规筛查Excel（sourceType=keyPopulation|regular，默认 keyPopulation）")
     @PostMapping("/upload")
-    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
-        ImportResult result = screeningKeyPopulationService.uploadAndParse(file);
+    public ResultResponse<ImportResult> upload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
+        ImportResult result = screeningKeyPopulationService.uploadAndParse(file, sourceType);
         return ResultRes.success(result);
     }
 
-    @Operation(summary = "分页查询重点人群筛查数据")
+    @Operation(summary = "分页查询重点人群/常规筛查数据（sourceType=keyPopulation|regular，默认 keyPopulation）")
     @GetMapping("/list")
     public ResultResponse<IPage<ScreeningKeyPopulation>> list(
             @RequestParam(defaultValue = "1") int page,
@@ -47,9 +49,10 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String townshipCommunity,
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String screenMethod,
-            @RequestParam(required = false) Integer isLatent) {
+            @RequestParam(required = false) Integer isLatent,
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
-                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent));
+                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent, sourceType));
     }
 
     @Operation(summary = "新增重点人群筛查记录")

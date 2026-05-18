@@ -272,6 +272,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveXrayAndDiagnosis(Long id, Map<String, Object> data) {
+        // 兼容入口：批量导入与旧前端继续走此方法（一次性同时传胸片+诊断）。
+        // 内部拆分为两步以复用 V13 的拆分逻辑。
         LatentInfection entity = getById(id);
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
@@ -282,12 +284,51 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片与诊断已录入，不可重复操作");
         }
-
         String diagnosisFirst = data.getOrDefault("diagnosisFirst", "").toString();
         if (StrUtil.isBlank(diagnosisFirst)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
         }
+        // 先写胸片（不校验"已录入"，沿用旧行为：覆盖式写入）
+        doSaveXray(entity, data, /* skipExistsCheck */ true);
+        // 重新加载后写诊断并触发转诊
+        LatentInfection refreshed = getById(id);
+        doSaveDiagnosis(refreshed, data);
+    }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveXrayOnly(Long id, Map<String, Object> data) {
+        LatentInfection entity = getById(id);
+        if (entity == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
+        }
+        if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后可录入胸片结果");
+        }
+        if (StrUtil.isNotBlank(entity.getChestXrayResult())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片结果已录入，不可重复操作");
+        }
+        doSaveXray(entity, data, /* skipExistsCheck */ false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveDiagnosisOnly(Long id, Map<String, Object> data) {
+        LatentInfection entity = getById(id);
+        if (entity == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
+        }
+        if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后可录入诊断结果");
+        }
+        if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果已录入，不可重复操作");
+        }
+        doSaveDiagnosis(entity, data);
+    }
+
+    /** 内部：写胸片字段 + 回写筛查表。skipExistsCheck=true 时不做"已录入"校验（兼容老接口）。 */
+    private void doSaveXray(LatentInfection entity, Map<String, Object> data, boolean skipExistsCheck) {
         String hasXray = data.getOrDefault("hasChestXray", "").toString();
         String xrayResult = data.getOrDefault("chestXrayResult", "").toString();
         LocalDate xrayDate = null;
@@ -295,29 +336,33 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (xrayDateObj != null && StrUtil.isNotBlank(xrayDateObj.toString())) {
             xrayDate = LocalDate.parse(xrayDateObj.toString(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         }
-
-        // 写入胸片字段与首次诊断（diagnosisResult 由后续联动转诊决定，不在此处直接写入，
-        // 避免数据被过早过滤而从待诊断/患者管理列表中"消失"）
         lambdaUpdate()
                 .eq(LatentInfection::getId, entity.getId())
                 .set(LatentInfection::getHasChestXray, hasXray)
                 .set(LatentInfection::getChestXrayDate, xrayDate)
                 .set(LatentInfection::getChestXrayResult, xrayResult)
+                .update();
+        // 同步回写到筛查表（不传 diagnosisFirst）
+        writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, null);
+    }
+
+    /** 内部：写诊断字段 + 回写筛查表 + 触发转诊映射 */
+    private void doSaveDiagnosis(LatentInfection entity, Map<String, Object> data) {
+        String diagnosisFirst = data.getOrDefault("diagnosisFirst", "").toString();
+        if (StrUtil.isBlank(diagnosisFirst)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
+        }
+        lambdaUpdate()
+                .eq(LatentInfection::getId, entity.getId())
                 .set(LatentInfection::getDiagnosisFirst, diagnosisFirst)
                 .update();
+        // 同步回写筛查表诊断字段（不动胸片）
+        writeBackXrayToScreening(entity, null, null, null, diagnosisFirst);
 
-        // V4 sheet2：胸片与诊断同步回写到筛查表
-        writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
-
-        // 根据首次诊断自动驱动转诊：
-        //  - 排除/其他       → 归档
-        //  - 确诊患者/疑似肺结核 → 创建患者档案 + 归档（数据进入患者管理）
-        //  - 潜伏感染者      → 进入潜伏感染管理（不归档）
-        // 与 referral() 的语义一致，避免再让用户多点一次"诊断"按钮。
+        // 根据首次诊断自动驱动转诊（与 referral() 语义一致）
         String referralCode = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
         if (referralCode != null) {
-            // 重新加载，确保后续 updateById 写回的字段最新
-            LatentInfection refreshed = getById(id);
+            LatentInfection refreshed = getById(entity.getId());
             applyReferralOutcome(refreshed, referralCode, null);
         }
     }

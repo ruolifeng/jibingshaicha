@@ -2,12 +2,16 @@ package cn.luyou.controller;
 
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.User;
 import cn.luyou.model.vo.UserInfoVO;
+import cn.luyou.service.OperationLogService;
 import cn.luyou.service.UserService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -23,14 +27,61 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final OperationLogService operationLogService;
+    private final UserMapper userMapper;
 
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public ResultResponse<String> login(
             @NotBlank(message = "用户名不能为空") @RequestParam String username,
-            @NotBlank(message = "密码不能为空") @RequestParam String password) {
-        String token = userService.login(username, password);
-        return ResultRes.success(token);
+            @NotBlank(message = "密码不能为空") @RequestParam String password,
+            HttpServletRequest request) {
+        // 登录接口走显式记录（AOP 之前 BaseContext 尚未注入，无法用 @OperationLog 注解）
+        cn.luyou.model.OperationLog logEntity = new cn.luyou.model.OperationLog();
+        logEntity.setOpType("login");
+        logEntity.setOpModule("system");
+        logEntity.setOpAction("用户登录");
+        logEntity.setRequestMethod(request.getMethod());
+        logEntity.setRequestUrl(request.getRequestURI());
+        logEntity.setUserName(username);
+        String ua = request.getHeader("User-Agent");
+        if (ua != null) logEntity.setUserAgent(ua.length() > 256 ? ua.substring(0, 256) : ua);
+        logEntity.setIp(getClientIp(request));
+        try {
+            String token = userService.login(username, password);
+            // 登录成功后补全用户信息
+            User u = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
+            if (u != null) {
+                logEntity.setUserId(u.getId());
+                logEntity.setRealName(u.getRealName());
+                logEntity.setRole(u.getRole());
+                logEntity.setDepartmentId(u.getDepartmentId());
+            }
+            logEntity.setResultStatus(1);
+            operationLogService.saveAsync(logEntity);
+            return ResultRes.success(token);
+        } catch (RuntimeException e) {
+            logEntity.setResultStatus(0);
+            String msg = e.getMessage();
+            if (msg != null && msg.length() > 2048) msg = msg.substring(0, 2048);
+            logEntity.setErrorMessage(msg);
+            operationLogService.saveAsync(logEntity);
+            throw e;
+        }
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip == null || ip.length() <= 64 ? ip : ip.substring(0, 64);
     }
 
     @Operation(summary = "获取当前登录用户信息")
@@ -79,5 +130,11 @@ public class UserController {
     @GetMapping("/level5-users")
     public ResultResponse<List<UserInfoVO>> getLevel5Users() {
         return ResultRes.success(userService.getLevel5Users());
+    }
+
+    @Operation(summary = "获取三/四级用户列表（推介追踪接收人选择）")
+    @GetMapping("/level34-users")
+    public ResultResponse<List<UserInfoVO>> getLevel34Users() {
+        return ResultRes.success(userService.getLevel34Users());
     }
 }

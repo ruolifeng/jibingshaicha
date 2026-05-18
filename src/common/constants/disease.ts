@@ -236,3 +236,117 @@ export const ROLE_OPTIONS = [
   { label: "四级", value: 5 },
   { label: "五级", value: 6 }
 ]
+
+// ==================== 操作日志（V13） ====================
+
+/** 操作日志类型 — 严格按用户原文 5 类 */
+export const OP_LOG_TYPE_OPTIONS = [
+  { label: "登录", value: "login", tagType: "info" as const },
+  { label: "导入", value: "import", tagType: "primary" as const },
+  { label: "删除", value: "delete", tagType: "danger" as const },
+  { label: "修改", value: "update", tagType: "warning" as const },
+  { label: "导出", value: "export", tagType: "success" as const }
+]
+
+/** 操作日志类型 → 中文标签 */
+export const OP_LOG_TYPE_LABEL: Record<string, string> = {
+  login: "登录",
+  import: "导入",
+  delete: "删除",
+  update: "修改",
+  export: "导出",
+  // 扩展位（按文档保留，默认未启用）
+  create: "新增",
+  logout: "登出"
+}
+
+/** 业务模块下拉（与后端 op_module 一致） */
+export const OP_LOG_MODULE_OPTIONS = [
+  { label: "筛查", value: "screening" },
+  { label: "潜伏感染", value: "latent" },
+  { label: "患者管理", value: "patient" },
+  { label: "推介追踪", value: "referral" },
+  { label: "系统", value: "system" },
+  { label: "统计", value: "statistics" }
+]
+
+// ==================== 后续随访（V15，按《后续随访服务记录表》Excel 模板） ====================
+
+/** 督导人员（1医生/2家属/3自服药/4其他） */
+export const FOLLOW_UP_SUPERVISOR_OPTIONS = [
+  { value: "1", label: "医生" },
+  { value: "2", label: "家属" },
+  { value: "3", label: "自服药" },
+  { value: "4", label: "其他" }
+]
+
+/** 随访方式（V15，对齐模板的 1门诊/2家庭/3电话；改用编号） */
+export const FOLLOW_UP_VISIT_METHOD_OPTIONS = [
+  { value: "1", label: "门诊" },
+  { value: "2", label: "家庭" },
+  { value: "3", label: "电话" }
+]
+
+/** 后续随访 — 症状及体征（多选，0-11） */
+export const FOLLOW_UP_SYMPTOM_OPTIONS = [
+  { value: "0", label: "没有症状" },
+  { value: "1", label: "咳嗽咳痰" },
+  { value: "2", label: "低热盗汗" },
+  { value: "3", label: "咯血或血痰" },
+  { value: "4", label: "胸痛消瘦" },
+  { value: "5", label: "恶心纳差" },
+  { value: "6", label: "关节疼痛" },
+  { value: "7", label: "头痛失眠" },
+  { value: "8", label: "视物模糊" },
+  { value: "9", label: "皮肤瘙痒、皮疹" },
+  { value: "10", label: "耳鸣、听力下降" },
+  { value: "11", label: "其它" }
+]
+
+/** 用法 */
+export const FOLLOW_UP_MEDICATION_USAGE_OPTIONS = [
+  { value: "1", label: "每日" },
+  { value: "2", label: "间歇" }
+]
+
+/** 药品剂型 */
+export const FOLLOW_UP_DRUG_FORM_OPTIONS = [
+  { value: "1", label: "固定剂量复合制剂" },
+  { value: "2", label: "散装药" },
+  { value: "3", label: "板式组合药" },
+  { value: "4", label: "注射剂" }
+]
+
+/** 是/否（1无/2有） */
+export const YES_NO_OPTIONS = [
+  { value: "1", label: "无" },
+  { value: "2", label: "有" }
+]
+
+/** 停止治疗原因 */
+export const STOP_TREATMENT_REASON_OPTIONS = [
+  { value: "完成疗程", label: "完成疗程" },
+  { value: "死亡", label: "死亡" },
+  { value: "丢失", label: "丢失" },
+  { value: "转入耐多药治疗", label: "转入耐多药治疗" }
+]
+
+/** V16 数据来源（populationType）标签映射，用于聚合列表的"数据来源"列 */
+export const POPULATION_TYPE_LABEL_MAP: Record<string, { label: string; type: "primary" | "success" | "warning" | "danger" | "info" }> = {
+  school: { label: "学生筛查", type: "primary" },
+  keyPopulation: { label: "重点人群", type: "success" },
+  regular: { label: "常规筛查", type: "warning" },
+  epidemic: { label: "大疫情", type: "danger" },
+  referral: { label: "推介", type: "info" },
+  closeContact: { label: "密接", type: "info" }
+}
+
+/** 获取 populationType 对应的 label */
+export function getPopulationTypeLabel(type: string): string {
+  return POPULATION_TYPE_LABEL_MAP[type]?.label ?? type
+}
+
+/** 获取 populationType 对应的 tag type */
+export function getPopulationTypeTagType(type: string) {
+  return POPULATION_TYPE_LABEL_MAP[type]?.type ?? "info"
+}

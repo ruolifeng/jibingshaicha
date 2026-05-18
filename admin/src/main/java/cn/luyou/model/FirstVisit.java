@@ -53,4 +53,8 @@ public class FirstVisit extends BaseEntity {
     private LocalDate nextVisitDate;
     private String doctorSignature;
     private Long filledBy;
+    /** V15 备注 */
+    private String remarks;
+    /** V15 附件图片URL（JSON数组字符串，2~6 张） */
+    private String attachmentUrls;
 }

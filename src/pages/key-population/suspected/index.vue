@@ -13,7 +13,8 @@ import {
   getSuspectedListApi,
   importXrayApi,
   referralSuspectedApi,
-  submitXrayApi,
+  submitDiagnosisApi,
+  submitXrayOnlyApi,
   trackSuspectedApi
 } from "./apis"
 
@@ -105,44 +106,71 @@ async function handleTrack() {
   }
 }
 
-// ==================== 录入胸片+诊断弹窗 ====================
+// ==================== 录入胸片结果弹窗（V13 拆分：仅胸片字段） ====================
 const xrayDialogVisible = ref(false)
 const xrayRow = ref<any>(null)
 const xrayForm = reactive({
   hasChestXray: "是",
   chestXrayDate: "",
-  chestXrayResult: "",
-  diagnosisFirst: ""
+  chestXrayResult: ""
 })
 const xrayImportLoading = ref(false)
 
 function openXrayDialog(row: any) {
   xrayRow.value = row
-  // 自动填充第一次导入的筛查数据，用户仅需确认
   xrayForm.hasChestXray = row.hasChestXray || "是"
   xrayForm.chestXrayDate = row.chestXrayDate || ""
   xrayForm.chestXrayResult = row.chestXrayResult || ""
-  xrayForm.diagnosisFirst = row.diagnosisFirst || ""
   xrayDialogVisible.value = true
 }
 
 async function handleSubmitXray() {
-  if (!xrayForm.diagnosisFirst) {
+  if (xrayForm.hasChestXray === "是" && !xrayForm.chestXrayResult) {
+    ElMessage.warning("请选择胸片结果")
+    return
+  }
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await submitXrayOnlyApi({
+      id: xrayRow.value.id,
+      hasChestXray: xrayForm.hasChestXray,
+      chestXrayDate: xrayForm.chestXrayDate || undefined,
+      chestXrayResult: xrayForm.chestXrayResult || undefined
+    })
+    ElMessage.success("胸片结果录入成功")
+    xrayDialogVisible.value = false
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
+}
+
+// ==================== 录入诊断结果弹窗（V13 新增） ====================
+const diagnosisDialogVisible = ref(false)
+const diagnosisRow = ref<any>(null)
+const diagnosisForm = reactive({ diagnosisFirst: "" })
+
+function openDiagnosisDialog(row: any) {
+  diagnosisRow.value = row
+  diagnosisForm.diagnosisFirst = row.diagnosisFirst || ""
+  diagnosisDialogVisible.value = true
+}
+
+async function handleSubmitDiagnosis() {
+  if (!diagnosisForm.diagnosisFirst) {
     ElMessage.warning("请选择诊断结果")
     return
   }
   if (submitting.value) return
   submitting.value = true
   try {
-    await submitXrayApi({
-      id: xrayRow.value.id,
-      hasChestXray: xrayForm.hasChestXray,
-      chestXrayDate: xrayForm.chestXrayDate || undefined,
-      chestXrayResult: xrayForm.chestXrayResult || undefined,
-      diagnosisFirst: xrayForm.diagnosisFirst
+    await submitDiagnosisApi({
+      id: diagnosisRow.value.id,
+      diagnosisFirst: diagnosisForm.diagnosisFirst
     })
-    ElMessage.success("录入成功")
-    xrayDialogVisible.value = false
+    ElMessage.success("诊断结果录入成功")
+    diagnosisDialogVisible.value = false
     fetchData()
   } catch { /* handled by interceptor */ } finally {
     submitting.value = false
@@ -325,9 +353,9 @@ watch(
             >
               追踪
             </el-button>
-            <!-- 录入胸片结果（追踪到位后、尚未录入诊断时可操作） -->
+            <!-- 录入胸片结果（追踪到位后、胸片结果未录入时可操作） -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisFirst && !row.referralResult"
+              v-if="row.trackingStatus === 1 && !row.chestXrayResult && !row.referralResult"
               v-permission="'latent:xray'"
               type="warning"
               size="small"
@@ -335,7 +363,17 @@ watch(
             >
               录入胸片结果
             </el-button>
-            <!-- 诊断（胸片已录入时可操作） -->
+            <!-- 录入诊断结果（追踪到位后、诊断未录入时可操作；与胸片解耦） -->
+            <el-button
+              v-if="row.trackingStatus === 1 && !row.diagnosisFirst && !row.referralResult"
+              v-permission="'latent:diagnosis'"
+              type="warning"
+              size="small"
+              @click="openDiagnosisDialog(row)"
+            >
+              录入诊断结果
+            </el-button>
+            <!-- 转诊确认（诊断完成后由系统自动驱动，此按钮用于手动二次确认/补救） -->
             <el-button
               v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult"
               v-permission="'latent:referral'"
@@ -403,8 +441,8 @@ watch(
       </template>
     </el-dialog>
 
-    <!-- 录入胸片+诊断弹窗 -->
-    <el-dialog v-model="xrayDialogVisible" title="确认胸片检查结果" width="520px">
+    <!-- 录入胸片结果弹窗（V13 拆分） -->
+    <el-dialog v-model="xrayDialogVisible" title="录入胸片检查结果" width="520px">
       <el-alert type="info" :closable="false" class="mb-4" description="以下数据已自动从初始导入记录填充，请确认无误后点击确认。如有需要可修改后再提交。" />
       <el-form :model="xrayForm" label-width="110px">
         <el-form-item label="是否进行胸片检查">
@@ -421,29 +459,44 @@ watch(
           <el-form-item label="胸片检查日期">
             <el-date-picker v-model="xrayForm.chestXrayDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
           </el-form-item>
-          <el-form-item label="胸片结果">
+          <el-form-item label="胸片结果" required>
             <el-select v-model="xrayForm.chestXrayResult" placeholder="请选择" style="width: 100%">
               <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </template>
-        <el-form-item label="诊断结果" required>
-          <el-select v-model="xrayForm.diagnosisFirst" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in DIAGNOSIS_RESULT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <div class="mt-1 text-xs text-gray-400">
-            <span v-if="xrayForm.diagnosisFirst === '排除'">→ 归档</span>
-            <span v-else-if="xrayForm.diagnosisFirst === '疑似肺结核' || xrayForm.diagnosisFirst === '确诊患者'">→ 进入患者管理</span>
-            <span v-else-if="xrayForm.diagnosisFirst === '潜伏感染者'">→ 进入潜伏感染管理</span>
-            <span v-else-if="xrayForm.diagnosisFirst === '其他'">→ 填写备注后归档</span>
-          </div>
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="xrayDialogVisible = false">
           取消
         </el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmitXray">
+          确认录入
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 录入诊断结果弹窗（V13 新增） -->
+    <el-dialog v-model="diagnosisDialogVisible" title="录入诊断结果" width="520px">
+      <el-alert type="info" :closable="false" class="mb-4" description="录入诊断结果后，系统将根据诊断结果自动驱动后续转诊流程。" />
+      <el-form :model="diagnosisForm" label-width="110px">
+        <el-form-item label="诊断结果" required>
+          <el-select v-model="diagnosisForm.diagnosisFirst" placeholder="请选择" style="width: 100%">
+            <el-option v-for="item in DIAGNOSIS_RESULT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <div class="mt-1 text-xs text-gray-400">
+            <span v-if="diagnosisForm.diagnosisFirst === '排除'">→ 归档</span>
+            <span v-else-if="diagnosisForm.diagnosisFirst === '疑似肺结核' || diagnosisForm.diagnosisFirst === '确诊患者'">→ 进入患者管理</span>
+            <span v-else-if="diagnosisForm.diagnosisFirst === '潜伏感染者'">→ 进入潜伏感染管理</span>
+            <span v-else-if="diagnosisForm.diagnosisFirst === '其他'">→ 填写备注后归档</span>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="diagnosisDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmitDiagnosis">
           确认录入
         </el-button>
       </template>

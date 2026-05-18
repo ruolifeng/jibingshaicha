@@ -36,7 +36,42 @@ export function referralSuspectedApi(data: { id: number, result: string, remark?
   })
 }
 
-/** 手动录入胸片检查与首次诊断结果（追踪到位后） */
+/**
+ * 录入胸片检查结果（V13 拆分：仅胸片字段）
+ * 仅追踪到位且胸片结果未录入时可用。
+ */
+export function submitXrayOnlyApi(data: {
+  id: number
+  hasChestXray: string
+  chestXrayDate?: string
+  chestXrayResult?: string
+}) {
+  return request<ApiResponseData<null>>({
+    url: "latent/xray-only",
+    method: "post",
+    data
+  })
+}
+
+/**
+ * 录入首次诊断结果（V13 拆分：仅诊断字段）
+ * 仅追踪到位且诊断结果未录入时可用；提交后按映射自动驱动转诊。
+ */
+export function submitDiagnosisApi(data: {
+  id: number
+  diagnosisFirst: string
+}) {
+  return request<ApiResponseData<null>>({
+    url: "latent/diagnosis",
+    method: "post",
+    data
+  })
+}
+
+/**
+ * @deprecated V13 起请改用 {@link submitXrayOnlyApi} + {@link submitDiagnosisApi}。
+ *             本方法保留仅用于兼容旧前端代码。
+ */
 export function submitXrayApi(data: {
   id: number
   hasChestXray: string

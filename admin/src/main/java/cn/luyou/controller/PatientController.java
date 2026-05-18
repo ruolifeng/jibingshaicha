@@ -84,6 +84,13 @@ public class PatientController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "删除患者（级联删除首次随访/后续随访/服药/通知单）")
+    @DeleteMapping("/{id}")
+    public ResultResponse<Void> deletePatient(@PathVariable Long id) {
+        patientService.deletePatient(id);
+        return ResultRes.success(null);
+    }
+
     // ==================== 首次随访 ====================
 
     @Operation(summary = "保存首次随访")
