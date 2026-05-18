@@ -1,5 +1,32 @@
 <script lang="ts" setup>
 import { cleanScreeningDataApi, downloadCleaningResultApi } from "./apis/index"
+import { downloadTemplateApi } from "@/pages/patient-management/apis/index"
+
+const templateDownloading = ref<string | null>(null)
+
+const TEMPLATE_OPTIONS = [
+  { label: "学生筛查数据模板", type: "school" },
+  { label: "重点人群筛查数据模板", type: "keyPopulation" },
+  { label: "常规筛查数据模板", type: "regular" }
+]
+
+async function handleDownloadTemplate(type: string, label: string) {
+  templateDownloading.value = type
+  try {
+    const data = await downloadTemplateApi(type)
+    const url = URL.createObjectURL(new Blob([data as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${label}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("模板下载成功")
+  } catch {
+    ElMessage.error("模板下载失败")
+  } finally {
+    templateDownloading.value = null
+  }
+}
 
 type PopulationType = "school" | "keyPopulation" | "closeContact"
 
@@ -65,6 +92,43 @@ async function handleDownload() {
 
 <template>
   <div class="app-container">
+    <!-- ==================== 模板下载区（P7 新增） ==================== -->
+    <el-card shadow="never" class="mb-4">
+      <template #header>
+        <span class="text-lg font-bold">数据导入模板下载</span>
+      </template>
+      <el-alert
+        type="info"
+        :closable="false"
+        title="下载标准模板后，按列头格式填写数据，再到对应筛查管理模块上传即可。"
+        class="mb-4"
+      />
+      <div style="display: flex; gap: 12px; flex-wrap: wrap">
+        <el-card
+          v-for="tpl in TEMPLATE_OPTIONS"
+          :key="tpl.type"
+          shadow="hover"
+          style="min-width: 200px; cursor: pointer; border: 1px solid #e4e7ed"
+        >
+          <div style="text-align: center; padding: 8px 0">
+            <el-icon style="font-size: 32px; color: #67c23a; margin-bottom: 8px">
+              <document />
+            </el-icon>
+            <p style="font-size: 14px; color: #303133; margin: 4px 0 12px">{{ tpl.label }}</p>
+            <el-button
+              type="success"
+              size="small"
+              :loading="templateDownloading === tpl.type"
+              @click="handleDownloadTemplate(tpl.type, tpl.label)"
+            >
+              下载模板
+            </el-button>
+          </div>
+        </el-card>
+      </div>
+    </el-card>
+
+    <!-- ==================== 数据清洗区（原有功能） ==================== -->
     <el-card shadow="never" class="mb-4">
       <template #header>
         <span class="text-lg font-bold">数据清洗</span>

@@ -36,6 +36,18 @@ public class SupervisionForm extends BaseEntity {
     private String phone;
     /** 现住址 */
     private String currentAddress;
+    /** 户籍地址（V18新增） */
+    private String householdAddress;
+    /** 身份证号（V18新增） */
+    private String idNumber;
+    /** 出生日期（V18新增） */
+    private String birthDate;
+    /** 民族（V18新增） */
+    private String ethnicity;
+    /** 管理单位（V18新增） */
+    private String managingUnit;
+    /** 督导医生（V18新增） */
+    private String supervisingDoctor;
 
     /** 预防性治疗开始日期 */
     private LocalDate treatmentStartDate;

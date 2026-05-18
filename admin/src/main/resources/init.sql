@@ -1274,53 +1274,52 @@ ALTER TABLE `screening_key_population`
         COMMENT 'V16 数据来源：keyPopulation=重点人群 / regular=常规筛查'
         AFTER `upload_batch`;
 
--- ---------- 2. 新增权限码（V16 新增菜单对应的权限） ----------
-INSERT IGNORE INTO `permission` (`permission_code`, `description`)
-VALUES
-    -- 筛查管理（一级）
-    ('screening',                           '筛查管理菜单'),
-    -- 常规筛查
-    ('regular:screening',                   '常规筛查-筛查导入'),
-    ('regular:screening:create',            '常规筛查-新增记录'),
-    ('regular:screening:edit',              '常规筛查-编辑记录'),
-    ('regular:screening:delete',            '常规筛查-删除记录'),
-    ('regular:screening:upload',            '常规筛查-上传Excel'),
-    ('regular:screening:export',            '常规筛查-导出'),
-    ('regular:suspected',                   '常规筛查-待诊断'),
-    ('regular:suspected:track',             '常规筛查-追踪操作'),
-    ('regular:suspected:xray',             '常规筛查-录入胸片'),
-    ('regular:suspected:diagnosis',        '常规筛查-录入诊断'),
-    -- 大疫情导入筛查
-    ('epidemic:screening',                  '大疫情导入筛查菜单'),
-    -- 聚合潜伏感染者管理
-    ('latentManagement',                    '潜伏感染者管理菜单'),
-    ('latentManagement:notice',             '潜伏感染者-通知单管理'),
-    ('latentManagement:track',              '潜伏感染者-追踪'),
-    ('latentManagement:xray',              '潜伏感染者-录入胸片'),
-    ('latentManagement:diagnosis',         '潜伏感染者-录入诊断'),
-    ('latentManagement:referral',           '潜伏感染者-转诊'),
-    ('latentManagement:close',             '潜伏感染者-归档'),
-    ('latentManagement:supervision',        '潜伏感染者-督导表管理'),
-    -- 聚合患者管理
-    ('patientManagement',                   '患者管理菜单'),
-    ('patientManagement:notice',            '患者管理-通知单管理'),
-    ('patientManagement:firstVisit',        '患者管理-首次随访'),
-    ('patientManagement:followUp',          '患者管理-后续随访'),
-    ('patientManagement:medication',        '患者管理-服药管理'),
-    ('patientManagement:specialDisease',    '患者管理-专病网导入'),
-    ('patientManagement:history',           '患者管理-历史患者'),
-    ('patientManagement:referral',          '患者管理-转诊'),
-    ('patientManagement:delete',            '患者管理-删除患者');
+-- ---------- 2. 新增权限码（V16 新增菜单对应的权限，ID 从 400 起） ----------
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+-- 筛查管理（一级菜单）
+(400, 'screening',                      '筛查管理',             1, 0,   10),
+-- 常规筛查子菜单
+(401, 'regular:screening',              '常规筛查',             1, 400, 3),
+(402, 'regular:screening:create',       '新增记录',             2, 401, 1),
+(403, 'regular:screening:edit',         '编辑记录',             2, 401, 2),
+(404, 'regular:screening:delete',       '删除记录',             2, 401, 3),
+(405, 'regular:screening:upload',       '上传Excel',            2, 401, 4),
+(406, 'regular:screening:export',       '导出',                 2, 401, 5),
+-- 常规筛查-待诊断子菜单
+(407, 'regular:suspected',              '常规筛查-待诊断',      1, 400, 4),
+(408, 'regular:suspected:track',        '追踪操作',             2, 407, 1),
+(409, 'regular:suspected:xray',         '录入胸片',             2, 407, 2),
+(410, 'regular:suspected:diagnosis',    '录入诊断',             2, 407, 3),
+-- 大疫情导入筛查
+(411, 'epidemic:screening',             '大疫情导入筛查',       1, 400, 5),
+-- 聚合潜伏感染者管理（一级菜单）
+(412, 'latentManagement',               '潜伏感染者管理',       1, 0,   11),
+(413, 'latentManagement:notice',        '通知单管理',           1, 412, 1),
+(414, 'latentManagement:track',         '追踪',                 2, 413, 1),
+(415, 'latentManagement:xray',          '录入胸片',             2, 413, 2),
+(416, 'latentManagement:diagnosis',     '录入诊断',             2, 413, 3),
+(417, 'latentManagement:referral',      '转诊',                 2, 413, 4),
+(418, 'latentManagement:close',         '归档',                 2, 413, 5),
+(419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
+-- 聚合患者管理（一级菜单）
+(420, 'patientManagement',              '患者管理',             1, 0,   12),
+(421, 'patientManagement:notice',       '通知单管理',           1, 420, 1),
+(422, 'patientManagement:firstVisit',   '首次随访',             1, 420, 2),
+(423, 'patientManagement:followUp',     '后续随访',             1, 420, 3),
+(424, 'patientManagement:medication',   '服药管理',             1, 420, 4),
+(425, 'patientManagement:specialDisease','专病网导入',          1, 420, 5),
+(426, 'patientManagement:history',      '历史患者',             1, 420, 6),
+(427, 'patientManagement:referral',     '转诊',                 2, 421, 1),
+(428, 'patientManagement:delete',       '删除患者',             2, 421, 2);
 
--- ---------- 3. 将新权限赋给超级管理员角色（若有）和一级/二级管理员 ----------
--- 仅在 role_permission 表不存在时插入，避免重复。
-INSERT IGNORE INTO `role_permission` (`role_id`, `permission_id`)
-SELECT r.id, p.id
-FROM `role` r
+-- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
-WHERE r.role_level IN (1, 2)   -- 一级、二级管理员获得全部新权限
-  AND p.permission_code IN (
-    'screening', 'regular:screening', 'regular:screening:create', 'regular:screening:edit',
+WHERE p.`code` IN (
+    'screening',
+    'regular:screening', 'regular:screening:create', 'regular:screening:edit',
     'regular:screening:delete', 'regular:screening:upload', 'regular:screening:export',
     'regular:suspected', 'regular:suspected:track', 'regular:suspected:xray', 'regular:suspected:diagnosis',
     'epidemic:screening',
@@ -1329,7 +1328,7 @@ WHERE r.role_level IN (1, 2)   -- 一级、二级管理员获得全部新权限
     'patientManagement', 'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
     'patientManagement:medication', 'patientManagement:specialDisease', 'patientManagement:history',
     'patientManagement:referral', 'patientManagement:delete'
-  );
+);
 
 -- ==================== V17：P5 推介追踪模块 ====================
 
@@ -1385,30 +1384,37 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `deleted`                TINYINT       NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推介追踪记录表（V17）';
 
--- ---------- 2. 推介追踪权限码 ----------
-INSERT IGNORE INTO `permission` (`permission_code`, `description`)
-VALUES
-    ('referralManagement',              '推介追踪管理菜单'),
-    ('referralManagement:recommend',    '推介追踪-推介子菜单'),
-    ('referralManagement:track',        '推介追踪-追踪子菜单'),
-    ('referralManagement:create',       '推介追踪-新增记录'),
-    ('referralManagement:send',         '推介追踪-发送推介通知'),
-    ('referralManagement:confirm',      '推介追踪-确认/拒绝推介'),
-    ('referralManagement:trackOperate', '推介追踪-操作追踪状态'),
-    ('referralManagement:xray',         '推介追踪-录入胸片'),
-    ('referralManagement:diagnosis',    '推介追踪-录入诊断'),
-    ('referralManagement:delete',       '推介追踪-删除记录');
+-- ---------- 2. 推介追踪权限码（ID 从 430 起） ----------
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(430, 'referralManagement',              '推介追踪管理',         1, 0,   13),
+(431, 'referralManagement:recommend',    '推介',                 1, 430, 1),
+(432, 'referralManagement:create',       '新增推介/追踪记录',    2, 431, 1),
+(433, 'referralManagement:send',         '发送推介通知',         2, 431, 2),
+(434, 'referralManagement:confirm',      '确认/拒绝推介',        2, 431, 3),
+(435, 'referralManagement:trackOperate', '操作追踪状态',         2, 431, 4),
+(436, 'referralManagement:xray',         '录入胸片',             2, 431, 5),
+(437, 'referralManagement:diagnosis',    '录入诊断',             2, 431, 6),
+(438, 'referralManagement:delete',       '删除推介/追踪记录',    2, 431, 7),
+(439, 'referralManagement:track',        '追踪',                 1, 430, 2);
 
--- ---------- 3. 将推介追踪权限赋给一级/二级管理员 ----------
-INSERT IGNORE INTO `role_permission` (`role_id`, `permission_id`)
-SELECT r.id, p.id
-FROM `role` r
+-- ---------- 3. 将 V17 推介追踪权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
-WHERE r.role_level IN (1, 2)
-  AND p.permission_code IN (
+WHERE p.`code` IN (
     'referralManagement', 'referralManagement:recommend', 'referralManagement:track',
     'referralManagement:create', 'referralManagement:send', 'referralManagement:confirm',
     'referralManagement:trackOperate', 'referralManagement:xray', 'referralManagement:diagnosis',
     'referralManagement:delete'
-  );
+);
 
+-- ==================== V18：supervision_form 补充人员基本信息字段（P4 聚合潜伏督导表修复） ====================
+
+ALTER TABLE `supervision_form`
+    ADD COLUMN IF NOT EXISTS `household_address` VARCHAR(255) NULL COMMENT '户籍地址' AFTER `current_address`,
+    ADD COLUMN IF NOT EXISTS `id_number`         VARCHAR(50)  NULL COMMENT '身份证号' AFTER `household_address`,
+    ADD COLUMN IF NOT EXISTS `birth_date`         VARCHAR(20)  NULL COMMENT '出生日期' AFTER `id_number`,
+    ADD COLUMN IF NOT EXISTS `ethnicity`          VARCHAR(50)  NULL COMMENT '民族'    AFTER `birth_date`,
+    ADD COLUMN IF NOT EXISTS `managing_unit`      VARCHAR(100) NULL COMMENT '管理单位' AFTER `ethnicity`,
+    ADD COLUMN IF NOT EXISTS `supervising_doctor` VARCHAR(100) NULL COMMENT '督导医生' AFTER `managing_unit`;

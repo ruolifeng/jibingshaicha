@@ -30,7 +30,7 @@ interface Props {
   visible: boolean
   patientId: number | null
   patientName?: string
-  populationType: "school" | "keyPopulation" | "closeContact"
+  populationType: "school" | "keyPopulation" | "regular" | "epidemic" | "referral" | "specialDisease" | "closeContact" | string
 }
 
 const props = withDefaults(defineProps<Props>(), {

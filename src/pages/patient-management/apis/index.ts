@@ -77,3 +77,20 @@ export function getMedicationDetailApi(patientId: number) {
 export function referralPatientApi(data: { id: number; result: string; remark?: string }) {
   return request<ApiResponseData<null>>({ url: "patient/referral", method: "post", data })
 }
+
+/** 导入专病网/病案信息表（populationType=specialDisease） */
+export function importSpecialDiseaseApi(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<number>>({ url: "patient/import-special-disease", method: "post", data: formData })
+}
+
+/** 下载数据导入模板（type: school/keyPopulation/regular） */
+export function downloadTemplateApi(type: string) {
+  return request<Blob>({
+    url: "template/download",
+    method: "get",
+    params: { type },
+    responseType: "blob"
+  })
+}

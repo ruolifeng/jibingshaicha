@@ -68,6 +68,7 @@ async function handleFirstVisitSave() {
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
+            <el-option label="专病网" value="specialDisease" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -188,7 +189,7 @@ async function handleFirstVisitSave() {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="附件（2~6张）">
+            <el-form-item label="附件（可选，最多6张）">
               <ImageUploader v-model="firstVisitForm.attachmentUrls" :min="0" :max="6" />
             </el-form-item>
           </el-col>

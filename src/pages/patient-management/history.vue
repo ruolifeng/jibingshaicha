@@ -62,6 +62,7 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
+            <el-option label="专病网" value="specialDisease" />
           </el-select>
         </el-form-item>
         <el-form-item label="归档时间">

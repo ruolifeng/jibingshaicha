@@ -331,14 +331,15 @@ export const STOP_TREATMENT_REASON_OPTIONS = [
   { value: "转入耐多药治疗", label: "转入耐多药治疗" }
 ]
 
-/** V16 数据来源（populationType）标签映射，用于聚合列表的"数据来源"列 */
+/** V16/V17 数据来源（populationType）标签映射，用于聚合列表的"数据来源"列 */
 export const POPULATION_TYPE_LABEL_MAP: Record<string, { label: string; type: "primary" | "success" | "warning" | "danger" | "info" }> = {
   school: { label: "学生筛查", type: "primary" },
   keyPopulation: { label: "重点人群", type: "success" },
   regular: { label: "常规筛查", type: "warning" },
   epidemic: { label: "大疫情", type: "danger" },
   referral: { label: "推介", type: "info" },
-  closeContact: { label: "密接", type: "info" }
+  closeContact: { label: "密接", type: "info" },
+  specialDisease: { label: "专病网", type: "warning" }
 }
 
 /** 获取 populationType 对应的 label */

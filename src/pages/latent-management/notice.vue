@@ -45,8 +45,7 @@ async function fetchData() {
     // 不传 populationType 或传空则返回全部；若用户选择某来源则过滤
     if (!params.populationType) delete params.populationType
     const { data } = await getLatentAggregateListApi(params)
-    // 前端过滤密接（密接潜伏感染在密接菜单中单独管理）
-    tableData.value = (data.records as any[]).filter((r: any) => r.populationType !== "closeContact")
+    tableData.value = data.records
     total.value = data.total
   } finally {
     loading.value = false

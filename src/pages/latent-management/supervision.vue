@@ -28,7 +28,7 @@ async function fetchData() {
     }
     if (!params.populationType) delete params.populationType
     const { data } = await getLatentAggregateListApi(params)
-    tableData.value = (data.records as any[]).filter((r: any) => r.populationType !== "closeContact")
+    tableData.value = data.records
     total.value = data.total
   } finally {
     loading.value = false
@@ -60,10 +60,10 @@ const supervisionForm = reactive({
   birthDate: "",
   age: "",
   ethnicity: "",
-  crowdCategory: "",
+  category: "",
   treatmentPlan: "",
-  startDate: "",
-  endDate: "",
+  treatmentStartDate: "",
+  treatmentEndDate: "",
   managingUnit: "",
   supervisingDoctor: "",
   remark: "",
@@ -88,10 +88,10 @@ async function openSupervision(row: any, viewOnly = false) {
         birthDate: row.birthDate ?? "",
         age: row.age ?? "",
         ethnicity: row.ethnicity ?? "",
-        crowdCategory: "",
+        category: "",
         treatmentPlan: "",
-        startDate: "",
-        endDate: "",
+        treatmentStartDate: "",
+        treatmentEndDate: "",
         managingUnit: "",
         supervisingDoctor: "",
         remark: "",
@@ -130,6 +130,7 @@ async function handleSupervisionSave(archive = false) {
             <el-option label="学生筛查" value="school" />
             <el-option label="重点人群" value="keyPopulation" />
             <el-option label="常规筛查" value="regular" />
+            <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
           </el-select>
         </el-form-item>
@@ -230,7 +231,7 @@ async function handleSupervisionSave(archive = false) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="人群分类">
-              <el-select v-model="supervisionForm.crowdCategory">
+              <el-select v-model="supervisionForm.category">
                 <el-option v-for="opt in CROWD_CATEGORY_OPTIONS" :key="opt" :label="opt" :value="opt" />
               </el-select>
             </el-form-item>
@@ -244,12 +245,12 @@ async function handleSupervisionSave(archive = false) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="治疗开始时间">
-              <el-date-picker v-model="supervisionForm.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+              <el-date-picker v-model="supervisionForm.treatmentStartDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="治疗结束时间">
-              <el-date-picker v-model="supervisionForm.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+              <el-date-picker v-model="supervisionForm.treatmentEndDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">

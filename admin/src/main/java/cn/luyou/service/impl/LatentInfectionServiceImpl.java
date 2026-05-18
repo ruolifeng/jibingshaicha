@@ -82,8 +82,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
                                              String referralResult) {
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
-                .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
+        if (StrUtil.isNotBlank(populationType)) {
+            // 指定来源时精确匹配（密接模块传 closeContact，其他模块传具体值）
+            wrapper.eq(LatentInfection::getPopulationType, populationType);
+        } else {
+            // 聚合查询时自动排除密接（密接潜伏感染在密接人群管理菜单中单独管理）
+            wrapper.ne(LatentInfection::getPopulationType, "closeContact");
+        }
+        wrapper.like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived)

@@ -33,7 +33,7 @@ public class PatientController {
     public ResultResponse<IPage<Patient>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam String populationType,
+            @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber) {
         return ResultRes.success(patientService.queryPage(page, size, populationType, name, idNumber, 0));
@@ -44,7 +44,7 @@ public class PatientController {
     public ResultResponse<IPage<Patient>> history(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam String populationType,
+            @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String startTime,
@@ -74,6 +74,13 @@ public class PatientController {
             @RequestParam("file") MultipartFile file,
             @RequestParam String populationType) {
         int count = patientService.importEpidemic(file, populationType);
+        return ResultRes.success(count);
+    }
+
+    @Operation(summary = "导入专病网/病案信息表（populationType=specialDisease）")
+    @PostMapping("/import-special-disease")
+    public ResultResponse<Integer> importSpecialDisease(@RequestParam("file") MultipartFile file) {
+        int count = patientService.importSpecialDisease(file);
         return ResultRes.success(count);
     }
 

@@ -23,4 +23,11 @@ public interface PatientService extends IService<Patient> {
 
     /** 删除患者（级联软删首次随访、后续随访、服药记录、通知单） */
     void deletePatient(Long id);
+
+    /**
+     * 导入专病网/病案信息表（populationType='specialDisease'）。
+     * 提取字段：患者姓名、身份证号、性别、出生日期、年龄、联系电话、人群分类、
+     *          现详细住址、户籍地址、现管单位、诊断结果（病原学阴/阳性）
+     */
+    int importSpecialDisease(MultipartFile file);
 }

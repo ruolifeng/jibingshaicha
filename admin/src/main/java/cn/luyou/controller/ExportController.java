@@ -1,7 +1,15 @@
 package cn.luyou.controller;
 
 import cn.hutool.core.util.StrUtil;
+import cn.luyou.mapper.FirstVisitMapper;
+import cn.luyou.mapper.FollowUpVisitMapper;
+import cn.luyou.mapper.MedicationManagementMapper;
+import cn.luyou.mapper.NoticeMapper;
+import cn.luyou.model.FirstVisit;
+import cn.luyou.model.FollowUpVisit;
 import cn.luyou.model.LatentInfection;
+import cn.luyou.model.MedicationManagement;
+import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
@@ -34,9 +42,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,8 +62,25 @@ public class ExportController {
     private final LatentInfectionService latentInfectionService;
     private final PatientService patientService;
     private final SupervisionFormService supervisionFormService;
+    private final NoticeMapper noticeMapper;
+    private final FirstVisitMapper firstVisitMapper;
+    private final FollowUpVisitMapper followUpVisitMapper;
+    private final MedicationManagementMapper medicationManagementMapper;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /** 数据来源（populationType）→ 中文标签（与前端 POPULATION_TYPE_LABEL_MAP 保持一致） */
+    private static final Map<String, String> POP_TYPE_LABEL = new HashMap<>();
+    static {
+        POP_TYPE_LABEL.put("school",         "学生筛查");
+        POP_TYPE_LABEL.put("keyPopulation",  "重点人群");
+        POP_TYPE_LABEL.put("regular",        "常规筛查");
+        POP_TYPE_LABEL.put("epidemic",       "大疫情");
+        POP_TYPE_LABEL.put("referral",       "推介");
+        POP_TYPE_LABEL.put("closeContact",   "密接");
+        POP_TYPE_LABEL.put("specialDisease", "专病网");
+    }
 
     /** 大汇总表：三类人群筛查数据合并导出 */
     @Operation(summary = "大汇总表导出")
@@ -502,6 +529,202 @@ public class ExportController {
             log.error("[导出] 患者列表导出失败 populationType={}", populationType, e);
             throw e;
         }
+    }
+
+    // ==================== P6 新增：全来源患者/潜伏总表导出 ====================
+
+    /**
+     * 患者信息总表（全部来源，含来源标签）。
+     * populationType 不传则导出全部来源（school/keyPopulation/regular/epidemic/referral/closeContact）。
+     */
+    @Operation(summary = "患者信息总表导出（全部来源，含来源标签）")
+    @GetMapping("/all-patients")
+    public void exportAllPatients(
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) Integer archived,
+            HttpServletResponse response) throws IOException {
+
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
+                .eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
+                .like(StrUtil.isNotBlank(name), Patient::getName, name)
+                .like(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
+                .eq(archived != null, Patient::getArchived, archived)
+                .orderByAsc(Patient::getPopulationType)
+                .orderByDesc(Patient::getCreateTime);
+
+        List<Patient> patientList = patientService.list(wrapper);
+        List<Long> patientIds = patientList.stream().map(Patient::getId).collect(Collectors.toList());
+
+        // 批量查询患者通知单（每患者取最新一条）
+        Map<Long, Notice> noticeMap = new HashMap<>();
+        if (!patientIds.isEmpty()) {
+            noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                            .in(Notice::getBizId, patientIds)
+                            .eq(Notice::getNoticeType, "patient")
+                            .orderByDesc(Notice::getId))
+                    .forEach(n -> noticeMap.putIfAbsent(n.getBizId(), n));
+        }
+
+        // 批量判断是否完成首次随访
+        Set<Long> firstVisitSet = new HashSet<>();
+        if (!patientIds.isEmpty()) {
+            firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
+                            .in(FirstVisit::getPatientId, patientIds))
+                    .forEach(fv -> firstVisitSet.add(fv.getPatientId()));
+        }
+
+        // 批量统计后续随访次数
+        Map<Long, Long> followUpCountMap = new HashMap<>();
+        if (!patientIds.isEmpty()) {
+            followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
+                            .in(FollowUpVisit::getPatientId, patientIds))
+                    .forEach(fv -> followUpCountMap.merge(fv.getPatientId(), 1L, Long::sum));
+        }
+
+        // 批量获取服药管理记录（每患者取最新一条）
+        Map<Long, MedicationManagement> medicationMap = new HashMap<>();
+        if (!patientIds.isEmpty()) {
+            medicationManagementMapper.selectList(new LambdaQueryWrapper<MedicationManagement>()
+                            .in(MedicationManagement::getPatientId, patientIds)
+                            .orderByDesc(MedicationManagement::getId))
+                    .forEach(m -> medicationMap.putIfAbsent(m.getPatientId(), m));
+        }
+
+        int seq = 1;
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Patient p : patientList) {
+            Notice notice = noticeMap.get(p.getId());
+            MedicationManagement med = medicationMap.get(p.getId());
+            String noticeStatusLabel = notice == null ? "未发送"
+                    : (Integer.valueOf(2).equals(notice.getStatus()) ? "已确认"
+                    : (Integer.valueOf(1).equals(notice.getStatus()) ? "已发送" : "草稿"));
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("序号", seq++);
+            row.put("数据来源", POP_TYPE_LABEL.getOrDefault(p.getPopulationType(), p.getPopulationType()));
+            row.put("姓名", p.getName());
+            row.put("性别", p.getGender());
+            row.put("出生日期", formatDate(p.getBirthDate()));
+            row.put("年龄", p.getAge());
+            row.put("证件类型", p.getIdType());
+            row.put("证件号", p.getIdNumber());
+            row.put("民族", p.getEthnicity());
+            row.put("联系电话", p.getPhone());
+            row.put("户籍地址", p.getHouseholdAddress());
+            row.put("现住址", p.getCurrentAddress());
+            row.put("最终诊断结果", p.getDiagnosisResult());
+            row.put("通知单状态", noticeStatusLabel);
+            row.put("首次随访", firstVisitSet.contains(p.getId()) ? "已完成" : "未完成");
+            row.put("后续随访次数", followUpCountMap.getOrDefault(p.getId(), 0L));
+            row.put("服药管理", med != null ? "已录入" : "未录入");
+            row.put("是否归档", Integer.valueOf(1).equals(p.getArchived()) ? "已归档" : "未归档");
+            row.put("归档时间", p.getArchivedTime() != null ? p.getArchivedTime().format(DATETIME_FMT) : "");
+            row.put("创建时间", p.getCreateTime() != null ? p.getCreateTime().format(DATETIME_FMT) : "");
+            rows.add(row);
+        }
+
+        log.info("[导出] 患者信息总表 {} 条", rows.size());
+        writeExcel(response, "患者信息总表", rows);
+    }
+
+    /**
+     * 潜伏感染者信息总表（全部来源，含来源标签）。
+     * populationType 不传时默认排除密接（密接潜伏不纳入聚合统计）；若明确传 closeContact 则包含。
+     */
+    @Operation(summary = "潜伏感染者信息总表导出（全部来源，含来源标签）")
+    @GetMapping("/all-latent")
+    public void exportAllLatent(
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) Integer archived,
+            HttpServletResponse response) throws IOException {
+
+        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
+                .eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
+                .ne(StrUtil.isBlank(populationType), LatentInfection::getPopulationType, "closeContact")
+                .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
+                .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                .eq(archived != null, LatentInfection::getArchived, archived)
+                .orderByAsc(LatentInfection::getPopulationType)
+                .orderByDesc(LatentInfection::getCreateTime);
+
+        List<LatentInfection> latentList = latentInfectionService.list(wrapper);
+        List<Long> latentIds = latentList.stream().map(LatentInfection::getId).collect(Collectors.toList());
+
+        // 批量查询潜伏通知单
+        Map<Long, Notice> noticeMap = new HashMap<>();
+        if (!latentIds.isEmpty()) {
+            noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                            .in(Notice::getBizId, latentIds)
+                            .eq(Notice::getNoticeType, "latent")
+                            .orderByDesc(Notice::getId))
+                    .forEach(n -> noticeMap.putIfAbsent(n.getBizId(), n));
+        }
+
+        // 批量查询督导表
+        Map<Long, SupervisionForm> supervisionMap = new HashMap<>();
+        if (!latentIds.isEmpty()) {
+            supervisionFormService.lambdaQuery()
+                    .in(SupervisionForm::getLatentInfectionId, latentIds)
+                    .orderByDesc(SupervisionForm::getId)
+                    .list()
+                    .forEach(sv -> supervisionMap.putIfAbsent(sv.getLatentInfectionId(), sv));
+        }
+
+        int seq = 1;
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (LatentInfection r : latentList) {
+            Notice notice = noticeMap.get(r.getId());
+            SupervisionForm sv = supervisionMap.get(r.getId());
+
+            String trackingLabel = switch (r.getTrackingStatus() != null ? r.getTrackingStatus() : 0) {
+                case 1 -> "到位";
+                case 2 -> "未到位";
+                case 3 -> "其他";
+                case 4 -> "强制结束";
+                default -> "待追踪";
+            };
+            String noticeStatusLabel = notice == null ? "未发送"
+                    : (Integer.valueOf(2).equals(notice.getStatus()) ? "已确认"
+                    : (Integer.valueOf(1).equals(notice.getStatus()) ? "已发送" : "草稿"));
+            String supervisionLabel = sv == null ? "未填写"
+                    : (Integer.valueOf(2).equals(sv.getStatus()) ? "已完成" : "填写中");
+            String treatmentLabel = r.getTreatmentPhase() == null ? "" : switch (r.getTreatmentPhase()) {
+                case 1 -> "预防治疗中";
+                case 2 -> "已结案";
+                default -> "未开始";
+            };
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("序号", seq++);
+            row.put("数据来源", POP_TYPE_LABEL.getOrDefault(r.getPopulationType(), r.getPopulationType()));
+            row.put("姓名", r.getName());
+            row.put("性别", r.getGender());
+            row.put("年龄", r.getAge());
+            row.put("证件号", r.getIdNumber());
+            row.put("联系电话", r.getPhone());
+            row.put("感染筛查结果", r.getInfectionResult());
+            row.put("追踪状态", trackingLabel);
+            row.put("未到位次数", r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0);
+            row.put("首次诊断结果", r.getDiagnosisFirst());
+            row.put("最终诊断结果", r.getDiagnosisResult());
+            row.put("通知单状态", noticeStatusLabel);
+            row.put("督导表状态", supervisionLabel);
+            row.put("预防性治疗方案", sv != null ? sv.getTreatmentPlan() : "");
+            row.put("预防性治疗开始时间", formatDate(sv != null ? sv.getTreatmentStartDate() : null));
+            row.put("预防性治疗完成时间", formatDate(sv != null ? sv.getTreatmentEndDate() : null));
+            row.put("预防性治疗结果", sv != null ? sv.getPreventiveResult() : "");
+            row.put("治疗阶段", treatmentLabel);
+            row.put("是否归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "未归档");
+            row.put("创建时间", r.getCreateTime() != null ? r.getCreateTime().format(DATETIME_FMT) : "");
+            rows.add(row);
+        }
+
+        log.info("[导出] 潜伏感染者信息总表 {} 条", rows.size());
+        writeExcel(response, "潜伏感染者信息总表", rows);
     }
 
     private String formatDate(LocalDate date) {

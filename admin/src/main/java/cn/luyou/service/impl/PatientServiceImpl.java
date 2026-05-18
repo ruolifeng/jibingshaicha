@@ -129,7 +129,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     p.setInfectionResult(s.getInfectionResult());
                 }
             });
-        } else if ("keyPopulation".equals(populationType)) {
+        } else if ("keyPopulation".equals(populationType) || "regular".equals(populationType)) {
+            // regular 筛查数据也存储在 screening_key_population 表中（通过 source_type 区分）
             List<ScreeningKeyPopulation> keyPops = screeningKeyPopulationMapper.selectBatchIds(screeningIds);
             Map<Long, ScreeningKeyPopulation> keyPopMap = keyPops.stream()
                     .collect(Collectors.toMap(ScreeningKeyPopulation::getId, k -> k));
@@ -378,5 +379,103 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             }
         }
         return null;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int importSpecialDisease(MultipartFile file) {
+        List<Map<Integer, String>> allRows = new ArrayList<>();
+        try {
+            EasyExcel.read(file.getInputStream(), new com.alibaba.excel.read.listener.ReadListener<Map<Integer, String>>() {
+                @Override
+                public void invoke(Map<Integer, String> data, com.alibaba.excel.context.AnalysisContext context) {
+                    allRows.add(new LinkedHashMap<>(data));
+                }
+                @Override
+                public void doAfterAllAnalysed(com.alibaba.excel.context.AnalysisContext context) {
+                    log.info("专病表解析完成，共 {} 行（含表头）", allRows.size());
+                }
+            }).sheet().headRowNumber(0).doRead();
+        } catch (java.io.IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "专病表Excel读取失败");
+        }
+
+        if (allRows.size() < 2) {
+            log.warn("专病表无数据行，跳过导入");
+            return 0;
+        }
+
+        // 解析表头
+        Map<Integer, String> headerRow = allRows.get(0);
+        Map<String, Integer> headerIndex = new LinkedHashMap<>();
+        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
+            if (StrUtil.isNotBlank(entry.getValue())) {
+                headerIndex.put(entry.getValue().trim(), entry.getKey());
+            }
+        }
+        log.info("专病表表头解析：{}", headerIndex.keySet());
+
+        List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
+        int count = 0;
+        for (Map<Integer, String> row : dataRows) {
+            String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
+            String idNumber = getFieldByHeader(row, headerIndex, "身份证号", "有效证件号", "证件号");
+            if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) continue;
+
+            String gender = getFieldByHeader(row, headerIndex, "性别");
+            String birthDateStr = getFieldByHeader(row, headerIndex, "出生日期");
+            String ageStr = getFieldByHeader(row, headerIndex, "年龄");
+            String phone = getFieldByHeader(row, headerIndex, "联系电话", "电话");
+            String currentAddress = getFieldByHeader(row, headerIndex, "现详细住址", "现住地址", "现住址", "现地址");
+            String householdAddress = getFieldByHeader(row, headerIndex, "户籍地址", "户籍所在地");
+            String diagnosisResult = getFieldByHeader(row, headerIndex, "诊断结果");
+            String crowdCategory = getFieldByHeader(row, headerIndex, "人群分类");
+            String currentUnit = getFieldByHeader(row, headerIndex, "现管单位");
+
+            // 将人群分类和现管单位等额外字段存入 epidemicData JSON
+            java.util.Map<String, String> extraFields = new java.util.LinkedHashMap<>();
+            if (StrUtil.isNotBlank(crowdCategory)) extraFields.put("人群分类", crowdCategory);
+            if (StrUtil.isNotBlank(currentUnit)) extraFields.put("现管单位", currentUnit);
+            String extraJson = null;
+            try {
+                extraJson = objectMapper.writeValueAsString(extraFields);
+            } catch (Exception ignored) {}
+
+            java.time.LocalDate birthDate = null;
+            if (StrUtil.isNotBlank(birthDateStr)) {
+                try { birthDate = java.time.LocalDate.parse(birthDateStr); } catch (Exception ignored) {
+                    try { birthDate = java.time.LocalDate.parse(birthDateStr,
+                            java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd")); } catch (Exception ignored2) {}
+                }
+            }
+            Integer age = null;
+            if (StrUtil.isNotBlank(ageStr)) {
+                try { age = Integer.parseInt(ageStr.replaceAll("[^0-9]", "")); } catch (Exception ignored) {}
+            }
+
+            Patient patient = Patient.builder()
+                    .populationType("specialDisease")
+                    .source("specialDisease")
+                    .name(name)
+                    .idType("居民身份证")
+                    .idNumber(idNumber)
+                    .gender(gender)
+                    .birthDate(birthDate)
+                    .age(age)
+                    .phone(phone)
+                    .currentAddress(currentAddress)
+                    .householdAddress(householdAddress)
+                    .diagnosisResult(diagnosisResult)
+                    .epidemicData(extraJson)
+                    .archived(0)
+                    .departmentId(BaseContext.getCurrentDepartmentId())
+                    .build();
+
+            save(patient);
+            count++;
+        }
+
+        log.info("专病表导入完成：成功创建 {} 条患者记录", count);
+        return count;
     }
 }

@@ -87,3 +87,33 @@ export function exportCustomApi(populationType: string, fields: string, year?: s
     responseType: "blob"
   })
 }
+
+/** P6 新增：患者信息总表导出（全部来源，含来源标签） */
+export function exportAllPatientsApi(params?: {
+  populationType?: string
+  name?: string
+  idNumber?: string
+  archived?: number
+}) {
+  return request<Blob>({
+    url: "export/all-patients",
+    method: "get",
+    params,
+    responseType: "blob"
+  })
+}
+
+/** P6 新增：潜伏感染者信息总表导出（全部来源，含来源标签，默认排除密接） */
+export function exportAllLatentApi(params?: {
+  populationType?: string
+  name?: string
+  idNumber?: string
+  archived?: number
+}) {
+  return request<Blob>({
+    url: "export/all-latent",
+    method: "get",
+    params,
+    responseType: "blob"
+  })
+}

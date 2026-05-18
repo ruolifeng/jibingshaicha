@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { ArrowDown } from "@element-plus/icons-vue"
 import {
+  exportAllLatentApi,
+  exportAllPatientsApi,
   exportCategoryTableApi,
   exportCustomApi,
   exportDistrictStatisticsApi,
@@ -177,11 +179,88 @@ async function handleExportCustom() {
   }
 }
 
+// ==================== P6 新增：信息总表导出 ====================
+/** 患者总表筛选条件 */
+const patientFilterForm = reactive({
+  populationType: "",
+  name: "",
+  idNumber: "",
+  archived: undefined as number | undefined
+})
+
+/** 潜伏感染者总表筛选条件 */
+const latentFilterForm = reactive({
+  populationType: "",
+  name: "",
+  idNumber: "",
+  archived: undefined as number | undefined
+})
+
+/** 兼容旧引用 */
+const aggregateFilterForm = patientFilterForm
+
+/** 患者总表筛选来源（含密接、专病网） */
+const PATIENT_POP_OPTIONS = [
+  { label: "全部来源", value: "" },
+  { label: "学生筛查", value: "school" },
+  { label: "重点人群", value: "keyPopulation" },
+  { label: "常规筛查", value: "regular" },
+  { label: "大疫情", value: "epidemic" },
+  { label: "推介", value: "referral" },
+  { label: "专病网", value: "specialDisease" },
+  { label: "密接", value: "closeContact" }
+]
+
+/** 潜伏感染者总表筛选来源（不含密接、专病网，密接潜伏由密接人群管理独立维护） */
+const LATENT_POP_OPTIONS = [
+  { label: "全部来源", value: "" },
+  { label: "学生筛查", value: "school" },
+  { label: "重点人群", value: "keyPopulation" },
+  { label: "常规筛查", value: "regular" },
+  { label: "大疫情", value: "epidemic" },
+  { label: "推介", value: "referral" }
+]
+
+/** 兼容旧变量名（用于已有 label 查找） */
+const AGGREGATE_POP_OPTIONS = PATIENT_POP_OPTIONS
+
+async function handleExportAllPatients() {
+  try {
+    const params: Record<string, any> = {}
+    if (aggregateFilterForm.populationType) params.populationType = aggregateFilterForm.populationType
+    if (aggregateFilterForm.name) params.name = aggregateFilterForm.name
+    if (aggregateFilterForm.idNumber) params.idNumber = aggregateFilterForm.idNumber
+    if (aggregateFilterForm.archived !== undefined) params.archived = aggregateFilterForm.archived
+    const data = await exportAllPatientsApi(params)
+    const label = AGGREGATE_POP_OPTIONS.find(o => o.value === aggregateFilterForm.populationType)?.label || "全部来源"
+    downloadBlob(data as unknown as Blob, `患者信息总表_${label}.xlsx`)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  }
+}
+
+async function handleExportAllLatent() {
+  try {
+    const params: Record<string, any> = {}
+    if (latentFilterForm.populationType) params.populationType = latentFilterForm.populationType
+    if (latentFilterForm.name) params.name = latentFilterForm.name
+    if (latentFilterForm.idNumber) params.idNumber = latentFilterForm.idNumber
+    if (latentFilterForm.archived !== undefined) params.archived = latentFilterForm.archived
+    const data = await exportAllLatentApi(params)
+    const label = LATENT_POP_OPTIONS.find(o => o.value === (latentFilterForm.populationType || ""))?.label || "全部来源"
+    downloadBlob(data as unknown as Blob, `潜伏感染者信息总表_${label}.xlsx`)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  }
+}
+
 // ==================== Tab 切换时自动加载数据 ====================
 function handleTabChange(tab: string | number) {
   if (tab === "school") {
     fetchSchoolStatistics()
-  } else {
+  } else if (tab === "district") {
     fetchDistrictStatistics()
   }
 }
@@ -302,6 +381,75 @@ onMounted(() => {
             <el-table-column prop="tbPatientCount" label="肺结核/疑似肺结核患者人数" />
             <el-table-column prop="remark" label="备注" />
           </el-table>
+        </el-tab-pane>
+
+        <!-- P6 新增：信息总表导出 -->
+        <el-tab-pane label="信息总表导出" name="aggregate">
+          <el-alert
+            title="信息总表聚合全部来源数据（学生/重点/常规/大疫情/推介/密接），导出 Excel 文件。默认导出全部来源，可按数据来源、姓名、证件号筛选。"
+            type="info" :closable="false" style="margin-bottom: 16px"
+          />
+          <!-- 患者信息总表 -->
+          <el-card shadow="hover" style="margin-bottom: 16px">
+            <template #header>
+              <span style="font-weight: 600">患者信息总表</span>
+              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 常规 / 大疫情 / 推介 / 专病网 / 密接</span>
+            </template>
+            <el-form :model="patientFilterForm" inline style="margin-bottom: 12px">
+              <el-form-item label="数据来源">
+                <el-select v-model="patientFilterForm.populationType" style="width: 140px">
+                  <el-option v-for="opt in PATIENT_POP_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="姓名">
+                <el-input v-model="patientFilterForm.name" placeholder="姓名筛选" clearable style="width: 120px" />
+              </el-form-item>
+              <el-form-item label="证件号">
+                <el-input v-model="patientFilterForm.idNumber" placeholder="证件号筛选" clearable style="width: 180px" />
+              </el-form-item>
+              <el-form-item label="归档">
+                <el-select v-model="patientFilterForm.archived" placeholder="全部" clearable style="width: 90px">
+                  <el-option label="未归档" :value="0" />
+                  <el-option label="已归档" :value="1" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+            <p style="color: #606266; font-size: 13px; margin-bottom: 12px">
+              包含字段：数据来源、基本信息、诊断结果、通知单状态、首次随访、后续随访次数、服药管理、归档状态、归档时间
+            </p>
+            <el-button type="primary" @click="handleExportAllPatients">导出患者信息总表</el-button>
+          </el-card>
+
+          <!-- 潜伏感染者信息总表 -->
+          <el-card shadow="hover">
+            <template #header>
+              <span style="font-weight: 600">潜伏感染者信息总表</span>
+              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 常规 / 大疫情 / 推介（密接潜伏独立管理，不计入此表）</span>
+            </template>
+            <el-form :model="latentFilterForm" inline style="margin-bottom: 12px">
+              <el-form-item label="数据来源">
+                <el-select v-model="latentFilterForm.populationType" style="width: 140px">
+                  <el-option v-for="opt in LATENT_POP_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="姓名">
+                <el-input v-model="latentFilterForm.name" placeholder="姓名筛选" clearable style="width: 120px" />
+              </el-form-item>
+              <el-form-item label="证件号">
+                <el-input v-model="latentFilterForm.idNumber" placeholder="证件号筛选" clearable style="width: 180px" />
+              </el-form-item>
+              <el-form-item label="归档">
+                <el-select v-model="latentFilterForm.archived" placeholder="全部" clearable style="width: 90px">
+                  <el-option label="未归档" :value="0" />
+                  <el-option label="已归档" :value="1" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+            <p style="color: #606266; font-size: 13px; margin-bottom: 12px">
+              包含字段：数据来源、基本信息、感染筛查结果、追踪状态、诊断结果、通知单状态、督导表状态、预防性治疗信息、治疗阶段、归档状态
+            </p>
+            <el-button type="primary" @click="handleExportAllLatent">导出潜伏感染者信息总表</el-button>
+          </el-card>
         </el-tab-pane>
       </el-tabs>
     </el-card>

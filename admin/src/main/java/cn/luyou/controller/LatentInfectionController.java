@@ -36,7 +36,7 @@ public class LatentInfectionController {
     public ResultResponse<IPage<LatentInfection>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam String populationType,
+            @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) Integer trackingStatus,
