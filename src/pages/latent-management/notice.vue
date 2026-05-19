@@ -20,6 +20,7 @@ const { paginationData, handleCurrentChange, handleSizeChange } = usePagination(
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+const FETCH_ALL_SIZE = 10000
 
 const searchForm = reactive({
   name: "",
@@ -29,24 +30,26 @@ const searchForm = reactive({
   populationType: "" // 留空 = 全部来源（后端不过滤）
 })
 
-/** 潜伏感染列表仅显示 populationType 不为 closeContact 的记录
- *  前端侧过滤：若后端支持 exclude 参数则可改为后端过滤。
- *  当前策略：传 populationType="" 获取全部，再在前端标注来源。
+/** 聚合潜伏感染者通知单管理，不含密接来源（密接潜伏由密接管理菜单独立处理）。
+ *  后端暂不支持 populationType NOT IN 过滤，前端拿到全量数据后过滤。
+ *  TODO: 待后端支持 excludePopulationType 参数后改为服务端过滤，以修正分页总数偏差。
  */
 async function fetchData() {
   loading.value = true
   try {
     const params: Record<string, any> = {
-      page: paginationData.currentPage,
-      size: paginationData.pageSize,
-      referralResult: "pending",
+      page: 1,
+      size: FETCH_ALL_SIZE,
       ...searchForm
     }
-    // 不传 populationType 或传空则返回全部；若用户选择某来源则过滤
     if (!params.populationType) delete params.populationType
     const { data } = await getLatentAggregateListApi(params)
-    tableData.value = data.records
-    total.value = data.total
+    // 前端过滤后再本地分页，避免 total 与展示条数不一致导致空页
+    const filtered = (data.records ?? []).filter((r: any) => r.populationType !== "closeContact")
+    const start = (paginationData.currentPage - 1) * paginationData.pageSize
+    const end = start + paginationData.pageSize
+    tableData.value = filtered.slice(start, end)
+    total.value = filtered.length
   } finally {
     loading.value = false
   }

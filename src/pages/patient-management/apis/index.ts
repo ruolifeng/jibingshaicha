@@ -50,7 +50,7 @@ export function saveFirstVisitApi(data: Record<string, any>) {
 
 /** 查询首次随访详情 */
 export function getFirstVisitDetailApi(patientId: number) {
-  return request<ApiResponseData<any>>({ url: `patient/first-visit/detail/${patientId}`, method: "get" })
+  return request<ApiResponseData<any>>({ url: `patient/first-visit/${patientId}`, method: "get" })
 }
 
 /** 保存后续随访（每次新增一条） */
@@ -70,7 +70,7 @@ export function saveMedicationApi(data: Record<string, any>) {
 
 /** 查询服药管理 */
 export function getMedicationDetailApi(patientId: number) {
-  return request<ApiResponseData<any>>({ url: `patient/medication/detail/${patientId}`, method: "get" })
+  return request<ApiResponseData<any>>({ url: `patient/medication/${patientId}`, method: "get" })
 }
 
 /** 转诊操作（患者） */

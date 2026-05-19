@@ -163,7 +163,7 @@ function goToLatent() {
 
 /** 跳转到密接患者管理页 */
 function goToPatient() {
-  router.push("/close-contact/patient")
+  router.push("/patient-management/follow-up")
 }
 
 /** 编辑弹窗 */

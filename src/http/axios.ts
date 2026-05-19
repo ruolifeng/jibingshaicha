@@ -127,12 +127,13 @@ function createRequest(instance: AxiosInstance) {
       headers: {
         // 携带 Token
         "Authorization": token ? `Bearer ${token}` : undefined,
-        "Content-Type": "application/json"
+        // FormData 请求（文件上传）不设 Content-Type，让浏览器自动带上 multipart/form-data boundary
+        "Content-Type": config.data instanceof FormData ? undefined : "application/json"
       },
       // 请求体
       data: {},
-      // 请求超时
-      timeout: 5000,
+      // 文件上传（FormData）超时 60s，普通请求 10s
+      timeout: config.data instanceof FormData ? 60000 : 10000,
       // 跨域请求时是否携带 Cookies
       withCredentials: false
     }

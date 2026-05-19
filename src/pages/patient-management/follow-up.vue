@@ -4,6 +4,16 @@ import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/d
 import { usePatientList } from "./composables/usePatientList"
 import { getFollowUpVisitListApi } from "./apis"
 
+/**
+ * 随访方式显示兼容：
+ *   V15 以前存文本（"门诊"/"家庭"/"电话"），V15 之后存编码（"1"/"2"/"3"）。
+ *   此处统一映射为中文，保证历史数据也能正确展示。
+ */
+const VISIT_METHOD_MAP: Record<string, string> = { "1": "门诊", "2": "家庭", "3": "电话" }
+function formatVisitMethod(val: string): string {
+  return VISIT_METHOD_MAP[val] ?? val ?? "-"
+}
+
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
 // ==================== 后续随访弹窗 ====================
@@ -109,7 +119,9 @@ async function viewHistory(row: any) {
         <el-table-column prop="visitSeq" label="第几次" width="70" />
         <el-table-column prop="visitDate" label="随访日期" width="110" />
         <el-table-column prop="treatmentMonth" label="治疗月序" width="80" />
-        <el-table-column prop="visitMethod" label="随访方式" width="90" />
+        <el-table-column label="随访方式" width="90">
+          <template #default="{ row }">{{ formatVisitMethod(row.visitMethod) }}</template>
+        </el-table-column>
         <el-table-column prop="missedDoses" label="漏服次数" width="80" />
         <el-table-column prop="nextVisitDate" label="下次随访" width="110" />
         <el-table-column prop="doctorSignature" label="医生签名" width="100" />

@@ -708,16 +708,27 @@ UPDATE `permission` SET `parent_id` = 60 WHERE `code` IN ('user:create','user:ed
 UPDATE `permission` SET `parent_id` = 61 WHERE `code` = 'permission:assign';
 
 -- ==================== 潜伏治疗扩展（已有数据库升级用） ====================
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `treatment_phase` TINYINT NOT NULL DEFAULT 0 COMMENT '治疗阶段：0未开始 1预防治疗中 2已结案' AFTER `diagnosis_result`;
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `medication_status` TINYINT DEFAULT NULL COMMENT '服药状态：1按要求服药 2不服药' AFTER `treatment_phase`;
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `archived_time` DATETIME DEFAULT NULL COMMENT '结案归档时间' AFTER `archived`;
+-- 兼容 MySQL < 8.0.29：用存储过程忽略 1060 重复列错误（不支持 ADD COLUMN IF NOT EXISTS）
+DROP PROCEDURE IF EXISTS _latent_treatment_migrate;
+DELIMITER $$
+CREATE PROCEDURE _latent_treatment_migrate()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
 
--- V4 扩展：潜伏感染表新增胸片/诊断/轮次字段
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `has_chest_xray`    VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查' AFTER `tracking_remark`;
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `chest_xray_date`   DATE         DEFAULT NULL COMMENT '胸片检查日期' AFTER `has_chest_xray`;
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `chest_xray_result` VARCHAR(128) DEFAULT NULL COMMENT '胸片检查结果：正常/异常/未查' AFTER `chest_xray_date`;
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `diagnosis_first`   VARCHAR(64)  DEFAULT NULL COMMENT '首次诊断结果' AFTER `chest_xray_result`;
-ALTER TABLE `latent_infection` ADD COLUMN IF NOT EXISTS `active_round`      TINYINT      DEFAULT NULL COMMENT '密接阳性轮次：1首次 2半年后 3一年后' AFTER `diagnosis_first`;
+    ALTER TABLE `latent_infection` ADD COLUMN `treatment_phase` TINYINT NOT NULL DEFAULT 0 COMMENT '治疗阶段：0未开始 1预防治疗中 2已结案' AFTER `diagnosis_result`;
+    ALTER TABLE `latent_infection` ADD COLUMN `medication_status` TINYINT DEFAULT NULL COMMENT '服药状态：1按要求服药 2不服药' AFTER `treatment_phase`;
+    ALTER TABLE `latent_infection` ADD COLUMN `archived_time` DATETIME DEFAULT NULL COMMENT '结案归档时间' AFTER `archived`;
+
+    -- V4 扩展：潜伏感染表新增胸片/诊断/轮次字段
+    ALTER TABLE `latent_infection` ADD COLUMN `has_chest_xray`    VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查' AFTER `tracking_remark`;
+    ALTER TABLE `latent_infection` ADD COLUMN `chest_xray_date`   DATE         DEFAULT NULL COMMENT '胸片检查日期' AFTER `has_chest_xray`;
+    ALTER TABLE `latent_infection` ADD COLUMN `chest_xray_result` VARCHAR(128) DEFAULT NULL COMMENT '胸片检查结果：正常/异常/未查' AFTER `chest_xray_date`;
+    ALTER TABLE `latent_infection` ADD COLUMN `diagnosis_first`   VARCHAR(64)  DEFAULT NULL COMMENT '首次诊断结果' AFTER `chest_xray_result`;
+    ALTER TABLE `latent_infection` ADD COLUMN `active_round`      TINYINT      DEFAULT NULL COMMENT '密接阳性轮次：1首次 2半年后 3一年后' AFTER `diagnosis_first`;
+END$$
+DELIMITER ;
+CALL _latent_treatment_migrate();
+DROP PROCEDURE IF EXISTS _latent_treatment_migrate;
 -- referral_result 新增 suspected 值，无需迁移，注释说明即可
 -- V4 增量迁移（用存储过程忽略 1060 重复列错误，兼容 MySQL）
 DROP PROCEDURE IF EXISTS _v4_migrate;
@@ -804,11 +815,19 @@ WHERE p.`code` IN (
   'closeContact:screening:upload','closeContact:screening:create','closeContact:screening:export','closeContact:screening:edit','closeContact:screening:delete'
 );
 
--- V5 迁移：notice 表补充 ethnicity 字段
-ALTER TABLE `notice` ADD COLUMN IF NOT EXISTS `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT '民族' AFTER `crowd_category`;
+-- V5 迁移：notice 表补充 ethnicity 字段；重点人群筛查表补充乡镇/社区字段
+DROP PROCEDURE IF EXISTS _v5_migrate_notice_key;
+DELIMITER $$
+CREATE PROCEDURE _v5_migrate_notice_key()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
 
--- V5 迁移：重点人群筛查表补充乡镇/社区字段
-ALTER TABLE `screening_key_population` ADD COLUMN `township_community` VARCHAR(128) DEFAULT NULL COMMENT '乡镇/社区' AFTER `household_address`;
+    ALTER TABLE `notice` ADD COLUMN `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT '民族' AFTER `crowd_category`;
+    ALTER TABLE `screening_key_population` ADD COLUMN `township_community` VARCHAR(128) DEFAULT NULL COMMENT '乡镇/社区' AFTER `household_address`;
+END$$
+DELIMITER ;
+CALL _v5_migrate_notice_key();
+DROP PROCEDURE IF EXISTS _v5_migrate_notice_key;
 
 -- ==================== V5 迁移：督导表字段完整重构 ====================
 DROP PROCEDURE IF EXISTS _v5_migrate_supervision;
@@ -907,8 +926,17 @@ WHERE `code` IN (
 );
 
 -- 修复 V5 全新安装数据库中缺失 supervision_content 列导致 SELECT 报错的问题
--- （V4 → V5 迁移的数据库该列已存在，IF NOT EXISTS 可安全幂等执行）
-ALTER TABLE `supervision_form` ADD COLUMN IF NOT EXISTS `supervision_content` TEXT DEFAULT NULL COMMENT '督导内容（V4旧字段，兼容保留）';
+-- （V4 → V5 迁移的数据库该列已存在，重复列错误由 CONTINUE HANDLER 静默忽略）
+DROP PROCEDURE IF EXISTS _v5_fix_supervision_content;
+DELIMITER $$
+CREATE PROCEDURE _v5_fix_supervision_content()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
+    ALTER TABLE `supervision_form` ADD COLUMN `supervision_content` TEXT DEFAULT NULL COMMENT '督导内容（V4旧字段，兼容保留）';
+END$$
+DELIMITER ;
+CALL _v5_fix_supervision_content();
+DROP PROCEDURE IF EXISTS _v5_fix_supervision_content;
 
 -- ==================== 分级诊疗表 ====================
 CREATE TABLE IF NOT EXISTS `referral` (
@@ -1224,46 +1252,63 @@ JOIN `permission` p_new ON p_new.code = 'keyPopulation:latent:diagnosis';
 -- 用户要求："患者管理模块首次入户随访管理，后续随访管理需要增加备注，并可以上传2~6张照片作为附件。"
 --              "后续随访表更改为现在的后续随访表，可多次填写。"（新模板：后续随访服务记录表.xlsx）
 -- 设计原则：保留原字段不删除，向上兼容历史数据；新增字段按 v1.2 §3.3.5 落地。
+-- 使用存储过程兼容重复执行（CONTINUE HANDLER FOR 1060 静默忽略 Duplicate column name）。
 
 -- ---------- first_visit：补 remarks + attachment_urls ----------
-ALTER TABLE `first_visit`
-    ADD COLUMN `remarks`         TEXT DEFAULT NULL COMMENT 'V15 备注'           AFTER `doctor_signature`,
-    ADD COLUMN `attachment_urls` TEXT DEFAULT NULL COMMENT 'V15 附件图片URL JSON数组(2~6张)' AFTER `remarks`;
+DROP PROCEDURE IF EXISTS _v15_migrate_first_visit;
+DELIMITER $$
+CREATE PROCEDURE _v15_migrate_first_visit()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
+    ALTER TABLE `first_visit` ADD COLUMN `remarks`         TEXT DEFAULT NULL COMMENT 'V15 备注'                        AFTER `doctor_signature`;
+    ALTER TABLE `first_visit` ADD COLUMN `attachment_urls` TEXT DEFAULT NULL COMMENT 'V15 附件图片URL JSON数组(2~6张)' AFTER `remarks`;
+END$$
+DELIMITER ;
+CALL _v15_migrate_first_visit();
+DROP PROCEDURE IF EXISTS _v15_migrate_first_visit;
 
 -- ---------- follow_up_visit：按新 Excel 模板《后续随访服务记录表》扩展全部字段 ----------
 -- 旧字段 visit_situation / remarks / attachment_url 保留兼容，新前端不再使用。
 -- 字段命名严格对齐 v1.2 §3.3.5 表格。
-ALTER TABLE `follow_up_visit`
-    ADD COLUMN `treatment_month`           INT          DEFAULT NULL COMMENT 'V15 治疗月序（第X月）'        AFTER `visit_date`,
-    ADD COLUMN `supervisor`                VARCHAR(16)  DEFAULT NULL COMMENT 'V15 督导人员 1医生/2家属/3自服药/4其他' AFTER `treatment_month`,
-    ADD COLUMN `supervisor_other`          VARCHAR(64)  DEFAULT NULL COMMENT 'V15 督导人员-其他'           AFTER `supervisor`,
-    ADD COLUMN `symptoms`                  VARCHAR(64)  DEFAULT NULL COMMENT 'V15 症状及体征（多选0-11,逗号分隔）' AFTER `visit_method`,
-    ADD COLUMN `symptoms_other`            VARCHAR(256) DEFAULT NULL COMMENT 'V15 症状-其它'               AFTER `symptoms`,
-    ADD COLUMN `smoking_amount`            VARCHAR(16)  DEFAULT NULL COMMENT 'V15 吸烟（支/天）'           AFTER `symptoms_other`,
-    ADD COLUMN `drinking_amount`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 饮酒（两/天）'           AFTER `smoking_amount`,
-    ADD COLUMN `chemotherapy_plan`         VARCHAR(256) DEFAULT NULL COMMENT 'V15 化疗方案'               AFTER `drinking_amount`,
-    ADD COLUMN `medication_usage`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 用法 1每日/2间歇'        AFTER `chemotherapy_plan`,
-    ADD COLUMN `drug_form`                 VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药品剂型 1固定剂量/2散装/3板式/4注射' AFTER `medication_usage`,
-    ADD COLUMN `missed_doses`              INT          DEFAULT NULL COMMENT 'V15 漏服药次数'             AFTER `drug_form`,
-    ADD COLUMN `adverse_reaction`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药物不良反应 1无/2有'    AFTER `missed_doses`,
-    ADD COLUMN `adverse_reaction_detail`   VARCHAR(256) DEFAULT NULL COMMENT 'V15 不良反应详情'           AFTER `adverse_reaction`,
-    ADD COLUMN `complication`              VARCHAR(16)  DEFAULT NULL COMMENT 'V15 并发症或合并症 1无/2有' AFTER `adverse_reaction_detail`,
-    ADD COLUMN `complication_detail`       VARCHAR(256) DEFAULT NULL COMMENT 'V15 并发症详情'             AFTER `complication`,
-    ADD COLUMN `referral_department`       VARCHAR(64)  DEFAULT NULL COMMENT 'V15 转诊-科别'              AFTER `complication_detail`,
-    ADD COLUMN `referral_reason`           VARCHAR(256) DEFAULT NULL COMMENT 'V15 转诊-原因'              AFTER `referral_department`,
-    ADD COLUMN `referral_two_week_result`  VARCHAR(256) DEFAULT NULL COMMENT 'V15 2周内随访结果'          AFTER `referral_reason`,
-    ADD COLUMN `handling_opinion`          TEXT         DEFAULT NULL COMMENT 'V15 处理意见'               AFTER `referral_two_week_result`,
-    ADD COLUMN `next_visit_date`           DATE         DEFAULT NULL COMMENT 'V15 下次随访时间'           AFTER `handling_opinion`,
-    ADD COLUMN `doctor_signature`          VARCHAR(64)  DEFAULT NULL COMMENT 'V15 随访医生签名'           AFTER `next_visit_date`,
-    ADD COLUMN `stop_treatment_date`       DATE         DEFAULT NULL COMMENT 'V15 停止治疗时间'           AFTER `doctor_signature`,
-    ADD COLUMN `stop_treatment_reason`     VARCHAR(32)  DEFAULT NULL COMMENT 'V15 停止治疗原因 完成疗程/死亡/丢失/转入耐多药' AFTER `stop_treatment_date`,
-    ADD COLUMN `should_visit_count`        INT          DEFAULT NULL COMMENT 'V15 全程管理-应访视次数'     AFTER `stop_treatment_reason`,
-    ADD COLUMN `actual_visit_count`        INT          DEFAULT NULL COMMENT 'V15 全程管理-实际访视次数'   AFTER `should_visit_count`,
-    ADD COLUMN `should_dose_count`         INT          DEFAULT NULL COMMENT 'V15 全程管理-应服药次数'     AFTER `actual_visit_count`,
-    ADD COLUMN `actual_dose_count`         INT          DEFAULT NULL COMMENT 'V15 全程管理-实际服药次数'   AFTER `should_dose_count`,
-    ADD COLUMN `medication_rate`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 服药率（%）'             AFTER `actual_dose_count`,
-    ADD COLUMN `evaluator_signature`       VARCHAR(64)  DEFAULT NULL COMMENT 'V15 评估医生签名'           AFTER `medication_rate`,
-    ADD COLUMN `attachment_urls`           TEXT         DEFAULT NULL COMMENT 'V15 附件图片URL JSON数组(2~6张)' AFTER `attachment_url`;
+DROP PROCEDURE IF EXISTS _v15_migrate_follow_up;
+DELIMITER $$
+CREATE PROCEDURE _v15_migrate_follow_up()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `treatment_month`           INT          DEFAULT NULL COMMENT 'V15 治疗月序（第X月）'                    AFTER `visit_date`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `supervisor`                VARCHAR(16)  DEFAULT NULL COMMENT 'V15 督导人员 1医生/2家属/3自服药/4其他'    AFTER `treatment_month`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `supervisor_other`          VARCHAR(64)  DEFAULT NULL COMMENT 'V15 督导人员-其他'                         AFTER `supervisor`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `symptoms`                  VARCHAR(64)  DEFAULT NULL COMMENT 'V15 症状及体征（多选0-11,逗号分隔）'        AFTER `visit_method`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `symptoms_other`            VARCHAR(256) DEFAULT NULL COMMENT 'V15 症状-其它'                             AFTER `symptoms`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `smoking_amount`            VARCHAR(16)  DEFAULT NULL COMMENT 'V15 吸烟（支/天）'                         AFTER `symptoms_other`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `drinking_amount`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 饮酒（两/天）'                         AFTER `smoking_amount`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `chemotherapy_plan`         VARCHAR(256) DEFAULT NULL COMMENT 'V15 化疗方案'                              AFTER `drinking_amount`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `medication_usage`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 用法 1每日/2间歇'                       AFTER `chemotherapy_plan`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `drug_form`                 VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药品剂型 1固定剂量/2散装/3板式/4注射'   AFTER `medication_usage`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `missed_doses`              INT          DEFAULT NULL COMMENT 'V15 漏服药次数'                             AFTER `drug_form`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `adverse_reaction`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药物不良反应 1无/2有'                   AFTER `missed_doses`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `adverse_reaction_detail`   VARCHAR(256) DEFAULT NULL COMMENT 'V15 不良反应详情'                          AFTER `adverse_reaction`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `complication`              VARCHAR(16)  DEFAULT NULL COMMENT 'V15 并发症或合并症 1无/2有'                 AFTER `adverse_reaction_detail`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `complication_detail`       VARCHAR(256) DEFAULT NULL COMMENT 'V15 并发症详情'                             AFTER `complication`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `referral_department`       VARCHAR(64)  DEFAULT NULL COMMENT 'V15 转诊-科别'                             AFTER `complication_detail`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `referral_reason`           VARCHAR(256) DEFAULT NULL COMMENT 'V15 转诊-原因'                             AFTER `referral_department`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `referral_two_week_result`  VARCHAR(256) DEFAULT NULL COMMENT 'V15 2周内随访结果'                         AFTER `referral_reason`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `handling_opinion`          TEXT         DEFAULT NULL COMMENT 'V15 处理意见'                              AFTER `referral_two_week_result`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `next_visit_date`           DATE         DEFAULT NULL COMMENT 'V15 下次随访时间'                          AFTER `handling_opinion`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `doctor_signature`          VARCHAR(64)  DEFAULT NULL COMMENT 'V15 随访医生签名'                          AFTER `next_visit_date`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `stop_treatment_date`       DATE         DEFAULT NULL COMMENT 'V15 停止治疗时间'                          AFTER `doctor_signature`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `stop_treatment_reason`     VARCHAR(32)  DEFAULT NULL COMMENT 'V15 停止治疗原因 完成疗程/死亡/丢失/转入耐多药' AFTER `stop_treatment_date`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `should_visit_count`        INT          DEFAULT NULL COMMENT 'V15 全程管理-应访视次数'                    AFTER `stop_treatment_reason`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `actual_visit_count`        INT          DEFAULT NULL COMMENT 'V15 全程管理-实际访视次数'                  AFTER `should_visit_count`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `should_dose_count`         INT          DEFAULT NULL COMMENT 'V15 全程管理-应服药次数'                    AFTER `actual_visit_count`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `actual_dose_count`         INT          DEFAULT NULL COMMENT 'V15 全程管理-实际服药次数'                  AFTER `should_dose_count`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `medication_rate`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 服药率（%）'                           AFTER `actual_dose_count`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `evaluator_signature`       VARCHAR(64)  DEFAULT NULL COMMENT 'V15 评估医生签名'                          AFTER `medication_rate`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `attachment_urls`           TEXT         DEFAULT NULL COMMENT 'V15 附件图片URL JSON数组(2~6张)'            AFTER `attachment_url`;
+END$$
+DELIMITER ;
+CALL _v15_migrate_follow_up();
+DROP PROCEDURE IF EXISTS _v15_migrate_follow_up;
 
 -- ==================== V16：P4 重构阶段 — 常规筛查、聚合菜单、患者删除、新权限 ====================
 
@@ -1410,11 +1455,109 @@ WHERE p.`code` IN (
 );
 
 -- ==================== V18：supervision_form 补充人员基本信息字段（P4 聚合潜伏督导表修复） ====================
+DROP PROCEDURE IF EXISTS _v18_migrate_supervision_person;
+DELIMITER $$
+CREATE PROCEDURE _v18_migrate_supervision_person()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
 
-ALTER TABLE `supervision_form`
-    ADD COLUMN IF NOT EXISTS `household_address` VARCHAR(255) NULL COMMENT '户籍地址' AFTER `current_address`,
-    ADD COLUMN IF NOT EXISTS `id_number`         VARCHAR(50)  NULL COMMENT '身份证号' AFTER `household_address`,
-    ADD COLUMN IF NOT EXISTS `birth_date`         VARCHAR(20)  NULL COMMENT '出生日期' AFTER `id_number`,
-    ADD COLUMN IF NOT EXISTS `ethnicity`          VARCHAR(50)  NULL COMMENT '民族'    AFTER `birth_date`,
-    ADD COLUMN IF NOT EXISTS `managing_unit`      VARCHAR(100) NULL COMMENT '管理单位' AFTER `ethnicity`,
-    ADD COLUMN IF NOT EXISTS `supervising_doctor` VARCHAR(100) NULL COMMENT '督导医生' AFTER `managing_unit`;
+    ALTER TABLE `supervision_form` ADD COLUMN `household_address` VARCHAR(255) NULL COMMENT '户籍地址' AFTER `current_address`;
+    ALTER TABLE `supervision_form` ADD COLUMN `id_number`         VARCHAR(50)  NULL COMMENT '身份证号' AFTER `household_address`;
+    ALTER TABLE `supervision_form` ADD COLUMN `birth_date`         VARCHAR(20)  NULL COMMENT '出生日期' AFTER `id_number`;
+    ALTER TABLE `supervision_form` ADD COLUMN `ethnicity`          VARCHAR(50)  NULL COMMENT '民族'    AFTER `birth_date`;
+    ALTER TABLE `supervision_form` ADD COLUMN `managing_unit`      VARCHAR(100) NULL COMMENT '管理单位' AFTER `ethnicity`;
+    ALTER TABLE `supervision_form` ADD COLUMN `supervising_doctor` VARCHAR(100) NULL COMMENT '督导医生' AFTER `managing_unit`;
+END$$
+DELIMITER ;
+CALL _v18_migrate_supervision_person();
+DROP PROCEDURE IF EXISTS _v18_migrate_supervision_person;
+
+-- ==================== V19：旧 V1 权限码软删（§8 R5 决策：旧码保留 deleted=1，不立即物理删） ====================
+-- 受影响的旧菜单权限：school / keyPopulation 的 patient、history、latent 子菜单
+-- 以及对应三条主线的旧一级菜单权限码（V2 已用 screening / latentManagement / patientManagement 替代）
+-- 注意：permission 表无 deleted 字段，用 UPDATE name 方式标记废弃；
+--       同时将对应 role_permission 行 soft-delete（role_permission 表同样无 deleted，此处只做标注性注释保留）
+-- 实际操作：仅重命名 V1 旧权限 name 加 [废弃] 前缀，权限码 code 保持不变以供历史数据兼容查询。
+
+UPDATE `permission`
+SET `name` = CONCAT('[废弃] ', `name`)
+WHERE `code` IN (
+    'school:latent',   'school:patient',  'school:history',
+    'keyPopulation:latent', 'keyPopulation:patient', 'keyPopulation:history',
+    'closeContact:patient', 'closeContact:history'
+)
+  AND `name` NOT LIKE '[废弃]%'; -- 幂等：避免重复执行时重复加前缀
+
+-- ==================== V20：大疫情待诊断表（epidemic_import）====================
+-- 文档 §5.2.1 要求新建 epidemic_import 表（含追踪、诊断字段），替代原仅存 raw_data JSON 的 epidemic_report 表。
+-- epidemic_report 保留不删（历史数据兼容）；新功能使用 epidemic_import。
+
+CREATE TABLE IF NOT EXISTS `epidemic_import` (
+    `id`                 BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    -- 从大疫情表提取的 10 个字段（文档§4.1）
+    `name`               VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
+    `id_number`          VARCHAR(64)  DEFAULT NULL COMMENT '有效证件号',
+    `gender`             VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `birth_date`         DATE         DEFAULT NULL COMMENT '出生日期',
+    `age`                INT          DEFAULT NULL COMMENT '年龄',
+    `phone`              VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `current_address`    VARCHAR(256) DEFAULT NULL COMMENT '现详细住址（来自：现住地址区现住详细）',
+    `case_category`      VARCHAR(64)  DEFAULT NULL COMMENT '病例分类',
+    `disease_name`       VARCHAR(128) DEFAULT NULL COMMENT '疾病名称',
+    `report_unit`        VARCHAR(256) DEFAULT NULL COMMENT '报告单位',
+    -- 追踪字段
+    `tracking_status`    TINYINT      NOT NULL DEFAULT 0  COMMENT '0待追踪 1到位 2未到位 3其他 4强制结束',
+    `not_in_place_count` INT          NOT NULL DEFAULT 0  COMMENT '未到位次数',
+    `tracking_remark`    TEXT         DEFAULT NULL        COMMENT '追踪备注',
+    -- 胸片字段
+    `has_chest_xray`     VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
+    `chest_xray_date`    DATE         DEFAULT NULL COMMENT '胸片检查日期',
+    `chest_xray_result`  VARCHAR(64)  DEFAULT NULL COMMENT '胸片结果：正常/异常/未查',
+    -- 诊断字段（录入诊断后自动分流）
+    `diagnosis_result`   VARCHAR(64)  DEFAULT NULL COMMENT '诊断结果：排除/疑似肺结核/潜伏感染者/确诊患者/其他',
+    `diagnosis_time`     DATETIME     DEFAULT NULL,
+    -- 归集去向
+    `archived`           TINYINT      NOT NULL DEFAULT 0,
+    `target_patient_id`  BIGINT       DEFAULT NULL COMMENT '分流到患者管理后的 patient.id',
+    `target_latent_id`   BIGINT       DEFAULT NULL COMMENT '分流到潜伏感染后的 latent_infection.id',
+    -- 批次与系统字段
+    `upload_batch`       VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `department_id`      BIGINT       DEFAULT NULL,
+    `creator_id`         BIGINT       DEFAULT NULL,
+    `create_time`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`            TINYINT      NOT NULL DEFAULT 0,
+    KEY `idx_id_number`      (`id_number`),
+    KEY `idx_tracking`       (`tracking_status`),
+    KEY `idx_batch`          (`upload_batch`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='大疫情待诊断记录表（V20，文档§4.1）';
+
+-- 大疫情待诊断权限码补充（epidemic:screening 已在 V16 创建，此处补充操作按钮）
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'epidemic:screening:import', '上传大疫情表', 2, p.id, 1
+FROM `permission` p
+WHERE p.`code` = 'epidemic:screening';
+
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'epidemic:screening:track', '追踪', 2, p.id, 2
+FROM `permission` p
+WHERE p.`code` = 'epidemic:screening';
+
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'epidemic:screening:xray', '录入胸片', 2, p.id, 3
+FROM `permission` p
+WHERE p.`code` = 'epidemic:screening';
+
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'epidemic:screening:diagnosis', '录入诊断', 2, p.id, 4
+FROM `permission` p
+WHERE p.`code` = 'epidemic:screening';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'epidemic:screening:import', 'epidemic:screening:track',
+    'epidemic:screening:xray', 'epidemic:screening:diagnosis'
+);

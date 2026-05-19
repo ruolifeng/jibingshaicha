@@ -38,7 +38,7 @@ async function handleFileChange(uploadFile: any) {
       <el-alert
         type="info"
         :closable="false"
-        title="上传专病/病案信息表（.xlsx），系统自动提取字段并创建患者记录，提取后可直接进入"填写通知单→首次随访→后续随访→服药管理"流程。"
+          title="上传专病/病案信息表（.xlsx），系统自动提取字段并创建患者记录，提取后可直接进入「填写通知单→首次随访→后续随访→服药管理」流程。"
         style="margin-bottom: 20px"
       />
 

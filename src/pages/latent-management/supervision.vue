@@ -8,6 +8,7 @@ const { paginationData, handleCurrentChange, handleSizeChange } = usePagination(
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+const FETCH_ALL_SIZE = 10000
 
 const searchForm = reactive({
   name: "",
@@ -16,20 +17,28 @@ const searchForm = reactive({
   populationType: ""
 })
 
+/** 督导表管理：仅展示已追踪到位（trackingStatus=1）且诊断为"潜伏感染者"的记录，不含密接来源。
+ *  TODO: 待后端支持 excludePopulationType / diagnosisFirst 参数后改为服务端过滤。
+ */
 async function fetchData() {
   loading.value = true
   try {
     const params: Record<string, any> = {
-      page: paginationData.currentPage,
-      size: paginationData.pageSize,
-      trackingStatus: 1, // 仅到位的记录才需要督导表
-      referralResult: "latent",
+      page: 1,
+      size: FETCH_ALL_SIZE,
+      trackingStatus: 1, // 仅追踪到位的记录
       ...searchForm
     }
     if (!params.populationType) delete params.populationType
     const { data } = await getLatentAggregateListApi(params)
-    tableData.value = data.records
-    total.value = data.total
+    // 过滤：排除密接来源；仅保留诊断为"潜伏感染者"的记录（文档§3.2，督导表只针对潜伏感染者）
+    const filtered = (data.records ?? []).filter(
+      (r: any) => r.populationType !== "closeContact" && r.diagnosisFirst === "潜伏感染者"
+    )
+    const start = (paginationData.currentPage - 1) * paginationData.pageSize
+    const end = start + paginationData.pageSize
+    tableData.value = filtered.slice(start, end)
+    total.value = filtered.length
   } finally {
     loading.value = false
   }

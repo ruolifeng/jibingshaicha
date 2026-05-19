@@ -1328,7 +1328,11 @@ watch(
       <el-table :data="followUpListData" border stripe>
         <el-table-column prop="visitSeq" label="随访次数" width="80" />
         <el-table-column prop="visitDate" label="随访时间" width="110" />
-        <el-table-column prop="visitMethod" label="随访方式" width="80" />
+        <el-table-column label="随访方式" width="80">
+          <template #default="{ row }">
+            {{ ({ "1": "门诊", "2": "家庭", "3": "电话" } as Record<string, string>)[row.visitMethod] ?? row.visitMethod ?? "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="visitSituation" label="随访情况" show-overflow-tooltip />
         <el-table-column prop="remarks" label="备注" width="120" show-overflow-tooltip />
         <el-table-column prop="createTime" label="填写时间" width="160" />
