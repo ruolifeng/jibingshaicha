@@ -18,6 +18,18 @@
 // 业务页面几乎都应该在根元素上挂载 class="app-container"，以保持页面美观
 .app-container {
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+
+  .el-card {
+    width: 100%;
+  }
+}
+
+.pagination-container {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 html {

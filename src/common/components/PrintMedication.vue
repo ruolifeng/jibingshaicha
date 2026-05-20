@@ -185,7 +185,7 @@ function handlePrint() {
         关闭
       </el-button>
       <el-button type="primary" @click="handlePrint">
-        打印
+        打印 / 保存PDF
       </el-button>
     </template>
   </el-dialog>

@@ -10,6 +10,18 @@ export const CROWD_CATEGORY_OPTIONS = [
   "非重点人群"
 ]
 
+/** 推介/追踪 人群分类选项 */
+export const REFERRAL_CROWD_CATEGORY_OPTIONS = [
+  "学生",
+  "密接",
+  "教职工",
+  "老年人",
+  "糖尿病",
+  "双感",
+  "既往结核史",
+  "非重点人群"
+]
+
 /** 治疗方案选项（8种，V5新增"不服药"） */
 export const TREATMENT_PLAN_OPTIONS = [
   "FDC-2HRZE/4HR",
@@ -139,6 +151,7 @@ export const CHECK_RESULT_OPTIONS = ["未发病", "发病", "其他"]
 
 /** 通知单状态 */
 export const NOTICE_STATUS_MAP: Record<number, string> = {
+  0: "草稿",
   1: "已发送",
   2: "已确认"
 }

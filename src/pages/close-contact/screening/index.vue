@@ -426,21 +426,21 @@ async function handleThreeMonthSubmit() {
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="50" fixed />
-        <el-table-column prop="name" label="接触者姓名" fixed min-width="80" />
-        <el-table-column prop="idNumber" label="接触者身份证号" min-width="160" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="phone" label="联系电话" min-width="120" />
+        <el-table-column type="selection" fixed />
+        <el-table-column prop="name" label="接触者姓名" fixed />
+        <el-table-column prop="idNumber" label="接触者身份证号" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="city" label="市/州" />
         <el-table-column prop="district" label="区/县" />
         <el-table-column prop="contactType" label="接触类型" />
         <el-table-column prop="sourcePatientName" label="原患者姓名" />
-        <el-table-column prop="registrationDate" label="登记日期" min-width="100" />
-        <el-table-column prop="infectionCheckMethod" label="感染检测方法" min-width="120" />
-        <el-table-column prop="infectionCheckResult" label="感染检测结果" min-width="80" />
-        <el-table-column prop="imagingDate" label="影像检查日期" min-width="110" />
-        <el-table-column prop="imagingResult" label="影像结果" min-width="100" />
-        <el-table-column label="最终筛查结果" min-width="120" fixed="right">
+        <el-table-column prop="registrationDate" label="登记日期" />
+        <el-table-column prop="infectionCheckMethod" label="感染检测方法" />
+        <el-table-column prop="infectionCheckResult" label="感染检测结果" />
+        <el-table-column prop="imagingDate" label="影像检查日期" />
+        <el-table-column prop="imagingResult" label="影像结果" />
+        <el-table-column label="最终筛查结果" fixed="right">
           <template #default="{ row }">
             <el-tag v-if="row.finalScreeningResult" :type="tagType(getFinalResultTag(row.finalScreeningResult))" size="small">
               {{ row.finalScreeningResult }}
@@ -448,7 +448,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="流程状态" min-width="130" fixed="right">
+        <el-table-column label="流程状态" fixed="right">
           <template #default="{ row }">
             <el-tag v-if="CC_STATUS_MAP[row.ccStatus]" :type="tagType(CC_STATUS_MAP[row.ccStatus].type)" size="small">
               {{ CC_STATUS_MAP[row.ccStatus].label }}
@@ -456,7 +456,7 @@ async function handleThreeMonthSubmit() {
           </template>
         </el-table-column>
         <!-- 随访完成情况 -->
-        <el-table-column label="6月随访" width="90">
+        <el-table-column label="6月随访">
           <template #default="{ row }">
             <el-tag v-if="hasFollowupData(row, 6)" :type="tagType(getFollowupTag(row.followup6Result))" size="small">
               {{ row.followup6Result }}
@@ -464,7 +464,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="12月随访" width="90">
+        <el-table-column label="12月随访">
           <template #default="{ row }">
             <el-tag v-if="hasFollowupData(row, 12)" :type="tagType(getFollowupTag(row.followup12Result))" size="small">
               {{ row.followup12Result }}
@@ -472,7 +472,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="24月随访" width="90">
+        <el-table-column label="24月随访">
           <template #default="{ row }">
             <el-tag v-if="hasFollowupData(row, 24)" :type="tagType(getFollowupTag(row.followup24Result))" size="small">
               {{ row.followup24Result }}
@@ -480,7 +480,7 @@ async function handleThreeMonthSubmit() {
             <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="220">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">
               详情
@@ -925,7 +925,7 @@ async function handleThreeMonthSubmit() {
       <template v-if="importResult.errors.length > 0">
         <el-alert :title="`发现 ${importResult.errors.length} 条数据格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
-          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="index" label="#" />
           <el-table-column prop="msg" label="错误信息" />
         </el-table>
       </template>

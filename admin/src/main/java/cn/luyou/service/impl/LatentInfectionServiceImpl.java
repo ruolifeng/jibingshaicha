@@ -701,4 +701,40 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             }
         }
     }
+
+    @Override
+    public LatentInfection getDetail(Long id) {
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        fillNoticeAutoFields(latent);
+        return latent;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateBasicInfo(Long id, Map<String, Object> body) {
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        if (body.get("name") != null) latent.setName(body.get("name").toString());
+        if (body.get("gender") != null) latent.setGender(body.get("gender").toString());
+        if (body.get("age") != null) {
+            Object ageVal = body.get("age");
+            latent.setAge(ageVal == null || "".equals(ageVal.toString()) ? null : Integer.valueOf(ageVal.toString()));
+        }
+        if (body.get("idNumber") != null) latent.setIdNumber(body.get("idNumber").toString());
+        if (body.get("phone") != null) latent.setPhone(body.get("phone").toString());
+        if (body.get("infectionResult") != null) latent.setInfectionResult(body.get("infectionResult").toString());
+        if (body.get("diagnosisFirst") != null) latent.setDiagnosisFirst(body.get("diagnosisFirst").toString());
+        if (body.get("hasChestXray") != null) latent.setHasChestXray(body.get("hasChestXray").toString());
+        if (body.get("chestXrayDate") != null) {
+            latent.setChestXrayDate(parseDateCell(body.get("chestXrayDate")));
+        }
+        if (body.get("chestXrayResult") != null) latent.setChestXrayResult(body.get("chestXrayResult").toString());
+        if (body.get("trackingRemark") != null) latent.setTrackingRemark(body.get("trackingRemark").toString());
+        updateById(latent);
+    }
 }

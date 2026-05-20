@@ -9,6 +9,26 @@ export function getPatientListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "patient/list", method: "get", params })
 }
 
+/** 患者详情 */
+export function getPatientDetailApi(id: number) {
+  return request<ApiResponseData<any>>({ url: `patient/${id}`, method: "get" })
+}
+
+/** 更新患者基本信息 */
+export function updatePatientApi(id: number, data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: `patient/${id}`, method: "put", data })
+}
+
+/** 导出在管患者总表 */
+export function exportAllPatientsApi(params: Record<string, any>) {
+  return request<Blob>({
+    url: "export/all-patients",
+    method: "get",
+    params: { archived: 0, ...params },
+    responseType: "blob"
+  })
+}
+
 /** 历史患者列表 */
 export function getPatientHistoryListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "patient/history", method: "get", params })

@@ -68,13 +68,13 @@ onMounted(() => {
       </el-alert>
 
       <el-table v-loading="loading" :data="backupList" border stripe max-height="500">
-        <el-table-column prop="name" label="文件名" min-width="280" />
-        <el-table-column label="文件大小" width="120">
+        <el-table-column prop="name" label="文件名" />
+        <el-table-column label="文件大小">
           <template #default="{ row }">
             {{ formatSize(row.size) }}
           </template>
         </el-table-column>
-        <el-table-column label="备份时间" width="200">
+        <el-table-column label="备份时间">
           <template #default="{ row }">
             {{ formatTime(row.lastModified) }}
           </template>

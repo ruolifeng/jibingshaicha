@@ -16,6 +16,26 @@ export function getLatentAggregateListApi(params: Record<string, any>) {
   })
 }
 
+/** 潜伏感染详情 */
+export function getLatentDetailApi(id: number) {
+  return request<ApiResponseData<any>>({ url: `latent/${id}`, method: "get" })
+}
+
+/** 更新潜伏感染基本信息 */
+export function updateLatentApi(id: number, data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: `latent/${id}`, method: "put", data })
+}
+
+/** 导出在管潜伏感染者总表 */
+export function exportAllLatentApi(params: Record<string, any>) {
+  return request<Blob>({
+    url: "export/all-latent",
+    method: "get",
+    params: { archived: 0, ...params },
+    responseType: "blob"
+  })
+}
+
 /** 追踪操作 */
 export function trackLatentApi(data: { id: number; status: number; remark?: string }) {
   return request<ApiResponseData<null>>({

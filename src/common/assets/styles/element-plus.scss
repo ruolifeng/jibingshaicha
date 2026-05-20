@@ -5,6 +5,15 @@
   background-color: var(--el-bg-color) !important;
 }
 
+// 列表表格撑满容器（配合 Element Plus fit 将剩余宽度分配给各列）
+.app-container,
+.el-dialog,
+.screening-population {
+  .el-table {
+    width: 100%;
+  }
+}
+
 // 分页
 .el-pagination {
   // 参考 Bootstrap 的响应式设计 WIDTH = 768

@@ -1,22 +1,14 @@
 <script lang="ts" setup>
+import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.vue"
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
+import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import { usePatientList } from "./composables/usePatientList"
 import { getFollowUpVisitListApi } from "./apis"
 
-/**
- * 随访方式显示兼容：
- *   V15 以前存文本（"门诊"/"家庭"/"电话"），V15 之后存编码（"1"/"2"/"3"）。
- *   此处统一映射为中文，保证历史数据也能正确展示。
- */
-const VISIT_METHOD_MAP: Record<string, string> = { "1": "门诊", "2": "家庭", "3": "电话" }
-function formatVisitMethod(val: string): string {
-  return VISIT_METHOD_MAP[val] ?? val ?? "-"
-}
-
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
-// ==================== 后续随访弹窗 ====================
 const followUpDialogVisible = ref(false)
 const followUpPatient = ref<any>(null)
 
@@ -25,16 +17,33 @@ function openFollowUp(row: any) {
   followUpDialogVisible.value = true
 }
 
-// ==================== 查看历次随访记录 ====================
 const historyVisible = ref(false)
 const historyList = ref<any[]>([])
 const historyPatientName = ref("")
+
+const detailVisible = ref(false)
+const detailData = ref<Record<string, any> | null>(null)
+
+const printVisible = ref(false)
+const printData = ref<Record<string, any> | null>(null)
+const printPatientName = ref("")
 
 async function viewHistory(row: any) {
   historyPatientName.value = row.name
   const { data } = await getFollowUpVisitListApi(row.id)
   historyList.value = data || []
   historyVisible.value = true
+}
+
+function viewDetail(row: Record<string, any>) {
+  detailData.value = row
+  detailVisible.value = true
+}
+
+function openPrint(row: Record<string, any>) {
+  printData.value = row
+  printPatientName.value = historyPatientName.value
+  printVisible.value = true
 }
 </script>
 
@@ -68,20 +77,20 @@ async function viewHistory(row: any) {
 
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column type="index" label="#" width="50" />
-        <el-table-column label="数据来源" width="100">
+        <el-table-column type="index" label="#" />
+        <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" width="90" />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="170" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="110" />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column prop="name" label="姓名" />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'patientManagement:followUp'" type="primary" link size="small"
               :disabled="row.archived === 1"
@@ -103,7 +112,6 @@ async function viewHistory(row: any) {
       />
     </el-card>
 
-    <!-- 后续随访弹窗（复用通用组件） -->
     <FollowUpVisitDialog
       v-if="followUpPatient"
       v-model:visible="followUpDialogVisible"
@@ -113,20 +121,39 @@ async function viewHistory(row: any) {
       @saved="fetchData"
     />
 
-    <!-- 历次随访记录弹窗 -->
-    <el-dialog v-model="historyVisible" :title="`${historyPatientName} - 随访记录`" width="720px" append-to-body>
+    <el-dialog v-model="historyVisible" :title="`${historyPatientName} - 随访记录`" width="900px" append-to-body>
       <el-table :data="historyList" border stripe>
-        <el-table-column prop="visitSeq" label="第几次" width="70" />
-        <el-table-column prop="visitDate" label="随访日期" width="110" />
-        <el-table-column prop="treatmentMonth" label="治疗月序" width="80" />
-        <el-table-column label="随访方式" width="90">
-          <template #default="{ row }">{{ formatVisitMethod(row.visitMethod) }}</template>
+        <el-table-column prop="visitSeq" label="第几次" />
+        <el-table-column prop="visitDate" label="随访日期" />
+        <el-table-column prop="treatmentMonth" label="治疗月序" />
+        <el-table-column label="随访方式">
+          <template #default="{ row }">{{ followUpFormatters.visitMethod(row.visitMethod) }}</template>
         </el-table-column>
-        <el-table-column prop="missedDoses" label="漏服次数" width="80" />
-        <el-table-column prop="nextVisitDate" label="下次随访" width="110" />
-        <el-table-column prop="doctorSignature" label="医生签名" width="100" />
-        <el-table-column prop="remarks" label="备注" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="missedDoses" label="漏服次数" />
+        <el-table-column prop="nextVisitDate" label="下次随访" />
+        <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
+        <el-table-column label="操作" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="viewDetail(row)">查看详情</el-button>
+            <el-button type="info" link size="small" @click="openPrint(row)">打印</el-button>
+          </template>
+        </el-table-column>
       </el-table>
+      <el-empty v-if="!historyList.length" description="暂无随访记录" />
     </el-dialog>
+
+    <FollowUpVisitDetailDialog
+      v-model:visible="detailVisible"
+      :visit-data="detailData"
+      :patient-name="historyPatientName"
+    />
+
+    <PrintFollowUp
+      v-if="printData"
+      :visible="printVisible"
+      :visit-data="printData"
+      :patient-name="printPatientName"
+      @update:visible="printVisible = $event"
+    />
   </div>
 </template>

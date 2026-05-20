@@ -384,24 +384,48 @@ async function handleSave() {
         全程管理情况
       </el-divider>
       <el-row :gutter="16">
-        <el-col :span="6">
+        <el-col :span="12">
           <el-form-item label="应访视次数">
-            <el-input-number v-model="form.shouldVisitCount" :min="0" style="width: 100%" />
+            <el-input-number
+              v-model="form.shouldVisitCount"
+              :min="0"
+              controls-position="right"
+              placeholder="次"
+              class="follow-up-input-number"
+            />
           </el-form-item>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="12">
           <el-form-item label="实际访视次数">
-            <el-input-number v-model="form.actualVisitCount" :min="0" style="width: 100%" />
+            <el-input-number
+              v-model="form.actualVisitCount"
+              :min="0"
+              controls-position="right"
+              placeholder="次"
+              class="follow-up-input-number"
+            />
           </el-form-item>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="12">
           <el-form-item label="应服药次数">
-            <el-input-number v-model="form.shouldDoseCount" :min="0" style="width: 100%" />
+            <el-input-number
+              v-model="form.shouldDoseCount"
+              :min="0"
+              controls-position="right"
+              placeholder="次"
+              class="follow-up-input-number"
+            />
           </el-form-item>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="12">
           <el-form-item label="实际服药次数">
-            <el-input-number v-model="form.actualDoseCount" :min="0" style="width: 100%" />
+            <el-input-number
+              v-model="form.actualDoseCount"
+              :min="0"
+              controls-position="right"
+              placeholder="次"
+              class="follow-up-input-number"
+            />
           </el-form-item>
         </el-col>
         <el-col :span="12">
@@ -438,3 +462,13 @@ async function handleSave() {
     </template>
   </el-dialog>
 </template>
+
+<style lang="scss" scoped>
+.follow-up-input-number {
+  width: 100%;
+
+  :deep(.el-input__wrapper) {
+    width: 100%;
+  }
+}
+</style>

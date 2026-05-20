@@ -69,10 +69,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .build();
 
         if ("recommend".equals(bizMode)) {
+            validateRecommendRequired(params);
             Long receiverUserId = getLong(params, "receiverUserId");
-            if (receiverUserId == null) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介模式必须指定接收人（receiverUserId）");
-            }
             User receiver = userService.getById(receiverUserId);
             if (receiver == null) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
@@ -80,6 +78,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             record.setReceiverUserId(receiverUserId);
             record.setReceiverDeptId(receiver.getDepartmentId());
             record.setRecommendStatus(0);
+            record.setRecommendReason(getStr(params, "recommendReason"));
+        } else if ("track".equals(bizMode)) {
+            validateTrackRequired(params);
+            record.setTrackReason(getStr(params, "trackReason"));
         }
 
         save(record);
@@ -153,8 +155,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         // 向接收人发送系统消息
         String title = "新推介通知单待接收";
-        String content = String.format("收到来自「%s」的推介通知单，请尽快确认接收。",
-                StrUtil.blankToDefault(record.getName(), "（未知姓名）"));
+        String reasonPart = StrUtil.isNotBlank(record.getRecommendReason())
+                ? "，推介原因：" + record.getRecommendReason() : "";
+        String content = String.format("收到「%s」的推介通知单（人群分类：%s%s），请尽快确认接收。",
+                StrUtil.blankToDefault(record.getName(), "（未知姓名）"),
+                StrUtil.blankToDefault(record.getCrowdCategory(), "-"),
+                reasonPart);
         sysMessageService.sendMessage(record.getReceiverUserId(), title, content, "referral", id);
         log.info("推介通知单已发送，recordId={}, receiverUserId={}", id, record.getReceiverUserId());
     }
@@ -441,6 +447,47 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         latentInfectionMapper.insert(latent);
         return latent.getId();
+    }
+
+    /** 追踪模式必填项校验 */
+    private void validateTrackRequired(Map<String, Object> params) {
+        if (StrUtil.isBlank(getStr(params, "idNumber"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写证件号");
+        }
+        if (StrUtil.isBlank(getStr(params, "phone"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写联系电话");
+        }
+        if (StrUtil.isBlank(getStr(params, "currentAddress"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写现住址");
+        }
+        if (StrUtil.isBlank(getStr(params, "crowdCategory"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择人群分类");
+        }
+        if (StrUtil.isBlank(getStr(params, "trackReason"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写追踪原因");
+        }
+    }
+
+    /** 推介模式必填项校验 */
+    private void validateRecommendRequired(Map<String, Object> params) {
+        if (StrUtil.isBlank(getStr(params, "idNumber"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写证件号");
+        }
+        if (StrUtil.isBlank(getStr(params, "phone"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写联系电话");
+        }
+        if (StrUtil.isBlank(getStr(params, "currentAddress"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写现住址");
+        }
+        if (StrUtil.isBlank(getStr(params, "crowdCategory"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择人群分类");
+        }
+        if (StrUtil.isBlank(getStr(params, "recommendReason"))) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写推介原因");
+        }
+        if (getLong(params, "receiverUserId") == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择推介接收人");
+        }
     }
 
     private String getStr(Map<String, Object> params, String key) {

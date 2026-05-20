@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue"
+import { ref, reactive, onMounted, nextTick } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import { idCardRule, phoneRule } from "@@/utils/validate"
 import {
   getReferralTrackingListApi,
   createReferralTrackingApi,
@@ -60,21 +62,37 @@ const createForm = reactive({
   phone: "",
   householdAddress: "",
   currentAddress: "",
-  crowdCategory: ""
+  crowdCategory: "",
+  trackReason: ""
 })
 const createFormRef = ref()
+
+const createFormRules = {
+  name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
+  idNumber: [idCardRule(true)],
+  phone: [phoneRule(true)],
+  currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
+  crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
+  trackReason: [{ required: true, message: "请填写追踪原因", trigger: "blur" }]
+}
 
 function openCreateDialog() {
   Object.assign(createForm, {
     name: "", gender: "", birthDate: "", age: undefined, idType: "居民身份证",
     idNumber: "", ethnicity: "", phone: "",
-    householdAddress: "", currentAddress: "", crowdCategory: ""
+    householdAddress: "", currentAddress: "", crowdCategory: "",
+    trackReason: ""
   })
   createDialogVisible.value = true
+  nextTick(() => createFormRef.value?.clearValidate())
 }
 
 async function handleCreate() {
-  await createFormRef.value?.validate()
+  try {
+    await createFormRef.value?.validate()
+  } catch {
+    return
+  }
   await createReferralTrackingApi({ ...createForm, bizMode: "track" })
   ElMessage.success("追踪记录创建成功")
   createDialogVisible.value = false
@@ -203,12 +221,14 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column prop="name" label="姓名" width="90" />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" min-width="160" />
-        <el-table-column prop="phone" label="联系电话" width="120" />
-        <el-table-column label="追踪状态" width="90">
+        <el-table-column prop="name" label="姓名" />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="crowdCategory" label="人群分类" />
+        <el-table-column prop="trackReason" label="追踪原因" show-overflow-tooltip />
+        <el-table-column label="追踪状态">
           <template #default="{ row }">
             <el-tag
               :type="TRACKING_STATUS_MAP[row.trackingStatus]?.type as any"
@@ -218,14 +238,14 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="追踪次数" width="80">
+        <el-table-column label="追踪次数">
           <template #default="{ row }">
             {{ row.notInPlaceCount > 0 ? `${row.notInPlaceCount}次未到位` : "-" }}
           </template>
         </el-table-column>
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="110" />
-        <el-table-column prop="createTime" label="创建时间" width="160" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="createTime" label="创建时间" />
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <!-- 追踪：待追踪或未到位 -->
             <el-button
@@ -263,11 +283,11 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-card>
 
     <!-- 新增追踪弹窗 -->
-    <el-dialog v-model="createDialogVisible" title="新增追踪记录" width="620px">
-      <el-form ref="createFormRef" :model="createForm" label-width="100px">
+    <el-dialog v-model="createDialogVisible" title="新增追踪记录" width="660px">
+      <el-form ref="createFormRef" :model="createForm" :rules="createFormRules" label-width="100px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="姓名" prop="name" :rules="[{ required: true, message: '请输入姓名' }]">
+            <el-form-item label="姓名" prop="name">
               <el-input v-model="createForm.name" />
             </el-form-item>
           </el-col>
@@ -295,7 +315,7 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="证件号">
+            <el-form-item label="证件号" prop="idNumber">
               <el-input v-model="createForm.idNumber" />
             </el-form-item>
           </el-col>
@@ -305,7 +325,7 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="联系电话">
+            <el-form-item label="联系电话" prop="phone">
               <el-input v-model="createForm.phone" />
             </el-form-item>
           </el-col>
@@ -315,13 +335,30 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="现住址">
+            <el-form-item label="现住址" prop="currentAddress">
               <el-input v-model="createForm.currentAddress" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="人群分类">
-              <el-input v-model="createForm.crowdCategory" placeholder="如：密接/糖尿病等" />
+          <el-col :span="24">
+            <el-form-item label="人群分类" prop="crowdCategory">
+              <el-select v-model="createForm.crowdCategory" placeholder="请选择" style="width: 100%">
+                <el-option
+                  v-for="item in REFERRAL_CROWD_CATEGORY_OPTIONS"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="追踪原因" prop="trackReason">
+              <el-input
+                v-model="createForm.trackReason"
+                type="textarea"
+                :rows="3"
+                placeholder="请填写追踪原因"
+              />
             </el-form-item>
           </el-col>
         </el-row>

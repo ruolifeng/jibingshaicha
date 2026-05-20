@@ -31,10 +31,17 @@ export function registerNavigationGuard(router: Router) {
     if (to.path === LOGIN_PATH) return "/"
     // 如果用户已经获得其权限角色
     if (userStore.roles.length !== 0) {
-      // 校验页面访问权限：若路由声明了 meta.permission，则检查用户是否拥有
-      const permCode = to.meta.permission as string | undefined
-      if (permCode && !userStore.hasPermission(permCode)) {
-        return "/403"
+      // 校验页面访问权限
+      const anyPerms = to.meta.anyPermission as string[] | undefined
+      if (anyPerms?.length) {
+        if (!anyPerms.some(code => userStore.hasPermission(code))) {
+          return "/403"
+        }
+      } else {
+        const permCode = to.meta.permission as string | undefined
+        if (permCode && !userStore.hasPermission(permCode)) {
+          return "/403"
+        }
       }
       return true
     }

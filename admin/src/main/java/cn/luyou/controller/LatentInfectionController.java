@@ -31,6 +31,19 @@ public class LatentInfectionController {
     private final LatentFollowUpService latentFollowUpService;
     private final LatentCheckService latentCheckService;
 
+    @Operation(summary = "潜伏感染详情")
+    @GetMapping("/{id}")
+    public ResultResponse<LatentInfection> detail(@PathVariable Long id) {
+        return ResultRes.success(latentInfectionService.getDetail(id));
+    }
+
+    @Operation(summary = "更新潜伏感染基本信息")
+    @PutMapping("/{id}")
+    public ResultResponse<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        latentInfectionService.updateBasicInfo(id, body);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "分页查询潜伏感染数据")
     @GetMapping("/list")
     public ResultResponse<IPage<LatentInfection>> list(

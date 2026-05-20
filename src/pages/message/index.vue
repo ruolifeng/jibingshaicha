@@ -304,28 +304,28 @@ const activeTab = ref("received")
           </div>
 
           <el-table v-loading="loading" :data="tableData" border stripe>
-            <el-table-column prop="title" label="标题" min-width="200">
+            <el-table-column prop="title" label="标题">
               <template #default="{ row }">
                 <span :class="{ 'font-bold': !row.isRead }">{{ row.title }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="content" label="内容" min-width="300" />
-            <el-table-column prop="type" label="类型" width="150">
+            <el-table-column prop="content" label="内容" />
+            <el-table-column prop="type" label="类型">
               <template #default="{ row }">
                 <el-tag size="small" :type="getMessageTypeTagType(row.type)">
                   {{ MESSAGE_TYPE_LABEL_MAP[row.type] || row.type }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="80">
+            <el-table-column label="状态">
               <template #default="{ row }">
                 <el-tag :type="row.isRead ? 'info' : 'success'" size="small">
                   {{ row.isRead ? "已读" : "未读" }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="createTime" label="时间" width="170" />
-            <el-table-column label="操作" fixed="right" width="300">
+            <el-table-column prop="createTime" label="时间" />
+            <el-table-column label="操作" fixed="right">
               <template #default="{ row }">
                 <!-- 通知单查看 & 接收 -->
                 <template v-if="row.type === 'notice_receive' || row.type === 'notice_confirmed'">
@@ -381,7 +381,7 @@ const activeTab = ref("received")
         <!-- 已发送通知单 -->
         <el-tab-pane label="已发送通知单" name="sent">
           <el-table v-loading="sentLoading" :data="sentTableData" border stripe>
-            <el-table-column prop="senderName" label="发送者" width="110">
+            <el-table-column prop="senderName" label="发送者">
               <template #default="{ row }">
                 <div>{{ row.senderName || "—" }}</div>
                 <div class="text-xs text-gray-400">
@@ -389,21 +389,21 @@ const activeTab = ref("received")
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="sentTime" label="发送时间" width="170" />
-            <el-table-column label="内容" min-width="180">
+            <el-table-column prop="sentTime" label="发送时间" />
+            <el-table-column label="内容">
               <template #default="{ row }">
                 {{ NOTICE_TYPE_MAP[row.noticeType] || row.noticeType }} —
                 {{ row.patientName }}（{{ POPULATION_TYPE_MAP[row.populationType] || row.populationType }}）
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="100">
+            <el-table-column label="状态">
               <template #default="{ row }">
                 <el-tag :type="row.status === 2 ? 'success' : 'warning'" size="small">
                   {{ row.status === 2 ? "已接收" : "待接收" }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="receiverName" label="接收者" width="110">
+            <el-table-column prop="receiverName" label="接收者">
               <template #default="{ row }">
                 <div>{{ row.receiverName || "—" }}</div>
                 <div class="text-xs text-gray-400">
@@ -411,12 +411,12 @@ const activeTab = ref("received")
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="confirmedTime" label="接收时间" width="170">
+            <el-table-column prop="confirmedTime" label="接收时间">
               <template #default="{ row }">
                 {{ row.confirmedTime || "—" }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" fixed="right" width="100">
+            <el-table-column label="操作" fixed="right">
               <template #default="{ row }">
                 <el-button v-if="row.status !== 2" type="warning" size="small" @click="handleRemind(row)">
                   点击提醒
@@ -442,15 +442,15 @@ const activeTab = ref("received")
         <!-- 已发送转诊 -->
         <el-tab-pane label="已发送转诊" name="referral">
           <el-table v-loading="referralLoading" :data="referralTableData" border stripe>
-            <el-table-column prop="subjectName" label="对象姓名" width="110" />
-            <el-table-column label="类型" width="160">
+            <el-table-column prop="subjectName" label="对象姓名" />
+            <el-table-column label="类型">
               <template #default="{ row }">
                 {{ POPULATION_TYPE_MAP[row.populationType] || row.populationType }} —
                 {{ MODULE_TYPE_MAP[row.moduleType] || row.moduleType }}
               </template>
             </el-table-column>
-            <el-table-column prop="sentTime" label="发送时间" width="170" />
-            <el-table-column label="状态" width="100">
+            <el-table-column prop="sentTime" label="发送时间" />
+            <el-table-column label="状态">
               <template #default="{ row }">
                 <el-tag
                   :type="row.status === 2 ? 'success' : row.status === 3 ? 'danger' : 'warning'"
@@ -460,7 +460,7 @@ const activeTab = ref("received")
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="receiverName" label="接收者" width="110">
+            <el-table-column prop="receiverName" label="接收者">
               <template #default="{ row }">
                 <div>{{ row.receiverName || "—" }}</div>
                 <div class="text-xs text-gray-400">
@@ -468,12 +468,12 @@ const activeTab = ref("received")
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="confirmedTime" label="接收时间" width="170">
+            <el-table-column prop="confirmedTime" label="接收时间">
               <template #default="{ row }">
                 {{ row.confirmedTime || "—" }}
               </template>
             </el-table-column>
-            <el-table-column prop="rejectReason" label="拒绝原因" min-width="120">
+            <el-table-column prop="rejectReason" label="拒绝原因">
               <template #default="{ row }">
                 {{ row.rejectReason || "—" }}
               </template>

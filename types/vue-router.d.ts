@@ -62,5 +62,9 @@ declare module "vue-router" {
      * @description 菜单权限编码，与 permission 表 code 对应
      */
     permission?: string
+    /**
+     * @description 满足任一权限编码即可访问（用于聚合菜单）
+     */
+    anyPermission?: string[]
   }
 }

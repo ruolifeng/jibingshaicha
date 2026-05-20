@@ -365,21 +365,21 @@ watch(
 
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="50" fixed />
+        <el-table-column type="selection" fixed />
         <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="year" label="年份" width="80" />
+        <el-table-column prop="year" label="年份" />
         <el-table-column prop="city" label="市（州）" />
         <el-table-column prop="district" label="区县" />
-        <el-table-column prop="gender" label="性别" width="70" />
-        <el-table-column prop="birthDate" label="出生日期" width="110" />
-        <el-table-column prop="age" label="年龄" width="70" />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="birthDate" label="出生日期" />
+        <el-table-column prop="age" label="年龄" />
         <el-table-column prop="idType" label="证件类型" />
-        <el-table-column prop="idNumber" label="证件号" width="180" />
-        <el-table-column prop="ethnicity" label="民族" width="80" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="householdAddress" label="户籍地址" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="ethnicity" label="民族" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="householdAddress" label="户籍地址" show-overflow-tooltip />
         <el-table-column prop="townshipCommunity" label="乡镇/社区" />
-        <el-table-column prop="currentAddress" label="现住址" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
         <!-- V4 人群分类：各列独立 -->
         <el-table-column label="人群分类">
           <template #default="{ row }">
@@ -407,10 +407,10 @@ watch(
         <el-table-column prop="screenMethod" label="筛查方法" />
         <el-table-column prop="screenResult" label="筛查结果" />
         <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="首次（是否胸片）" min-width="110" />
-        <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" min-width="100" />
-        <el-table-column prop="diagnosisResult" label="首次诊断结果" min-width="110" />
+        <el-table-column prop="hasChestXray" label="首次（是否胸片）" />
+        <el-table-column prop="chestXrayDate" label="胸片检查日期" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" />
+        <el-table-column prop="diagnosisResult" label="首次诊断结果" />
         <!-- 预防性治疗情况（督导表归档后同步） -->
         <el-table-column prop="preventivePlan" label="预防性治疗方案" />
         <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
@@ -425,7 +425,7 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" fixed="right" width="260">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">
               查看详情
@@ -828,7 +828,7 @@ watch(
       <template v-if="importResult.errors.length > 0">
         <el-alert :title="`发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
-          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="index" label="#" />
           <el-table-column prop="msg" label="错误信息" />
         </el-table>
       </template>

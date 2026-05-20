@@ -236,7 +236,7 @@ async function handleSaveFollowupInput() {
       </template>
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="idNumber" label="身份证号" min-width="150" />
+        <el-table-column prop="idNumber" label="身份证号" />
         <el-table-column prop="registrationDate" label="登记日期" />
         <el-table-column prop="sourcePatientName" label="原患者" />
         <el-table-column label="6月随访">
@@ -281,7 +281,7 @@ async function handleSaveFollowupInput() {
             <span v-else class="text-gray-400">监测中</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="220">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewFollowupDetail(row)">
               查看/录入详情
@@ -323,7 +323,7 @@ async function handleSaveFollowupInput() {
       </template>
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="idNumber" label="身份证号" min-width="150" />
+        <el-table-column prop="idNumber" label="身份证号" />
         <el-table-column prop="registrationDate" label="登记日期" />
         <el-table-column prop="sourcePatientName" label="原患者" />
         <el-table-column prop="infectionCheckMethod" label="初次感染检测方法" />
@@ -343,7 +343,7 @@ async function handleSaveFollowupInput() {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="160">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button
               v-permission="'closeContact:latent:check'"

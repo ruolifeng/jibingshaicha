@@ -38,6 +38,10 @@ public class ReferralTracking extends BaseEntity {
     private String householdAddress;
     private String currentAddress;
     private String crowdCategory;
+    /** 推介原因（bizMode=recommend 时手动录入） */
+    private String recommendReason;
+    /** 追踪原因（bizMode=track 时手动录入） */
+    private String trackReason;
 
     // ===== 推介专用字段（bizMode=recommend 时使用）=====
     /** 接收推介的三/四级用户ID */

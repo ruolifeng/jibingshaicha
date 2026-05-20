@@ -568,8 +568,8 @@ async function handleSaveFollowupInput() {
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="idNumber" label="身份证号" min-width="150" />
-        <el-table-column prop="age" label="年龄" width="60" />
+        <el-table-column prop="idNumber" label="身份证号" />
+        <el-table-column prop="age" label="年龄" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="sourcePatientName" label="原患者" />
         <el-table-column prop="registrationDate" label="登记日期" />
@@ -597,7 +597,7 @@ async function handleSaveFollowupInput() {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="380">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <!-- 步骤1: 确认预防治疗 -->
             <el-button v-permission="'closeContact:latent:treatmentDecision'" type="primary" size="small" @click="openTreatmentDecision(row)">
@@ -1015,8 +1015,8 @@ async function handleSaveFollowupInput() {
         </el-descriptions-item>
       </el-descriptions>
       <el-table v-if="supervisionDetailData?.supervisionRecords" :data="JSON.parse(supervisionDetailData.supervisionRecords)" border stripe size="small" class="my-3">
-        <el-table-column prop="time" label="督导时间" width="120" />
-        <el-table-column prop="method" label="督导方式" width="100" />
+        <el-table-column prop="time" label="督导时间" />
+        <el-table-column prop="method" label="督导方式" />
         <el-table-column prop="content" label="督导内容" />
         <el-table-column prop="remark" label="备注" />
       </el-table>

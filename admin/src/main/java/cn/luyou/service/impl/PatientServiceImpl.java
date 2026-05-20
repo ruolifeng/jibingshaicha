@@ -478,4 +478,43 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         log.info("专病表导入完成：成功创建 {} 条患者记录", count);
         return count;
     }
+
+    @Override
+    public Patient getDetail(Long id) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
+        }
+        fillNoticeStatus(List.of(patient), patient.getPopulationType());
+        fillFirstVisitStatus(List.of(patient));
+        fillScreeningXrayData(List.of(patient), patient.getPopulationType());
+        return patient;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateBasicInfo(Long id, Map<String, Object> body) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
+        }
+        if (body.get("name") != null) patient.setName(body.get("name").toString());
+        if (body.get("gender") != null) patient.setGender(body.get("gender").toString());
+        if (body.get("birthDate") != null) {
+            String bd = body.get("birthDate").toString();
+            patient.setBirthDate(StrUtil.isNotBlank(bd) ? java.time.LocalDate.parse(bd) : null);
+        }
+        if (body.get("age") != null) {
+            Object ageVal = body.get("age");
+            patient.setAge(ageVal == null || "".equals(ageVal.toString()) ? null : Integer.valueOf(ageVal.toString()));
+        }
+        if (body.get("idType") != null) patient.setIdType(body.get("idType").toString());
+        if (body.get("idNumber") != null) patient.setIdNumber(body.get("idNumber").toString());
+        if (body.get("ethnicity") != null) patient.setEthnicity(body.get("ethnicity").toString());
+        if (body.get("phone") != null) patient.setPhone(body.get("phone").toString());
+        if (body.get("householdAddress") != null) patient.setHouseholdAddress(body.get("householdAddress").toString());
+        if (body.get("currentAddress") != null) patient.setCurrentAddress(body.get("currentAddress").toString());
+        if (body.get("diagnosisResult") != null) patient.setDiagnosisResult(body.get("diagnosisResult").toString());
+        updateById(patient);
+    }
 }

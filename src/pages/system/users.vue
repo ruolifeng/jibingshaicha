@@ -172,10 +172,10 @@ fetchDepartments()
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="id" label="ID" />
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="realName" label="真实姓名" />
-        <el-table-column label="角色" width="100">
+        <el-table-column label="角色">
           <template #default="{ row }">
             <el-tag :type="row.role === 1 ? 'danger' : row.role <= 4 ? 'warning' : 'primary'" size="small">
               {{ ROLE_MAP[row.role] || "未知" }}
@@ -189,7 +189,7 @@ fetchDepartments()
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right" width="140">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">
               编辑

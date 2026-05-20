@@ -65,4 +65,10 @@ public interface LatentInfectionService extends IService<LatentInfection> {
      * 创建对应患者记录并将潜伏感染记录标记为已转诊归档，避免数据丢失。
      */
     void autoReferralForDirectDiagnosis(List<LatentInfection> latents);
+
+    /** 查询潜伏感染详情（含筛查回填字段） */
+    LatentInfection getDetail(Long id);
+
+    /** 更新潜伏感染基本信息 */
+    void updateBasicInfo(Long id, Map<String, Object> body);
 }

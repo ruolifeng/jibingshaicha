@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
+
 public interface PatientService extends IService<Patient> {
 
     IPage<Patient> queryPage(int page, int size, String populationType,
@@ -30,4 +32,10 @@ public interface PatientService extends IService<Patient> {
      *          现详细住址、户籍地址、现管单位、诊断结果（病原学阴/阳性）
      */
     int importSpecialDisease(MultipartFile file);
+
+    /** 查询患者详情（含关联状态） */
+    Patient getDetail(Long id);
+
+    /** 更新患者基本信息 */
+    void updateBasicInfo(Long id, Map<String, Object> body);
 }

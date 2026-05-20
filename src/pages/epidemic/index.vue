@@ -290,16 +290,16 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
 
         <el-card shadow="never" style="margin-top: 10px">
           <el-table :data="tableData" v-loading="loading" border stripe>
-            <el-table-column type="index" label="#" width="50" />
-            <el-table-column prop="name" label="患者姓名" width="100" />
-            <el-table-column prop="gender" label="性别" width="60" />
-            <el-table-column prop="age" label="年龄" width="60" />
-            <el-table-column prop="idNumber" label="证件号" width="180" />
-            <el-table-column prop="phone" label="联系电话" width="130" />
-            <el-table-column prop="caseCategory" label="病例分类" width="100" />
-            <el-table-column prop="diseaseName" label="疾病名称" width="120" />
-            <el-table-column prop="reportUnit" label="报告单位" min-width="120" show-overflow-tooltip />
-            <el-table-column label="追踪状态" width="90">
+            <el-table-column type="index" label="#" />
+            <el-table-column prop="name" label="患者姓名" />
+            <el-table-column prop="gender" label="性别" />
+            <el-table-column prop="age" label="年龄" />
+            <el-table-column prop="idNumber" label="证件号" />
+            <el-table-column prop="phone" label="联系电话" />
+            <el-table-column prop="caseCategory" label="病例分类" />
+            <el-table-column prop="diseaseName" label="疾病名称" />
+            <el-table-column prop="reportUnit" label="报告单位" show-overflow-tooltip />
+            <el-table-column label="追踪状态">
               <template #default="{ row }">
                 <el-tag
                   :type="row.trackingStatus === 1 ? 'success' : row.trackingStatus === 2 ? 'danger' : row.trackingStatus === 4 ? 'info' : 'warning'"
@@ -309,15 +309,15 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="diagnosisResult" label="诊断结果" width="110" />
-            <el-table-column label="归档" width="70">
+            <el-table-column prop="diagnosisResult" label="诊断结果" />
+            <el-table-column label="归档">
               <template #default="{ row }">
                 <el-tag :type="row.archived ? 'success' : 'info'" size="small">
                   {{ row.archived ? "已归档" : "进行中" }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="280" fixed="right">
+            <el-table-column label="操作" fixed="right">
               <template #default="{ row }">
                 <el-button
                   type="primary"

@@ -735,14 +735,14 @@ watch(
             {{ MEDICATION_STATUS_OPTIONS.find(o => o.value === row.medicationStatus)?.label || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="当前阶段" fixed="right" width="110">
+        <el-table-column label="当前阶段" fixed="right">
           <template #default="{ row }">
             <el-tag :type="getStageInfo(row).type" size="small">
               {{ getStageInfo(row).label }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="400">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
               查看详情
@@ -1327,8 +1327,8 @@ watch(
         督导记录
       </el-divider>
       <el-table v-if="supervisionDetailData?.supervisionRecords" :data="JSON.parse(supervisionDetailData.supervisionRecords)" border stripe size="small" class="mb-4">
-        <el-table-column prop="time" label="督导时间" width="120" />
-        <el-table-column prop="method" label="督导方式" width="100" />
+        <el-table-column prop="time" label="督导时间" />
+        <el-table-column prop="method" label="督导方式" />
         <el-table-column prop="content" label="督导内容" />
         <el-table-column prop="remark" label="备注" />
       </el-table>
@@ -1544,8 +1544,8 @@ watch(
         通知单
       </el-divider>
       <el-table :data="aggregateNotices" border stripe size="small" max-height="200">
-        <el-table-column prop="receiverName" label="接收人" width="120" />
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="receiverName" label="接收人" />
+        <el-table-column prop="status" label="状态">
           <template #default="{ row: n }">
             <el-tag :type="n.status === 1 ? 'success' : 'warning'" size="small">
               {{ NOTICE_STATUS_MAP[n.status] || "未知" }}
@@ -1595,10 +1595,10 @@ watch(
           :data="aggregateSupervision.supervisionRecords ? JSON.parse(aggregateSupervision.supervisionRecords) : []"
           border stripe size="small"
         >
-          <el-table-column prop="time" label="督导时间" width="120" />
-          <el-table-column prop="method" label="督导方式" width="100" />
+          <el-table-column prop="time" label="督导时间" />
+          <el-table-column prop="method" label="督导方式" />
           <el-table-column prop="content" label="督导内容" />
-          <el-table-column prop="remark" label="备注" width="130" />
+          <el-table-column prop="remark" label="备注" />
         </el-table>
 
         <!-- 全疗程规律治疗评价 -->
@@ -1648,18 +1648,18 @@ watch(
         电话随访记录
       </el-divider>
       <el-table :data="aggregateFollowUps" border stripe size="small" max-height="200">
-        <el-table-column prop="followUpDate" label="日期" width="120" />
+        <el-table-column prop="followUpDate" label="日期" />
         <el-table-column prop="content" label="内容" />
-        <el-table-column prop="result" label="结果" width="120" />
+        <el-table-column prop="result" label="结果" />
       </el-table>
 
       <el-divider content-position="left">
         按期检查记录
       </el-divider>
       <el-table :data="aggregateChecks" border stripe size="small" max-height="200">
-        <el-table-column prop="checkDate" label="日期" width="120" />
-        <el-table-column prop="checkPeriod" label="周期" width="100" />
-        <el-table-column prop="checkResult" label="结果" width="100" />
+        <el-table-column prop="checkDate" label="日期" />
+        <el-table-column prop="checkPeriod" label="周期" />
+        <el-table-column prop="checkResult" label="结果" />
         <el-table-column prop="content" label="详情" />
       </el-table>
 

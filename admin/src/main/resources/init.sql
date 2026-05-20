@@ -1339,6 +1339,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (411, 'epidemic:screening',             '大疫情导入筛查',       1, 400, 5),
 -- 聚合潜伏感染者管理（一级菜单）
 (412, 'latentManagement',               '潜伏感染者管理',       1, 0,   11),
+(460, 'latentManagement:overview',      '在管总览',             1, 412, 0),
+(461, 'latentManagement:edit',          '修改信息',             2, 460, 1),
 (413, 'latentManagement:notice',        '通知单管理',           1, 412, 1),
 (414, 'latentManagement:track',         '追踪',                 2, 413, 1),
 (415, 'latentManagement:xray',          '录入胸片',             2, 413, 2),
@@ -1348,6 +1350,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
 -- 聚合患者管理（一级菜单）
 (420, 'patientManagement',              '患者管理',             1, 0,   12),
+(462, 'patientManagement:overview',     '在管总览',             1, 420, 0),
+(463, 'patientManagement:edit',         '修改信息',             2, 462, 1),
 (421, 'patientManagement:notice',       '通知单管理',           1, 420, 1),
 (422, 'patientManagement:firstVisit',   '首次随访',             1, 420, 2),
 (423, 'patientManagement:followUp',     '后续随访',             1, 420, 3),
@@ -1368,9 +1372,11 @@ WHERE p.`code` IN (
     'regular:screening:delete', 'regular:screening:upload', 'regular:screening:export',
     'regular:suspected', 'regular:suspected:track', 'regular:suspected:xray', 'regular:suspected:diagnosis',
     'epidemic:screening',
-    'latentManagement', 'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
+    'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
+    'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
-    'patientManagement', 'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
+    'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
+    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
     'patientManagement:medication', 'patientManagement:specialDisease', 'patientManagement:history',
     'patientManagement:referral', 'patientManagement:delete'
 );
@@ -1393,6 +1399,8 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `household_address`      VARCHAR(256),
     `current_address`        VARCHAR(256),
     `crowd_category`         VARCHAR(128)                            COMMENT '人群分类',
+    `recommend_reason`       VARCHAR(512)                            COMMENT '推介原因（recommend模式）',
+    `track_reason`           VARCHAR(512)                            COMMENT '追踪原因（track模式）',
     -- 推介专用字段（biz_mode=recommend 时使用）
     `receiver_user_id`       BIGINT                                  COMMENT '接收推介的三/四级用户ID',
     `receiver_dept_id`       BIGINT                                  COMMENT '接收推介的用户所在部门ID（自动派生）',
@@ -1428,6 +1436,23 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `update_time`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`                TINYINT       NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推介追踪记录表（V17）';
+
+-- 兼容已部署环境：在管总览菜单权限（可重复执行）
+-- INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+-- (460, 'latentManagement:overview', '在管总览', 1, 412, 0),
+-- (461, 'latentManagement:edit', '修改信息', 2, 460, 1),
+-- (462, 'patientManagement:overview', '在管总览', 1, 420, 0),
+-- (463, 'patientManagement:edit', '修改信息', 2, 462, 1);
+-- INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+-- SELECT r.role, p.id FROM (SELECT 1 AS role UNION SELECT 2) r
+-- CROSS JOIN `permission` p WHERE p.`code` IN (
+--   'latentManagement:overview', 'latentManagement:edit',
+--   'patientManagement:overview', 'patientManagement:edit'
+-- );
+
+-- 兼容已部署环境：补充推介/追踪原因字段（列已存在时可忽略报错）
+-- ALTER TABLE `referral_tracking` ADD COLUMN `recommend_reason` VARCHAR(512) COMMENT '推介原因（recommend模式）' AFTER `crowd_category`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `track_reason` VARCHAR(512) COMMENT '追踪原因（track模式）' AFTER `recommend_reason`;
 
 -- ---------- 2. 推介追踪权限码（ID 从 430 起） ----------
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES

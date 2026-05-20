@@ -341,7 +341,7 @@ watch(
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="300">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
               查看详情

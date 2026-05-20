@@ -731,7 +731,7 @@ watch(
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="380">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
               <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
@@ -1302,16 +1302,16 @@ watch(
     <!-- 后续随访记录列表（患者随访汇总表） -->
     <el-dialog v-model="followUpListVisible" title="患者随访汇总表" width="800px">
       <el-table :data="followUpListData" border stripe>
-        <el-table-column prop="visitSeq" label="随访次数" width="80" />
-        <el-table-column prop="visitDate" label="随访时间" width="110" />
-        <el-table-column label="随访方式" width="80">
+        <el-table-column prop="visitSeq" label="随访次数" />
+        <el-table-column prop="visitDate" label="随访时间" />
+        <el-table-column label="随访方式">
           <template #default="{ row }">
             {{ ({ "1": "门诊", "2": "家庭", "3": "电话" } as Record<string, string>)[row.visitMethod] ?? row.visitMethod ?? "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="visitSituation" label="随访情况" show-overflow-tooltip />
-        <el-table-column prop="remarks" label="备注" width="120" show-overflow-tooltip />
-        <el-table-column prop="createTime" label="填写时间" width="160" />
+        <el-table-column prop="remarks" label="备注" show-overflow-tooltip />
+        <el-table-column prop="createTime" label="填写时间" />
       </el-table>
     </el-dialog>
 

@@ -184,8 +184,8 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="createTime" label="时间" width="170" />
-        <el-table-column label="操作人" width="160">
+        <el-table-column prop="createTime" label="时间" />
+        <el-table-column label="操作人">
           <template #default="{ row }">
             <div>
               <div>{{ row.realName || "-" }}</div>
@@ -193,36 +193,36 @@ watch(
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="角色" width="90">
+        <el-table-column label="角色">
           <template #default="{ row }">
             <el-tag size="small">{{ ROLE_MAP[row.role] || "-" }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="类型" width="80">
+        <el-table-column label="类型">
           <template #default="{ row }">
             <el-tag :type="getOpTypeTagType(row.opType)" size="small">
               {{ OP_LOG_TYPE_LABEL[row.opType] || row.opType }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="opModule" label="模块" width="100" />
-        <el-table-column prop="opAction" label="动作描述" show-overflow-tooltip min-width="160" />
-        <el-table-column prop="requestUrl" label="URL" show-overflow-tooltip min-width="200" />
-        <el-table-column prop="ip" label="IP" width="130" />
-        <el-table-column label="结果" width="80">
+        <el-table-column prop="opModule" label="模块" />
+        <el-table-column prop="opAction" label="动作描述" show-overflow-tooltip />
+        <el-table-column prop="requestUrl" label="URL" show-overflow-tooltip />
+        <el-table-column prop="ip" label="IP" />
+        <el-table-column label="结果">
           <template #default="{ row }">
             <el-tag :type="row.resultStatus === 1 ? 'success' : 'danger'" size="small">
               {{ row.resultStatus === 1 ? "成功" : "失败" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="耗时" width="80">
+        <el-table-column label="耗时">
           <template #default="{ row }">
             <span v-if="row.costMs != null">{{ row.costMs }} ms</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="80">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" link @click="viewDetail(row)">
               详情

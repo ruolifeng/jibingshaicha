@@ -153,28 +153,28 @@ async function handleSupervisionSave(archive = false) {
     <!-- 数据表格 -->
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column type="index" label="#" width="50" />
-        <el-table-column label="数据来源" width="100">
+        <el-table-column type="index" label="#" />
+        <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" width="90" />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="170" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="diagnosisFirst" label="诊断结果" width="110" />
-        <el-table-column label="督导表状态" width="100">
+        <el-table-column prop="name" label="姓名" />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="diagnosisFirst" label="诊断结果" />
+        <el-table-column label="督导表状态">
           <template #default="{ row }">
             <el-tag :type="row.supervisionDone ? 'success' : 'warning'" size="small">
               {{ row.supervisionDone ? "已完成" : "待填写" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'latentManagement:supervision'" type="primary" link size="small"
               :disabled="row.archived === 1"

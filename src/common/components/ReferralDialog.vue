@@ -177,30 +177,30 @@ watch(visible, (val: boolean) => {
         <span class="font-semibold">推送记录</span>
       </template>
       <el-table v-loading="historyLoading" :data="historyList" border size="small">
-        <el-table-column prop="sentTime" label="推送时间" width="170" />
-        <el-table-column label="状态" width="90">
+        <el-table-column prop="sentTime" label="推送时间" />
+        <el-table-column label="状态">
           <template #default="{ row }">
             <el-tag :type="STATUS_TAG_TYPE[row.status]" size="small">
               {{ STATUS_LABEL[row.status] || row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confirmedTime" label="接收时间" width="170">
+        <el-table-column prop="confirmedTime" label="接收时间">
           <template #default="{ row }">
             {{ row.confirmedTime || "—" }}
           </template>
         </el-table-column>
-        <el-table-column prop="rejectedTime" label="拒绝时间" width="170">
+        <el-table-column prop="rejectedTime" label="拒绝时间">
           <template #default="{ row }">
             {{ row.rejectedTime || "—" }}
           </template>
         </el-table-column>
-        <el-table-column prop="rejectReason" label="拒绝原因" min-width="120">
+        <el-table-column prop="rejectReason" label="拒绝原因">
           <template #default="{ row }">
             {{ row.rejectReason || "—" }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.status === 3"

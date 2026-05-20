@@ -79,21 +79,21 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
 
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column type="index" label="#" width="50" />
-        <el-table-column label="数据来源" width="100">
+        <el-table-column type="index" label="#" />
+        <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" width="90" />
-        <el-table-column prop="gender" label="性别" width="60" />
-        <el-table-column prop="age" label="年龄" width="60" />
-        <el-table-column prop="idNumber" label="证件号" width="170" />
-        <el-table-column prop="phone" label="联系电话" width="130" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" width="110" />
-        <el-table-column prop="archivedTime" label="归档时间" width="160" />
+        <el-table-column prop="name" label="姓名" />
+        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="idNumber" label="证件号" />
+        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="archivedTime" label="归档时间" />
       </el-table>
 
       <el-pagination

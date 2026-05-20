@@ -200,7 +200,7 @@ async function handleDownload() {
       />
 
       <el-table v-if="result.errors.length > 0" :data="result.errors.map((msg, idx) => ({ idx: idx + 1, msg }))" border max-height="360">
-        <el-table-column prop="idx" label="#" width="60" />
+        <el-table-column prop="idx" label="#" />
         <el-table-column prop="msg" label="异常详情" />
       </el-table>
     </el-card>

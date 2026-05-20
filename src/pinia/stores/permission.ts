@@ -15,9 +15,13 @@ function hasPermission(roles: string[], route: RouteRecordRaw) {
 
 /** 基于权限编码过滤路由 */
 function hasMenuPermission(route: RouteRecordRaw): boolean {
+  const userStore = useUserStore()
+  const anyPerms = route.meta?.anyPermission
+  if (anyPerms?.length) {
+    return anyPerms.some(code => userStore.hasPermission(code))
+  }
   const permCode = route.meta?.permission as string | undefined
   if (!permCode) return true
-  const userStore = useUserStore()
   return userStore.hasPermission(permCode)
 }
 

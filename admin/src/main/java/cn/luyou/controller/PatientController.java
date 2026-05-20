@@ -28,6 +28,19 @@ public class PatientController {
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
 
+    @Operation(summary = "患者详情")
+    @GetMapping("/{id}")
+    public ResultResponse<Patient> detail(@PathVariable Long id) {
+        return ResultRes.success(patientService.getDetail(id));
+    }
+
+    @Operation(summary = "更新患者基本信息")
+    @PutMapping("/{id}")
+    public ResultResponse<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        patientService.updateBasicInfo(id, body);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "患者列表")
     @GetMapping("/list")
     public ResultResponse<IPage<Patient>> list(

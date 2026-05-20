@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 /** 首次入户随访记录 — 查看详情弹窗（学校人群 & 重点人群共用） */
+import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
 
 const props = defineProps<{
@@ -36,6 +37,8 @@ const educationEntries = computed<[string, string][]>(() => {
   }
   return Object.entries(obj) as [string, string][]
 })
+
+const printVisible = ref(false)
 </script>
 
 <template>
@@ -163,6 +166,17 @@ const educationEntries = computed<[string, string][]>(() => {
       <el-button @click="emit('update:visible', false)">
         关闭
       </el-button>
+      <el-button v-if="visitData" type="primary" @click="printVisible = true">
+        打印 / 保存PDF
+      </el-button>
     </template>
   </el-dialog>
+
+  <PrintFirstVisit
+    v-if="visitData"
+    :visible="printVisible"
+    :visit-data="visitData"
+    :patient-name="patientName"
+    @update:visible="printVisible = $event"
+  />
 </template>

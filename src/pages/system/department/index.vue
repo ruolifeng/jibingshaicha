@@ -168,21 +168,21 @@ fetchData()
       <el-alert type="info" :closable="false" class="mb-3" title="三级结构：市级（1）可查看全部下属区县与社区数据；同级区县互不可见；社区挂在区县下。" />
 
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column label="层级" width="100">
+        <el-table-column prop="id" label="ID" />
+        <el-table-column label="层级">
           <template #default="{ row }">
             {{ LEVEL_MAP[row.level ?? 1] || "—" }}
           </template>
         </el-table-column>
         <el-table-column prop="name" label="部门名称" />
-        <el-table-column label="上级部门" min-width="120">
+        <el-table-column label="上级部门">
           <template #default="{ row }">
             {{ getParentName(row.parentId) }}
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
         <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right" width="160">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">
               编辑

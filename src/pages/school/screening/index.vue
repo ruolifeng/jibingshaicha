@@ -327,7 +327,7 @@ watch(
 
       <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="50" fixed />
+        <el-table-column type="selection" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
@@ -346,10 +346,10 @@ watch(
         <el-table-column prop="screenMethod" label="筛查方法" />
         <el-table-column prop="screenResult" label="筛查结果" />
         <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="首次（是否胸片）" min-width="110" />
-        <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" min-width="100" />
-        <el-table-column prop="diagnosisResult" label="首次诊断结果" min-width="110" />
+        <el-table-column prop="hasChestXray" label="首次（是否胸片）" />
+        <el-table-column prop="chestXrayDate" label="胸片检查日期" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" />
+        <el-table-column prop="diagnosisResult" label="首次诊断结果" />
         <!-- 预防性治疗情况（督导表归档后同步） -->
         <el-table-column prop="preventivePlan" label="预防性治疗方案" />
         <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
@@ -364,7 +364,7 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" fixed="right" width="240">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">
               查看详情
@@ -738,7 +738,7 @@ watch(
           class="mb-3"
         />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
-          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="index" label="#" />
           <el-table-column prop="msg" label="错误信息" />
         </el-table>
       </template>

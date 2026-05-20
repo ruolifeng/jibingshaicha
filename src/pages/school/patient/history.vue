@@ -167,7 +167,7 @@ watch(
         </el-table-column>
         <el-table-column prop="archivedTime" label="归档时间" />
         <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right" width="100">
+        <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
               查看详情
