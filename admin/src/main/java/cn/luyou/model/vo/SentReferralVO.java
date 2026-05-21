@@ -29,4 +29,6 @@ public class SentReferralVO {
     private LocalDateTime confirmedTime;
     private LocalDateTime rejectedTime;
     private String rejectReason;
+    /** 转诊原因（发送方填写） */
+    private String referralReason;
 }

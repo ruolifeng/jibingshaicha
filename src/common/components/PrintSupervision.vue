@@ -12,16 +12,6 @@ const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
 }>()
 
-/** 解析督导记录 JSON 字符串，兜底返回空数组 */
-function parseRecords(raw: string | undefined): { time: string, method: string, content: string, remark: string }[] {
-  if (!raw) return []
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
-}
-
 function handlePrint() {
   printElement("print-supervision-content", "结核病潜伏感染者预防性治疗督导表")
 }
@@ -39,114 +29,49 @@ function handlePrint() {
         结核病潜伏感染者预防性治疗督导表
       </h2>
 
-      <!-- 基本信息 -->
       <table class="sup-table">
         <tbody>
           <tr>
             <th>姓名</th>
-            <td>{{ data?.patientName }}</td>
-            <th>类别</th>
+            <td>{{ data?.patientName || "-" }}</td>
+            <th>人群分类</th>
             <td>{{ data?.category || "-" }}</td>
           </tr>
           <tr>
+            <th>现居住地址</th>
+            <td>{{ data?.currentAddress || "-" }}</td>
+            <th>户籍地址</th>
+            <td>{{ data?.householdAddress || "-" }}</td>
+          </tr>
+          <tr>
+            <th>身份证</th>
+            <td>{{ data?.idNumber || "-" }}</td>
             <th>性别</th>
             <td>{{ data?.gender || "-" }}</td>
-            <th>年龄</th>
-            <td>{{ data?.age ?? "-" }}</td>
           </tr>
           <tr>
-            <th>电话号码</th>
-            <td>{{ data?.phone || "-" }}</td>
-            <th>现住址</th>
-            <td>{{ data?.currentAddress || "-" }}</td>
+            <th>出生日期</th>
+            <td>{{ data?.birthDate || "-" }}</td>
+            <th>民族</th>
+            <td>{{ data?.ethnicity || "-" }}</td>
           </tr>
           <tr>
+            <th>是否开始预防性治疗</th>
+            <td>{{ data?.hasPreventiveTreatment || "-" }}</td>
             <th>治疗方案</th>
-            <td colspan="3">
-              {{ data?.treatmentPlan || "-" }}
-            </td>
+            <td>{{ data?.treatmentPlan || "-" }}</td>
           </tr>
           <tr>
-            <th>开始治疗时间</th>
+            <th>治疗开始时间</th>
             <td>{{ data?.treatmentStartDate || "-" }}</td>
-            <th>结束疗程时间</th>
+            <th>治疗结束时间</th>
             <td>{{ data?.treatmentEndDate || "-" }}</td>
           </tr>
-        </tbody>
-      </table>
-
-      <!-- 督导记录 -->
-      <h3 class="section-title">
-        督导记录
-      </h3>
-      <table class="sup-table">
-        <thead>
           <tr>
-            <th style="width:120px">
-              督导时间
-            </th>
-            <th style="width:120px">
-              督导方式
-            </th>
-            <th>督导内容</th>
-            <th style="width:150px">
-              备注
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(rec, i) in parseRecords(data?.supervisionRecords)" :key="i">
-            <td>{{ rec.time || "-" }}</td>
-            <td>{{ rec.method || "-" }}</td>
-            <td>{{ rec.content || "-" }}</td>
-            <td>{{ rec.remark || "-" }}</td>
-          </tr>
-          <tr v-if="!parseRecords(data?.supervisionRecords).length">
-            <td colspan="4" style="text-align:center;color:#999">
-              暂无督导记录
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- 全疗程规律治疗评价 -->
-      <h3 class="section-title">
-        全疗程规律治疗评价
-      </h3>
-      <table class="sup-table">
-        <tbody>
-          <tr>
-            <th>中断用药</th>
-            <td>{{ data?.interruptMedication || "-" }}</td>
-            <th>中断次数</th>
-            <td>{{ data?.interruptCount ?? "-" }}</td>
-          </tr>
-          <tr>
-            <th>全程应用药次数</th>
-            <td>{{ data?.totalDoses ?? "-" }}</td>
-            <th>实际用药次数</th>
-            <td>{{ data?.actualDoses ?? "-" }}</td>
-          </tr>
-          <tr>
-            <th>用药率</th>
-            <td colspan="3">
-              {{ data?.medicationRate || "-" }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- 督导管理人员 -->
-      <h3 class="section-title">
-        督导管理人员
-      </h3>
-      <table class="sup-table">
-        <tbody>
-          <tr>
-            <th>管理人员类型</th>
-            <td>{{ data?.managerType || "-" }}</td>
-            <th>管理人员姓名</th>
-            <td>{{ data?.managerName || "-" }}</td>
+            <th>管理单位</th>
+            <td>{{ data?.managingUnit || "-" }}</td>
+            <th>督导医生</th>
+            <td>{{ data?.supervisingDoctor || "-" }}</td>
           </tr>
           <tr>
             <th>备注</th>
@@ -181,14 +106,6 @@ function handlePrint() {
   margin-bottom: 16px;
 }
 
-.section-title {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 14px 0 6px;
-  padding-left: 4px;
-  border-left: 3px solid #409eff;
-}
-
 .sup-table {
   width: 100%;
   border-collapse: collapse;
@@ -206,11 +123,5 @@ function handlePrint() {
     white-space: nowrap;
     width: 130px;
   }
-
-  thead th {
-    text-align: center;
-    width: auto;
-  }
 }
 </style>
-

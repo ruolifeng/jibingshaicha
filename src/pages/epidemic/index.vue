@@ -9,7 +9,7 @@ import {
   trackEpidemicApi
 } from "./apis"
 
-defineOptions({ name: "EpidemicScreening" })
+defineOptions({ name: "ScreeningEpidemic" })
 
 const activeTab = ref<"import" | "suspected">("import")
 
@@ -192,7 +192,7 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
 <template>
   <div class="app-container">
     <el-tabs v-model="activeTab" type="border-card">
-      <el-tab-pane label="导入大疫情表" name="import">
+      <el-tab-pane label="筛查数据" name="import">
         <el-card shadow="never">
           <el-alert
             type="info"
@@ -205,7 +205,7 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
             <template #default>
               <ul style="margin: 6px 0 0 16px; line-height: 1.9; color: #606266; font-size: 13px">
                 <li>提取字段：姓名、证件号、性别、出生日期、年龄、联系电话、现详细住址、病例分类、疾病名称、报告单位</li>
-                <li>导入后进入「待诊断列表」，执行：追踪 -> 录入胸片 -> 录入诊断 -> 自动分流</li>
+                <li>导入后进入「待诊断」，执行：追踪 -> 录入胸片 -> 录入诊断 -> 自动分流</li>
               </ul>
             </template>
           </el-alert>
@@ -249,14 +249,14 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
           >
             <template #extra>
               <el-button type="primary" @click="activeTab = 'suspected'">
-                前往待诊断列表
+                前往待诊断
               </el-button>
             </template>
           </el-result>
         </el-card>
       </el-tab-pane>
 
-      <el-tab-pane label="待诊断列表" name="suspected">
+      <el-tab-pane label="待诊断" name="suspected">
         <el-card class="search-wrapper" shadow="never">
           <el-form inline>
             <el-form-item label="姓名">

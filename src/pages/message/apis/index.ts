@@ -95,6 +95,7 @@ export interface SentReferralVO {
   confirmedTime: string | null
   rejectedTime: string | null
   rejectReason: string | null
+  referralReason: string | null
 }
 
 export interface ReferralDetailVO {
@@ -117,6 +118,7 @@ export interface ReferralDetailVO {
   confirmedTime: string | null
   rejectedTime: string | null
   rejectReason: string | null
+  referralReason: string | null
 }
 
 /** 查询转诊详情（含发送方信息） */

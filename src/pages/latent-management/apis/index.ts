@@ -26,6 +26,21 @@ export function updateLatentApi(id: number, data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: `latent/${id}`, method: "put", data })
 }
 
+/** 手动新增潜伏感染记录 */
+export function createLatentApi(data: Record<string, any>) {
+  return request<ApiResponseData<number>>({ url: "latent", method: "post", data })
+}
+
+/** 删除潜伏感染记录（级联删除） */
+export function deleteLatentApi(id: number) {
+  return request<ApiResponseData<null>>({ url: `latent/${id}`, method: "delete" })
+}
+
+/** 批量删除潜伏感染记录（级联删除） */
+export function batchDeleteLatentApi(ids: number[]) {
+  return request<ApiResponseData<null>>({ url: "latent/batch-delete", method: "delete", data: { ids } })
+}
+
 /** 导出在管潜伏感染者总表 */
 export function exportAllLatentApi(params: Record<string, any>) {
   return request<Blob>({

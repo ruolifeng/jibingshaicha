@@ -18,6 +18,7 @@ export interface SentReferralVO {
   confirmedTime: string | null
   rejectedTime: string | null
   rejectReason: string | null
+  referralReason: string | null
 }
 
 export interface ReferralRecord {
@@ -32,6 +33,7 @@ export interface ReferralRecord {
   confirmedTime: string | null
   rejectedTime: string | null
   rejectReason: string | null
+  referralReason: string | null
 }
 
 export interface SendReferralParams {
@@ -42,6 +44,8 @@ export interface SendReferralParams {
   subjectName: string
   /** 业务摘要 JSON 字符串 */
   summary?: string
+  /** 转诊原因 */
+  referralReason?: string
   receiverOrgId: number
 }
 

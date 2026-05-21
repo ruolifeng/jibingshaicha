@@ -450,6 +450,11 @@ const activeTab = ref("received")
               </template>
             </el-table-column>
             <el-table-column prop="sentTime" label="发送时间" />
+            <el-table-column prop="referralReason" label="转诊原因" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ row.referralReason || "—" }}
+              </template>
+            </el-table-column>
             <el-table-column label="状态">
               <template #default="{ row }">
                 <el-tag
@@ -546,6 +551,9 @@ const activeTab = ref("received")
           </el-descriptions-item>
           <el-descriptions-item label="接收时间">
             {{ referralDetailData.confirmedTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="referralDetailData.referralReason" label="转诊原因" :span="2">
+            {{ referralDetailData.referralReason }}
           </el-descriptions-item>
           <el-descriptions-item v-if="referralDetailData.rejectReason" label="拒绝原因" :span="2">
             {{ referralDetailData.rejectReason }}

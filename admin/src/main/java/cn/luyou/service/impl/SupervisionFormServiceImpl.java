@@ -31,11 +31,22 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void saveSubmit(SupervisionForm form) {
+        form.setStatus(1);
+        form.setArchivedTime(null);
+        saveOrUpdate(form);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void saveAndArchive(SupervisionForm form) {
         form.setStatus(2);
         form.setArchivedTime(LocalDateTime.now());
 
         // V5 兼容：将新字段回填到旧字段，保持筛查表回写兼容
+        if (StrUtil.isBlank(form.getPreventiveManager()) && StrUtil.isNotBlank(form.getManagingUnit())) {
+            form.setPreventiveManager(form.getManagingUnit());
+        }
         if (StrUtil.isBlank(form.getPreventiveManager()) && (StrUtil.isNotBlank(form.getManagerType()) || StrUtil.isNotBlank(form.getManagerName()))) {
             StringBuilder manager = new StringBuilder();
             if (StrUtil.isNotBlank(form.getManagerType())) manager.append(form.getManagerType());
@@ -83,6 +94,7 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             case "school" -> {
                 ScreeningSchool s = screeningSchoolMapper.selectById(screeningId);
                 if (s != null) {
+                    s.setHasPreventiveTreatment(form.getHasPreventiveTreatment());
                     s.setPreventivePlan(form.getTreatmentPlan());
                     s.setPreventiveStartDate(form.getTreatmentStartDate());
                     s.setPreventiveEndDate(form.getTreatmentEndDate());
@@ -91,9 +103,10 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
                     screeningSchoolMapper.updateById(s);
                 }
             }
-            case "keyPopulation" -> {
+            case "keyPopulation", "regular" -> {
                 ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(screeningId);
                 if (k != null) {
+                    k.setHasPreventiveTreatment(form.getHasPreventiveTreatment());
                     k.setPreventivePlan(form.getTreatmentPlan());
                     k.setPreventiveStartDate(form.getTreatmentStartDate());
                     k.setPreventiveEndDate(form.getTreatmentEndDate());

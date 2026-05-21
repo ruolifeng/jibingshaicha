@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { FormInstance, FormRules } from "element-plus"
 import ImageUploader from "@@/components/ImageUploader.vue"
 import {
   DRUG_FORM_OPTIONS,
@@ -55,7 +56,60 @@ function createEmptyForm() {
 }
 
 const firstVisitForm = reactive(createEmptyForm())
+const formRef = ref<FormInstance>()
 const saving = ref(false)
+
+const rules: FormRules = {
+  visitDate: [{ required: true, message: "请选择随访时间", trigger: "change" }],
+  visitMethod: [{ required: true, message: "请选择随访方式", trigger: "change" }],
+  patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
+  sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
+  drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
+  otherSymptoms: [{
+    validator: (_rule, value, callback) => {
+      if (!value || !String(value).trim()) {
+        callback(new Error("请填写其他症状"))
+      } else {
+        callback()
+      }
+    },
+    trigger: "blur"
+  }],
+  symptoms: [{
+    type: "array",
+    required: true,
+    min: 1,
+    message: "请至少选择一项症状及体征",
+    trigger: "change"
+  }],
+  chemotherapy: [{ required: true, whitespace: true, message: "请填写化疗方案", trigger: "blur" }],
+  medicationUsage: [{ required: true, message: "请选择用法", trigger: "change" }],
+  supervisor: [{ required: true, message: "请选择督导人员", trigger: "change" }],
+  drugForm: [{
+    type: "array",
+    required: true,
+    min: 1,
+    message: "请至少选择一种药品剂型",
+    trigger: "change"
+  }],
+  medicationLocation: [{ required: true, whitespace: true, message: "请填写取药地点", trigger: "blur" }],
+  medicationPickTime: [{ required: true, message: "请选择取药时间", trigger: "change" }],
+  nextVisitDate: [{ required: true, message: "请选择下次随访时间", trigger: "change" }],
+  doctorSignature: [{ required: true, whitespace: true, message: "请填写评估医生签名", trigger: "blur" }]
+}
+
+function educationItemRules(label: string) {
+  return [{
+    validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+      if (!value || (value !== "掌握" && value !== "未掌握")) {
+        callback(new Error(`请选择「${label}」的掌握情况`))
+      } else {
+        callback()
+      }
+    },
+    trigger: "change"
+  }]
+}
 
 function parseLoadedData(data: Record<string, any>) {
   const base = createEmptyForm()
@@ -97,8 +151,11 @@ async function loadExisting() {
 
 watch(
   () => props.visible,
-  (val) => {
-    if (val) loadExisting()
+  async (val) => {
+    if (val) {
+      await loadExisting()
+      nextTick(() => formRef.value?.clearValidate())
+    }
   }
 )
 
@@ -108,6 +165,13 @@ function close() {
 
 async function handleSave() {
   if (!props.patientRow || saving.value) return
+  if (!formRef.value) return
+  try {
+    await formRef.value.validate()
+  } catch {
+    ElMessage.warning("请完善必填项后再保存")
+    return
+  }
   saving.value = true
   try {
     await saveFirstVisitApi({
@@ -136,18 +200,18 @@ async function handleSave() {
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
-    <el-form :model="firstVisitForm" label-width="110px" size="default">
+    <el-form ref="formRef" :model="firstVisitForm" :rules="rules" label-width="110px" size="default">
       <el-divider content-position="left">
         基本信息
       </el-divider>
       <el-row :gutter="16">
         <el-col :span="8">
-          <el-form-item label="随访时间">
+          <el-form-item label="随访时间" prop="visitDate">
             <el-date-picker v-model="firstVisitForm.visitDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="随访方式">
+          <el-form-item label="随访方式" prop="visitMethod">
             <el-radio-group v-model="firstVisitForm.visitMethod">
               <el-radio v-for="item in VISIT_METHOD_OPTIONS" :key="item" :value="item">
                 {{ item }}
@@ -156,7 +220,7 @@ async function handleSave() {
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="患者类型">
+          <el-form-item label="患者类型" prop="patientType">
             <el-radio-group v-model="firstVisitForm.patientType">
               <el-radio value="初治">
                 初治
@@ -170,26 +234,26 @@ async function handleSave() {
       </el-row>
       <el-row :gutter="16">
         <el-col :span="8">
-          <el-form-item label="痰菌情况">
+          <el-form-item label="痰菌情况" prop="sputumStatus">
             <el-select v-model="firstVisitForm.sputumStatus" style="width: 100%">
               <el-option v-for="item in SPUTUM_STATUS_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="耐药情况">
+          <el-form-item label="耐药情况" prop="drugResistance">
             <el-select v-model="firstVisitForm.drugResistance" style="width: 100%">
               <el-option v-for="item in DRUG_RESISTANCE_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="其他症状">
-            <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写" />
+          <el-form-item label="其他症状" prop="otherSymptoms">
+            <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写，无则填「无」" />
           </el-form-item>
         </el-col>
       </el-row>
-      <el-form-item label="症状及体征">
+      <el-form-item label="症状及体征" prop="symptoms">
         <el-checkbox-group v-model="firstVisitForm.symptoms">
           <el-checkbox v-for="s in SYMPTOM_OPTIONS" :key="s.value" :value="s.value">
             {{ s.label }}
@@ -202,12 +266,12 @@ async function handleSave() {
       </el-divider>
       <el-row :gutter="16">
         <el-col :span="8">
-          <el-form-item label="化疗方案">
+          <el-form-item label="化疗方案" prop="chemotherapy">
             <el-input v-model="firstVisitForm.chemotherapy" placeholder="化疗方案" />
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="用法">
+          <el-form-item label="用法" prop="medicationUsage">
             <el-radio-group v-model="firstVisitForm.medicationUsage">
               <el-radio v-for="item in MEDICATION_USAGE_OPTIONS" :key="item" :value="item">
                 {{ item }}
@@ -216,14 +280,14 @@ async function handleSave() {
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="督导人员">
+          <el-form-item label="督导人员" prop="supervisor">
             <el-select v-model="firstVisitForm.supervisor" style="width: 100%">
               <el-option v-for="item in FIRST_VISIT_SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>
       </el-row>
-      <el-form-item label="药品剂型">
+      <el-form-item label="药品剂型" prop="drugForm">
         <el-checkbox-group v-model="firstVisitForm.drugForm">
           <el-checkbox v-for="item in DRUG_FORM_OPTIONS" :key="item" :value="item">
             {{ item }}
@@ -271,12 +335,12 @@ async function handleSave() {
       </el-divider>
       <el-row :gutter="16">
         <el-col :span="12">
-          <el-form-item label="取药地点">
+          <el-form-item label="取药地点" prop="medicationLocation">
             <el-input v-model="firstVisitForm.medicationLocation" />
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="取药时间">
+          <el-form-item label="取药时间" prop="medicationPickTime">
             <el-date-picker
               v-model="firstVisitForm.medicationPickTime"
               type="date"
@@ -289,7 +353,12 @@ async function handleSave() {
       </el-row>
       <el-row :gutter="16">
         <el-col v-for="item in EDUCATION_ITEMS" :key="item" :span="12">
-          <el-form-item :label="item" label-width="170px">
+          <el-form-item
+            :label="item"
+            label-width="170px"
+            :prop="`educationItems.${item}`"
+            :rules="educationItemRules(item)"
+          >
             <el-radio-group v-model="firstVisitForm.educationItems[item]">
               <el-radio value="掌握">
                 掌握
@@ -307,12 +376,12 @@ async function handleSave() {
       </el-divider>
       <el-row :gutter="16">
         <el-col :span="12">
-          <el-form-item label="下次随访时间">
+          <el-form-item label="下次随访时间" prop="nextVisitDate">
             <el-date-picker v-model="firstVisitForm.nextVisitDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="评估医生签名">
+          <el-form-item label="评估医生签名" prop="doctorSignature">
             <el-input v-model="firstVisitForm.doctorSignature" />
           </el-form-item>
         </el-col>
@@ -324,8 +393,8 @@ async function handleSave() {
       <el-form-item label="备注">
         <el-input v-model="firstVisitForm.remarks" type="textarea" :rows="2" placeholder="请填写" />
       </el-form-item>
-      <el-form-item label="附件（2~6张图片）">
-        <ImageUploader v-model="firstVisitForm.attachmentUrls" :min="2" :max="6" />
+      <el-form-item label="附件（可选）">
+        <ImageUploader v-model="firstVisitForm.attachmentUrls" :max="6" />
       </el-form-item>
     </el-form>
     <template #footer>

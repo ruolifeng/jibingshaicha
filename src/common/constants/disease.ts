@@ -70,12 +70,53 @@ export const REFERRAL_RESULT_OPTIONS = [
 /** 胸片检查结果选项 */
 export const CHEST_XRAY_RESULT_OPTIONS = ["正常", "异常", "未查"]
 
+/** 待诊断-确认诊断选项（学生/重点/常规筛查） */
+export const SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS = [
+  { label: "确诊患者", value: "确诊患者" },
+  { label: "排除", value: "排除" },
+  { label: "潜伏感染者", value: "潜伏感染者" }
+]
+
+/** 待诊断-确认诊断对应的转诊结果码 */
+export const SUSPECTED_REFERRAL_RESULT_OPTIONS = [
+  { label: "排除", value: "excluded" },
+  { label: "确诊患者", value: "confirmed" },
+  { label: "潜伏感染者", value: "latent" }
+]
+
+/** 待诊断-诊断中文 → 转诊码 */
+export const SUSPECTED_DIAGNOSIS_TO_REFERRAL: Record<string, string> = {
+  排除: "excluded",
+  确诊患者: "confirmed",
+  潜伏感染者: "latent"
+}
+
+/** 获取待诊断列表「确认诊断」列展示文本 */
+export function getSuspectedConfirmDiagnosisLabel(row: {
+  diagnosisFirst?: string
+  referralResult?: string
+}): string {
+  if (row.diagnosisFirst) {
+    const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === row.diagnosisFirst)
+    if (matched) return matched.label
+    return row.diagnosisFirst
+  }
+  const referral = SUSPECTED_REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)
+  return referral?.label || "-"
+}
+
 /** 预防性治疗结果（V4新增，督导表字段） */
 export const PREVENTIVE_RESULT_OPTIONS = [
   "规范完成",
   "失访",
   "自行中断治疗",
   "确诊肺结核"
+]
+
+/** 是否进行预防性治疗（督导表） */
+export const PREVENTIVE_TREATMENT_YES_NO_OPTIONS = [
+  { label: "是", value: "是" },
+  { label: "否", value: "否" }
 ]
 
 /** 预防性治疗期间随访管理人员（V4新增，督导表字段） */

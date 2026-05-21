@@ -57,8 +57,10 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
             String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
             String title = "待确认分级诊疗";
-            String content = String.format("【%s - %s】%s，发送方已发起分级诊疗推送，请在消息管理中确认接收。",
-                    popLabel, moduleLabel, referral.getSubjectName());
+            String reasonPart = referral.getReferralReason() != null && !referral.getReferralReason().isBlank()
+                    ? "，转诊原因：" + referral.getReferralReason() : "";
+            String content = String.format("【%s - %s】%s，发送方已发起分级诊疗推送%s，请在消息管理中确认接收。",
+                    popLabel, moduleLabel, referral.getSubjectName(), reasonPart);
             sysMessageService.sendMessage(referral.getReceiverOrgId(), title, content,
                     "referral_receive", referral.getId());
         }
@@ -146,8 +148,10 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
             String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
             String title = "待确认分级诊疗（重新发起）";
-            String content = String.format("【%s - %s】%s，发送方重新发起了分级诊疗推送，请在消息管理中确认接收。",
-                    popLabel, moduleLabel, referral.getSubjectName());
+            String reasonPart = referral.getReferralReason() != null && !referral.getReferralReason().isBlank()
+                    ? "，转诊原因：" + referral.getReferralReason() : "";
+            String content = String.format("【%s - %s】%s，发送方重新发起了分级诊疗推送%s，请在消息管理中确认接收。",
+                    popLabel, moduleLabel, referral.getSubjectName(), reasonPart);
             sysMessageService.sendMessage(referral.getReceiverOrgId(), title, content,
                     "referral_receive", referral.getId());
         }
@@ -174,6 +178,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         vo.setConfirmedTime(referral.getConfirmedTime());
         vo.setRejectedTime(referral.getRejectedTime());
         vo.setRejectReason(referral.getRejectReason());
+        vo.setReferralReason(referral.getReferralReason());
 
         // 填充发送方与接收方用户信息
         java.util.Set<Long> ids = new java.util.HashSet<>();
@@ -239,6 +244,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
             vo.setConfirmedTime(r.getConfirmedTime());
             vo.setRejectedTime(r.getRejectedTime());
             vo.setRejectReason(r.getRejectReason());
+            vo.setReferralReason(r.getReferralReason());
             User sender = userMap.get(r.getSenderId());
             if (sender != null) {
                 vo.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());

@@ -3,7 +3,7 @@ import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import { TRACKING_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { exportAllLatentApi } from "./apis"
+import { batchDeleteLatentApi, exportAllLatentApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const {
@@ -15,10 +15,20 @@ const detailVisible = ref(false)
 const editVisible = ref(false)
 const currentId = ref<number | null>(null)
 const exporting = ref(false)
+const selectedRows = ref<any[]>([])
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
 
 function openDetail(row: any) {
   currentId.value = row.id
   detailVisible.value = true
+}
+
+function openCreate() {
+  currentId.value = null
+  editVisible.value = true
 }
 
 function openEdit(row: any) {
@@ -40,6 +50,24 @@ async function handleExport() {
     ElMessage.error("导出失败")
   } finally {
     exporting.value = false
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) return
+  const names = selectedRows.value.map(r => r.name).join("、")
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、督导表、患者等数据将一并删除，且不可恢复！`,
+      "警告",
+      { type: "warning" }
+    )
+    await batchDeleteLatentApi(selectedRows.value.map(r => r.id))
+    ElMessage.success("删除成功")
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除失败")
   }
 }
 </script>
@@ -83,7 +111,22 @@ async function handleExport() {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 10px">
-      <div style="margin-bottom: 12px">
+      <div class="toolbar flex items-center justify-end gap-2" style="margin-bottom: 12px">
+        <el-button
+          v-permission="'latentManagement:overview'"
+          type="primary"
+          @click="openCreate"
+        >
+          新增
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:overview'"
+          type="danger"
+          :disabled="selectedRows.length === 0"
+          @click="handleBatchDelete"
+        >
+          删除
+        </el-button>
         <el-button
           v-permission="'latentManagement:overview'"
           type="success"
@@ -94,7 +137,15 @@ async function handleExport() {
         </el-button>
       </div>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="gender" label="性别" />

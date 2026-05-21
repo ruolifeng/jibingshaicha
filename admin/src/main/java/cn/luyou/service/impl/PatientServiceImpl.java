@@ -40,11 +40,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,6 +54,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         implements PatientService {
+
+    private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
+            "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact", "specialDisease"
+    );
 
     private final DepartmentService departmentService;
     private final EpidemicReportService epidemicReportService;
@@ -66,17 +72,46 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
-                                     String name, String idNumber, Integer archived) {
+                                     String name, String idNumber, String phone, String currentAddress,
+                                     Integer archived) {
+        LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
+                populationType, name, idNumber, phone, currentAddress, archived);
+        wrapper.orderByDesc(Patient::getCreateTime);
+        IPage<Patient> result = page(new Page<>(page, size), wrapper);
+        fillNoticeStatus(result.getRecords(), populationType);
+        fillFirstVisitStatus(result.getRecords());
+        fillScreeningXrayData(result.getRecords(), populationType);
+        return result;
+    }
+
+    @Override
+    public List<Patient> listForExport(String populationType, String name, String idNumber,
+                                        String phone, String currentAddress, Integer archived) {
+        LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
+                populationType, name, idNumber, phone, currentAddress, archived);
+        wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getCreateTime);
+        return list(wrapper);
+    }
+
+    private LambdaQueryWrapper<Patient> buildPatientQueryWrapper(String populationType, String name,
+                                                                  String idNumber, String phone,
+                                                                  String currentAddress, Integer archived) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
-                .eq(archived != null, Patient::getArchived, archived)
-                .orderByDesc(Patient::getCreateTime);
+                .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
+                .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
+                .eq(archived != null, Patient::getArchived, archived);
+        applyPatientScopeFilter(wrapper);
+        return wrapper;
+    }
+
+    /** 与列表查询保持一致的数据权限过滤 */
+    private void applyPatientScopeFilter(LambdaQueryWrapper<Patient> wrapper) {
         if (!BaseContext.isSuperAdmin()) {
             Integer currentRole = BaseContext.getCurrentRole();
             if (currentRole != null && currentRole == 6) {
-                // 五级管理员：只能看到发给自己的通知单所关联的患者记录
                 Long userId = BaseContext.getCurrentId();
                 wrapper.inSql(Patient::getId,
                         "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
@@ -86,11 +121,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 wrapper.in(Patient::getDepartmentId, deptIds);
             }
         }
-        IPage<Patient> result = page(new Page<>(page, size), wrapper);
-        fillNoticeStatus(result.getRecords(), populationType);
-        fillFirstVisitStatus(result.getRecords());
-        fillScreeningXrayData(result.getRecords(), populationType);
-        return result;
     }
 
     /** 批量查询首次随访状态并填充到每条记录 */
@@ -516,5 +546,77 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (body.get("currentAddress") != null) patient.setCurrentAddress(body.get("currentAddress").toString());
         if (body.get("diagnosisResult") != null) patient.setDiagnosisResult(body.get("diagnosisResult").toString());
         updateById(patient);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createManual(Map<String, Object> body) {
+        String name = body.getOrDefault("name", "").toString().trim();
+        String idNumber = body.getOrDefault("idNumber", "").toString().trim();
+        String populationType = body.getOrDefault("populationType", "").toString().trim();
+        String phone = body.getOrDefault("phone", "").toString().trim();
+
+        if (StrUtil.isBlank(name)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "姓名不能为空");
+        }
+        if (StrUtil.isBlank(idNumber)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "证件号不能为空");
+        }
+        if (!isValidIdCard(idNumber)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+        if (!MANUAL_POPULATION_TYPES.contains(populationType)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的数据来源");
+        }
+
+        Patient patient = Patient.builder()
+                .populationType(populationType)
+                .name(name)
+                .idNumber(idNumber)
+                .phone(phone)
+                .gender(body.getOrDefault("gender", "").toString())
+                .age(parseIntegerField(body.get("age")))
+                .idType(body.getOrDefault("idType", "居民身份证").toString())
+                .ethnicity(body.getOrDefault("ethnicity", "").toString())
+                .householdAddress(body.getOrDefault("householdAddress", "").toString())
+                .currentAddress(body.getOrDefault("currentAddress", "").toString())
+                .diagnosisResult(body.getOrDefault("diagnosisResult", "").toString())
+                .source("manual")
+                .archived(0)
+                .departmentId(BaseContext.getCurrentDepartmentId())
+                .build();
+
+        String birthDate = body.getOrDefault("birthDate", "").toString().trim();
+        if (StrUtil.isNotBlank(birthDate)) {
+            patient.setBirthDate(LocalDate.parse(birthDate));
+        }
+
+        save(patient);
+        log.info("手动新增在管患者 id={}, populationType={}", patient.getId(), populationType);
+        return patient.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchDeletePatients(List<Long> ids) {
+        for (Long id : ids) {
+            deletePatient(id);
+        }
+    }
+
+    private Integer parseIntegerField(Object val) {
+        if (val == null || StrUtil.isBlank(val.toString())) return null;
+        return Integer.valueOf(val.toString());
+    }
+
+    private boolean isValidIdCard(String id) {
+        return id != null && id.length() == 18 && id.matches("\\d{17}[\\dXx]");
+    }
+
+    private boolean isValidPhone(String phone) {
+        return phone != null && phone.matches("^1[3-9]\\d{9}$");
     }
 }

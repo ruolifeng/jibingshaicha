@@ -2,6 +2,7 @@ import type { RouteRecordRaw } from "vue-router"
 import { createRouter } from "vue-router"
 import { routerConfig } from "@/router/config"
 import { registerNavigationGuard } from "@/router/guard"
+import { resolvePopulationLegacyRedirect, resolveScreeningDefaultPath } from "@/router/screening-redirect"
 import { flatMultiLevelRoutes } from "./helper"
 
 const Layouts = () => import("@/layouts/index.vue")
@@ -47,45 +48,61 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
 
-  // ==================== V2 新增：筛查管理（人群筛查聚合 + 大疫情） ====================
+  // ==================== V2 新增：筛查管理（学生/重点/常规/大疫情） ====================
   {
     path: "/screening",
     component: Layouts,
-    redirect: "/screening/population",
+    redirect: () => resolveScreeningDefaultPath(),
     name: "Screening",
     meta: { title: "筛查管理", elIcon: "Search", permission: "screening" },
     children: [
       {
-        path: "population",
-        component: () => import("@/pages/screening/population/index.vue"),
-        name: "ScreeningPopulation",
+        path: "student",
+        component: () => import("@/pages/screening/student/index.vue"),
+        name: "ScreeningStudent",
         meta: {
-          title: "人群筛查",
-          tagTitle: "人群筛查",
+          title: "学生人群",
+          tagTitle: "学生人群",
           keepAlive: true,
-          anyPermission: [
-            "school:screening",
-            "school:suspected",
-            "keyPopulation:screening",
-            "keyPopulation:suspected",
-            "regular:screening",
-            "regular:suspected"
-          ]
+          anyPermission: ["school:screening", "school:suspected"]
+        }
+      },
+      {
+        path: "key-population",
+        component: () => import("@/pages/screening/key-population/index.vue"),
+        name: "ScreeningKeyPopulation",
+        meta: {
+          title: "重点人群",
+          tagTitle: "重点人群",
+          keepAlive: true,
+          anyPermission: ["keyPopulation:screening", "keyPopulation:suspected"]
+        }
+      },
+      {
+        path: "regular",
+        component: () => import("@/pages/screening/regular/index.vue"),
+        name: "ScreeningRegular",
+        meta: {
+          title: "常规筛查",
+          tagTitle: "常规筛查",
+          keepAlive: true,
+          anyPermission: ["regular:screening", "regular:suspected"]
         }
       },
       {
         path: "epidemic",
         component: () => import("@/pages/epidemic/index.vue"),
         name: "ScreeningEpidemic",
-        meta: { title: "大疫情导入筛查", tagTitle: "大疫情导入筛查", keepAlive: true, permission: "epidemic:screening" }
+        meta: { title: "大疫情导入", tagTitle: "大疫情导入", keepAlive: true, permission: "epidemic:screening" }
       },
       // 旧路径重定向（书签/外链兼容）
-      { path: "school/screening", redirect: { name: "ScreeningPopulation", query: { view: "screening", source: "school" } }, meta: { hidden: true } },
-      { path: "school/suspected", redirect: { name: "ScreeningPopulation", query: { view: "suspected", source: "school" } }, meta: { hidden: true } },
-      { path: "key-population/screening", redirect: { name: "ScreeningPopulation", query: { view: "screening", source: "keyPopulation" } }, meta: { hidden: true } },
-      { path: "key-population/suspected", redirect: { name: "ScreeningPopulation", query: { view: "suspected", source: "keyPopulation" } }, meta: { hidden: true } },
-      { path: "regular/screening", redirect: { name: "ScreeningPopulation", query: { view: "screening", source: "regular" } }, meta: { hidden: true } },
-      { path: "regular/suspected", redirect: { name: "ScreeningPopulation", query: { view: "suspected", source: "regular" } }, meta: { hidden: true } }
+      { path: "population", redirect: to => resolvePopulationLegacyRedirect(to), meta: { hidden: true } },
+      { path: "school/screening", redirect: { name: "ScreeningStudent", query: { view: "screening" } }, meta: { hidden: true } },
+      { path: "school/suspected", redirect: { name: "ScreeningStudent", query: { view: "suspected" } }, meta: { hidden: true } },
+      { path: "key-population/screening", redirect: { name: "ScreeningKeyPopulation", query: { view: "screening" } }, meta: { hidden: true } },
+      { path: "key-population/suspected", redirect: { name: "ScreeningKeyPopulation", query: { view: "suspected" } }, meta: { hidden: true } },
+      { path: "regular/screening", redirect: { name: "ScreeningRegular", query: { view: "screening" } }, meta: { hidden: true } },
+      { path: "regular/suspected", redirect: { name: "ScreeningRegular", query: { view: "suspected" } }, meta: { hidden: true } }
     ]
   },
 

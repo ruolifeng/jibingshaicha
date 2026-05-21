@@ -5,12 +5,24 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 public interface PatientService extends IService<Patient> {
 
     IPage<Patient> queryPage(int page, int size, String populationType,
-                              String name, String idNumber, Integer archived);
+                              String name, String idNumber, String phone, String currentAddress,
+                              Integer archived);
+
+    /** 手动新增在管患者（在管总览） */
+    Long createManual(Map<String, Object> body);
+
+    /** 批量删除患者（级联删除） */
+    void batchDeletePatients(List<Long> ids);
+
+    /** 导出用患者列表（与列表查询使用相同的数据范围过滤） */
+    List<Patient> listForExport(String populationType, String name, String idNumber,
+                                 String phone, String currentAddress, Integer archived);
 
     /** 导入大疫情表并模糊匹配合并 */
     int importEpidemic(MultipartFile file, String populationType);

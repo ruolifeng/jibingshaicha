@@ -1,10 +1,9 @@
 <script lang="ts" setup>
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
-import { NOTICE_STATUS_MAP } from "@@/constants/disease"
-import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { NOTICE_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { exportAllPatientsApi } from "./apis"
+import { batchDeletePatientsApi, exportAllPatientsApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const {
@@ -16,10 +15,20 @@ const detailVisible = ref(false)
 const editVisible = ref(false)
 const currentId = ref<number | null>(null)
 const exporting = ref(false)
+const selectedRows = ref<any[]>([])
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
 
 function openDetail(row: any) {
   currentId.value = row.id
   detailVisible.value = true
+}
+
+function openCreate() {
+  currentId.value = null
+  editVisible.value = true
 }
 
 function openEdit(row: any) {
@@ -28,11 +37,16 @@ function openEdit(row: any) {
 }
 
 async function handleExport() {
+  if (total.value === 0) {
+    ElMessage.warning("当前没有在管患者数据，将导出仅含表头的空表")
+  }
   exporting.value = true
   try {
     const blob = await exportAllPatientsApi({
       name: searchForm.name || undefined,
       idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      currentAddress: searchForm.currentAddress || undefined,
       populationType: searchForm.populationType || undefined
     })
     downloadBlob(blob as unknown as Blob, "在管患者信息总表.xlsx")
@@ -41,6 +55,24 @@ async function handleExport() {
     ElMessage.error("导出失败")
   } finally {
     exporting.value = false
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) return
+  const names = selectedRows.value.map(r => r.name).join("、")
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、随访、服药等数据将一并删除，且不可恢复！`,
+      "警告",
+      { type: "warning" }
+    )
+    await batchDeletePatientsApi(selectedRows.value.map(r => r.id))
+    ElMessage.success("删除成功")
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除失败")
   }
 }
 </script>
@@ -62,6 +94,12 @@ async function handleExport() {
         </el-form-item>
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入" clearable style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="住址">
+          <el-input v-model="searchForm.currentAddress" placeholder="请输入现住址" clearable style="width: 160px" />
         </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width: 140px">
@@ -86,7 +124,22 @@ async function handleExport() {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 10px">
-      <div style="margin-bottom: 12px">
+      <div class="toolbar flex items-center justify-end gap-2" style="margin-bottom: 12px">
+        <el-button
+          v-permission="'patientManagement:overview'"
+          type="primary"
+          @click="openCreate"
+        >
+          新增
+        </el-button>
+        <el-button
+          v-permission="'patientManagement:overview'"
+          type="danger"
+          :disabled="selectedRows.length === 0"
+          @click="handleBatchDelete"
+        >
+          删除
+        </el-button>
         <el-button
           v-permission="'patientManagement:overview'"
           type="success"
@@ -97,13 +150,22 @@ async function handleExport() {
         </el-button>
       </div>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
         <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
         <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
         <el-table-column prop="diagnosisResult" label="诊断结果" show-overflow-tooltip />
         <el-table-column label="通知单">
           <template #default="{ row }">

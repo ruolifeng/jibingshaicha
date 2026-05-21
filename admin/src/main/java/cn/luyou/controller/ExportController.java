@@ -82,6 +82,13 @@ public class ExportController {
         POP_TYPE_LABEL.put("specialDisease", "专病网");
     }
 
+    /** 在管患者总表导出列（无数据时也输出表头） */
+    private static final List<String> ALL_PATIENT_EXPORT_HEADERS = List.of(
+            "序号", "数据来源", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
+            "民族", "联系电话", "户籍地址", "现住址", "最终诊断结果", "通知单状态",
+            "首次随访", "后续随访次数", "服药管理", "是否归档", "归档时间", "创建时间"
+    );
+
     /** 大汇总表：三类人群筛查数据合并导出 */
     @Operation(summary = "大汇总表导出")
     @GetMapping("/wide-table")
@@ -543,18 +550,13 @@ public class ExportController {
             @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String currentAddress,
             @RequestParam(required = false) Integer archived,
             HttpServletResponse response) throws IOException {
 
-        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
-                .eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
-                .like(StrUtil.isNotBlank(name), Patient::getName, name)
-                .like(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
-                .eq(archived != null, Patient::getArchived, archived)
-                .orderByAsc(Patient::getPopulationType)
-                .orderByDesc(Patient::getCreateTime);
-
-        List<Patient> patientList = patientService.list(wrapper);
+        List<Patient> patientList = patientService.listForExport(
+                populationType, name, idNumber, phone, currentAddress, archived);
         List<Long> patientIds = patientList.stream().map(Patient::getId).collect(Collectors.toList());
 
         // 批量查询患者通知单（每患者取最新一条）
@@ -626,7 +628,7 @@ public class ExportController {
         }
 
         log.info("[导出] 患者信息总表 {} 条", rows.size());
-        writeExcel(response, "患者信息总表", rows);
+        writeExcel(response, "患者信息总表", rows, ALL_PATIENT_EXPORT_HEADERS);
     }
 
     /**
@@ -766,20 +768,29 @@ public class ExportController {
     }
 
     private void writeExcel(HttpServletResponse response, String fileName, List<Map<String, Object>> rows) throws IOException {
+        writeExcel(response, fileName, rows, null);
+    }
+
+    private void writeExcel(HttpServletResponse response, String fileName, List<Map<String, Object>> rows,
+                            List<String> fallbackHeaders) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("UTF-8");
         String encodedName = URLEncoder.encode(fileName + ".xlsx", StandardCharsets.UTF_8).replace("+", "%20");
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
 
-        if (rows.isEmpty()) {
+        List<String> headerKeys = !rows.isEmpty()
+                ? new ArrayList<>(rows.get(0).keySet())
+                : (fallbackHeaders != null ? fallbackHeaders : List.of());
+
+        if (headerKeys.isEmpty()) {
             EasyExcel.write(response.getOutputStream()).sheet("数据").doWrite(new ArrayList<>());
             return;
         }
 
-        List<List<String>> heads = rows.get(0).keySet().stream()
+        List<List<String>> heads = headerKeys.stream()
                 .map(k -> List.of(k)).collect(Collectors.toList());
         List<List<Object>> data = rows.stream()
-                .map(row -> new ArrayList<Object>(row.values()))
+                .map(row -> headerKeys.stream().map(row::get).collect(Collectors.toList()))
                 .collect(Collectors.toList());
 
         EasyExcel.write(response.getOutputStream())

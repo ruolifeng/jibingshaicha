@@ -56,6 +56,9 @@ public class Referral implements Serializable {
     /** 拒绝原因 */
     private String rejectReason;
 
+    /** 转诊原因（发送方填写） */
+    private String referralReason;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

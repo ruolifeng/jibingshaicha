@@ -44,6 +44,35 @@ public class LatentInfectionController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "删除潜伏感染记录（级联删除）")
+    @DeleteMapping("/{id}")
+    @OperationLog(type = "delete", module = "latent", action = "删除潜伏感染记录")
+    public ResultResponse<Void> delete(@PathVariable Long id) {
+        latentInfectionService.deleteCascade(id);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "手动新增潜伏感染记录")
+    @PostMapping
+    @OperationLog(type = "create", module = "latent", action = "新增潜伏感染记录")
+    public ResultResponse<Long> create(@RequestBody Map<String, Object> body) {
+        return ResultRes.success(latentInfectionService.createManual(body));
+    }
+
+    @Operation(summary = "批量删除潜伏感染记录（级联删除）")
+    @DeleteMapping("/batch-delete")
+    @OperationLog(type = "delete", module = "latent", action = "批量删除潜伏感染记录")
+    public ResultResponse<Void> batchDelete(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Object> rawIds = (List<Object>) body.get("ids");
+        if (rawIds == null || rawIds.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择要删除的记录");
+        }
+        List<Long> ids = rawIds.stream().map(o -> Long.valueOf(o.toString())).toList();
+        latentInfectionService.batchDeleteCascade(ids);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "分页查询潜伏感染数据")
     @GetMapping("/list")
     public ResultResponse<IPage<LatentInfection>> list(

@@ -5,10 +5,13 @@ import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.LatentInfection;
+import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
+import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
@@ -17,8 +20,18 @@ import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.mapper.SupervisionFormMapper;
 import cn.luyou.model.SupervisionForm;
 import cn.luyou.service.DepartmentService;
+import cn.luyou.service.EpidemicReportService;
+import cn.luyou.service.FirstVisitService;
+import cn.luyou.service.FollowUpVisitService;
+import cn.luyou.service.LatentCheckService;
+import cn.luyou.service.LatentFollowUpService;
 import cn.luyou.service.LatentInfectionService;
+import cn.luyou.service.MedicationManagementService;
+import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
+import cn.luyou.service.ReferralService;
+import cn.luyou.service.SupervisionFormService;
+import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -58,6 +71,20 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
     private final NoticeMapper noticeMapper;
     private final SupervisionFormMapper supervisionFormMapper;
+    private final LatentFollowUpService latentFollowUpService;
+    private final LatentCheckService latentCheckService;
+    private final SupervisionFormService supervisionFormService;
+    private final NoticeService noticeService;
+    private final ReferralService referralService;
+    private final SysMessageService sysMessageService;
+    private final FirstVisitService firstVisitService;
+    private final FollowUpVisitService followUpVisitService;
+    private final MedicationManagementService medicationManagementService;
+    private final EpidemicReportService epidemicReportService;
+
+    private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
+            "school", "keyPopulation", "regular", "epidemic", "referral"
+    );
 
     private static final List<String> DIAGNOSIS_TO_PATIENT = Arrays.asList("疑似肺结核", "确诊患者");
 
@@ -136,6 +163,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             records.forEach(r -> {
                 r.setNoticeSent(false);
                 r.setSupervisionCompleted(false);
+                r.setSupervisionStatus(0);
             });
             return result;
         }
@@ -150,14 +178,22 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         records.forEach(r -> r.setNoticeSent(sentBizIds.contains(r.getId())));
 
-        // 补充督导表完成状态：status=2 表示已归档完成，不再允许重新填写
-        Set<Long> completedSupervisionIds = new HashSet<>(supervisionFormMapper.selectList(
+        // 补充督导表状态：取每条记录最新督导表 status（0未填写 1已提交 2已归档）
+        Map<Long, Integer> supervisionStatusMap = supervisionFormMapper.selectList(
                 new LambdaQueryWrapper<SupervisionForm>()
                         .in(SupervisionForm::getLatentInfectionId, latentIds)
-                        .eq(SupervisionForm::getStatus, 2)
-                        .select(SupervisionForm::getLatentInfectionId)
-        ).stream().map(SupervisionForm::getLatentInfectionId).toList());
-        records.forEach(r -> r.setSupervisionCompleted(completedSupervisionIds.contains(r.getId())));
+                        .orderByDesc(SupervisionForm::getCreateTime)
+        ).stream().collect(java.util.stream.Collectors.toMap(
+                SupervisionForm::getLatentInfectionId,
+                SupervisionForm::getStatus,
+                (a, b) -> a,
+                java.util.LinkedHashMap::new
+        ));
+        records.forEach(r -> {
+            Integer status = supervisionStatusMap.get(r.getId());
+            r.setSupervisionStatus(status != null ? status : 0);
+            r.setSupervisionCompleted(Integer.valueOf(2).equals(status));
+        });
 
         return result;
     }
@@ -394,7 +430,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (StrUtil.isNotBlank(diagnosis)) update.set(ScreeningSchool::getDiagnosisFirst, diagnosis);
                 screeningSchoolMapper.update(null, update);
             }
-            case "keyPopulation" -> {
+            case "keyPopulation", "regular" -> {
                 var update = new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ScreeningKeyPopulation>()
                         .eq(ScreeningKeyPopulation::getId, sid);
                 if (StrUtil.isNotBlank(hasXray)) update.set(ScreeningKeyPopulation::getHasChestXray, hasXray);
@@ -415,7 +451,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     public int importXrayBatch(MultipartFile file, String populationType) {
         // 与各人群主导入的 headRowNumber 保持一致
         int headerRows = switch (populationType) {
-            case "keyPopulation" -> 4;
+            case "keyPopulation", "regular" -> 4;
             default -> 2;
         };
 
@@ -456,8 +492,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     // 学校人群：hasChestXray(25) chestXrayDate(26) chestXrayResult(27) diagnosisFirst(28)
                     hasXrayIdx = 25; xrayDateIdx = 26; xrayResultIdx = 27; diagnosisIdx = 28;
                 }
-                case "keyPopulation" -> {
-                    // 重点人群：hasChestXray(37) chestXrayDate(38) chestXrayResult(39) diagnosisFirst(40)
+                case "keyPopulation", "regular" -> {
+                    // 重点/常规筛查：hasChestXray(37) chestXrayDate(38) chestXrayResult(39) diagnosisFirst(40)
                     hasXrayIdx = 37; xrayDateIdx = 38; xrayResultIdx = 39; diagnosisIdx = 40;
                 }
                 case "closeContact" -> {
@@ -478,32 +514,38 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             }
 
             String diagnosisFirst = getStrCell(row, diagnosisIdx);
-            if (StrUtil.isBlank(diagnosisFirst)) continue;
-
             String hasXray = getStrCell(row, hasXrayIdx);
             LocalDate xrayDate = parseDateCell(row.get(xrayDateIdx));
             String xrayResult = getStrCell(row, xrayResultIdx);
 
-            // 仅写入胸片字段与首次诊断；diagnosisResult 由后续联动转诊设置
-            lambdaUpdate()
+            // 至少包含胸片结果或确认诊断才更新（支持仅导入胸片结果）
+            if (StrUtil.isBlank(xrayResult) && StrUtil.isBlank(diagnosisFirst)) continue;
+
+            // 写入胸片字段；确认诊断可选，有值时一并写入并驱动转诊
+            var updateWrapper = lambdaUpdate()
                     .eq(LatentInfection::getId, entity.getId())
                     .set(StrUtil.isNotBlank(hasXray), LatentInfection::getHasChestXray, hasXray)
                     .set(xrayDate != null, LatentInfection::getChestXrayDate, xrayDate)
-                    .set(StrUtil.isNotBlank(xrayResult), LatentInfection::getChestXrayResult, xrayResult)
-                    .set(LatentInfection::getDiagnosisFirst, diagnosisFirst)
-                    .update();
+                    .set(StrUtil.isNotBlank(xrayResult), LatentInfection::getChestXrayResult, xrayResult);
+            if (StrUtil.isNotBlank(diagnosisFirst)) {
+                updateWrapper.set(LatentInfection::getDiagnosisFirst, diagnosisFirst);
+            }
+            updateWrapper.update();
 
-            writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult, diagnosisFirst);
+            writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult,
+                    StrUtil.isNotBlank(diagnosisFirst) ? diagnosisFirst : null);
 
-            // 与单条录入保持一致：根据 diagnosisFirst 自动驱动转诊
-            String referralCode = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
-            if (referralCode != null) {
-                LatentInfection refreshed = getById(entity.getId());
-                applyReferralOutcome(refreshed, referralCode, null);
+            // 与单条录入保持一致：有确认诊断时自动驱动转诊
+            if (StrUtil.isNotBlank(diagnosisFirst)) {
+                String referralCode = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
+                if (referralCode != null) {
+                    LatentInfection refreshed = getById(entity.getId());
+                    applyReferralOutcome(refreshed, referralCode, null);
+                }
             }
             updated++;
         }
-        log.info("批量导入胸片诊断，populationType={}，成功更新 {} 条", populationType, updated);
+        log.info("批量导入胸片结果，populationType={}，成功更新 {} 条", populationType, updated);
         return updated;
     }
 
@@ -736,5 +778,136 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (body.get("chestXrayResult") != null) latent.setChestXrayResult(body.get("chestXrayResult").toString());
         if (body.get("trackingRemark") != null) latent.setTrackingRemark(body.get("trackingRemark").toString());
         updateById(latent);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createManual(Map<String, Object> body) {
+        String name = body.getOrDefault("name", "").toString().trim();
+        String idNumber = body.getOrDefault("idNumber", "").toString().trim();
+        String populationType = body.getOrDefault("populationType", "").toString().trim();
+        String phone = body.getOrDefault("phone", "").toString().trim();
+
+        if (StrUtil.isBlank(name)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "姓名不能为空");
+        }
+        if (StrUtil.isBlank(idNumber)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "证件号不能为空");
+        }
+        if (!isValidIdCard(idNumber)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+        if (!MANUAL_POPULATION_TYPES.contains(populationType)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的数据来源");
+        }
+
+        LatentInfection latent = LatentInfection.builder()
+                .populationType(populationType)
+                .name(name)
+                .idNumber(idNumber)
+                .phone(phone)
+                .gender(body.getOrDefault("gender", "").toString())
+                .age(parseIntegerField(body.get("age")))
+                .infectionResult(body.getOrDefault("infectionResult", "").toString())
+                .diagnosisFirst(body.getOrDefault("diagnosisFirst", "").toString())
+                .hasChestXray(body.getOrDefault("hasChestXray", "").toString())
+                .chestXrayDate(parseDateCell(body.get("chestXrayDate")))
+                .chestXrayResult(body.getOrDefault("chestXrayResult", "").toString())
+                .trackingRemark(body.getOrDefault("trackingRemark", "").toString())
+                .trackingStatus(0)
+                .notInPlaceCount(0)
+                .archived(0)
+                .departmentId(BaseContext.getCurrentDepartmentId())
+                .build();
+        save(latent);
+        log.info("手动新增潜伏感染记录 id={}, populationType={}", latent.getId(), populationType);
+        return latent.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteCascade(Long id) {
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        if ("closeContact".equals(latent.getPopulationType())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "密接来源记录请在密接人群管理模块操作");
+        }
+        doDeleteCascade(id);
+        log.info("级联删除潜伏感染记录 id={}", id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchDeleteCascade(List<Long> ids) {
+        for (Long id : ids) {
+            deleteCascade(id);
+        }
+    }
+
+    private void doDeleteCascade(Long latentId) {
+        List<Patient> patientList = patientService.lambdaQuery()
+                .eq(Patient::getLatentInfectionId, latentId)
+                .list();
+        for (Patient patient : patientList) {
+            Long pid = patient.getId();
+            firstVisitService.lambdaUpdate().eq(cn.luyou.model.FirstVisit::getPatientId, pid).remove();
+            followUpVisitService.lambdaUpdate().eq(cn.luyou.model.FollowUpVisit::getPatientId, pid).remove();
+            medicationManagementService.lambdaUpdate().eq(cn.luyou.model.MedicationManagement::getPatientId, pid).remove();
+            epidemicReportService.lambdaUpdate().eq(cn.luyou.model.EpidemicReport::getPatientId, pid).remove();
+            deleteNoticeAndMessages(pid, "patient");
+            deleteReferralsAndMessages(pid);
+            patientService.removeById(pid);
+        }
+        supervisionFormService.lambdaUpdate()
+                .eq(SupervisionForm::getLatentInfectionId, latentId).remove();
+        latentFollowUpService.lambdaUpdate()
+                .eq(cn.luyou.model.LatentFollowUp::getLatentInfectionId, latentId).remove();
+        latentCheckService.lambdaUpdate()
+                .eq(cn.luyou.model.LatentCheck::getLatentInfectionId, latentId).remove();
+        deleteNoticeAndMessages(latentId, "latent");
+        deleteReferralsAndMessages(latentId);
+        removeById(latentId);
+    }
+
+    private void deleteNoticeAndMessages(Long bizId, String noticeType) {
+        List<Long> noticeIds = noticeService.lambdaQuery()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .list().stream().map(Notice::getId).toList();
+        if (!noticeIds.isEmpty()) {
+            sysMessageService.lambdaUpdate().in(SysMessage::getBizId, noticeIds).remove();
+        }
+        noticeService.lambdaUpdate()
+                .eq(Notice::getBizId, bizId)
+                .eq(Notice::getNoticeType, noticeType)
+                .remove();
+    }
+
+    private void deleteReferralsAndMessages(Long bizId) {
+        List<Long> referralIds = referralService.lambdaQuery()
+                .eq(Referral::getBizId, bizId)
+                .list().stream().map(Referral::getId).toList();
+        if (!referralIds.isEmpty()) {
+            sysMessageService.lambdaUpdate().in(SysMessage::getBizId, referralIds).remove();
+            referralService.lambdaUpdate().eq(Referral::getBizId, bizId).remove();
+        }
+    }
+
+    private Integer parseIntegerField(Object val) {
+        if (val == null || StrUtil.isBlank(val.toString())) return null;
+        return Integer.valueOf(val.toString());
+    }
+
+    private boolean isValidIdCard(String id) {
+        return id != null && id.length() == 18 && id.matches("\\d{17}[\\dXx]");
+    }
+
+    private boolean isValidPhone(String phone) {
+        return phone != null && phone.matches("^1[3-9]\\d{9}$");
     }
 }

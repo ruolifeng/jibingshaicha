@@ -15,6 +15,8 @@ export function usePatientList(defaultArchived?: number) {
   const searchForm = reactive({
     name: "",
     idNumber: "",
+    phone: "",
+    currentAddress: "",
     populationType: "",
     archived: defaultArchived
   })
@@ -28,6 +30,8 @@ export function usePatientList(defaultArchived?: number) {
         ...searchForm
       }
       if (!params.populationType) delete params.populationType
+      if (!params.phone) delete params.phone
+      if (!params.currentAddress) delete params.currentAddress
       const { data } = await getPatientListApi(params)
       tableData.value = data.records
       total.value = data.total
@@ -40,6 +44,8 @@ export function usePatientList(defaultArchived?: number) {
   function handleReset() {
     searchForm.name = ""
     searchForm.idNumber = ""
+    searchForm.phone = ""
+    searchForm.currentAddress = ""
     searchForm.populationType = ""
     handleSearch()
   }

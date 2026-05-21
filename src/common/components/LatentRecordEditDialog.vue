@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { idCardRule, phoneRule } from "@@/utils/validate"
-import { getLatentDetailApi, updateLatentApi } from "@/pages/latent-management/apis"
+import { createLatentApi, getLatentDetailApi, updateLatentApi } from "@/pages/latent-management/apis"
 
 const props = defineProps<{
   visible: boolean
@@ -12,9 +12,12 @@ const emit = defineEmits<{
   (e: "success"): void
 }>()
 
+const isCreate = computed(() => props.latentId == null)
+
 const formRef = ref()
 const submitting = ref(false)
 const form = reactive({
+  populationType: "",
   name: "",
   gender: "",
   age: null as number | null,
@@ -28,10 +31,30 @@ const form = reactive({
   trackingRemark: ""
 })
 
-const rules = {
+const rules = computed(() => ({
+  ...(isCreate.value
+    ? { populationType: [{ required: true, message: "请选择数据来源", trigger: "change" }] }
+    : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   idNumber: [idCardRule(true)],
-  phone: [phoneRule(true)]
+  phone: [phoneRule(!isCreate.value)]
+}))
+
+function resetForm() {
+  Object.assign(form, {
+    populationType: "",
+    name: "",
+    gender: "",
+    age: null,
+    idNumber: "",
+    phone: "",
+    infectionResult: "",
+    diagnosisFirst: "",
+    hasChestXray: "",
+    chestXrayDate: "",
+    chestXrayResult: "",
+    trackingRemark: ""
+  })
 }
 
 async function loadDetail() {
@@ -39,6 +62,7 @@ async function loadDetail() {
   const { data } = await getLatentDetailApi(props.latentId)
   if (!data) return
   Object.assign(form, {
+    populationType: data.populationType || "",
     name: data.name || "",
     gender: data.gender || "",
     age: data.age ?? null,
@@ -55,7 +79,10 @@ async function loadDetail() {
 
 watch(() => props.visible, async (val) => {
   if (val) {
-    await loadDetail()
+    resetForm()
+    if (props.latentId) {
+      await loadDetail()
+    }
     nextTick(() => formRef.value?.clearValidate())
   }
 })
@@ -72,8 +99,14 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
-    await updateLatentApi(props.latentId!, { ...form })
-    ElMessage.success("保存成功")
+    if (isCreate.value) {
+      await createLatentApi({ ...form })
+      ElMessage.success("新增成功")
+    } else {
+      const { populationType, ...payload } = form
+      await updateLatentApi(props.latentId!, payload)
+      ElMessage.success("保存成功")
+    }
     close()
     emit("success")
   } finally {
@@ -85,13 +118,24 @@ async function handleSubmit() {
 <template>
   <el-dialog
     :model-value="visible"
-    title="修改潜伏感染者信息"
+    :title="isCreate ? '新增潜伏感染者' : '修改潜伏感染者信息'"
     width="660px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
       <el-row :gutter="16">
+        <el-col v-if="isCreate" :span="12">
+          <el-form-item label="数据来源" prop="populationType">
+            <el-select v-model="form.populationType" placeholder="请选择" style="width: 100%">
+              <el-option label="学生筛查" value="school" />
+              <el-option label="重点人群" value="keyPopulation" />
+              <el-option label="常规筛查" value="regular" />
+              <el-option label="大疫情" value="epidemic" />
+              <el-option label="推介" value="referral" />
+            </el-select>
+          </el-form-item>
+        </el-col>
         <el-col :span="12">
           <el-form-item label="姓名" prop="name">
             <el-input v-model="form.name" />
@@ -160,7 +204,7 @@ async function handleSubmit() {
         取消
       </el-button>
       <el-button type="primary" :loading="submitting" @click="handleSubmit">
-        保存
+        {{ isCreate ? "新增" : "保存" }}
       </el-button>
     </template>
   </el-dialog>

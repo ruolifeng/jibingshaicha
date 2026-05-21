@@ -68,7 +68,10 @@ async function loadReceiverUsers() {
 }
 
 // ====== 发起推送表单 ======
-const sendForm = reactive({ receiverOrgId: undefined as number | undefined })
+const sendForm = reactive({
+  receiverOrgId: undefined as number | undefined,
+  referralReason: ""
+})
 const sending = ref(false)
 
 async function handleSend() {
@@ -85,10 +88,12 @@ async function handleSend() {
       moduleType: props.moduleType,
       subjectName: props.subjectName,
       summary: props.summary,
+      referralReason: sendForm.referralReason.trim() || undefined,
       receiverOrgId: sendForm.receiverOrgId
     })
     ElMessage.success("转诊推送已发送")
     sendForm.receiverOrgId = undefined
+    sendForm.referralReason = ""
     await loadHistory()
   } finally {
     sending.value = false
@@ -148,21 +153,35 @@ watch(visible, (val: boolean) => {
         <span class="font-semibold">发起转诊推送</span>
       </template>
       <el-form :model="sendForm" label-width="100px" size="small">
-        <el-form-item label="接收部门" required>
-          <el-select
-            v-model="sendForm.receiverOrgId"
-            placeholder="请选择接收部门"
-            filterable
-            style="width: 280px"
-          >
-            <el-option
-              v-for="u in receiverUsers"
-              :key="u.id"
-              :value="u.id"
-              :label="`${u.orgName}（${u.realName || u.username}）`"
-            />
-          </el-select>
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="接收部门" required>
+              <el-select
+                v-model="sendForm.receiverOrgId"
+                placeholder="请选择接收部门"
+                filterable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="u in receiverUsers"
+                  :key="u.id"
+                  :value="u.id"
+                  :label="`${u.orgName}（${u.realName || u.username}）`"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="转诊原因">
+              <el-input
+                v-model="sendForm.referralReason"
+                placeholder="请填写转诊原因"
+                maxlength="500"
+                show-word-limit
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item>
           <el-button type="primary" :loading="sending" @click="handleSend">
             发起推送
@@ -178,6 +197,11 @@ watch(visible, (val: boolean) => {
       </template>
       <el-table v-loading="historyLoading" :data="historyList" border size="small">
         <el-table-column prop="sentTime" label="推送时间" />
+        <el-table-column prop="referralReason" label="转诊原因" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.referralReason || "—" }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态">
           <template #default="{ row }">
             <el-tag :type="STATUS_TAG_TYPE[row.status]" size="small">

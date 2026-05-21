@@ -46,6 +46,8 @@ public class SupervisionForm extends BaseEntity {
     private String ethnicity;
     /** 管理单位（V18新增） */
     private String managingUnit;
+    /** 是否进行预防性治疗：是/否（V22新增） */
+    private String hasPreventiveTreatment;
     /** 督导医生（V18新增） */
     private String supervisingDoctor;
 

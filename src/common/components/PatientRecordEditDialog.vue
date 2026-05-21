@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { idCardRule, phoneRule } from "@@/utils/validate"
-import { getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
+import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
   visible: boolean
@@ -12,9 +12,12 @@ const emit = defineEmits<{
   (e: "success"): void
 }>()
 
+const isCreate = computed(() => props.patientId == null)
+
 const formRef = ref()
 const submitting = ref(false)
 const form = reactive({
+  populationType: "",
   name: "",
   gender: "",
   birthDate: "",
@@ -28,10 +31,30 @@ const form = reactive({
   diagnosisResult: ""
 })
 
-const rules = {
+const rules = computed(() => ({
+  ...(isCreate.value
+    ? { populationType: [{ required: true, message: "请选择数据来源", trigger: "change" }] }
+    : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   idNumber: [idCardRule(true)],
-  phone: [phoneRule(true)]
+  phone: [phoneRule(!isCreate.value)]
+}))
+
+function resetForm() {
+  Object.assign(form, {
+    populationType: "",
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: null,
+    idType: "居民身份证",
+    idNumber: "",
+    ethnicity: "",
+    phone: "",
+    householdAddress: "",
+    currentAddress: "",
+    diagnosisResult: ""
+  })
 }
 
 async function loadDetail() {
@@ -39,6 +62,7 @@ async function loadDetail() {
   const { data } = await getPatientDetailApi(props.patientId)
   if (!data) return
   Object.assign(form, {
+    populationType: data.populationType || "",
     name: data.name || "",
     gender: data.gender || "",
     birthDate: data.birthDate || "",
@@ -53,12 +77,18 @@ async function loadDetail() {
   })
 }
 
-watch(() => props.visible, async (val) => {
-  if (val) {
-    await loadDetail()
+watch(
+  () => [props.visible, props.patientId] as const,
+  async ([visible]) => {
+    if (!visible) return
+    if (isCreate.value) {
+      resetForm()
+    } else {
+      await loadDetail()
+    }
     nextTick(() => formRef.value?.clearValidate())
   }
-})
+)
 
 function close() {
   emit("update:visible", false)
@@ -72,8 +102,13 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
-    await updatePatientApi(props.patientId!, { ...form })
-    ElMessage.success("保存成功")
+    if (isCreate.value) {
+      await createPatientApi({ ...form })
+      ElMessage.success("新增成功")
+    } else {
+      await updatePatientApi(props.patientId!, { ...form })
+      ElMessage.success("保存成功")
+    }
     close()
     emit("success")
   } finally {
@@ -85,13 +120,26 @@ async function handleSubmit() {
 <template>
   <el-dialog
     :model-value="visible"
-    title="修改患者信息"
+    :title="isCreate ? '新增患者' : '修改患者信息'"
     width="660px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
       <el-row :gutter="16">
+        <el-col v-if="isCreate" :span="24">
+          <el-form-item label="数据来源" prop="populationType">
+            <el-select v-model="form.populationType" placeholder="请选择" style="width: 100%">
+              <el-option label="学生筛查" value="school" />
+              <el-option label="重点人群" value="keyPopulation" />
+              <el-option label="常规筛查" value="regular" />
+              <el-option label="大疫情" value="epidemic" />
+              <el-option label="推介" value="referral" />
+              <el-option label="密接" value="closeContact" />
+              <el-option label="专病网" value="specialDisease" />
+            </el-select>
+          </el-form-item>
+        </el-col>
         <el-col :span="12">
           <el-form-item label="姓名" prop="name">
             <el-input v-model="form.name" />

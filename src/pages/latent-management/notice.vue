@@ -3,12 +3,9 @@ import LatentNoticeDetailDialog from "@@/components/LatentNoticeDetailDialog.vue
 import LatentNoticeFormDialog from "@@/components/LatentNoticeFormDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { TRACKING_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { TRACKING_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel } from "@@/constants/disease"
 import {
   getLatentAggregateListApi,
-  trackLatentApi,
-  submitXrayOnlyApi,
-  submitDiagnosisApi,
   closeCaseApi
 } from "./apis"
 
@@ -27,9 +24,8 @@ const searchForm = reactive({
   populationType: "" // 留空 = 全部来源（后端不过滤）
 })
 
-/** 聚合潜伏感染者通知单管理，不含密接来源（密接潜伏由密接管理菜单独立处理）。
- *  后端暂不支持 populationType NOT IN 过滤，前端拿到全量数据后过滤。
- *  TODO: 待后端支持 excludePopulationType 参数后改为服务端过滤，以修正分页总数偏差。
+/** 聚合潜伏感染者通知单管理：仅展示经筛查诊断分流为「潜伏感染者」的记录（referralResult=latent）。
+ *  不含密接来源；追踪/胸片/确认诊断在筛查管理「待诊断」完成，本页只负责通知单与后续流转。
  */
 async function fetchData() {
   loading.value = true
@@ -37,11 +33,11 @@ async function fetchData() {
     const params: Record<string, any> = {
       page: 1,
       size: FETCH_ALL_SIZE,
+      referralResult: "latent",
       ...searchForm
     }
     if (!params.populationType) delete params.populationType
     const { data } = await getLatentAggregateListApi(params)
-    // 前端过滤后再本地分页，避免 total 与展示条数不一致导致空页
     const filtered = (data.records ?? []).filter((r: any) => r.populationType !== "closeContact")
     const start = (paginationData.currentPage - 1) * paginationData.pageSize
     const end = start + paginationData.pageSize
@@ -68,67 +64,12 @@ function handleReset() {
 onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
 
-// ==================== 追踪 ====================
-const trackDialogVisible = ref(false)
-const trackRow = ref<any>(null)
-const trackForm = reactive({ status: undefined as number | undefined, remark: "" })
-
-function openTrack(row: any) {
-  trackRow.value = row
-  trackForm.status = undefined
-  trackForm.remark = ""
-  trackDialogVisible.value = true
-}
-async function handleTrackSubmit() {
-  if (trackForm.status === undefined) { ElMessage.warning("请选择追踪状态"); return }
-  await trackLatentApi({ id: trackRow.value.id, status: trackForm.status, remark: trackForm.remark })
-  ElMessage.success("追踪状态已更新")
-  trackDialogVisible.value = false
-  fetchData()
-}
-
 // ==================== 转诊 ====================
 const referralDialogVisible = ref(false)
 const referralRow = ref<any>(null)
 function openReferral(row: any) {
   referralRow.value = row
   referralDialogVisible.value = true
-}
-
-// ==================== 录入胸片 ====================
-const xrayDialogVisible = ref(false)
-const xrayRow = ref<any>(null)
-const xrayForm = reactive({ hasChestXray: "", chestXrayDate: "", chestXrayResult: "" })
-function openXray(row: any) {
-  xrayRow.value = row
-  xrayForm.hasChestXray = row.hasChestXray ?? ""
-  xrayForm.chestXrayDate = row.chestXrayDate ?? ""
-  xrayForm.chestXrayResult = row.chestXrayResult ?? ""
-  xrayDialogVisible.value = true
-}
-async function handleXraySubmit() {
-  await submitXrayOnlyApi({ id: xrayRow.value.id, ...xrayForm })
-  ElMessage.success("胸片结果已保存")
-  xrayDialogVisible.value = false
-  fetchData()
-}
-
-// ==================== 录入诊断 ====================
-const diagDialogVisible = ref(false)
-const diagRow = ref<any>(null)
-const diagForm = reactive({ diagnosisFirst: "" })
-const DIAGNOSIS_OPTIONS = ["排除", "疑似肺结核", "潜伏感染者", "确诊患者", "其他"]
-function openDiag(row: any) {
-  diagRow.value = row
-  diagForm.diagnosisFirst = row.diagnosisFirst ?? ""
-  diagDialogVisible.value = true
-}
-async function handleDiagSubmit() {
-  if (!diagForm.diagnosisFirst) { ElMessage.warning("请选择诊断结果"); return }
-  await submitDiagnosisApi({ id: diagRow.value.id, diagnosisFirst: diagForm.diagnosisFirst })
-  ElMessage.success("诊断结果已保存")
-  diagDialogVisible.value = false
-  fetchData()
 }
 
 // ==================== 通知单 ====================
@@ -211,7 +152,11 @@ async function handleCloseCase(row: any) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="diagnosisFirst" label="诊断结果" />
+        <el-table-column label="确认诊断">
+          <template #default="{ row }">
+            {{ getSuspectedConfirmDiagnosisLabel(row) }}
+          </template>
+        </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
             <el-button v-if="row.noticeSent" type="primary" link size="small" @click="viewNotice(row)">
@@ -220,24 +165,15 @@ async function handleCloseCase(row: any) {
             <span v-else class="text-gray-400">未发送</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
-            <el-button v-permission="'latentManagement:track'" type="primary" link size="small"
-              :disabled="row.trackingStatus === 1 || row.archived === 1"
-              @click="openTrack(row)">追踪</el-button>
-            <el-button v-permission="'latentManagement:xray'" type="primary" link size="small"
-              :disabled="row.trackingStatus !== 1 || row.archived === 1"
-              @click="openXray(row)">录入胸片</el-button>
-            <el-button v-permission="'latentManagement:diagnosis'" type="warning" link size="small"
-              :disabled="!row.hasChestXray || row.archived === 1"
-              @click="openDiag(row)">录入诊断</el-button>
             <el-button
               v-if="!row.noticeSent"
               v-permission="'latentManagement:notice'"
               type="success"
               link
               size="small"
-              :disabled="row.trackingStatus !== 1 || row.archived === 1"
+              :disabled="row.archived === 1"
               @click="openNotice(row)"
             >
               发送通知单
@@ -252,8 +188,16 @@ async function handleCloseCase(row: any) {
             >
               查看通知单
             </el-button>
-            <el-button v-permission="'latentManagement:referral'" type="info" link size="small"
-              @click="openReferral(row)">转诊</el-button>
+            <el-button
+              v-permission="'latentManagement:referral'"
+              type="info"
+              link
+              size="small"
+              :disabled="row.archived === 1"
+              @click="openReferral(row)"
+            >
+              转诊
+            </el-button>
             <el-button v-permission="'latentManagement:close'" type="danger" link size="small"
               :disabled="row.archived === 1"
               @click="handleCloseCase(row)">归档</el-button>
@@ -273,63 +217,6 @@ async function handleCloseCase(row: any) {
         @current-change="handleCurrentChange"
       />
     </el-card>
-
-    <!-- 追踪弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="420px" append-to-body>
-      <el-form :model="trackForm" label-width="90px">
-        <el-form-item label="追踪状态" required>
-          <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">到位</el-radio>
-            <el-radio :value="2">未到位</el-radio>
-            <el-radio :value="3">其他</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="trackForm.status === 3 || trackForm.status === 2" label="备注">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="trackDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleTrackSubmit">确认</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 录入胸片弹窗 -->
-    <el-dialog v-model="xrayDialogVisible" title="录入胸片结果" width="480px" append-to-body>
-      <el-form :model="xrayForm" label-width="120px">
-        <el-form-item label="是否进行胸片检查">
-          <el-select v-model="xrayForm.hasChestXray" placeholder="请选择">
-            <el-option label="是" value="是" />
-            <el-option label="否" value="否" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="胸片检查日期">
-          <el-date-picker v-model="xrayForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="胸片结果">
-          <el-input v-model="xrayForm.chestXrayResult" placeholder="请输入" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="xrayDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleXraySubmit">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 录入诊断弹窗 -->
-    <el-dialog v-model="diagDialogVisible" title="录入诊断结果" width="400px" append-to-body>
-      <el-form :model="diagForm" label-width="100px">
-        <el-form-item label="诊断结果" required>
-          <el-select v-model="diagForm.diagnosisFirst" placeholder="请选择">
-            <el-option v-for="opt in DIAGNOSIS_OPTIONS" :key="opt" :label="opt" :value="opt" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="diagDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleDiagSubmit">保存</el-button>
-      </template>
-    </el-dialog>
 
     <LatentNoticeFormDialog
       v-model:visible="noticeFormVisible"

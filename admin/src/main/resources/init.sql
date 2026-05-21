@@ -381,6 +381,13 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     `age`                    INT          DEFAULT NULL COMMENT '年龄',
     `phone`                  VARCHAR(32)  DEFAULT NULL COMMENT '电话号码',
     `current_address`        VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `household_address`      VARCHAR(255) DEFAULT NULL COMMENT '户籍地址',
+    `id_number`              VARCHAR(50)  DEFAULT NULL COMMENT '身份证号',
+    `birth_date`             VARCHAR(20)  DEFAULT NULL COMMENT '出生日期',
+    `ethnicity`              VARCHAR(50)  DEFAULT NULL COMMENT '民族',
+    `managing_unit`          VARCHAR(100) DEFAULT NULL COMMENT '管理单位',
+    `has_preventive_treatment` VARCHAR(10) DEFAULT NULL COMMENT '是否进行预防性治疗：是/否',
+    `supervising_doctor`     VARCHAR(100) DEFAULT NULL COMMENT '督导医生',
     `treatment_start_date`   DATE         DEFAULT NULL COMMENT '预防性治疗开始日期',
     `treatment_plan`         VARCHAR(256) DEFAULT NULL COMMENT '治疗方案（含新增"不服药"）',
     -- V4 旧字段兼容保留（实体字段 supervisionContent 映射至此列）
@@ -954,6 +961,7 @@ CREATE TABLE IF NOT EXISTS `referral` (
     `confirmed_time`  DATETIME     DEFAULT NULL COMMENT '接收时间',
     `rejected_time`   DATETIME     DEFAULT NULL COMMENT '拒绝时间',
     `reject_reason`   VARCHAR(256) DEFAULT NULL COMMENT '拒绝原因',
+    `referral_reason` VARCHAR(512) DEFAULT NULL COMMENT '转诊原因（发送方填写）',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`         TINYINT      NOT NULL DEFAULT 0,
@@ -1586,3 +1594,29 @@ WHERE p.`code` IN (
     'epidemic:screening:import', 'epidemic:screening:track',
     'epidemic:screening:xray', 'epidemic:screening:diagnosis'
 );
+
+-- ==================== V21：分级诊疗增加转诊原因字段 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral' AND COLUMN_NAME = 'referral_reason'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral` ADD COLUMN `referral_reason` VARCHAR(512) DEFAULT NULL COMMENT ''转诊原因（发送方填写）'' AFTER `reject_reason`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V22：supervision_form 增加是否进行预防性治疗 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supervision_form' AND COLUMN_NAME = 'has_preventive_treatment'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `supervision_form` ADD COLUMN `has_preventive_treatment` VARCHAR(10) DEFAULT NULL COMMENT ''是否进行预防性治疗：是/否'' AFTER `managing_unit`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

@@ -71,4 +71,13 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     /** 更新潜伏感染基本信息 */
     void updateBasicInfo(Long id, Map<String, Object> body);
+
+    /** 手动新增潜伏感染记录（在管总览） */
+    Long createManual(Map<String, Object> body);
+
+    /** 级联删除潜伏感染记录及其关联数据 */
+    void deleteCascade(Long id);
+
+    /** 批量级联删除潜伏感染记录 */
+    void batchDeleteCascade(List<Long> ids);
 }

@@ -19,6 +19,16 @@ export function updatePatientApi(id: number, data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: `patient/${id}`, method: "put", data })
 }
 
+/** 手动新增在管患者 */
+export function createPatientApi(data: Record<string, any>) {
+  return request<ApiResponseData<number>>({ url: "patient", method: "post", data })
+}
+
+/** 批量删除患者（级联删除） */
+export function batchDeletePatientsApi(ids: number[]) {
+  return request<ApiResponseData<null>>({ url: "patient/batch-delete", method: "delete", data: { ids } })
+}
+
 /** 导出在管患者总表 */
 export function exportAllPatientsApi(params: Record<string, any>) {
   return request<Blob>({
