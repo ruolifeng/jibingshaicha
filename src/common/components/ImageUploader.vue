@@ -12,9 +12,10 @@
  *   - 也兼容直接传入 string[] 数组
  *   - 空值（null/""/[]）均合法
  */
-import type { UploadFile, UploadProps } from "element-plus"
+import type { UploadFile, UploadFiles, UploadProps } from "element-plus"
 import { Plus, ZoomIn } from "@element-plus/icons-vue"
 import { getToken } from "@@/utils/cache/cookies"
+import { parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
 
 interface Props {
   /** v-model 绑定值：可以是 JSON 字符串或 string[] */
@@ -44,31 +45,34 @@ const emit = defineEmits<{
 const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
-/** 将 v-model 输入规范化为 string[] */
-function parseValue(v: Props["modelValue"]): string[] {
-  if (!v) return []
-  if (Array.isArray(v)) return v.filter(Boolean)
-  try {
-    const parsed = JSON.parse(v)
-    return Array.isArray(parsed) ? parsed.filter(Boolean) : []
-  } catch {
-    // 兼容历史脏数据：单个 URL 字符串
-    return v ? [v] : []
+type LocalFile = { name: string, url: string, uid: number }
+
+/** 内部维护的 fileList，结构对齐 el-upload */
+const fileList = ref<LocalFile[]>([])
+
+function toLocalFile(file: UploadFile): LocalFile {
+  return {
+    name: file.name,
+    url: file.url || "",
+    uid: file.uid
   }
 }
 
-/** 内部维护的 fileList，结构对齐 el-upload */
-const fileList = ref<{ name: string, url: string, uid?: number }[]>([])
+function sameUrlList(a: string[], b: string[]) {
+  return a.length === b.length && a.every((url, index) => url === b[index])
+}
 
-/** 同步 v-model → fileList */
+/** 同步 v-model → fileList（仅在外部值变化时更新，避免覆盖上传中的列表） */
 watch(
   () => props.modelValue,
   (v) => {
-    const urls = parseValue(v)
+    const urls = parseAttachmentUrls(v)
+    const current = fileList.value.map(f => f.url).filter(Boolean)
+    if (sameUrlList(urls, current)) return
     fileList.value = urls.map((url, idx) => ({
-      name: extractFileName(url) || `图片${idx + 1}`,
+      name: url.split("/").pop()?.split("?")[0] || `图片${idx + 1}`,
       url,
-      uid: idx
+      uid: Date.now() + idx
     }))
   },
   { immediate: true }
@@ -80,13 +84,11 @@ function emitChange() {
   emit("update:modelValue", urls.length ? JSON.stringify(urls) : "")
 }
 
-function extractFileName(url: string): string {
-  try {
-    const u = new URL(url, "http://x")
-    const name = u.searchParams.get("name")
-    if (name) return decodeURIComponent(name)
-  } catch { /* ignore */ }
-  return url.split("/").pop() || url
+function syncFromUploadFiles(uploadFiles: UploadFiles) {
+  fileList.value = uploadFiles
+    .filter(file => file.status === "success" && file.url)
+    .map(toLocalFile)
+  emitChange()
 }
 
 // ==================== 上传 hooks ====================
@@ -108,16 +110,17 @@ const beforeUpload: UploadProps["beforeUpload"] = (file) => {
 }
 
 const onSuccess: UploadProps["onSuccess"] = (response, uploadFile) => {
-  if (response.code === 200) {
-    fileList.value.push({
-      name: uploadFile.name,
-      url: import.meta.env.VITE_BASE_URL + response.data,
-      uid: uploadFile.uid
-    })
-    emitChange()
-  } else {
-    ElMessage.error(response.msg || "上传失败")
+  if (response?.code === 200 && response?.data) {
+    uploadFile.url = resolveFileUrl(response.data)
+    uploadFile.status = "success"
+    return
   }
+  uploadFile.status = "fail"
+  ElMessage.error(response?.msg || "上传失败")
+}
+
+const onChange: UploadProps["onChange"] = (_uploadFile, uploadFiles) => {
+  syncFromUploadFiles(uploadFiles)
 }
 
 const onError: UploadProps["onError"] = () => {
@@ -125,11 +128,8 @@ const onError: UploadProps["onError"] = () => {
 }
 
 function handleRemove(uploadFile: UploadFile) {
-  const idx = fileList.value.findIndex(f => f.url === uploadFile.url || f.name === uploadFile.name)
-  if (idx >= 0) {
-    fileList.value.splice(idx, 1)
-    emitChange()
-  }
+  fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid && f.url !== uploadFile.url)
+  emitChange()
 }
 
 // ==================== 预览 ====================
@@ -155,6 +155,7 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
       accept="image/*"
       :before-upload="beforeUpload"
       :on-success="onSuccess"
+      :on-change="onChange"
       :on-error="onError"
       :on-remove="handleRemove"
       :on-preview="handlePreview"
@@ -183,7 +184,7 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
       <span class="image-uploader__count">已上传 {{ fileList.length }} / {{ max }}</span>
     </div>
 
-    <el-dialog v-model="previewVisible" title="" width="60vw" align-center>
+    <el-dialog v-model="previewVisible" title="" width="60vw" append-to-body align-center>
       <img v-if="previewUrl" class="preview-img" :src="previewUrl" alt="preview">
     </el-dialog>
   </div>

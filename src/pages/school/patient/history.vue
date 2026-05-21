@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
@@ -167,11 +168,14 @@ watch(
         </el-table-column>
         <el-table-column prop="archivedTime" label="归档时间" />
         <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="420">
           <template #default="{ row }">
-            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
-              查看详情
-            </el-button>
+            <div class="action-btns">
+              <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
+                筛查详情
+              </el-button>
+              <ArchivedPatientRecordsActions :row="row" />
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -199,5 +203,11 @@ watch(
 }
 .mt-4 {
   margin-top: 16px;
+}
+.action-btns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
 }
 </style>

@@ -40,7 +40,8 @@ public class VisitTimeoutTask {
         List<Notice> notices = noticeService.list(wrapper);
         for (Notice notice : notices) {
             LambdaQueryWrapper<FirstVisit> fvWrapper = new LambdaQueryWrapper<>();
-            fvWrapper.eq(FirstVisit::getPatientId, notice.getBizId());
+            fvWrapper.eq(FirstVisit::getPatientId, notice.getBizId())
+                    .eq(FirstVisit::getStatus, 1);
             long count = firstVisitService.count(fvWrapper);
 
             if (count > 0) {

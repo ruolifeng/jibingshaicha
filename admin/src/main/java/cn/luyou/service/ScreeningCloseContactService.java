@@ -36,4 +36,7 @@ public interface ScreeningCloseContactService extends IService<ScreeningCloseCon
 
     /** 分类统计（各 finalScreeningResult 数量） */
     Map<String, Long> countByFinalResult();
+
+    /** 查询详情并补全随访到期日等衍生字段 */
+    ScreeningCloseContact getEnrichedById(Long id);
 }

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 /** 后续随访记录 — 完整详情查看 */
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
+import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import {
   followUpFormatters,
   formatFollowUpSupervisor,
@@ -98,6 +99,9 @@ const d = computed(() => props.visitData)
       <el-divider content-position="left">其他</el-divider>
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="备注" :span="2">{{ d.remarks || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="附件" :span="2">
+          <AttachmentPreviewList :urls="d.attachmentUrls" />
+        </el-descriptions-item>
         <el-descriptions-item label="填写时间">{{ d.createTime || "-" }}</el-descriptions-item>
       </el-descriptions>
     </template>

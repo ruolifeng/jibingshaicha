@@ -92,7 +92,7 @@ public class ScreeningCloseContactController {
     @Operation(summary = "按ID查询密接人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningCloseContact> detail(@PathVariable Long id) {
-        return ResultRes.success(screeningCloseContactService.getById(id));
+        return ResultRes.success(screeningCloseContactService.getEnrichedById(id));
     }
 
     // ==================== 密接专属业务接口 ====================

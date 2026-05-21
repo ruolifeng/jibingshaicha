@@ -13,6 +13,7 @@ export {
   saveCheckApi,
   saveFollowUpApi,
   saveSupervisionApi,
+  saveNoticeDraftApi,
   sendNoticeApi,
   setMedicationStatusApi,
   submitXrayApi,

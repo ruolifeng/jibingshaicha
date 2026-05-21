@@ -92,7 +92,8 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
             String birthDateText = getFieldByHeader(row, headerIndex, "出生日期");
             String ageText = getFieldByHeader(row, headerIndex, "年龄");
             String phone = getFieldByHeader(row, headerIndex, "联系电话", "电话");
-            String currentAddress = getFieldByHeader(row, headerIndex, "现详细住址", "现住地址区现住详细", "现住址");
+            String currentAddress = getFieldByHeader(row, headerIndex,
+                    "现住详细地址", "现详细住址", "现住地址区现住详细", "现住址", "现住地址");
             String caseCategory = getFieldByHeader(row, headerIndex, "病例分类");
             String diseaseName = getFieldByHeader(row, headerIndex, "疾病名称");
             String reportUnit = getFieldByHeader(row, headerIndex, "报告单位");
@@ -315,6 +316,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
                 .gender(entity.getGender())
                 .age(entity.getAge())
                 .phone(entity.getPhone())
+                .currentAddress(entity.getCurrentAddress())
                 .trackingStatus(1)
                 .notInPlaceCount(entity.getNotInPlaceCount() == null ? 0 : entity.getNotInPlaceCount())
                 .trackingRemark(entity.getTrackingRemark())

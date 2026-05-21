@@ -47,7 +47,7 @@ async function handleFileChange(uploadFile: any) {
           <el-tag type="warning">专病网</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="提取字段">
-          患者姓名、身份证号、性别、出生日期、年龄、联系电话、人群分类、现详细住址、户籍地址、现管单位、诊断结果（病原学阴/阳性）
+          患者姓名、身份证号、性别、出生日期、年龄、联系电话、人群分类（重点人群列）、现详细住址、户籍地址、现管单位、诊断结果（病原学阴/阳性）
         </el-descriptions-item>
       </el-descriptions>
 

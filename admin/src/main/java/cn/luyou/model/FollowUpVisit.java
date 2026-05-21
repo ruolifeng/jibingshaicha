@@ -87,6 +87,8 @@ public class FollowUpVisit extends BaseEntity {
     private String remarks;
     /** 附件图片URL（JSON数组字符串，2~6 张）—— V15 */
     private String attachmentUrls;
+    /** 状态：0草稿 1已完成 */
+    private Integer status;
 
     /** @deprecated V15 起按新模板字段化；本字段保留兼容历史数据。 */
     @Deprecated

@@ -7,7 +7,7 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
-import { sendNoticeApi } from "@/pages/latent-management/apis"
+import { saveNoticeDraftApi, sendNoticeApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -85,6 +85,52 @@ function resetFormFromRow(row: Record<string, any>) {
   })
 }
 
+function assignFormFromNotice(notice: Record<string, any>, row: Record<string, any>) {
+  Object.assign(noticeForm, {
+    idNumber: notice.idNumber || row.idNumber || "",
+    gender: notice.gender || row.gender || "",
+    birthDate: notice.birthDate || row.birthDate || "",
+    age: notice.age ?? row.age ?? null,
+    phone: notice.phone || row.phone || "",
+    ethnicity: notice.ethnicity || row.ethnicity || "",
+    crowdCategory: notice.crowdCategory || row.crowdCategory || "",
+    currentAddress: notice.currentAddress || row.currentAddress || "",
+    householdAddress: notice.householdAddress || row.householdAddress || "",
+    infectionDate: notice.infectionDate || row.screenDate || "",
+    infectionMethod: notice.infectionMethod || row.screenMethod || "",
+    infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
+    chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
+    chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
+    treatmentInstitution: notice.treatmentInstitution || "",
+    issuedTime: notice.issuedTime || getNowDateStr(),
+    receiverOrgId: notice.receiverOrgId || undefined
+  })
+  const tp = notice.treatmentPlan || ""
+  if (tp && !TREATMENT_PLAN_OPTIONS.includes(tp)) {
+    noticeForm.treatmentPlan = "个体化方案"
+    noticeForm.customPlanDetail = notice.customPlanDetail || tp
+  } else {
+    noticeForm.treatmentPlan = tp
+    noticeForm.customPlanDetail = notice.customPlanDetail || ""
+  }
+}
+
+async function loadDraftIfNeeded(row: Record<string, any>) {
+  if (row.noticeSent) {
+    resetFormFromRow(row)
+    return
+  }
+  try {
+    const { data } = await getNoticeListByBizApi(row.id, "latent")
+    const notice = data?.[0]
+    if (notice && (notice.status === 0 || notice.status === 2)) {
+      assignFormFromNotice(notice, row)
+      return
+    }
+  } catch { /* ignore */ }
+  resetFormFromRow(row)
+}
+
 async function loadLevel5Users() {
   try {
     const { data } = await getLevel5UsersApi()
@@ -94,9 +140,9 @@ async function loadLevel5Users() {
 
 watch(
   () => props.visible,
-  (val) => {
+  async (val) => {
     if (val && props.latentRow) {
-      resetFormFromRow(props.latentRow)
+      await loadDraftIfNeeded(props.latentRow)
     }
   }
 )
@@ -134,6 +180,19 @@ async function handleSendNotice() {
     noticeForm.issuedTime = getNowDateStr()
     await sendNoticeApi(buildPayload())
     ElMessage.success("通知单发送成功")
+    close()
+    emit("success")
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
+}
+
+async function handleSaveDraft() {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await saveNoticeDraftApi(buildPayload())
+    ElMessage.success("通知单草稿已保存")
     close()
     emit("success")
   } catch { /* handled */ } finally {
@@ -298,6 +357,9 @@ async function handleSendNotice() {
     <template #footer>
       <el-button @click="close">
         取消
+      </el-button>
+      <el-button :loading="submitting" @click="handleSaveDraft">
+        保存草稿
       </el-button>
       <el-button type="primary" :loading="submitting" @click="handleSendNotice">
         发送通知单

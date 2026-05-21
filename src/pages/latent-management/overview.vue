@@ -166,8 +166,14 @@ async function handleBatchDelete() {
         <el-table-column prop="diagnosisFirst" label="诊断结果" show-overflow-tooltip />
         <el-table-column label="通知单">
           <template #default="{ row }">
-            <el-tag :type="row.noticeSent ? 'success' : 'info'" size="small">
-              {{ row.noticeSent ? "已发送" : "未发送" }}
+            <el-tag v-if="row.noticeStatus === 1 || row.noticeStatus === 2" type="success" size="small">
+              已发送
+            </el-tag>
+            <el-tag v-else-if="row.noticeStatus === 0" type="info" size="small">
+              草稿
+            </el-tag>
+            <el-tag v-else type="info" size="small">
+              未发送
             </el-tag>
           </template>
         </el-table-column>

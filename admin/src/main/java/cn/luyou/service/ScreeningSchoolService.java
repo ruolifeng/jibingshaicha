@@ -32,4 +32,7 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
      * 更新筛查记录（同步重新计算潜伏判定结果）
      */
     void updateScreening(ScreeningSchool data);
+
+    /** 问卷公开提交：无需登录，departmentId 为空 */
+    void createFromQuestionnaire(ScreeningSchool data);
 }

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
 import { getPatientHistoryListApi } from "./apis"
@@ -94,6 +95,11 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="诊断结果" />
         <el-table-column prop="archivedTime" label="归档时间" />
+        <el-table-column label="操作" fixed="right" width="360">
+          <template #default="{ row }">
+            <ArchivedPatientRecordsActions :row="row" />
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-pagination

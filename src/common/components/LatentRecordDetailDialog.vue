@@ -92,7 +92,11 @@ watch(() => props.visible, (val) => {
           {{ detail.diagnosisFirst || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="通知单">
-          {{ detail.noticeSent ? "已发送" : "未发送" }}
+          {{
+            detail.noticeStatus === 0
+              ? "草稿"
+              : (detail.noticeSent ? "已发送" : "未发送")
+          }}
         </el-descriptions-item>
         <el-descriptions-item label="创建时间" :span="2">
           {{ detail.createTime || "-" }}

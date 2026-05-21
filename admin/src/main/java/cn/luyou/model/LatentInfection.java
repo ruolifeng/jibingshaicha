@@ -64,6 +64,14 @@ public class LatentInfection extends BaseEntity {
     @TableField(exist = false)
     private Boolean noticeSent;
 
+    /** 通知单状态（非持久化）：0草稿 1已发送 2已确认 null无通知单 */
+    @TableField(exist = false)
+    private Integer noticeStatus;
+
+    /** 通知单ID（非持久化） */
+    @TableField(exist = false)
+    private Long noticeId;
+
     /** 督导表是否已完成（status=2，非持久化字段） */
     @TableField(exist = false)
     private Boolean supervisionCompleted;

@@ -573,7 +573,8 @@ public class ExportController {
         Set<Long> firstVisitSet = new HashSet<>();
         if (!patientIds.isEmpty()) {
             firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
-                            .in(FirstVisit::getPatientId, patientIds))
+                            .in(FirstVisit::getPatientId, patientIds)
+                            .eq(FirstVisit::getStatus, 1))
                     .forEach(fv -> firstVisitSet.add(fv.getPatientId()));
         }
 
@@ -581,7 +582,8 @@ public class ExportController {
         Map<Long, Long> followUpCountMap = new HashMap<>();
         if (!patientIds.isEmpty()) {
             followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
-                            .in(FollowUpVisit::getPatientId, patientIds))
+                            .in(FollowUpVisit::getPatientId, patientIds)
+                            .eq(FollowUpVisit::getStatus, 1))
                     .forEach(fv -> followUpCountMap.merge(fv.getPatientId(), 1L, Long::sum));
         }
 
@@ -693,7 +695,11 @@ public class ExportController {
                     : (Integer.valueOf(2).equals(notice.getStatus()) ? "已确认"
                     : (Integer.valueOf(1).equals(notice.getStatus()) ? "已发送" : "草稿"));
             String supervisionLabel = sv == null ? "未填写"
-                    : (Integer.valueOf(2).equals(sv.getStatus()) ? "已完成" : "填写中");
+                    : switch (sv.getStatus() != null ? sv.getStatus() : 0) {
+                        case 2 -> "已归档";
+                        case 1 -> "已提交";
+                        default -> "填写中";
+                    };
             String treatmentLabel = r.getTreatmentPhase() == null ? "" : switch (r.getTreatmentPhase()) {
                 case 1 -> "预防治疗中";
                 case 2 -> "已结案";
@@ -720,7 +726,7 @@ public class ExportController {
             row.put("预防性治疗完成时间", formatDate(sv != null ? sv.getTreatmentEndDate() : null));
             row.put("预防性治疗结果", sv != null ? sv.getPreventiveResult() : "");
             row.put("治疗阶段", treatmentLabel);
-            row.put("是否归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "未归档");
+            row.put("是否归档", isLatentArchived(r, sv) ? "已归档" : "未归档");
             row.put("创建时间", r.getCreateTime() != null ? r.getCreateTime().format(DATETIME_FMT) : "");
             rows.add(row);
         }
@@ -731,6 +737,17 @@ public class ExportController {
 
     private String formatDate(LocalDate date) {
         return date != null ? date.format(DATE_FMT) : "";
+    }
+
+    /** 潜伏感染者是否已归档：结案归档、督导表归档均视为已归档 */
+    private boolean isLatentArchived(LatentInfection latent, SupervisionForm supervision) {
+        if (Integer.valueOf(1).equals(latent.getArchived())) {
+            return true;
+        }
+        if (Integer.valueOf(2).equals(latent.getTreatmentPhase())) {
+            return true;
+        }
+        return supervision != null && Integer.valueOf(2).equals(supervision.getStatus());
     }
 
     /** 将重点人群多个分类字段拼接为可读字符串 */

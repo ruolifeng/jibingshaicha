@@ -204,7 +204,7 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
             </template>
             <template #default>
               <ul style="margin: 6px 0 0 16px; line-height: 1.9; color: #606266; font-size: 13px">
-                <li>提取字段：姓名、证件号、性别、出生日期、年龄、联系电话、现详细住址、病例分类、疾病名称、报告单位</li>
+                <li>提取字段：姓名、证件号、性别、出生日期、年龄、联系电话、现住详细地址、病例分类、疾病名称、报告单位</li>
                 <li>导入后进入「待诊断」，执行：追踪 -> 录入胸片 -> 录入诊断 -> 自动分流</li>
               </ul>
             </template>
@@ -296,6 +296,7 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
             <el-table-column prop="age" label="年龄" />
             <el-table-column prop="idNumber" label="证件号" />
             <el-table-column prop="phone" label="联系电话" />
+            <el-table-column prop="currentAddress" label="现住详细地址" show-overflow-tooltip min-width="160" />
             <el-table-column prop="caseCategory" label="病例分类" />
             <el-table-column prop="diseaseName" label="疾病名称" />
             <el-table-column prop="reportUnit" label="报告单位" show-overflow-tooltip />

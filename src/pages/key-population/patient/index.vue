@@ -7,6 +7,7 @@ import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintNotice from "@@/components/PrintNotice.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import { printHtml } from "@@/utils/print"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
@@ -43,6 +44,7 @@ import {
   getPatientListApi,
   importEpidemicApi,
   saveFirstVisitApi,
+  saveFirstVisitDraftApi,
   saveMedicationApi
 } from "./apis"
 
@@ -331,7 +333,9 @@ async function viewNotice(row: any) {
 // ==================== 首次随访 ====================
 const firstVisitDialogVisible = ref(false)
 const firstVisitRow = ref<any>(null)
+const firstVisitCompleted = ref(false)
 const firstVisitForm = reactive({
+  id: undefined as number | undefined,
   visitDate: "",
   visitMethod: "",
   patientType: "",
@@ -359,7 +363,9 @@ const firstVisitForm = reactive({
 
 function openFirstVisitDialog(row: any) {
   firstVisitRow.value = row
+  firstVisitCompleted.value = false
   Object.assign(firstVisitForm, {
+    id: undefined,
     visitDate: "",
     visitMethod: "",
     patientType: "",
@@ -384,18 +390,49 @@ function openFirstVisitDialog(row: any) {
     attachmentUrls: ""
   })
   firstVisitDialogVisible.value = true
+  loadFirstVisitForm(row.id)
+}
+
+async function loadFirstVisitForm(patientId: number) {
+  try {
+    const { data } = await getFirstVisitApi(patientId)
+    if (!data) return
+    firstVisitCompleted.value = data.status === 1
+    Object.assign(firstVisitForm, {
+      ...data,
+      symptoms: data.symptoms ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+      drugForm: data.drugForm ? String(data.drugForm).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+      educationItems: data.educationItems
+        ? (typeof data.educationItems === "string" ? JSON.parse(data.educationItems) : data.educationItems)
+        : {},
+      attachmentUrls: data.attachmentUrls ?? ""
+    })
+  } catch { /* 首次填写 */ }
+}
+
+function buildFirstVisitPayload() {
+  return {
+    patientId: firstVisitRow.value.id,
+    populationType: "keyPopulation",
+    ...firstVisitForm,
+    symptoms: firstVisitForm.symptoms.join(","),
+    drugForm: firstVisitForm.drugForm.join(","),
+    educationItems: JSON.stringify(firstVisitForm.educationItems)
+  }
+}
+
+async function handleSaveFirstVisitDraft() {
+  try {
+    await saveFirstVisitDraftApi(buildFirstVisitPayload())
+    ElMessage.success("首次随访草稿已保存")
+    firstVisitDialogVisible.value = false
+    fetchData()
+  } catch { /* handled */ }
 }
 
 async function handleSaveFirstVisit() {
   try {
-    await saveFirstVisitApi({
-      patientId: firstVisitRow.value.id,
-      populationType: "keyPopulation",
-      ...firstVisitForm,
-      symptoms: firstVisitForm.symptoms.join(","),
-      drugForm: firstVisitForm.drugForm.join(","),
-      educationItems: JSON.stringify(firstVisitForm.educationItems)
-    })
+    await saveFirstVisitApi(buildFirstVisitPayload())
     ElMessage.success("首次随访保存成功")
     firstVisitDialogVisible.value = false
     fetchData()
@@ -519,35 +556,25 @@ function openMedicationDialog(row: any) {
 function handlePrintMedication() {
   const printContent = document.querySelector(".med-calendar")
   if (!printContent) return
-  const printWindow = window.open("", "_blank")
-  if (!printWindow) return
   const patientName = medicationRow.value?.name || ""
-  printWindow.document.write(`
-    <html><head><title>治疗记录卡 - ${patientName}</title>
-    <style>
+  printHtml(
+    `<h2 style="text-align:center">肺结核患者治疗记录卡</h2>
+    <div style="margin-bottom:16px">
+      <span style="margin-right:24px">姓名：${patientName}</span>
+      <span style="margin-right:24px">管理方式：${medicationForm.managementMethod || ""}</span>
+      <span style="margin-right:24px">督导人员：${medicationForm.supervisor || ""}</span>
+      <span>痰菌检查：${medicationForm.sputumResult || ""}</span>
+    </div>
+    ${printContent.outerHTML}`,
+    `治疗记录卡 - ${patientName}`,
+    `
       body { font-family: sans-serif; padding: 20px; }
-      h2 { text-align: center; }
-      .info { margin-bottom: 16px; }
-      .info span { margin-right: 24px; }
       .med-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
       .med-calendar-cell { border: 1px solid #ccc; padding: 4px; text-align: center; min-height: 40px; }
       .checked { background: #e6f7e6; }
       .med-calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; margin-bottom: 4px; }
-    </style></head><body>
-    <h2>肺结核患者治疗记录卡</h2>
-    <div class="info">
-      <span>姓名：${patientName}</span>
-      <span>管理方式：${medicationForm.managementMethod || ""}</span>
-      <span>督导人员：${medicationForm.supervisor || ""}</span>
-      <span>痰菌检查：${medicationForm.sputumResult || ""}</span>
-    </div>
-    ${printContent.outerHTML}
-    </body></html>
-  `)
-  printWindow.document.close()
-  printWindow.focus()
-  printWindow.print()
-  printWindow.close()
+    `
+  )
 }
 
 async function handleSaveMedication() {
@@ -1301,6 +1328,9 @@ watch(
       <template #footer>
         <el-button @click="firstVisitDialogVisible = false">
           取消
+        </el-button>
+        <el-button v-if="!firstVisitCompleted" @click="handleSaveFirstVisitDraft">
+          保存草稿
         </el-button>
         <el-button type="primary" @click="handleSaveFirstVisit">
           保存

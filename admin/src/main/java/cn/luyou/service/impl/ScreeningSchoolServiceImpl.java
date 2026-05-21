@@ -209,8 +209,55 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             latentInfectionService.saveBatch(allLatent, 500);
             log.info("自动创建学校人群潜伏感染记录 {} 条", allLatent.size());
         }
+        syncLatentFromScreening(toUpdate, "school");
 
         return result;
+    }
+
+    /**
+     * 增量导入时，将胸片与首次诊断同步到已存在的潜伏感染记录，
+     * 避免筛查表已更新但待诊断列表仍为空的情况。
+     */
+    private void syncLatentFromScreening(List<ScreeningSchool> records, String populationType) {
+        for (ScreeningSchool d : records) {
+            if (d.getIsLatent() != 1 || d.getId() == null) continue;
+            LatentInfection latent = latentInfectionService.lambdaQuery()
+                    .eq(LatentInfection::getScreeningId, d.getId())
+                    .eq(LatentInfection::getPopulationType, populationType)
+                    .eq(LatentInfection::getArchived, 0)
+                    .isNull(LatentInfection::getReferralResult)
+                    .last("LIMIT 1")
+                    .one();
+            if (latent == null) continue;
+
+            boolean directXray = hasDirectXrayAndDiagnosis(d);
+            var update = latentInfectionService.lambdaUpdate()
+                    .eq(LatentInfection::getId, latent.getId());
+            boolean changed = false;
+            if (StrUtil.isNotBlank(d.getHasChestXray())) {
+                update.set(LatentInfection::getHasChestXray, d.getHasChestXray());
+                changed = true;
+            }
+            if (d.getChestXrayDate() != null) {
+                update.set(LatentInfection::getChestXrayDate, d.getChestXrayDate());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getChestXrayResult())) {
+                update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
+                update.set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
+                changed = true;
+            }
+            if (directXray && Integer.valueOf(0).equals(latent.getTrackingStatus())) {
+                update.set(LatentInfection::getTrackingStatus, 1);
+                changed = true;
+            }
+            if (changed) {
+                update.update();
+            }
+        }
     }
 
     @Override
@@ -308,6 +355,49 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     /** 11位手机号验证 */
     private boolean isValidPhone(String phone) {
         return phone != null && phone.matches("^1[3-9]\\d{9}$");
+    }
+
+    /** 证件类型为居民身份证（或未填）时按身份证规则校验 */
+    private boolean isIdCardType(String idType) {
+        return StrUtil.isBlank(idType) || "居民身份证".equals(idType);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void createFromQuestionnaire(ScreeningSchool data) {
+        if (isIdCardType(data.getIdType()) && StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+
+        boolean directXray = hasDirectXrayAndDiagnosis(data);
+        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        data.setDepartmentId(null);
+        save(data);
+
+        if (data.getIsLatent() == 1) {
+            LatentInfection latent = LatentInfection.builder()
+                    .screeningId(data.getId())
+                    .populationType("school")
+                    .name(data.getName())
+                    .idNumber(data.getIdNumber())
+                    .gender(data.getGender())
+                    .age(data.getAge())
+                    .phone(data.getPhone())
+                    .infectionResult(data.getInfectionResult())
+                    .trackingStatus(0)
+                    .notInPlaceCount(0)
+                    .archived(0)
+                    .hasChestXray(data.getHasChestXray())
+                    .chestXrayDate(data.getChestXrayDate())
+                    .chestXrayResult(data.getChestXrayResult())
+                    .diagnosisFirst(data.getDiagnosisFirst())
+                    .departmentId(null)
+                    .build();
+            latentInfectionService.save(latent);
+        }
     }
 
     @Override

@@ -154,31 +154,57 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         List<LatentInfection> records = result.getRecords();
         if (records == null || records.isEmpty()) return result;
 
+        records.forEach(this::fillNoticeAutoFields);
+        fillNoticeAndSupervisionStatus(records, populationType);
+
+        return result;
+    }
+
+    /** 补充通知单发送状态与督导表状态（列表/详情共用） */
+    private void fillNoticeAndSupervisionStatus(List<LatentInfection> records, String populationType) {
+        if (records == null || records.isEmpty()) return;
+
         List<Long> latentIds = records.stream()
                 .map(LatentInfection::getId)
                 .filter(java.util.Objects::nonNull)
                 .toList();
-        records.forEach(this::fillNoticeAutoFields);
         if (latentIds.isEmpty()) {
             records.forEach(r -> {
                 r.setNoticeSent(false);
+                r.setNoticeStatus(null);
+                r.setNoticeId(null);
                 r.setSupervisionCompleted(false);
                 r.setSupervisionStatus(0);
             });
-            return result;
+            return;
         }
 
-        Set<Long> sentBizIds = new HashSet<>(noticeMapper.selectList(
+        Map<Long, cn.luyou.model.Notice> noticeMap = noticeMapper.selectList(
                 new LambdaQueryWrapper<cn.luyou.model.Notice>()
                         .in(cn.luyou.model.Notice::getBizId, latentIds)
                         .eq(cn.luyou.model.Notice::getNoticeType, "latent")
-                        .eq(cn.luyou.model.Notice::getPopulationType, populationType)
-                        .select(cn.luyou.model.Notice::getBizId)
-        ).stream().map(cn.luyou.model.Notice::getBizId).toList());
+                        .eq(StrUtil.isNotBlank(populationType), cn.luyou.model.Notice::getPopulationType, populationType)
+                        .orderByDesc(cn.luyou.model.Notice::getId)
+        ).stream().collect(java.util.stream.Collectors.toMap(
+                cn.luyou.model.Notice::getBizId,
+                n -> n,
+                (a, b) -> a,
+                java.util.LinkedHashMap::new
+        ));
 
-        records.forEach(r -> r.setNoticeSent(sentBizIds.contains(r.getId())));
+        records.forEach(r -> {
+            cn.luyou.model.Notice notice = noticeMap.get(r.getId());
+            if (notice != null) {
+                r.setNoticeStatus(notice.getStatus());
+                r.setNoticeId(notice.getId());
+                r.setNoticeSent(notice.getStatus() != null && notice.getStatus() >= 1);
+            } else {
+                r.setNoticeStatus(null);
+                r.setNoticeId(null);
+                r.setNoticeSent(false);
+            }
+        });
 
-        // 补充督导表状态：取每条记录最新督导表 status（0未填写 1已提交 2已归档）
         Map<Long, Integer> supervisionStatusMap = supervisionFormMapper.selectList(
                 new LambdaQueryWrapper<SupervisionForm>()
                         .in(SupervisionForm::getLatentInfectionId, latentIds)
@@ -194,8 +220,6 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             r.setSupervisionStatus(status != null ? status : 0);
             r.setSupervisionCompleted(Integer.valueOf(2).equals(status));
         });
-
-        return result;
     }
 
     private void fillNoticeAutoFields(LatentInfection latent) {
@@ -751,6 +775,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
         fillNoticeAutoFields(latent);
+        fillNoticeAndSupervisionStatus(List.of(latent), latent.getPopulationType());
         return latent;
     }
 

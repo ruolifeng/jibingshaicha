@@ -159,9 +159,12 @@ async function handleCloseCase(row: any) {
         </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
-            <el-button v-if="row.noticeSent" type="primary" link size="small" @click="viewNotice(row)">
+            <el-button v-if="row.noticeStatus === 1 || row.noticeStatus === 2" type="primary" link size="small" @click="viewNotice(row)">
               {{ row.name }}通知单
             </el-button>
+            <el-tag v-else-if="row.noticeStatus === 0" type="info" size="small">
+              草稿
+            </el-tag>
             <span v-else class="text-gray-400">未发送</span>
           </template>
         </el-table-column>
@@ -176,7 +179,7 @@ async function handleCloseCase(row: any) {
               :disabled="row.archived === 1"
               @click="openNotice(row)"
             >
-              发送通知单
+              {{ row.noticeStatus === 0 ? "继续填写" : "发送通知单" }}
             </el-button>
             <el-button
               v-if="row.noticeSent"

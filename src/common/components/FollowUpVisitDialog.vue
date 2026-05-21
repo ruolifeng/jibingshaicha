@@ -23,7 +23,7 @@ import {
   STOP_TREATMENT_REASON_OPTIONS,
   YES_NO_OPTIONS
 } from "@@/constants/disease"
-import { saveFollowUpApi } from "@/pages/school/patient/apis"
+import { getFollowUpDraftApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import ImageUploader from "./ImageUploader.vue"
 
 interface Props {
@@ -48,6 +48,8 @@ const localVisible = computed({
 })
 
 const submitting = ref(false)
+const draftSaving = ref(false)
+const draftId = ref<number | null>(null)
 
 interface FollowUpForm {
   visitDate: string
@@ -125,12 +127,57 @@ function createEmptyForm(): FollowUpForm {
   }
 }
 
+function parseDraftData(data: Record<string, any>) {
+  Object.assign(form, createEmptyForm(), {
+    ...data,
+    symptoms: data.symptoms
+      ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean)
+      : []
+  })
+  draftId.value = data.id ?? null
+}
+
+async function loadDraft() {
+  if (!props.patientId) return
+  draftId.value = null
+  Object.assign(form, createEmptyForm())
+  try {
+    const { data } = await getFollowUpDraftApi(props.patientId)
+    if (data) {
+      parseDraftData(data)
+    }
+  } catch { /* 无草稿 */ }
+}
+
 watch(
   () => props.visible,
   (v) => {
-    if (v) Object.assign(form, createEmptyForm())
+    if (v) loadDraft()
   }
 )
+
+function buildPayload() {
+  return {
+    id: draftId.value ?? undefined,
+    patientId: props.patientId,
+    populationType: props.populationType,
+    ...form,
+    symptoms: form.symptoms.join(",")
+  }
+}
+
+async function handleSaveDraft() {
+  if (!props.patientId || draftSaving.value) return
+  draftSaving.value = true
+  try {
+    await saveFollowUpDraftApi(buildPayload())
+    ElMessage.success("后续随访草稿已保存")
+    emit("saved")
+    localVisible.value = false
+  } catch { /* handled by interceptor */ } finally {
+    draftSaving.value = false
+  }
+}
 
 async function handleSave() {
   if (!props.patientId) return
@@ -141,13 +188,7 @@ async function handleSave() {
   if (submitting.value) return
   submitting.value = true
   try {
-    await saveFollowUpApi({
-      patientId: props.patientId,
-      populationType: props.populationType,
-      ...form,
-      // 多选转 ","
-      symptoms: form.symptoms.join(",")
-    })
+    await saveFollowUpApi(buildPayload())
     ElMessage.success("后续随访保存成功")
     emit("saved")
     localVisible.value = false
@@ -456,7 +497,10 @@ async function handleSave() {
       <el-button @click="localVisible = false">
         取消
       </el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSave">
+      <el-button type="primary" plain :loading="draftSaving" :disabled="submitting" @click="handleSaveDraft">
+        保存草稿
+      </el-button>
+      <el-button type="primary" :loading="submitting" :disabled="draftSaving" @click="handleSave">
         保存
       </el-button>
     </template>

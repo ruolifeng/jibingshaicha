@@ -96,8 +96,14 @@ async function openPrintFirstVisit(row: any) {
         <el-table-column prop="diagnosisResult" label="诊断结果" />
         <el-table-column label="首次随访">
           <template #default="{ row }">
-            <el-tag :type="row.hasFirstVisit ? 'success' : 'warning'" size="small">
-              {{ row.hasFirstVisit ? "已完成" : "待填写" }}
+            <el-tag v-if="row.firstVisitStatus === 1" type="success" size="small">
+              已完成
+            </el-tag>
+            <el-tag v-else-if="row.firstVisitStatus === 0" type="info" size="small">
+              草稿
+            </el-tag>
+            <el-tag v-else type="warning" size="small">
+              待填写
             </el-tag>
           </template>
         </el-table-column>

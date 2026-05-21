@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
+import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 /**
  * 密接人群 — 潜伏感染者管理
@@ -25,6 +26,7 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
+import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
 import { idCardRule } from "@@/utils/validate"
 import {
   confirmTreatmentApi,
@@ -211,28 +213,45 @@ function beforeAttachmentUpload(file: File) {
   return true
 }
 
-function handleAttachmentSuccess(response: any, uploadFile: any) {
-  if (response.code === 200) {
-    attachmentFileList.value.push({ name: uploadFile.name, url: import.meta.env.VITE_BASE_URL + response.data })
+function syncAttachmentFileList(uploadFiles: { name: string, url?: string, status?: string }[]) {
+  attachmentFileList.value = uploadFiles
+    .filter(file => file.status === "success" && file.url)
+    .map((file, index) => ({
+      name: file.name || getAttachmentLabel(file.url!, index),
+      url: file.url!
+    }))
+}
+
+function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
+  if (response?.code === 200 && response?.data) {
+    uploadFile.url = resolveFileUrl(response.data)
+    uploadFile.status = "success"
+    syncAttachmentFileList(uploadFiles)
   } else {
-    ElMessage.error(response.msg || "附件上传失败")
+    uploadFile.status = "fail"
+    ElMessage.error(response?.msg || "附件上传失败")
   }
 }
 
-function handleAttachmentRemove(uploadFile: { name: string }) {
-  attachmentFileList.value = attachmentFileList.value.filter((f: { name: string, url: string }) => f.name !== uploadFile.name)
+function handleAttachmentChange(_uploadFile: any, uploadFiles: any[]) {
+  syncAttachmentFileList(uploadFiles)
+}
+
+function handleAttachmentRemove(uploadFile: { name: string, url?: string }) {
+  attachmentFileList.value = attachmentFileList.value.filter(
+    (f: { name: string, url: string }) => f.url !== uploadFile.url && f.name !== uploadFile.name
+  )
 }
 
 function handleAttachmentError() {
   ElMessage.error("附件上传失败，请重试")
 }
 
-function getAttachmentLabel(url: string, index: number | string): string {
-  try {
-    const match = url.match(/[?&]name=([^&]+)/)
-    if (match) return decodeURIComponent(match[1])
-  } catch { /* ignore */ }
-  return `附件${Number(index) + 1}`
+function loadAttachmentFileList(urls?: string) {
+  attachmentFileList.value = parseAttachmentUrls(urls).map((url, index) => ({
+    name: getAttachmentLabel(url, index),
+    url
+  }))
 }
 
 const supervisionForm = reactive({
@@ -451,8 +470,13 @@ const followupDetailVisible = ref(false)
 const followupDetailRow = ref<any>(null)
 
 function viewFollowupDetail(row: any) {
-  followupDetailRow.value = row
-  followupDetailVisible.value = true
+  getScreeningCloseContactDetailApi(row.id).then(({ data }) => {
+    followupDetailRow.value = data || row
+    followupDetailVisible.value = true
+  }).catch(() => {
+    followupDetailRow.value = row
+    followupDetailVisible.value = true
+  })
 }
 
 /** 判断日期是否已过期 */
@@ -948,6 +972,7 @@ async function handleSaveFollowupInput() {
             :file-list="attachmentFileList"
             :before-upload="beforeAttachmentUpload"
             :on-success="handleAttachmentSuccess"
+            :on-change="handleAttachmentChange"
             :on-remove="handleAttachmentRemove"
             :on-error="handleAttachmentError"
             multiple
@@ -1004,14 +1029,7 @@ async function handleSaveFollowupInput() {
           {{ supervisionDetailData.medicationRate || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
-          <template v-if="supervisionDetailData.attachmentUrls">
-            <div v-for="(url, i) in supervisionDetailData.attachmentUrls.split(',')" :key="url">
-              <a :href="url" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline break-all">
-                {{ getAttachmentLabel(url, i) }}
-              </a>
-            </div>
-          </template>
-          <span v-else>—</span>
+          <AttachmentPreviewList :urls="supervisionDetailData.attachmentUrls" />
         </el-descriptions-item>
       </el-descriptions>
       <el-table v-if="supervisionDetailData?.supervisionRecords" :data="JSON.parse(supervisionDetailData.supervisionRecords)" border stripe size="small" class="my-3">

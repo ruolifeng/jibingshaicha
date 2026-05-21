@@ -9,6 +9,7 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { idCardRule } from "@@/utils/validate"
+import { resolvePatientCrowdCategory, resolvePatientCurrentUnit } from "@@/utils/patient"
 import { saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import { getNoticeListByBizApi } from "@/pages/patient-management/apis"
@@ -69,12 +70,12 @@ function resetFormFromRow(row: Record<string, any>) {
     age: row.age ?? null,
     ethnicity: row.ethnicity || "",
     phone: row.phone || "",
-    crowdCategory: "",
+    crowdCategory: resolvePatientCrowdCategory(row, CROWD_CATEGORY_OPTIONS),
     currentAddress: row.currentAddress || "",
     householdAddress: row.householdAddress || "",
     chestXrayDate: row.chestXrayDate || "",
     chestXrayResult: row.chestXrayResult || "",
-    treatmentInstitution: "",
+    treatmentInstitution: resolvePatientCurrentUnit(row),
     issuedTime: new Date().toISOString().slice(0, 10),
     patientType: "",
     managementMethod: "",
@@ -97,12 +98,12 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     age: notice.age ?? null,
     ethnicity: notice.ethnicity || "",
     phone: notice.phone || "",
-    crowdCategory: notice.crowdCategory || "",
+    crowdCategory: notice.crowdCategory || resolvePatientCrowdCategory(row, CROWD_CATEGORY_OPTIONS),
     currentAddress: notice.currentAddress || "",
     householdAddress: notice.householdAddress || "",
     chestXrayDate: notice.chestXrayDate || "",
     chestXrayResult: notice.chestXrayResult || "",
-    treatmentInstitution: notice.treatmentInstitution || "",
+    treatmentInstitution: notice.treatmentInstitution || resolvePatientCurrentUnit(row),
     issuedTime: notice.issuedTime || new Date().toISOString().slice(0, 10),
     patientType: notice.patientType || "",
     managementMethod: notice.managementMethod || "",

@@ -59,6 +59,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact", "specialDisease"
     );
 
+    /** 专病表多列命中时，按业务优先级取一项作为通知单人群分类 */
+    private static final List<String> CROWD_CATEGORY_PRIORITY = List.of(
+            "密接", "学生", "教职工", "老年人", "糖尿病", "双感", "既往结核", "非重点人群"
+    );
+
     private final DepartmentService departmentService;
     private final EpidemicReportService epidemicReportService;
     private final ObjectMapper objectMapper;
@@ -81,6 +86,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
         fillScreeningXrayData(result.getRecords(), populationType);
+        fillEpidemicExtraFields(result.getRecords());
         return result;
     }
 
@@ -128,11 +134,21 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patients == null || patients.isEmpty()) return;
         List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
         LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
-        fw.in(FirstVisit::getPatientId, patientIds).select(FirstVisit::getPatientId);
-        List<Long> visitedIds = firstVisitMapper.selectList(fw).stream()
-                .map(FirstVisit::getPatientId)
-                .collect(Collectors.toList());
-        patients.forEach(p -> p.setHasFirstVisit(visitedIds.contains(p.getId())));
+        fw.in(FirstVisit::getPatientId, patientIds)
+                .select(FirstVisit::getPatientId, FirstVisit::getStatus);
+        Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
+                .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
+        patients.forEach(p -> {
+            FirstVisit visit = visitMap.get(p.getId());
+            if (visit == null) {
+                p.setHasFirstVisit(false);
+                p.setFirstVisitStatus(null);
+                return;
+            }
+            boolean completed = Integer.valueOf(1).equals(visit.getStatus());
+            p.setHasFirstVisit(completed);
+            p.setFirstVisitStatus(visit.getStatus());
+        });
     }
 
     /** 从筛查表关联填充胸片检查日期和结果（仅转诊确诊患者有 screeningId） */
@@ -355,7 +371,91 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 wrapper.in(Patient::getDepartmentId, deptIds);
             }
         }
-        return page(new Page<>(page, size), wrapper);
+        IPage<Patient> result = page(new Page<>(page, size), wrapper);
+        fillNoticeStatus(result.getRecords(), populationType);
+        fillFirstVisitStatus(result.getRecords());
+        fillEpidemicExtraFields(result.getRecords());
+        return result;
+    }
+
+    /** 从 epidemicData JSON 解析专病网导入的扩展字段（人群分类、现管单位） */
+    private void fillEpidemicExtraFields(List<Patient> patients) {
+        if (patients == null || patients.isEmpty()) return;
+        for (Patient patient : patients) {
+            if (StrUtil.isBlank(patient.getEpidemicData())) continue;
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> extra = objectMapper.readValue(patient.getEpidemicData(), Map.class);
+                Object crowdCategory = extra.get("人群分类");
+                if (crowdCategory != null && StrUtil.isNotBlank(crowdCategory.toString())) {
+                    patient.setCrowdCategory(crowdCategory.toString());
+                }
+                Object currentUnit = extra.get("现管单位");
+                if (currentUnit != null && StrUtil.isNotBlank(currentUnit.toString())) {
+                    patient.setCurrentManagementUnit(currentUnit.toString());
+                }
+            } catch (Exception ignored) {
+                // epidemicData 非 JSON 时忽略
+            }
+        }
+    }
+
+    /**
+     * 专病表人群分类：T 列「人群分类」为职业，实际分类来自 U 列「重点人群」及 V-AE 各子列。
+     */
+    private String resolveSpecialDiseaseCrowdCategory(Map<Integer, String> row, Map<String, Integer> headerIndex) {
+        List<String> matched = new ArrayList<>();
+        if ("是".equals(getFieldByHeader(row, headerIndex, "重点人群-A.密切接触者"))) {
+            matched.add("密接");
+        }
+        if ("是".equals(getFieldByHeader(row, headerIndex, "重点人群-E.学校托幼机构人员"))) {
+            matched.add("学生");
+        }
+        if ("是".equals(getFieldByHeader(row, headerIndex, "重点人群-D.医务人员"))) {
+            matched.add("教职工");
+        }
+        if ("是".equals(getFieldByHeader(row, headerIndex, "重点人群-J.养老院居住者"))
+                || "是".equals(getFieldByHeader(row, headerIndex, "重点人群-K.福利院居住者"))) {
+            matched.add("老年人");
+        }
+        if ("是".equals(getFieldByHeader(row, headerIndex, "重点人群-C.糖尿病患者"))) {
+            matched.add("糖尿病");
+        }
+        if ("是".equals(getFieldByHeader(row, headerIndex, "重点人群-B.HIV/AIDS患者"))) {
+            matched.add("双感");
+        }
+
+        String keyPopulation = getFieldByHeader(row, headerIndex, "重点人群");
+        if (StrUtil.isNotBlank(keyPopulation) && !"否".equals(keyPopulation.trim())) {
+            String mapped = mapKeyPopulationLabel(keyPopulation);
+            if (mapped != null && !matched.contains(mapped)) {
+                matched.add(mapped);
+            }
+        }
+
+        if (matched.isEmpty()) {
+            return "非重点人群";
+        }
+        for (String category : CROWD_CATEGORY_PRIORITY) {
+            if (matched.contains(category)) {
+                return category;
+            }
+        }
+        return matched.get(0);
+    }
+
+    private String mapKeyPopulationLabel(String raw) {
+        if (StrUtil.isBlank(raw)) return null;
+        String val = raw.trim();
+        if ("否".equals(val)) return null;
+        if (val.contains("密切") || val.contains("密接")) return "密接";
+        if (val.contains("学校") || val.contains("托幼")) return "学生";
+        if (val.contains("医务人员") || val.contains("教职工")) return "教职工";
+        if (val.contains("养老") || val.contains("福利院")) return "老年人";
+        if (val.contains("糖尿病")) return "糖尿病";
+        if (val.contains("HIV") || val.contains("AIDS") || val.contains("双感")) return "双感";
+        if (val.contains("既往") && val.contains("结核")) return "既往结核";
+        return null;
     }
 
     @Override
@@ -455,12 +555,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             String gender = getFieldByHeader(row, headerIndex, "性别");
             String birthDateStr = getFieldByHeader(row, headerIndex, "出生日期");
             String ageStr = getFieldByHeader(row, headerIndex, "年龄");
-            String phone = getFieldByHeader(row, headerIndex, "联系电话", "电话");
-            String currentAddress = getFieldByHeader(row, headerIndex, "现详细住址", "现住地址", "现住址", "现地址");
-            String householdAddress = getFieldByHeader(row, headerIndex, "户籍地址", "户籍所在地");
+            String phone = getFieldByHeader(row, headerIndex, "患者联系电话", "联系电话", "电话");
+            String currentAddress = getFieldByHeader(row, headerIndex, "现地址详细", "现详细住址", "现住地址", "现住址", "现地址");
+            String householdAddress = getFieldByHeader(row, headerIndex, "户籍地址详细", "户籍地址", "户籍所在地");
             String diagnosisResult = getFieldByHeader(row, headerIndex, "诊断结果");
-            String crowdCategory = getFieldByHeader(row, headerIndex, "人群分类");
-            String currentUnit = getFieldByHeader(row, headerIndex, "现管单位");
+            String crowdCategory = resolveSpecialDiseaseCrowdCategory(row, headerIndex);
+            String currentUnit = getFieldByHeader(row, headerIndex, "现管理单位", "现管单位", "首管理单位");
 
             // 将人群分类和现管单位等额外字段存入 epidemicData JSON
             java.util.Map<String, String> extraFields = new java.util.LinkedHashMap<>();
@@ -518,6 +618,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         fillNoticeStatus(List.of(patient), patient.getPopulationType());
         fillFirstVisitStatus(List.of(patient));
         fillScreeningXrayData(List.of(patient), patient.getPopulationType());
+        fillEpidemicExtraFields(List.of(patient));
         return patient;
     }
 

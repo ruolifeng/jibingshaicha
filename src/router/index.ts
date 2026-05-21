@@ -35,6 +35,12 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { hidden: true }
   },
   {
+    path: "/questionnaire/:code?",
+    component: () => import("@/pages/questionnaire/index.vue"),
+    name: "QuestionnaireFill",
+    meta: { hidden: true, title: "筛查问卷" }
+  },
+  {
     path: "/",
     component: Layouts,
     redirect: "/dashboard",

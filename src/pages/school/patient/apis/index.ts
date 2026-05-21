@@ -78,6 +78,15 @@ export function saveFirstVisitApi(data: Record<string, any>) {
   })
 }
 
+/** 保存首次随访草稿 */
+export function saveFirstVisitDraftApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "patient/first-visit/draft",
+    method: "post",
+    data
+  })
+}
+
 /** 查询首次随访 */
 export function getFirstVisitApi(patientId: number) {
   return request<ApiResponseData<any>>({
@@ -92,6 +101,23 @@ export function saveFollowUpApi(data: Record<string, any>) {
     url: "patient/follow-up/save",
     method: "post",
     data
+  })
+}
+
+/** 保存后续随访草稿 */
+export function saveFollowUpDraftApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "patient/follow-up/draft",
+    method: "post",
+    data
+  })
+}
+
+/** 查询后续随访草稿 */
+export function getFollowUpDraftApi(patientId: number) {
+  return request<ApiResponseData<any>>({
+    url: `patient/follow-up/draft/${patientId}`,
+    method: "get"
   })
 }
 

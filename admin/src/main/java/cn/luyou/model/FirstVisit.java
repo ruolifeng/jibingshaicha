@@ -57,4 +57,6 @@ public class FirstVisit extends BaseEntity {
     private String remarks;
     /** V15 附件图片URL（JSON数组字符串，2~6 张） */
     private String attachmentUrls;
+    /** 状态：0草稿 1已完成 */
+    private Integer status;
 }

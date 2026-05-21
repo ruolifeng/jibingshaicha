@@ -140,21 +140,42 @@ public class PatientController {
 
     // ==================== 首次随访 ====================
 
+    @Operation(summary = "保存首次随访草稿（部分填写即可）")
+    @PostMapping("/first-visit/draft")
+    public ResultResponse<Void> saveFirstVisitDraft(@RequestBody FirstVisit firstVisit) {
+        if (firstVisit.getPatientId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
+        }
+        mergeExistingFirstVisitId(firstVisit);
+        FirstVisit existing = firstVisit.getId() != null
+                ? firstVisitService.getById(firstVisit.getId())
+                : firstVisitService.lambdaQuery().eq(FirstVisit::getPatientId, firstVisit.getPatientId()).one();
+        if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "首次随访已完成，请直接保存正式记录");
+        }
+        firstVisit.setStatus(0);
+        firstVisitService.saveOrUpdate(firstVisit);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "保存首次随访")
     @PostMapping("/first-visit/save")
     public ResultResponse<Void> saveFirstVisit(@RequestBody FirstVisit firstVisit) {
         validateFirstVisitRequired(firstVisit);
-        // 若已存在首次随访记录则更新，避免唯一键冲突
-        if (firstVisit.getId() == null && firstVisit.getPatientId() != null) {
-            FirstVisit existing = firstVisitService.lambdaQuery()
-                    .eq(FirstVisit::getPatientId, firstVisit.getPatientId())
-                    .one();
-            if (existing != null) {
-                firstVisit.setId(existing.getId());
-            }
-        }
+        mergeExistingFirstVisitId(firstVisit);
+        firstVisit.setStatus(1);
         firstVisitService.saveOrUpdate(firstVisit);
         return ResultRes.success(null);
+    }
+
+    private void mergeExistingFirstVisitId(FirstVisit firstVisit) {
+        if (firstVisit.getId() != null || firstVisit.getPatientId() == null) return;
+        FirstVisit existing = firstVisitService.lambdaQuery()
+                .eq(FirstVisit::getPatientId, firstVisit.getPatientId())
+                .one();
+        if (existing != null) {
+            firstVisit.setId(existing.getId());
+        }
     }
 
     private static final List<String> FIRST_VISIT_EDUCATION_ITEMS = List.of(
@@ -250,24 +271,79 @@ public class PatientController {
 
     // ==================== 后续随访 ====================
 
+    @Operation(summary = "查询后续随访草稿")
+    @GetMapping("/follow-up/draft/{patientId}")
+    public ResultResponse<FollowUpVisit> getFollowUpDraft(@PathVariable Long patientId) {
+        FollowUpVisit draft = followUpVisitService.lambdaQuery()
+                .eq(FollowUpVisit::getPatientId, patientId)
+                .eq(FollowUpVisit::getStatus, 0)
+                .orderByDesc(FollowUpVisit::getUpdateTime)
+                .last("LIMIT 1")
+                .one();
+        return ResultRes.success(draft);
+    }
+
+    @Operation(summary = "保存后续随访草稿（部分填写即可）")
+    @PostMapping("/follow-up/draft")
+    public ResultResponse<Void> saveFollowUpDraft(@RequestBody FollowUpVisit followUpVisit) {
+        if (followUpVisit.getPatientId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
+        }
+        FollowUpVisit existingDraft = followUpVisitService.lambdaQuery()
+                .eq(FollowUpVisit::getPatientId, followUpVisit.getPatientId())
+                .eq(FollowUpVisit::getStatus, 0)
+                .one();
+        if (existingDraft != null) {
+            followUpVisit.setId(existingDraft.getId());
+        } else {
+            followUpVisit.setId(null);
+        }
+        followUpVisit.setStatus(0);
+        followUpVisit.setVisitSeq(null);
+        followUpVisitService.saveOrUpdate(followUpVisit);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "保存后续随访")
     @PostMapping("/follow-up/save")
     public ResultResponse<Void> saveFollowUp(@RequestBody FollowUpVisit followUpVisit) {
+        if (followUpVisit.getPatientId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
+        }
+        if (followUpVisit.getVisitDate() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访时间");
+        }
+        if (followUpVisit.getId() != null) {
+            FollowUpVisit existing = followUpVisitService.getById(followUpVisit.getId());
+            if (existing != null && Integer.valueOf(0).equals(existing.getStatus())) {
+                followUpVisit.setStatus(1);
+                followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));
+                followUpVisitService.updateById(followUpVisit);
+                return ResultRes.success(null);
+            }
+        }
         followUpVisit.setId(null);
-        // 自动计算本次随访是第几次（visitSeq = 已有记录数 + 1）
-        long count = followUpVisitService.lambdaQuery()
-                .eq(FollowUpVisit::getPatientId, followUpVisit.getPatientId())
-                .count();
-        followUpVisit.setVisitSeq((int) count + 1);
+        followUpVisit.setStatus(1);
+        followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));
         followUpVisitService.save(followUpVisit);
         return ResultRes.success(null);
+    }
+
+    private int nextFollowUpSeq(Long patientId) {
+        long count = followUpVisitService.lambdaQuery()
+                .eq(FollowUpVisit::getPatientId, patientId)
+                .eq(FollowUpVisit::getStatus, 1)
+                .count();
+        return (int) count + 1;
     }
 
     @Operation(summary = "后续随访列表")
     @GetMapping("/follow-up/list/{patientId}")
     public ResultResponse<List<FollowUpVisit>> listFollowUp(@PathVariable Long patientId) {
         LambdaQueryWrapper<FollowUpVisit> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(FollowUpVisit::getPatientId, patientId).orderByAsc(FollowUpVisit::getCreateTime);
+        wrapper.eq(FollowUpVisit::getPatientId, patientId)
+                .eq(FollowUpVisit::getStatus, 1)
+                .orderByAsc(FollowUpVisit::getCreateTime);
         return ResultRes.success(followUpVisitService.list(wrapper));
     }
 
@@ -284,7 +360,9 @@ public class PatientController {
     @GetMapping("/medication/{patientId}")
     public ResultResponse<MedicationManagement> getMedication(@PathVariable Long patientId) {
         LambdaQueryWrapper<MedicationManagement> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(MedicationManagement::getPatientId, patientId).last("LIMIT 1");
+        wrapper.eq(MedicationManagement::getPatientId, patientId)
+                .orderByDesc(MedicationManagement::getCreateTime)
+                .last("LIMIT 1");
         return ResultRes.success(medicationManagementService.getOne(wrapper));
     }
 

@@ -25,6 +25,7 @@ public class AuthWebMvcConfigurer implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/user/login",
                         "/file/serve/**",
+                        "/questionnaire/public/**",
                         "/doc.html",
                         "/webjars/**",
                         "/v3/api-docs/**",

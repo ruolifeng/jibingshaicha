@@ -12,6 +12,7 @@ import {
   getDistrictStatisticsApi,
   getSchoolStatisticsApi
 } from "./apis"
+import QuestionnairePanel from "./components/QuestionnairePanel.vue"
 
 defineOptions({ name: "Statistics" })
 
@@ -273,8 +274,8 @@ onMounted(() => {
 
 <template>
   <div class="app-container">
-    <!-- 筛选条件 -->
-    <el-card shadow="never" class="mb-4">
+    <!-- 筛选条件（问卷 Tab 不需要年份/区县筛选） -->
+    <el-card v-if="activeTab !== 'questionnaire'" shadow="never" class="mb-4">
       <el-form :model="filterForm" inline>
         <el-form-item label="年份">
           <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">
@@ -450,6 +451,11 @@ onMounted(() => {
             </p>
             <el-button type="primary" @click="handleExportAllLatent">导出潜伏感染者信息总表</el-button>
           </el-card>
+        </el-tab-pane>
+
+        <!-- 筛查问卷 -->
+        <el-tab-pane label="筛查问卷" name="questionnaire">
+          <QuestionnairePanel />
         </el-tab-pane>
       </el-tabs>
     </el-card>

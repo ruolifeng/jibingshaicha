@@ -44,6 +44,7 @@ import {
   exportPatientListApi,
   importEpidemicApi,
   saveFirstVisitApi,
+  saveFirstVisitDraftApi,
   saveMedicationApi
 } from "./apis"
 
@@ -338,7 +339,9 @@ async function viewNotice(row: any) {
 // ==================== 首次随访 ====================
 const firstVisitDialogVisible = ref(false)
 const firstVisitRow = ref<any>(null)
+const firstVisitCompleted = ref(false)
 const firstVisitForm = reactive({
+  id: undefined as number | undefined,
   visitDate: "",
   visitMethod: "",
   patientType: "",
@@ -366,7 +369,9 @@ const firstVisitForm = reactive({
 
 function openFirstVisitDialog(row: any) {
   firstVisitRow.value = row
+  firstVisitCompleted.value = false
   Object.assign(firstVisitForm, {
+    id: undefined,
     visitDate: "",
     visitMethod: "",
     patientType: "",
@@ -391,18 +396,49 @@ function openFirstVisitDialog(row: any) {
     attachmentUrls: ""
   })
   firstVisitDialogVisible.value = true
+  loadFirstVisitForm(row.id)
+}
+
+async function loadFirstVisitForm(patientId: number) {
+  try {
+    const { data } = await getFirstVisitApi(patientId)
+    if (!data) return
+    firstVisitCompleted.value = data.status === 1
+    Object.assign(firstVisitForm, {
+      ...data,
+      symptoms: data.symptoms ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+      drugForm: data.drugForm ? String(data.drugForm).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+      educationItems: data.educationItems
+        ? (typeof data.educationItems === "string" ? JSON.parse(data.educationItems) : data.educationItems)
+        : {},
+      attachmentUrls: data.attachmentUrls ?? ""
+    })
+  } catch { /* 首次填写 */ }
+}
+
+function buildFirstVisitPayload() {
+  return {
+    patientId: firstVisitRow.value.id,
+    populationType: "school",
+    ...firstVisitForm,
+    symptoms: firstVisitForm.symptoms.join(","),
+    drugForm: firstVisitForm.drugForm.join(","),
+    educationItems: JSON.stringify(firstVisitForm.educationItems)
+  }
+}
+
+async function handleSaveFirstVisitDraft() {
+  try {
+    await saveFirstVisitDraftApi(buildFirstVisitPayload())
+    ElMessage.success("首次随访草稿已保存")
+    firstVisitDialogVisible.value = false
+    fetchData()
+  } catch { /* handled */ }
 }
 
 async function handleSaveFirstVisit() {
   try {
-    await saveFirstVisitApi({
-      patientId: firstVisitRow.value.id,
-      populationType: "school",
-      ...firstVisitForm,
-      symptoms: firstVisitForm.symptoms.join(","),
-      drugForm: firstVisitForm.drugForm.join(","),
-      educationItems: JSON.stringify(firstVisitForm.educationItems)
-    })
+    await saveFirstVisitApi(buildFirstVisitPayload())
     ElMessage.success("首次随访保存成功")
     firstVisitDialogVisible.value = false
     fetchData()
@@ -1277,6 +1313,9 @@ watch(
       <template #footer>
         <el-button @click="firstVisitDialogVisible = false">
           取消
+        </el-button>
+        <el-button v-if="!firstVisitCompleted" @click="handleSaveFirstVisitDraft">
+          保存草稿
         </el-button>
         <el-button type="primary" @click="handleSaveFirstVisit">
           保存

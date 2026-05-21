@@ -13,14 +13,13 @@ import cn.luyou.mapper.SupervisionFormMapper;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.SupervisionFormService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 @Service
-@RequiredArgsConstructor
 public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMapper, SupervisionForm>
         implements SupervisionFormService {
 
@@ -28,6 +27,17 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
+
+    public SupervisionFormServiceImpl(
+            @Lazy LatentInfectionService latentInfectionService,
+            ScreeningSchoolMapper screeningSchoolMapper,
+            ScreeningKeyPopulationMapper screeningKeyPopulationMapper,
+            ScreeningCloseContactMapper screeningCloseContactMapper) {
+        this.latentInfectionService = latentInfectionService;
+        this.screeningSchoolMapper = screeningSchoolMapper;
+        this.screeningKeyPopulationMapper = screeningKeyPopulationMapper;
+        this.screeningCloseContactMapper = screeningCloseContactMapper;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -42,6 +52,11 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
     public void saveAndArchive(SupervisionForm form) {
         form.setStatus(2);
         form.setArchivedTime(LocalDateTime.now());
+
+        // V5：根据治疗方案推断是否进行预防性治疗，供筛查表回写
+        if (StrUtil.isBlank(form.getHasPreventiveTreatment()) && StrUtil.isNotBlank(form.getTreatmentPlan())) {
+            form.setHasPreventiveTreatment("不服药".equals(form.getTreatmentPlan()) ? "否" : "是");
+        }
 
         // V5 兼容：将新字段回填到旧字段，保持筛查表回写兼容
         if (StrUtil.isBlank(form.getPreventiveManager()) && StrUtil.isNotBlank(form.getManagingUnit())) {

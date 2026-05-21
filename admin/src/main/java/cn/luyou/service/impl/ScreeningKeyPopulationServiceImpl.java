@@ -225,8 +225,56 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             latentInfectionService.saveBatch(allLatent, 500);
             log.info("自动创建重点人群潜伏感染记录 {} 条", allLatent.size());
         }
+        syncLatentFromScreening(toUpdate);
 
         return result;
+    }
+
+    /**
+     * 增量导入时，将胸片与首次诊断同步到已存在的潜伏感染记录，
+     * 避免筛查表已更新但待诊断列表仍为空的情况。
+     */
+    private void syncLatentFromScreening(List<ScreeningKeyPopulation> records) {
+        for (ScreeningKeyPopulation d : records) {
+            if (d.getIsLatent() != 1 || d.getId() == null) continue;
+            String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
+            LatentInfection latent = latentInfectionService.lambdaQuery()
+                    .eq(LatentInfection::getScreeningId, d.getId())
+                    .eq(LatentInfection::getPopulationType, popType)
+                    .eq(LatentInfection::getArchived, 0)
+                    .isNull(LatentInfection::getReferralResult)
+                    .last("LIMIT 1")
+                    .one();
+            if (latent == null) continue;
+
+            boolean directXray = hasDirectXrayAndDiagnosis(d);
+            var update = latentInfectionService.lambdaUpdate()
+                    .eq(LatentInfection::getId, latent.getId());
+            boolean changed = false;
+            if (StrUtil.isNotBlank(d.getHasChestXray())) {
+                update.set(LatentInfection::getHasChestXray, d.getHasChestXray());
+                changed = true;
+            }
+            if (d.getChestXrayDate() != null) {
+                update.set(LatentInfection::getChestXrayDate, d.getChestXrayDate());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getChestXrayResult())) {
+                update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
+                update.set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
+                changed = true;
+            }
+            if (directXray && Integer.valueOf(0).equals(latent.getTrackingStatus())) {
+                update.set(LatentInfection::getTrackingStatus, 1);
+                changed = true;
+            }
+            if (changed) {
+                update.update();
+            }
+        }
     }
 
     @Override

@@ -54,6 +54,10 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private Boolean hasFirstVisit;
 
+    /** 首次随访状态（非数据库字段）：0草稿 1已完成 null无记录 */
+    @TableField(exist = false)
+    private Integer firstVisitStatus;
+
     /** 胸片检查日期（非数据库字段，从筛查表关联填充） */
     @TableField(exist = false)
     private LocalDate chestXrayDate;
@@ -73,4 +77,12 @@ public class Patient extends BaseEntity {
     /** 感染筛查结果（非数据库字段，从筛查表关联填充） */
     @TableField(exist = false)
     private String infectionResult;
+
+    /** 人群分类（非数据库字段，专病网导入时从 epidemicData 解析） */
+    @TableField(exist = false)
+    private String crowdCategory;
+
+    /** 现管单位（非数据库字段，专病网导入时从 epidemicData 解析） */
+    @TableField(exist = false)
+    private String currentManagementUnit;
 }

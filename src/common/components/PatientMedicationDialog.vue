@@ -11,6 +11,8 @@ import { completeMedicationApi, getMedicationApi, saveMedicationApi } from "@/pa
 const props = defineProps<{
   visible: boolean
   patientRow: Record<string, any> | null
+  /** 只读模式：归档后仅查看，不可编辑 */
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +30,9 @@ const medicationForm = reactive({
 
 const calendarMonth = ref(new Date())
 const saving = ref(false)
+const draftSaving = ref(false)
 const printVisible = ref(false)
+const formId = ref<number | undefined>(undefined)
 
 const calendarDays = computed(() => {
   const year = calendarMonth.value.getFullYear()
@@ -63,6 +67,7 @@ function nextMonth() {
 }
 
 function toggleDate(dateStr: string) {
+  if (props.readOnly) return
   const idx = medicationForm.checkedDates.indexOf(dateStr)
   if (idx >= 0) medicationForm.checkedDates.splice(idx, 1)
   else medicationForm.checkedDates.push(dateStr)
@@ -73,6 +78,7 @@ function isDateChecked(dateStr: string) {
 }
 
 function resetForm() {
+  formId.value = undefined
   medicationForm.managementMethod = ""
   medicationForm.supervisor = ""
   medicationForm.sputumResult = ""
@@ -87,6 +93,7 @@ async function loadMedication() {
   try {
     const { data } = await getMedicationApi(props.patientRow.id)
     if (data) {
+      formId.value = data.id
       medicationForm.managementMethod = data.managementMethod || ""
       medicationForm.supervisor = data.supervisor || ""
       medicationForm.sputumResult = data.sputumResult || ""
@@ -115,19 +122,38 @@ function close() {
   emit("update:visible", false)
 }
 
+function buildSaveData() {
+  return {
+    ...(formId.value ? { id: formId.value } : {}),
+    patientId: props.patientRow!.id,
+    populationType: props.patientRow!.populationType,
+    managementMethod: medicationForm.managementMethod,
+    supervisor: medicationForm.supervisor,
+    sputumResult: medicationForm.sputumResult,
+    stopDate: medicationForm.stopDate,
+    medicationRecords: JSON.stringify([...medicationForm.checkedDates].sort())
+  }
+}
+
+/** 保存草稿：仅保存数据，不归档患者 */
+async function handleSaveDraft() {
+  if (!props.patientRow || draftSaving.value) return
+  draftSaving.value = true
+  try {
+    await saveMedicationApi(buildSaveData())
+    ElMessage.success("服药管理草稿已保存")
+    close()
+    emit("success")
+  } catch { /* handled */ } finally {
+    draftSaving.value = false
+  }
+}
+
 async function handleSave() {
   if (!props.patientRow || saving.value) return
   saving.value = true
   try {
-    const saveData: Record<string, any> = {
-      patientId: props.patientRow.id,
-      populationType: props.patientRow.populationType,
-      managementMethod: medicationForm.managementMethod,
-      supervisor: medicationForm.supervisor,
-      sputumResult: medicationForm.sputumResult,
-      stopDate: medicationForm.stopDate,
-      medicationRecords: JSON.stringify([...medicationForm.checkedDates].sort())
-    }
+    const saveData = buildSaveData()
     if (medicationForm.stopDate) {
       await completeMedicationApi(saveData)
       ElMessage.success("服药管理完成，患者已归档")
@@ -146,7 +172,7 @@ async function handleSave() {
 <template>
   <el-dialog
     :model-value="visible"
-    :title="`服药管理${patientRow?.name ? ' — ' + patientRow.name : ''}`"
+    :title="`${readOnly ? '查看服药管理' : '服药管理'}${patientRow?.name ? ' — ' + patientRow.name : ''}`"
     width="700px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
@@ -155,9 +181,9 @@ async function handleSave() {
       <el-form-item label="每日服药记录">
         <div class="med-calendar">
           <div class="med-calendar-header">
-            <el-button text @click="prevMonth">&lt;</el-button>
+            <el-button text :disabled="false" @click="prevMonth">&lt;</el-button>
             <span class="med-calendar-title">{{ calendarTitle }}</span>
-            <el-button text @click="nextMonth">&gt;</el-button>
+            <el-button text :disabled="false" @click="nextMonth">&gt;</el-button>
           </div>
           <div class="med-calendar-weekdays">
             <span v-for="w in ['日', '一', '二', '三', '四', '五', '六']" :key="w">{{ w }}</span>
@@ -167,7 +193,7 @@ async function handleSave() {
               v-for="(cell, idx) in calendarDays"
               :key="idx"
               class="med-calendar-cell"
-              :class="{ blank: cell.blank, checked: !cell.blank && isDateChecked(cell.date) }"
+              :class="{ blank: cell.blank, checked: !cell.blank && isDateChecked(cell.date), readonly: readOnly }"
               @click="!cell.blank && toggleDate(cell.date)"
             >
               <template v-if="!cell.blank">
@@ -182,17 +208,17 @@ async function handleSave() {
         </div>
       </el-form-item>
       <el-form-item label="管理方式">
-        <el-select v-model="medicationForm.managementMethod" placeholder="请选择" style="width: 100%">
+        <el-select v-model="medicationForm.managementMethod" placeholder="请选择" style="width: 100%" :disabled="readOnly">
           <el-option v-for="item in MANAGEMENT_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
         </el-select>
       </el-form-item>
       <el-form-item label="督导人员">
-        <el-select v-model="medicationForm.supervisor" placeholder="请选择" style="width: 100%">
+        <el-select v-model="medicationForm.supervisor" placeholder="请选择" style="width: 100%" :disabled="readOnly">
           <el-option v-for="item in SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" />
         </el-select>
       </el-form-item>
       <el-form-item label="治疗前痰菌检查">
-        <el-select v-model="medicationForm.sputumResult" placeholder="请选择" style="width: 100%">
+        <el-select v-model="medicationForm.sputumResult" placeholder="请选择" style="width: 100%" :disabled="readOnly">
           <el-option v-for="item in SPUTUM_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
         </el-select>
       </el-form-item>
@@ -203,18 +229,24 @@ async function handleSave() {
           placeholder="填写后患者将归档"
           value-format="YYYY-MM-DD"
           style="width: 100%"
+          :disabled="readOnly"
         />
       </el-form-item>
-      <el-alert v-if="medicationForm.stopDate" type="warning" :closable="false">
-        填写停止完成时间后，该患者将从患者管理列表移除，放入历史患者。
+      <el-alert v-if="!readOnly && medicationForm.stopDate" type="warning" :closable="false">
+        已填写停止完成时间。点击「保存草稿」仅暂存数据；点击「完成并归档」后，患者将从在管列表移入历史患者。
       </el-alert>
     </el-form>
     <template #footer>
-      <el-button @click="close">取消</el-button>
+      <el-button @click="close">{{ readOnly ? "关闭" : "取消" }}</el-button>
       <el-button @click="printVisible = true">打印治疗记录卡</el-button>
-      <el-button type="primary" :loading="saving" @click="handleSave">
-        {{ medicationForm.stopDate ? "完成并归档" : "保存" }}
-      </el-button>
+      <template v-if="!readOnly">
+        <el-button type="primary" plain :loading="draftSaving" :disabled="saving" @click="handleSaveDraft">
+          保存草稿
+        </el-button>
+        <el-button type="primary" :loading="saving" :disabled="draftSaving" @click="handleSave">
+          {{ medicationForm.stopDate ? "完成并归档" : "保存" }}
+        </el-button>
+      </template>
     </template>
   </el-dialog>
 
@@ -283,7 +315,15 @@ async function handleSave() {
       color: #fff;
     }
 
-    &:not(.blank):hover {
+    &.readonly {
+      cursor: default;
+
+      &:not(.blank):hover {
+        border-color: #e4e7ed;
+      }
+    }
+
+    &:not(.blank):not(.readonly):hover {
       border-color: #409eff;
     }
 

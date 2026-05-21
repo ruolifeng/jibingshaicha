@@ -9,8 +9,8 @@ import {
 
 defineOptions({ name: "CloseContactMonitoring" })
 
-/** 监测随访子 Tab：未做（随访监测）/ 未发现异常 */
-const activeMonitoringTab = ref<"notDone" | "normal">("notDone")
+/** 监测随访子 Tab：6/12/24月随访监测 / 未发现异常3月复查 */
+const activeMonitoringTab = ref<"followup" | "normal">("followup")
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -19,9 +19,10 @@ const tableData = ref<any[]>([])
 const total = ref(0)
 const searchForm = reactive({ name: "", idNumber: "" })
 
-const MONITORING_RESULT_MAP: Record<string, string> = {
-  notDone: "未做",
-  normal: "未发现异常"
+const MONITORING_QUERY_MAP: Record<"followup" | "normal", { ccStatus?: number, finalScreeningResult?: string }> = {
+  /** 含「未做」及潜伏感染者未完成治疗转入的 6/12/24 月随访监测 */
+  followup: { ccStatus: 4 },
+  normal: { finalScreeningResult: "未发现异常" }
 }
 
 const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
@@ -57,12 +58,13 @@ function checkActiveInFollowup(row: any): number | null {
 async function fetchData() {
   loading.value = true
   try {
+    const query = MONITORING_QUERY_MAP[activeMonitoringTab.value]
     const { data } = await getScreeningCloseContactListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       name: searchForm.name || undefined,
       idNumber: searchForm.idNumber || undefined,
-      finalScreeningResult: MONITORING_RESULT_MAP[activeMonitoringTab.value]
+      ...query
     })
     tableData.value = data.records
     total.value = data.total
@@ -149,8 +151,13 @@ const FOLLOWUP_RESULT_OPTIONS = ["活动性肺结核", "潜伏感染者", "未�
 const FOLLOWUP_MONTHS = [6, 12, 24]
 
 function viewFollowupDetail(row: any) {
-  followupDetailRow.value = row
-  followupDetailVisible.value = true
+  getScreeningCloseContactDetailApi(row.id).then(({ data }) => {
+    followupDetailRow.value = data || row
+    followupDetailVisible.value = true
+  }).catch(() => {
+    followupDetailRow.value = row
+    followupDetailVisible.value = true
+  })
 }
 
 function openFollowupInput(row: any, month: number) {
@@ -205,7 +212,7 @@ async function handleSaveFollowupInput() {
   <div class="app-container">
     <!-- 子 Tab：未做 / 未发现异常 -->
     <el-tabs v-model="activeMonitoringTab" class="mb-4" @tab-change="() => { paginationData.currentPage = 1; fetchData() }">
-      <el-tab-pane label="未做（6/12/24月随访监测）" name="notDone" />
+      <el-tab-pane label="6/12/24月随访监测" name="followup" />
       <el-tab-pane label="未发现异常（3月复查）" name="normal" />
     </el-tabs>
 
@@ -229,16 +236,17 @@ async function handleSaveFollowupInput() {
       </el-form>
     </el-card>
 
-    <!-- 未做（6/12/24月随访监测） -->
-    <el-card v-if="activeMonitoringTab === 'notDone'" shadow="never">
+    <!-- 6/12/24月随访监测（含「未做」及潜伏感染者未完成治疗转入） -->
+    <el-card v-if="activeMonitoringTab === 'followup'" shadow="never">
       <template #header>
-        <span class="text-lg font-bold">密接人群 — 未做（6/12/24月随访监测）</span>
+        <span class="text-lg font-bold">密接人群 — 6/12/24月随访监测</span>
       </template>
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="idNumber" label="身份证号" />
         <el-table-column prop="registrationDate" label="登记日期" />
         <el-table-column prop="sourcePatientName" label="原患者" />
+        <el-table-column prop="finalScreeningResult" label="筛查分类" min-width="110" show-overflow-tooltip />
         <el-table-column label="6月随访">
           <template #default="{ row }">
             <div class="text-xs text-gray-400">

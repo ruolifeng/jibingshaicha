@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
+import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
@@ -20,6 +21,7 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
+import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -36,6 +38,7 @@ import {
   saveCheckApi,
   saveFollowUpApi,
   saveSupervisionApi,
+  saveNoticeDraftApi,
   sendNoticeApi,
   setMedicationStatusApi,
   submitXrayApi,
@@ -289,6 +292,12 @@ function getNowDateStr() {
 
 function openNoticeDialog(row: any) {
   noticeRow.value = row
+  resetNoticeFormFromRow(row)
+  noticeDialogVisible.value = true
+  loadNoticeDraft(row)
+}
+
+function resetNoticeFormFromRow(row: any) {
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "",
     gender: row.gender || "",
@@ -310,7 +319,69 @@ function openNoticeDialog(row: any) {
     issuedTime: getNowDateStr(),
     receiverOrgId: undefined
   })
-  noticeDialogVisible.value = true
+}
+
+async function loadNoticeDraft(row: any) {
+  if (row.noticeSent) return
+  try {
+    const { data } = await getNoticeListByBizApi(row.id, "latent")
+    const notice = data?.[0]
+    if (!notice) return
+    if (notice.status !== 0 && notice.status !== 2) return
+    Object.assign(noticeForm, {
+      idNumber: notice.idNumber || row.idNumber || "",
+      gender: notice.gender || row.gender || "",
+      birthDate: notice.birthDate || row.birthDate || "",
+      age: notice.age ?? row.age ?? null,
+      phone: notice.phone || row.phone || "",
+      ethnicity: notice.ethnicity || row.ethnicity || "",
+      crowdCategory: notice.crowdCategory || row.crowdCategory || "",
+      currentAddress: notice.currentAddress || row.currentAddress || "",
+      householdAddress: notice.householdAddress || row.householdAddress || "",
+      infectionDate: notice.infectionDate || row.screenDate || "",
+      infectionMethod: notice.infectionMethod || row.screenMethod || "",
+      infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
+      chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
+      chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
+      treatmentInstitution: notice.treatmentInstitution || "",
+      issuedTime: notice.issuedTime || getNowDateStr(),
+      receiverOrgId: notice.receiverOrgId || undefined
+    })
+    const tp = notice.treatmentPlan || ""
+    if (tp && !TREATMENT_PLAN_OPTIONS.includes(tp)) {
+      noticeForm.treatmentPlan = "个体化方案"
+      noticeForm.customPlanDetail = notice.customPlanDetail || tp
+    } else {
+      noticeForm.treatmentPlan = tp
+      noticeForm.customPlanDetail = notice.customPlanDetail || ""
+    }
+  } catch { /* ignore */ }
+}
+
+function buildNoticePayload() {
+  return {
+    noticeType: "latent",
+    populationType: POPULATION_TYPE,
+    bizId: noticeRow.value.id,
+    patientName: noticeRow.value.name,
+    ...noticeForm,
+    treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+    senderId: userStore.userId
+  }
+}
+
+async function handleSaveNoticeDraft() {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    noticeForm.issuedTime = getNowDateStr()
+    await saveNoticeDraftApi(buildNoticePayload())
+    ElMessage.success("通知单草稿已保存")
+    noticeDialogVisible.value = false
+    fetchData()
+  } catch { /* handled by interceptor */ } finally {
+    submitting.value = false
+  }
 }
 
 async function handleSendNotice() {
@@ -320,15 +391,7 @@ async function handleSendNotice() {
   submitting.value = true
   try {
     noticeForm.issuedTime = getNowDateStr()
-    await sendNoticeApi({
-      noticeType: "latent",
-      populationType: POPULATION_TYPE,
-      bizId: noticeRow.value.id,
-      patientName: noticeRow.value.name,
-      ...noticeForm,
-      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
-      senderId: userStore.userId
-    })
+    await sendNoticeApi(buildNoticePayload())
     ElMessage.success("通知单发送成功")
     noticeDialogVisible.value = false
     fetchData()
@@ -381,28 +444,45 @@ function beforeAttachmentUpload(file: File) {
   return true
 }
 
-function handleAttachmentSuccess(response: any, uploadFile: any) {
-  if (response.code === 200) {
-    attachmentFileList.value.push({ name: uploadFile.name, url: import.meta.env.VITE_BASE_URL + response.data })
+function syncAttachmentFileList(uploadFiles: { name: string, url?: string, status?: string }[]) {
+  attachmentFileList.value = uploadFiles
+    .filter(file => file.status === "success" && file.url)
+    .map((file, index) => ({
+      name: file.name || getAttachmentLabel(file.url!, index),
+      url: file.url!
+    }))
+}
+
+function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
+  if (response?.code === 200 && response?.data) {
+    uploadFile.url = resolveFileUrl(response.data)
+    uploadFile.status = "success"
+    syncAttachmentFileList(uploadFiles)
   } else {
-    ElMessage.error(response.msg || "附件上传失败")
+    uploadFile.status = "fail"
+    ElMessage.error(response?.msg || "附件上传失败")
   }
 }
 
-function handleAttachmentRemove(uploadFile: { name: string }) {
-  attachmentFileList.value = attachmentFileList.value.filter((f: { name: string, url: string }) => f.name !== uploadFile.name)
+function handleAttachmentChange(_uploadFile: any, uploadFiles: any[]) {
+  syncAttachmentFileList(uploadFiles)
+}
+
+function handleAttachmentRemove(uploadFile: { name: string, url?: string }) {
+  attachmentFileList.value = attachmentFileList.value.filter(
+    (f: { name: string, url: string }) => f.url !== uploadFile.url && f.name !== uploadFile.name
+  )
 }
 
 function handleAttachmentError() {
   ElMessage.error("附件上传失败，请重试")
 }
 
-function getAttachmentLabel(url: string, index: number | string): string {
-  try {
-    const match = url.match(/[?&]name=([^&]+)/)
-    if (match) return decodeURIComponent(match[1])
-  } catch { /* ignore */ }
-  return `附件${Number(index) + 1}`
+function loadAttachmentFileList(urls?: string) {
+  attachmentFileList.value = parseAttachmentUrls(urls).map((url, index) => ({
+    name: getAttachmentLabel(url, index),
+    url
+  }))
 }
 
 const supervisionForm = reactive({
@@ -1032,6 +1112,9 @@ watch(
         <el-button @click="noticeDialogVisible = false">
           取消
         </el-button>
+        <el-button :loading="submitting" @click="handleSaveNoticeDraft">
+          保存草稿
+        </el-button>
         <el-button type="primary" :loading="submitting" @click="handleSendNotice">
           发送通知单
         </el-button>
@@ -1266,6 +1349,7 @@ watch(
             :file-list="attachmentFileList"
             :before-upload="beforeAttachmentUpload"
             :on-success="handleAttachmentSuccess"
+            :on-change="handleAttachmentChange"
             :on-remove="handleAttachmentRemove"
             :on-error="handleAttachmentError"
             multiple
@@ -1365,14 +1449,7 @@ watch(
           {{ supervisionDetailData.remark || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="附件">
-          <template v-if="supervisionDetailData.attachmentUrls">
-            <div v-for="(url, i) in supervisionDetailData.attachmentUrls.split(',')" :key="url">
-              <a :href="url" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline break-all">
-                {{ getAttachmentLabel(url, i) }}
-              </a>
-            </div>
-          </template>
-          <span v-else>-</span>
+          <AttachmentPreviewList :urls="supervisionDetailData.attachmentUrls" />
         </el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="supervisionDetailData.status === 2 ? 'success' : 'info'" size="small">

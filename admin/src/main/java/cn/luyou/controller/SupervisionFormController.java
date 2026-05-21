@@ -40,17 +40,14 @@ public class SupervisionFormController {
         if (StrUtil.isBlank(form.getPopulationType())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少人群类型");
         }
-        if (StrUtil.isBlank(form.getHasPreventiveTreatment())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择是否开始预防性治疗");
-        }
-        if (StrUtil.isBlank(form.getTreatmentPlan())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择治疗方案");
-        }
-        if (form.getTreatmentStartDate() == null) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择治疗开始时间");
-        }
-        if (StrUtil.isBlank(form.getManagingUnit())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请输入管理单位");
+        // 归档时校验必填项；草稿允许部分填写
+        if (Integer.valueOf(2).equals(form.getStatus())) {
+            if (StrUtil.isBlank(form.getTreatmentPlan())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择治疗方案");
+            }
+            if (form.getTreatmentStartDate() == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择开始治疗时间");
+            }
         }
     }
 

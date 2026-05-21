@@ -76,6 +76,12 @@ watch(() => props.visible, (val) => {
         <el-descriptions-item label="诊断结果">
           {{ detail.diagnosisResult || "-" }}
         </el-descriptions-item>
+        <el-descriptions-item v-if="detail.populationType === 'specialDisease'" label="人群分类">
+          {{ detail.crowdCategory || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item v-if="detail.populationType === 'specialDisease'" label="现管单位">
+          {{ detail.currentManagementUnit || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="通知单状态">
           <template v-if="detail.noticeStatus == null">
             未发送
@@ -85,7 +91,11 @@ watch(() => props.visible, (val) => {
           </template>
         </el-descriptions-item>
         <el-descriptions-item label="首次随访">
-          {{ detail.hasFirstVisit ? "已完成" : "未完成" }}
+          {{
+            detail.firstVisitStatus === 1
+              ? "已完成"
+              : (detail.firstVisitStatus === 0 ? "草稿" : "未完成")
+          }}
         </el-descriptions-item>
         <el-descriptions-item label="胸片检查时间">
           {{ detail.chestXrayDate || "-" }}

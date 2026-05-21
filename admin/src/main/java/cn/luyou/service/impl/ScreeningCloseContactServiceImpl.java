@@ -131,6 +131,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         for (ScreeningCloseContact d : dataList) {
             if (StrUtil.isBlank(d.getIdNumber())) {
                 determineStatus(d);
+                if (Integer.valueOf(4).equals(d.getCcStatus())) {
+                    ensureFollowupDueDates(d);
+                }
                 toInsert.add(d);
                 continue;
             }
@@ -141,9 +144,15 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             if (existing != null) {
                 mergeFollowupData(existing, d);
                 determineStatus(existing);
+                if (Integer.valueOf(4).equals(existing.getCcStatus())) {
+                    ensureFollowupDueDates(existing);
+                }
                 toUpdate.add(existing);
             } else {
                 determineStatus(d);
+                if (Integer.valueOf(4).equals(d.getCcStatus())) {
+                    ensureFollowupDueDates(d);
+                }
                 toInsert.add(d);
             }
         }
@@ -247,6 +256,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             data.setCcStatus(2); // 潜伏感染者-管理中
         } else if (RESULT_NOT_DONE.equals(result)) {
             data.setCcStatus(4); // 随访监测中
+            ensureFollowupDueDates(data);
         } else if (RESULT_NORMAL.equals(result)) {
             data.setCcStatus(6); // 未发现异常-待3月复查
         } else {
@@ -314,11 +324,63 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     .in(Notice::getBizId, ids)
                     .eq(Notice::getNoticeType, "latent")
                     .eq(Notice::getPopulationType, "closeContact")
+                    .ge(Notice::getStatus, 1)
                     .list()
                     .stream().map(Notice::getBizId).toList());
             records.forEach(r -> r.setNoticeSent(sentBizIds.contains(r.getId())));
+            // 补全随访到期日（含潜伏感染者未完成治疗转入随访监测的记录）
+            List<ScreeningCloseContact> dueDateUpdates = new ArrayList<>();
+            for (ScreeningCloseContact r : records) {
+                if (r.getCcStatus() != null && (r.getCcStatus() == 4 || r.getCcStatus() == 5)) {
+                    if (ensureFollowupDueDates(r)) {
+                        dueDateUpdates.add(r);
+                    }
+                }
+            }
+            if (!dueDateUpdates.isEmpty()) {
+                updateBatchById(dueDateUpdates, 500);
+            }
         }
         return result;
+    }
+
+    @Override
+    public ScreeningCloseContact getEnrichedById(Long id) {
+        ScreeningCloseContact record = getById(id);
+        if (record == null) {
+            return null;
+        }
+        if (record.getCcStatus() != null && (record.getCcStatus() == 4 || record.getCcStatus() == 5)) {
+            if (ensureFollowupDueDates(record)) {
+                updateById(record);
+            }
+        }
+        return record;
+    }
+
+    /**
+     * 根据登记日期补全 6/12/24 月随访到期日（仅补缺失项）。
+     *
+     * @return 是否发生了字段变更
+     */
+    private boolean ensureFollowupDueDates(ScreeningCloseContact record) {
+        if (record.getRegistrationDate() == null) {
+            return false;
+        }
+        boolean changed = false;
+        if (record.getFollowup6DueDate() == null) {
+            record.setFollowup6DueDate(record.getRegistrationDate().plusMonths(6));
+            changed = true;
+        }
+        if (record.getFollowup12DueDate() == null) {
+            record.setFollowup12DueDate(record.getRegistrationDate().plusMonths(12));
+            changed = true;
+        }
+        if (record.getFollowup24DueDate() == null) {
+            record.setFollowup24DueDate(record.getRegistrationDate().plusMonths(24));
+            changed = true;
+        }
+        return changed;
     }
 
     // ==================== 单条增删改 ====================
@@ -340,11 +402,18 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateScreening(ScreeningCloseContact data) {
-        if (getById(data.getId()) == null) {
+        ScreeningCloseContact existing = getById(data.getId());
+        if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
+        } else if (existing.getRegistrationDate() != null) {
+            data.setRegistrationDate(existing.getRegistrationDate());
+        }
+        Integer effectiveCcStatus = data.getCcStatus() != null ? data.getCcStatus() : existing.getCcStatus();
+        if (Integer.valueOf(4).equals(effectiveCcStatus)) {
+            ensureFollowupDueDates(data);
         }
         updateById(data);
     }
@@ -431,6 +500,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             // 未完成：进入随访监测
             record.setCcStatus(4);
             record.setTreatmentCompleted("否");
+            ensureFollowupDueDates(record);
         }
         updateById(record);
     }

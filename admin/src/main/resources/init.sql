@@ -1620,3 +1620,53 @@ SET @ddl = IF(@col_exists = 0,
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+-- ==================== V23：筛查问卷配置 ====================
+CREATE TABLE IF NOT EXISTS `questionnaire_config` (
+    `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `code`            VARCHAR(64)  NOT NULL COMMENT '问卷编码',
+    `title`           VARCHAR(256) NOT NULL COMMENT '问卷标题',
+    `subtitle`        VARCHAR(512) DEFAULT NULL COMMENT '问卷说明',
+    `enabled`         TINYINT      NOT NULL DEFAULT 1 COMMENT '是否开启：0否 1是',
+    `population_type` VARCHAR(32)  NOT NULL DEFAULT 'school' COMMENT '关联人群类型',
+    `fields_json`     LONGTEXT     NOT NULL COMMENT '字段分组 JSON',
+    `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`         TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='筛查问卷配置表';
+
+INSERT IGNORE INTO `questionnaire_config` (`code`, `title`, `subtitle`, `enabled`, `population_type`, `fields_json`)
+VALUES (
+    'school',
+    '学校人群结核病筛查调查问卷',
+    '请如实填写以下信息，所有数据仅用于结核病防控统计分析，信息将严格保密。',
+    1,
+    'school',
+    '[]'
+);
+
+-- ==================== V24：首次/后续随访草稿状态 ====================
+DROP PROCEDURE IF EXISTS _v24_migrate_visit_draft_status;
+DELIMITER //
+CREATE PROCEDURE _v24_migrate_visit_draft_status()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'first_visit' AND COLUMN_NAME = 'status'
+    ) THEN
+        ALTER TABLE `first_visit`
+            ADD COLUMN `status` TINYINT NOT NULL DEFAULT 1 COMMENT '0草稿 1已完成' AFTER `attachment_urls`;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'follow_up_visit' AND COLUMN_NAME = 'status'
+    ) THEN
+        ALTER TABLE `follow_up_visit`
+            ADD COLUMN `status` TINYINT NOT NULL DEFAULT 1 COMMENT '0草稿 1已完成' AFTER `attachment_urls`;
+    END IF;
+END //
+DELIMITER ;
+CALL _v24_migrate_visit_draft_status();
+DROP PROCEDURE IF EXISTS _v24_migrate_visit_draft_status;

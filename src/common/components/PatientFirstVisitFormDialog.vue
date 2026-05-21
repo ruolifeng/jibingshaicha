@@ -12,7 +12,7 @@ import {
   VENTILATION_OPTIONS,
   VISIT_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { getFirstVisitDetailApi, saveFirstVisitApi } from "@/pages/patient-management/apis"
+import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
   visible: boolean
@@ -30,6 +30,7 @@ function createEmptyForm() {
     educationItems[item] = ""
   })
   return {
+    id: undefined as number | undefined,
     visitDate: "",
     visitMethod: "",
     patientType: "",
@@ -58,6 +59,8 @@ function createEmptyForm() {
 const firstVisitForm = reactive(createEmptyForm())
 const formRef = ref<FormInstance>()
 const saving = ref(false)
+const draftSaving = ref(false)
+const firstVisitCompleted = ref(false)
 
 const rules: FormRules = {
   visitDate: [{ required: true, message: "请选择随访时间", trigger: "change" }],
@@ -140,11 +143,13 @@ function parseLoadedData(data: Record<string, any>) {
 
 async function loadExisting() {
   if (!props.patientRow) return
+  firstVisitCompleted.value = false
   Object.assign(firstVisitForm, createEmptyForm())
   try {
     const { data } = await getFirstVisitDetailApi(props.patientRow.id)
     if (data) {
       parseLoadedData(data)
+      firstVisitCompleted.value = data.status === 1
     }
   } catch { /* 首次填写 */ }
 }
@@ -163,6 +168,30 @@ function close() {
   emit("update:visible", false)
 }
 
+function buildPayload() {
+  return {
+    patientId: props.patientRow!.id,
+    populationType: props.patientRow!.populationType,
+    ...firstVisitForm,
+    symptoms: firstVisitForm.symptoms.join(","),
+    drugForm: firstVisitForm.drugForm.join(","),
+    educationItems: JSON.stringify(firstVisitForm.educationItems)
+  }
+}
+
+async function handleSaveDraft() {
+  if (!props.patientRow || draftSaving.value) return
+  draftSaving.value = true
+  try {
+    await saveFirstVisitDraftApi(buildPayload())
+    ElMessage.success("首次随访草稿已保存")
+    close()
+    emit("success")
+  } catch { /* handled */ } finally {
+    draftSaving.value = false
+  }
+}
+
 async function handleSave() {
   if (!props.patientRow || saving.value) return
   if (!formRef.value) return
@@ -174,14 +203,7 @@ async function handleSave() {
   }
   saving.value = true
   try {
-    await saveFirstVisitApi({
-      patientId: props.patientRow.id,
-      populationType: props.patientRow.populationType,
-      ...firstVisitForm,
-      symptoms: firstVisitForm.symptoms.join(","),
-      drugForm: firstVisitForm.drugForm.join(","),
-      educationItems: JSON.stringify(firstVisitForm.educationItems)
-    })
+    await saveFirstVisitApi(buildPayload())
     ElMessage.success("首次随访保存成功")
     close()
     emit("success")
@@ -401,7 +423,10 @@ async function handleSave() {
       <el-button @click="close">
         取消
       </el-button>
-      <el-button type="primary" :loading="saving" @click="handleSave">
+      <el-button v-if="!firstVisitCompleted" type="primary" plain :loading="draftSaving" :disabled="saving" @click="handleSaveDraft">
+        保存草稿
+      </el-button>
+      <el-button type="primary" :loading="saving" :disabled="draftSaving" @click="handleSave">
         保存
       </el-button>
     </template>

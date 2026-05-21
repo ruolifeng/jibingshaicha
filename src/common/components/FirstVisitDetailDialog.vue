@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 /** 首次入户随访记录 — 查看详情弹窗（学校人群 & 重点人群共用） */
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
+import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
 
 const props = defineProps<{
@@ -158,6 +159,9 @@ const printVisible = ref(false)
         </el-descriptions-item>
         <el-descriptions-item label="填写时间">
           {{ visitData.createTime || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="附件" :span="3">
+          <AttachmentPreviewList :urls="visitData.attachmentUrls" />
         </el-descriptions-item>
       </el-descriptions>
     </template>
