@@ -70,7 +70,7 @@ export const REFERRAL_RESULT_OPTIONS = [
 /** 胸片检查结果选项 */
 export const CHEST_XRAY_RESULT_OPTIONS = ["正常", "异常", "未查"]
 
-/** 待诊断-确认诊断选项（学生/重点/常规筛查） */
+/** 待诊断-确认诊断选项（学生/重点/疫情筛查） */
 export const SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS = [
   { label: "确诊患者", value: "确诊患者" },
   { label: "排除", value: "排除" },
@@ -500,7 +500,7 @@ export const STOP_TREATMENT_REASON_OPTIONS = [
 export const POPULATION_TYPE_LABEL_MAP: Record<string, { label: string, type: "primary" | "success" | "warning" | "danger" | "info" }> = {
   school: { label: "学生筛查", type: "primary" },
   keyPopulation: { label: "重点人群", type: "success" },
-  regular: { label: "常规筛查", type: "warning" },
+  regular: { label: "疫情筛查", type: "warning" },
   epidemic: { label: "大疫情", type: "danger" },
   referral: { label: "推介", type: "info" },
   closeContact: { label: "密接", type: "info" },

@@ -6,6 +6,12 @@ import { idCardRule, phoneRule } from "@@/utils/validate"
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import {
+  parseTrackingHistory,
+  TRACK_STATUS_LABEL,
+  TRACKING_STATUS_MAP
+} from "@@/utils/referralTracking"
+import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
+import {
   getReferralTrackingListApi,
   createReferralTrackingApi,
   updateReferralTrackingApi,
@@ -16,29 +22,6 @@ import {
   importEpidemicTrackApi,
   exportReferralTrackApi
 } from "../apis/index"
-
-/** 解析追踪历史记录 */
-interface TrackingHistoryItem {
-  attempt: number
-  status: number
-  trackTime: string
-  reason?: string
-}
-
-function parseTrackingHistory(json?: string): TrackingHistoryItem[] {
-  if (!json) return []
-  try {
-    return JSON.parse(json)
-  } catch {
-    return []
-  }
-}
-
-const TRACK_STATUS_LABEL: Record<number, string> = {
-  1: "到位",
-  2: "未到位",
-  3: "其他"
-}
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -283,8 +266,15 @@ async function handleTrack() {
     ElMessage.warning("未到位时必须填写原因")
     return
   }
+  const willForceEnd = trackForm.status === 2 && (trackRow.value?.notInPlaceCount ?? 0) >= 2
   await trackReferralApi(trackRow.value.id, trackForm.status, trackForm.remark)
-  ElMessage.success("追踪状态已更新")
+  if (willForceEnd) {
+    ElMessage.warning("已记录第 3 次未到位，追踪已强制结束")
+  } else if (trackForm.status === 1) {
+    ElMessage.success("已确认到位")
+  } else {
+    ElMessage.success("追踪记录已保存")
+  }
   trackDialogVisible.value = false
   fetchList()
 }
@@ -356,13 +346,6 @@ async function handleDelete(row: any) {
 }
 
 // ===== 状态标签辅助 =====
-const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
-  0: { label: "待追踪", type: "info" },
-  1: { label: "到位", type: "success" },
-  2: { label: "未到位", type: "warning" },
-  3: { label: "其他", type: "" },
-  4: { label: "强制结束", type: "danger" }
-}
 </script>
 
 <template>
@@ -401,9 +384,9 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
 
     <el-card shadow="never" style="margin-top: 16px">
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
-        <el-button type="primary" @click="openCreateDialog">新增追踪</el-button>
-        <el-button type="success" @click="openImportDialog">大疫情导入</el-button>
-        <el-button type="warning" :loading="exporting" @click="handleExport">导出</el-button>
+        <el-button v-permission="'referralManagement:create'" type="primary" @click="openCreateDialog">新增追踪</el-button>
+        <el-button v-permission="'referralManagement:epidemicImport'" type="success" @click="openImportDialog">大疫情导入</el-button>
+        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe>
@@ -418,6 +401,11 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         <el-table-column prop="name" label="患者姓名" />
         <el-table-column prop="parentName" label="患儿家长姓名" show-overflow-tooltip />
         <el-table-column prop="gender" label="性别" width="60" />
+        <el-table-column label="出生日期" width="110">
+          <template #default="{ row }">
+            {{ row.birthDate || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" width="60" />
         <el-table-column prop="idNumber" label="有效证件号" min-width="160" show-overflow-tooltip />
         <el-table-column prop="workplace" label="工作单位" show-overflow-tooltip />
@@ -463,27 +451,30 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-table-column>
         <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+            <el-button v-permission="'referralManagement:edit'" type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
             <!-- 追踪：待追踪或未到位 -->
             <el-button
               v-if="[0, 2].includes(row.trackingStatus) && !row.archived"
+              v-permission="'referralManagement:trackOperate'"
               type="warning" link size="small"
               @click="openTrackDialog(row)"
             >追踪</el-button>
             <!-- 筛查信息：已到位 -->
             <el-button
               v-if="row.trackingStatus === 1 && !row.diagnosisResult"
+              v-permission="'referralManagement:xray'"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >录入筛查</el-button>
             <!-- 诊断：已到位 -->
             <el-button
               v-if="row.trackingStatus === 1 && !row.diagnosisResult"
+              v-permission="'referralManagement:diagnosis'"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >录入诊断</el-button>
             <!-- 删除 -->
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'referralManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -507,7 +498,7 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </template>
         <template #default>
           <div style="margin-top: 8px; font-size: 13px; line-height: 1.8; color: #606266">
-            卡片ID、患者姓名、患儿家长姓名、有效证件号、性别、出生日期、年龄、患者工作单位、联系电话、现住详细地址、人群分类、病例分类、疾病名称、报告单位、报告卡录入时间、备注
+            {{ EPIDEMIC_TRACK_IMPORT_FIELDS.join("、") }}
           </div>
         </template>
       </el-alert>

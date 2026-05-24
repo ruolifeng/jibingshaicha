@@ -11,7 +11,7 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
-const searchForm = reactive({ name: "", idNumber: "", startTime: "", endTime: "" })
+const searchForm = reactive({ name: "", idNumber: "", phone: "", startTime: "", endTime: "" })
 
 const statistics = ref({ totalCount: 0, confirmedCount: 0, epidemicCount: 0, maleCount: 0, femaleCount: 0 })
 
@@ -31,12 +31,17 @@ async function fetchStats() {
 async function fetchData() {
   loading.value = true
   try {
-    const { data } = await getPatientHistoryApi({
-      page: paginationData.currentPage,
-      size: paginationData.pageSize,
+    const params: Parameters<typeof getPatientHistoryApi>[0] = {
+      page: paginationData.currentPage ?? 1,
+      size: paginationData.pageSize ?? 10,
       populationType: "keyPopulation",
-      ...searchForm
-    })
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      startTime: searchForm.startTime || undefined,
+      endTime: searchForm.endTime || undefined
+    }
+    const { data } = await getPatientHistoryApi(params)
     tableData.value = data.records
     total.value = data.total
   } finally {
@@ -56,6 +61,7 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
   searchForm.startTime = ""
   searchForm.endTime = ""
   handleSearch()
@@ -97,6 +103,9 @@ watch(
         </el-form-item>
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
         </el-form-item>
         <el-form-item label="归档时间">
           <el-date-picker

@@ -481,7 +481,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return new ArrayList<>();
         }
         try {
-            return JSONUtil.toList(json, Map.class);
+            return (List<Map<String, Object>>) (List<?>) JSONUtil.toList(json, Map.class);
         } catch (Exception e) {
             return new ArrayList<>();
         }

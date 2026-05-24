@@ -2,8 +2,8 @@
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
-import { formatNoticeSentTime, resolveMedicationManagementUnit } from "@@/utils/patient"
+import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { isNoticeReceiveOverdue, resolveMedicationManagementUnit, resolveNoticeManageTime } from "@@/utils/patient"
 import { deletePatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
@@ -36,6 +36,10 @@ function openReferral(row: any) {
   referralRow.value = row
   referralDialogVisible.value = true
 }
+
+function getNoticeRowClass({ row }: { row: any }) {
+  return isNoticeReceiveOverdue(row) ? "notice-overdue-row" : ""
+}
 </script>
 
 <template>
@@ -48,11 +52,29 @@ function openReferral(row: any) {
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入" clearable style="width:180px" />
         </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
+        </el-form-item>
+        <el-form-item label="病原学结果">
+          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:140px">
+            <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
             <el-option label="学生筛查" value="school" />
             <el-option label="重点人群" value="keyPopulation" />
-            <el-option label="常规筛查" value="regular" />
+            <el-option label="疫情筛查" value="regular" />
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
@@ -71,7 +93,7 @@ function openReferral(row: any) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getNoticeRowClass">
         <el-table-column type="index" label="#" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
@@ -85,10 +107,12 @@ function openReferral(row: any) {
         <el-table-column prop="age" label="年龄" />
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column label="通知管理时间" min-width="160" show-overflow-tooltip>
+        <el-table-column prop="diagnosisResult" label="病原学结果" />
+        <el-table-column label="接收时间" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ formatNoticeSentTime(row.noticeSentTime) || "-" }}
+            <span :class="{ 'notice-overdue-text': isNoticeReceiveOverdue(row) }">
+              {{ resolveNoticeManageTime(row) || "-" }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
@@ -189,3 +213,14 @@ function openReferral(row: any) {
     />
   </div>
 </template>
+
+<style scoped lang="scss">
+:deep(.notice-overdue-row) {
+  --el-table-tr-bg-color: #fef0f0;
+}
+
+.notice-overdue-text {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+</style>

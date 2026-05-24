@@ -7,9 +7,13 @@ export function getSuspectedListApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
   trackingStatus?: number
   archived?: number
   referralResult?: string
+  diagnosisFirst?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "latent/list",

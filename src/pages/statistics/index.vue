@@ -205,7 +205,7 @@ const PATIENT_POP_OPTIONS = [
   { label: "全部来源", value: "" },
   { label: "学生筛查", value: "school" },
   { label: "重点人群", value: "keyPopulation" },
-  { label: "常规筛查", value: "regular" },
+  { label: "疫情筛查", value: "regular" },
   { label: "大疫情", value: "epidemic" },
   { label: "推介", value: "referral" },
   { label: "专病网", value: "specialDisease" },
@@ -217,7 +217,7 @@ const LATENT_POP_OPTIONS = [
   { label: "全部来源", value: "" },
   { label: "学生筛查", value: "school" },
   { label: "重点人群", value: "keyPopulation" },
-  { label: "常规筛查", value: "regular" },
+  { label: "疫情筛查", value: "regular" },
   { label: "大疫情", value: "epidemic" },
   { label: "推介", value: "referral" }
 ]
@@ -387,14 +387,14 @@ onMounted(() => {
         <!-- P6 新增：信息总表导出 -->
         <el-tab-pane label="信息总表导出" name="aggregate">
           <el-alert
-            title="信息总表聚合全部来源数据（学生/重点/常规/大疫情/推介/密接），导出 Excel 文件。默认导出全部来源，可按数据来源、姓名、证件号筛选。"
+            title="信息总表聚合全部来源数据（学生/重点/疫情/大疫情/推介/密接），导出 Excel 文件。默认导出全部来源，可按数据来源、姓名、证件号筛选。"
             type="info" :closable="false" style="margin-bottom: 16px"
           />
           <!-- 患者信息总表 -->
           <el-card shadow="hover" style="margin-bottom: 16px">
             <template #header>
               <span style="font-weight: 600">患者信息总表</span>
-              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 常规 / 大疫情 / 推介 / 专病网 / 密接</span>
+              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 疫情 / 大疫情 / 推介 / 专病网 / 密接</span>
             </template>
             <el-form :model="patientFilterForm" inline style="margin-bottom: 12px">
               <el-form-item label="数据来源">
@@ -425,7 +425,7 @@ onMounted(() => {
           <el-card shadow="hover">
             <template #header>
               <span style="font-weight: 600">潜伏感染者信息总表</span>
-              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 常规 / 大疫情 / 推介（密接潜伏独立管理，不计入此表）</span>
+              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 疫情 / 大疫情 / 推介（密接潜伏独立管理，不计入此表）</span>
             </template>
             <el-form :model="latentFilterForm" inline style="margin-bottom: 12px">
               <el-form-item label="数据来源">

@@ -12,6 +12,7 @@ import {
   SUSPECTED_REFERRAL_RESULT_OPTIONS,
   TRACKING_STATUS_MAP
 } from "@@/constants/disease"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getScreeningRegularDetailApi } from "@/pages/regular/screening/apis"
 import {
   getSuspectedListApi,
@@ -33,6 +34,8 @@ const total = ref(0)
 const searchForm = reactive({
   name: "",
   idNumber: "",
+  phone: "",
+  dateRange: [] as string[],
   trackingStatus: undefined as number | undefined,
   archived: undefined as number | undefined,
   diagnosisFirst: "" as string
@@ -41,11 +44,18 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const params: Record<string, any> = {
-      page: paginationData.currentPage,
-      size: paginationData.pageSize,
+    const { dateRange, ...rest } = searchForm
+    const params: Parameters<typeof getSuspectedListApi>[0] = {
+      page: paginationData.currentPage ?? 1,
+      size: paginationData.pageSize ?? 10,
       populationType: POPULATION_TYPE,
-      ...searchForm
+      name: rest.name || undefined,
+      idNumber: rest.idNumber || undefined,
+      phone: rest.phone || undefined,
+      trackingStatus: rest.trackingStatus,
+      archived: rest.archived,
+      diagnosisFirst: rest.diagnosisFirst || undefined,
+      ...extractDateRangeParams(dateRange)
     }
     if (!searchForm.diagnosisFirst && searchForm.archived === undefined) {
       params.referralResult = "pending"
@@ -66,6 +76,8 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
+  searchForm.dateRange = []
   searchForm.trackingStatus = undefined
   searchForm.archived = undefined
   searchForm.diagnosisFirst = ""
@@ -273,6 +285,19 @@ watch(
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item label="追踪状态">
           <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width: 120px">
             <el-option v-for="(label, key) in TRACKING_STATUS_MAP" :key="key" :label="label" :value="Number(key)" />
@@ -303,7 +328,7 @@ watch(
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="text-lg font-bold">常规筛查 — 待诊断管理</span>
+          <span class="text-lg font-bold">疫情筛查 — 待诊断管理</span>
           <el-upload
             :auto-upload="false"
             :show-file-list="false"

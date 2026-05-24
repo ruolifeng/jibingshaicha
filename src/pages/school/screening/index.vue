@@ -2,6 +2,8 @@
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { extractDateRangeParams } from "@@/utils/searchParams"
+import { formatScreenResultDisplay } from "@@/utils/screening"
 import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -15,6 +17,8 @@ const searchForm = reactive({
   idNumber: "",
   schoolName: "",
   district: "",
+  phone: "",
+  dateRange: [] as string[],
   isLatent: undefined as number | undefined,
   diagnosisFirst: "" as string
 })
@@ -22,10 +26,12 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
+    const { dateRange, ...rest } = searchForm
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      ...searchForm
+      ...rest,
+      ...extractDateRangeParams(dateRange)
     })
     tableData.value = data.records
     total.value = data.total
@@ -44,6 +50,8 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.schoolName = ""
   searchForm.district = ""
+  searchForm.phone = ""
+  searchForm.dateRange = []
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
   handleSearch()
@@ -282,6 +290,19 @@ watch(
         <el-form-item label="区县">
           <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
         </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="筛查时间">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
             <el-option label="待确诊" :value="1" />
@@ -356,7 +377,11 @@ watch(
         <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" />
         <el-table-column prop="screenDate" label="感染筛查日期" />
         <el-table-column prop="screenMethod" label="筛查方法" />
-        <el-table-column prop="screenResult" label="筛查结果" />
+        <el-table-column label="筛查结果">
+          <template #default="{ row }">
+            {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="infectionResult" label="感染筛查结果" />
         <el-table-column prop="hasChestXray" label="首次（是否胸片）" />
         <el-table-column prop="chestXrayDate" label="胸片检查日期" />
@@ -552,8 +577,8 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="筛查结果">
-              <el-input v-model="editForm.screenResult" />
+            <el-form-item label="筛查结果（mm*mm）">
+              <el-input v-model="editForm.screenResult" placeholder="PPD 斑痕如：3*6" />
             </el-form-item>
           </el-col>
           <el-col :span="16">
@@ -686,7 +711,7 @@ watch(
           {{ detailRow.screenMethod }}
         </el-descriptions-item>
         <el-descriptions-item label="筛查结果">
-          {{ detailRow.screenResult }}
+          {{ formatScreenResultDisplay(detailRow.screenResult, detailRow.screenMethod) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="感染筛查结果">
           {{ detailRow.infectionResult }}

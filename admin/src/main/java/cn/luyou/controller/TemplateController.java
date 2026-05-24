@@ -1,5 +1,7 @@
 package cn.luyou.controller;
 
+import cn.luyou.constant.LatentImportHeaders;
+import cn.luyou.constant.PatientManualImportHeaders;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +46,7 @@ public class TemplateController {
             List.of("备注")
     );
 
-    /** 重点人群/常规筛查模板列头（两者结构相同） */
+    /** 重点人群/疫情筛查模板列头（两者结构相同） */
     private static final List<List<String>> KEY_POPULATION_HEADERS = List.of(
             List.of("序号"), List.of("年份"), List.of("市（州）"), List.of("县（市、区）"),
             List.of("姓名"), List.of("性别"), List.of("出生日期"), List.of("年龄"),
@@ -65,7 +67,7 @@ public class TemplateController {
             List.of("是否规范完成预防性治疗"), List.of("其他情况说明（备注）")
     );
 
-    @Operation(summary = "下载数据导入模板（type: school/keyPopulation/regular）")
+    @Operation(summary = "下载数据导入模板（type: school/keyPopulation/regular/latent/patient）")
     @GetMapping("/download")
     public void download(
             @RequestParam String type,
@@ -84,8 +86,16 @@ public class TemplateController {
                 headers = KEY_POPULATION_HEADERS;
             }
             case "regular" -> {
-                fileName = "常规筛查数据模板";
+                fileName = "疫情筛查数据模板";
                 headers = KEY_POPULATION_HEADERS;
+            }
+            case "latent" -> {
+                fileName = "潜伏感染者导入模板";
+                headers = LatentImportHeaders.FIELDS.stream().map(List::of).toList();
+            }
+            case "patient" -> {
+                fileName = "在管患者导入模板";
+                headers = PatientManualImportHeaders.FIELDS.stream().map(List::of).toList();
             }
             default -> {
                 response.sendError(400, "未知模板类型：" + type);

@@ -33,6 +33,7 @@ import {
 import { getToken } from "@@/utils/cache/cookies"
 import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
 import { idCardRule } from "@@/utils/validate"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
   confirmTreatmentApi,
   getScreeningCloseContactDetailApi,
@@ -73,7 +74,7 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
-const searchForm = reactive({ name: "", idNumber: "" })
+const searchForm = reactive({ name: "", idNumber: "", phone: "", dateRange: [] as string[] })
 
 /** ccStatus 描述 */
 const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
@@ -101,7 +102,9 @@ async function fetchData() {
       size: paginationData.pageSize,
       name: searchForm.name || undefined,
       idNumber: searchForm.idNumber || undefined,
-      finalScreeningResult: "潜伏感染者"
+      phone: searchForm.phone || undefined,
+      finalScreeningResult: "潜伏感染者",
+      ...extractDateRangeParams(searchForm.dateRange)
     })
     tableData.value = data.records
     total.value = data.total
@@ -117,6 +120,8 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
+  searchForm.dateRange = []
   handleSearch()
 }
 
@@ -584,6 +589,19 @@ async function handleSaveFollowupInput() {
         </el-form-item>
         <el-form-item label="身份证号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="筛查时间">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">

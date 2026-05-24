@@ -32,6 +32,7 @@ import {
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { applyFirstVisitChemotherapyDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule } from "@@/utils/validate"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import { confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
@@ -77,16 +78,18 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
-const searchForm = reactive({ name: "", idNumber: "" })
+const searchForm = reactive({ name: "", idNumber: "", phone: "", dateRange: [] as string[] })
 
 async function fetchData() {
   loading.value = true
   try {
+    const { dateRange, ...rest } = searchForm
     const { data } = await getPatientListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       populationType: "keyPopulation",
-      ...searchForm
+      ...rest,
+      ...extractDateRangeParams(dateRange)
     })
     tableData.value = data.records
     total.value = data.total
@@ -103,6 +106,8 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
+  searchForm.dateRange = []
   handleSearch()
 }
 
@@ -113,7 +118,9 @@ async function handleExport() {
     const res = await exportPatientListApi({
       populationType: "keyPopulation",
       name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      ...extractDateRangeParams(searchForm.dateRange)
     })
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
@@ -722,6 +729,19 @@ watch(
         </el-form-item>
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">

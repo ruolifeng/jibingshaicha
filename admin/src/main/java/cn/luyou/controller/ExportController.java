@@ -21,6 +21,7 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -38,6 +39,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,7 +77,7 @@ public class ExportController {
     static {
         POP_TYPE_LABEL.put("school",         "学生筛查");
         POP_TYPE_LABEL.put("keyPopulation",  "重点人群");
-        POP_TYPE_LABEL.put("regular",        "常规筛查");
+        POP_TYPE_LABEL.put("regular",        "疫情筛查");
         POP_TYPE_LABEL.put("epidemic",       "大疫情");
         POP_TYPE_LABEL.put("referral",       "推介");
         POP_TYPE_LABEL.put("closeContact",   "密接");
@@ -246,16 +248,24 @@ public class ExportController {
             @RequestParam String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) Integer archived,
             HttpServletResponse response) throws IOException {
 
         log.info("[导出] 潜伏感染列表 populationType={} name={} idNumber={} archived={}", populationType, name, idNumber, archived);
         try {
+            LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
+            LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
             LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
                     .eq(LatentInfection::getPopulationType, populationType)
                     .eq(LatentInfection::getReferralResult, "latent")
                     .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                     .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                    .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
+                    .ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
+                    .le(createTo != null, LatentInfection::getCreateTime, createTo)
                     .eq(archived != null, LatentInfection::getArchived, archived)
                     .orderByDesc(LatentInfection::getCreateTime);
 
@@ -407,17 +417,15 @@ public class ExportController {
             @RequestParam String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
             HttpServletResponse response) throws IOException {
 
         log.info("[导出] 患者列表 populationType={} name={} idNumber={}", populationType, name, idNumber);
         try {
-            LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
-                    .eq(Patient::getPopulationType, populationType)
-                    .like(StrUtil.isNotBlank(name), Patient::getName, name)
-                    .like(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
-                    .orderByDesc(Patient::getCreateTime);
-
-            List<Patient> patientList = patientService.list(wrapper);
+            List<Patient> patientList = patientService.listForExport(
+                    populationType, name, idNumber, phone, null, null, 0, dateFrom, dateTo);
 
             // 批量查询筛查原表
             List<Long> screeningIds = patientList.stream()
@@ -552,11 +560,14 @@ public class ExportController {
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
             @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
             HttpServletResponse response) throws IOException {
 
         List<Patient> patientList = patientService.listForExport(
-                populationType, name, idNumber, phone, currentAddress, archived);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo);
         List<Long> patientIds = patientList.stream().map(Patient::getId).collect(Collectors.toList());
 
         // 批量查询患者通知单（每患者取最新一条）
@@ -644,14 +655,22 @@ public class ExportController {
             @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) Integer archived,
             HttpServletResponse response) throws IOException {
 
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
                 .eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
                 .ne(StrUtil.isBlank(populationType), LatentInfection::getPopulationType, "closeContact")
                 .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
+                .ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
+                .le(createTo != null, LatentInfection::getCreateTime, createTo)
                 .eq(archived != null, LatentInfection::getArchived, archived)
                 .orderByAsc(LatentInfection::getPopulationType)
                 .orderByDesc(LatentInfection::getCreateTime);

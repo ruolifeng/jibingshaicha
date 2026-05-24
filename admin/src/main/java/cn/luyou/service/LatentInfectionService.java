@@ -1,5 +1,6 @@
 package cn.luyou.service;
 
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentInfection;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -16,7 +17,8 @@ public interface LatentInfectionService extends IService<LatentInfection> {
      */
     IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                       String name, String idNumber, Integer trackingStatus, Integer archived,
-                                      String referralResult, String diagnosisFirst);
+                                      String referralResult, String diagnosisFirst,
+                                      String phone, String dateFrom, String dateTo);
 
     /** 追踪操作 */
     void track(Long id, Integer status, String remark);
@@ -74,6 +76,9 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     /** 手动新增潜伏感染记录（在管总览） */
     Long createManual(Map<String, Object> body);
+
+    /** 批量导入潜伏感染记录（字段与手动新增一致） */
+    ImportResult importManualBatch(MultipartFile file);
 
     /** 级联删除潜伏感染记录及其关联数据 */
     void deleteCascade(Long id);

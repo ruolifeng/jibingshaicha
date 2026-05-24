@@ -3,6 +3,7 @@
  * 各子菜单页面通过 usePagination + 本 composable 获取统一的患者列表数据。
  */
 import { usePagination } from "@@/composables/usePagination"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getPatientListApi } from "../apis"
 
 export function usePatientList(defaultArchived?: number) {
@@ -17,21 +18,26 @@ export function usePatientList(defaultArchived?: number) {
     idNumber: "",
     phone: "",
     currentAddress: "",
+    diagnosisResult: "",
     populationType: "",
+    dateRange: [] as string[],
     archived: defaultArchived
   })
 
   async function fetchData() {
     loading.value = true
     try {
+      const { dateRange, ...rest } = searchForm
       const params: Record<string, any> = {
         page: paginationData.currentPage,
         size: paginationData.pageSize,
-        ...searchForm
+        ...rest,
+        ...extractDateRangeParams(dateRange)
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
       if (!params.currentAddress) delete params.currentAddress
+      if (!params.diagnosisResult) delete params.diagnosisResult
       const { data } = await getPatientListApi(params)
       tableData.value = data.records
       total.value = data.total
@@ -46,7 +52,9 @@ export function usePatientList(defaultArchived?: number) {
     searchForm.idNumber = ""
     searchForm.phone = ""
     searchForm.currentAddress = ""
+    searchForm.diagnosisResult = ""
     searchForm.populationType = ""
+    searchForm.dateRange = []
     handleSearch()
   }
 

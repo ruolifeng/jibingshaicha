@@ -105,6 +105,10 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private LocalDateTime noticeSentTime;
 
+    /** 通知单接收时间（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private LocalDateTime noticeConfirmedTime;
+
     /** 通知单服药管理单位（非数据库字段，列表查询时填充） */
     @TableField(exist = false)
     private String noticeMedicationUnit;

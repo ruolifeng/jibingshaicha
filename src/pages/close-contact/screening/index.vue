@@ -2,6 +2,7 @@
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useRouter } from "vue-router"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
   batchDeleteScreeningCloseContactApi,
   countByResultApi,
@@ -28,6 +29,8 @@ const searchForm = reactive({
   name: "",
   idNumber: "",
   district: "",
+  phone: "",
+  dateRange: [] as string[],
   finalScreeningResult: "" as string
 })
 
@@ -75,7 +78,9 @@ async function fetchData() {
         name: searchForm.name || undefined,
         idNumber: searchForm.idNumber || undefined,
         district: searchForm.district || undefined,
-        finalScreeningResult: searchForm.finalScreeningResult || undefined
+        phone: searchForm.phone || undefined,
+        finalScreeningResult: searchForm.finalScreeningResult || undefined,
+        ...extractDateRangeParams(searchForm.dateRange)
       }),
       countByResultApi()
     ])
@@ -95,6 +100,8 @@ function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
   searchForm.district = ""
+  searchForm.phone = ""
+  searchForm.dateRange = []
   searchForm.finalScreeningResult = ""
   handleSearch()
 }
@@ -373,6 +380,19 @@ async function handleThreeMonthSubmit() {
         </el-form-item>
         <el-form-item label="区县">
           <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="筛查时间">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item label="最终筛查结果">
           <el-select v-model="searchForm.finalScreeningResult" placeholder="全部" clearable style="width: 140px">

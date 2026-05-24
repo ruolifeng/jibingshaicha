@@ -1,5 +1,6 @@
 package cn.luyou.service;
 
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.Patient;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -33,17 +34,21 @@ public interface PatientService extends IService<Patient> {
 
     IPage<Patient> queryPage(int page, int size, String populationType,
                               String name, String idNumber, String phone, String currentAddress,
-                              Integer archived);
+                              String diagnosisResult, Integer archived, String dateFrom, String dateTo);
 
     /** 手动新增在管患者（在管总览） */
     Long createManual(Map<String, Object> body);
+
+    /** 批量导入在管患者（字段与手动新增一致） */
+    ImportResult importManualBatch(MultipartFile file);
 
     /** 批量删除患者（级联删除） */
     void batchDeletePatients(List<Long> ids);
 
     /** 导出用患者列表（与列表查询使用相同的数据范围过滤） */
     List<Patient> listForExport(String populationType, String name, String idNumber,
-                                 String phone, String currentAddress, Integer archived);
+                                 String phone, String currentAddress, String diagnosisResult,
+                                 Integer archived, String dateFrom, String dateTo);
 
     /** 导入大疫情表并模糊匹配合并 */
     int importEpidemic(MultipartFile file, String populationType);
@@ -62,8 +67,8 @@ public interface PatientService extends IService<Patient> {
 
     /** 历史患者列表 */
     IPage<Patient> queryHistoryPage(int page, int size, String populationType,
-                                     String name, String idNumber,
-                                     String startTime, String endTime);
+                                     String name, String idNumber, String phone,
+                                     String diagnosisResult, String startTime, String endTime);
 
     /** 删除患者（级联软删首次随访、后续随访、服药记录、通知单） */
     void deletePatient(Long id);

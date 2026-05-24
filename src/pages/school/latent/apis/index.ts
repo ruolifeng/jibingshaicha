@@ -5,6 +5,9 @@ export function exportLatentListApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
   archived?: number
 }) {
   return request<Blob>({
@@ -22,6 +25,9 @@ export function getLatentListApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
   trackingStatus?: number
   archived?: number
   referralResult?: string

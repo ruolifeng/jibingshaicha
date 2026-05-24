@@ -27,6 +27,7 @@ import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.exception.ExcelDataConvertException;
@@ -42,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -281,7 +283,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     public IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent,
-                                                    String sourceType, String diagnosisFirst) {
+                                                    String sourceType, String diagnosisFirst,
+                                                    String dateFrom, String dateTo) {
+        LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
+        LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         // sourceType 为空时默认只查 keyPopulation（向后兼容），传 regular 时查常规
         String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
@@ -293,7 +298,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .like(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
                 .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
                 .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
-                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst);
+                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst)
+                .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
+                .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo);
         // 人群分类：按选项匹配对应的独立列
         if (StrUtil.isNotBlank(crowdCategory)) {
             switch (crowdCategory) {

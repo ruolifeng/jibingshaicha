@@ -5,6 +5,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentCheck;
 import cn.luyou.model.LatentFollowUp;
 import cn.luyou.model.LatentInfection;
@@ -59,6 +60,13 @@ public class LatentInfectionController {
         return ResultRes.success(latentInfectionService.createManual(body));
     }
 
+    @Operation(summary = "批量导入潜伏感染记录（字段与手动新增一致）")
+    @PostMapping("/import")
+    @OperationLog(type = "import", module = "latent", action = "批量导入潜伏感染者")
+    public ResultResponse<ImportResult> importManual(@RequestParam("file") MultipartFile file) {
+        return ResultRes.success(latentInfectionService.importManualBatch(file));
+    }
+
     @Operation(summary = "批量删除潜伏感染记录（级联删除）")
     @DeleteMapping("/batch-delete")
     @OperationLog(type = "delete", module = "latent", action = "批量删除潜伏感染记录")
@@ -84,8 +92,12 @@ public class LatentInfectionController {
             @RequestParam(required = false) Integer trackingStatus,
             @RequestParam(required = false) Integer archived,
             @RequestParam(required = false) String referralResult,
-            @RequestParam(required = false) String diagnosisFirst) {
-        return ResultRes.success(latentInfectionService.queryPage(page, size, populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst));
+            @RequestParam(required = false) String diagnosisFirst,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo) {
+        return ResultRes.success(latentInfectionService.queryPage(
+                page, size, populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst, phone, dateFrom, dateTo));
     }
 
     @Operation(summary = "追踪操作")

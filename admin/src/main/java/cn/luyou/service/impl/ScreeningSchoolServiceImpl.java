@@ -27,6 +27,7 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -41,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -262,14 +264,20 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     @Override
     public IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
-                                             String schoolName, String district, Integer isLatent, String diagnosisFirst) {
+                                             String schoolName, String district, Integer isLatent, String diagnosisFirst,
+                                             String phone, String dateFrom, String dateTo) {
+        LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
+        LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningSchool::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningSchool::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(schoolName), ScreeningSchool::getSchoolName, schoolName)
                 .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
+                .like(StrUtil.isNotBlank(phone), ScreeningSchool::getPhone, phone)
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
                 .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningSchool::getDiagnosisFirst, diagnosisFirst)
+                .ge(screenFrom != null, ScreeningSchool::getScreenDate, screenFrom)
+                .le(screenTo != null, ScreeningSchool::getScreenDate, screenTo)
                 .orderByDesc(ScreeningSchool::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());

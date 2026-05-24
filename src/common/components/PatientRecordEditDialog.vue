@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
+import { resolveManualEpidemicFormFields } from "@@/utils/patient"
 import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
@@ -38,7 +39,18 @@ const form = reactive({
   screenMethod: "",
   infectionResult: "",
   chestXrayDate: "",
-  chestXrayResult: ""
+  chestXrayResult: "",
+  registrationNo: "",
+  contactName: "",
+  contactRelation: "",
+  contactGuardianPhone: "",
+  comorbidity: "",
+  treatmentClass: "",
+  medicationManagementUnit: "",
+  patientRemark: "",
+  firstTreatmentPlan: "",
+  drugSensitivityR: "",
+  drugSensitivityH: ""
 })
 
 const showSpecialDiseaseFields = computed(() =>
@@ -81,7 +93,18 @@ function resetForm() {
     screenMethod: "",
     infectionResult: "",
     chestXrayDate: "",
-    chestXrayResult: ""
+    chestXrayResult: "",
+    registrationNo: "",
+    contactName: "",
+    contactRelation: "",
+    contactGuardianPhone: "",
+    comorbidity: "",
+    treatmentClass: "",
+    medicationManagementUnit: "",
+    patientRemark: "",
+    firstTreatmentPlan: "",
+    drugSensitivityR: "",
+    drugSensitivityH: ""
   })
 }
 
@@ -109,7 +132,8 @@ async function loadDetail() {
     screenMethod: data.screenMethod || "",
     infectionResult: data.infectionResult || "",
     chestXrayDate: data.chestXrayDate || "",
-    chestXrayResult: data.chestXrayResult || ""
+    chestXrayResult: data.chestXrayResult || "",
+    ...resolveManualEpidemicFormFields(data)
   })
 }
 
@@ -196,7 +220,7 @@ async function handleSubmit() {
             >
               <el-option label="学生筛查" value="school" />
               <el-option label="重点人群" value="keyPopulation" />
-              <el-option label="常规筛查" value="regular" />
+              <el-option label="疫情筛查" value="regular" />
               <el-option label="大疫情" value="epidemic" />
               <el-option label="推介" value="referral" />
               <el-option label="密接" value="closeContact" />
@@ -272,7 +296,7 @@ async function handleSubmit() {
       </el-divider>
       <el-row :gutter="16">
         <el-col :span="24">
-          <el-form-item label="诊断结果">
+          <el-form-item label="病原学结果">
             <el-input v-model="form.diagnosisResult" />
           </el-form-item>
         </el-col>
@@ -290,6 +314,67 @@ async function handleSubmit() {
             </el-form-item>
           </el-col>
         </template>
+      </el-row>
+
+      <el-divider content-position="left">
+        病案信息
+      </el-divider>
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <el-form-item label="登记号">
+            <el-input v-model="form.registrationNo" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="联系人姓名">
+            <el-input v-model="form.contactName" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="与本人关系">
+            <el-input v-model="form.contactRelation" placeholder="联系人监护人与本人关系" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="监护人电话">
+            <el-input v-model="form.contactGuardianPhone" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="合并症">
+            <el-input v-model="form.comorbidity" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="治疗分类">
+            <el-input v-model="form.treatmentClass" placeholder="复治患者将在总览标红" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="服药管理单位">
+            <el-input v-model="form.medicationManagementUnit" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="首次治疗方案">
+            <el-input v-model="form.firstTreatmentPlan" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="利福平（R）">
+            <el-input v-model="form.drugSensitivityR" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="异烟肼（H）">
+            <el-input v-model="form.drugSensitivityH" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="备注">
+            <el-input v-model="form.patientRemark" type="textarea" :rows="2" />
+          </el-form-item>
+        </el-col>
       </el-row>
 
       <template v-if="showScreeningFields">

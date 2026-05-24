@@ -49,9 +49,12 @@ public class ScreeningCloseContactController {
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String district,
             @RequestParam(required = false) Integer ccStatus,
-            @RequestParam(required = false) String finalScreeningResult) {
+            @RequestParam(required = false) String finalScreeningResult,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo) {
         return ResultRes.success(screeningCloseContactService.queryPage(
-                page, size, name, idNumber, district, ccStatus, finalScreeningResult));
+                page, size, name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo));
     }
 
     @Operation(summary = "各最终筛查结果分类统计")

@@ -20,6 +20,9 @@ export function getScreeningCloseContactListApi(params: {
   name?: string
   idNumber?: string
   district?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
   ccStatus?: number
   finalScreeningResult?: string
 }) {

@@ -23,6 +23,7 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -265,13 +266,19 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     @Override
     public IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
-                                                   String district, Integer ccStatus, String finalScreeningResult) {
+                                                   String district, Integer ccStatus, String finalScreeningResult,
+                                                   String phone, String dateFrom, String dateTo) {
+        LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
+        LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningCloseContact::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningCloseContact::getIdNumber, idNumber)
                 .eq(StrUtil.isNotBlank(district), ScreeningCloseContact::getDistrict, district)
+                .like(StrUtil.isNotBlank(phone), ScreeningCloseContact::getPhone, phone)
                 .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus)
                 .eq(StrUtil.isNotBlank(finalScreeningResult), ScreeningCloseContact::getFinalScreeningResult, finalScreeningResult)
+                .ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
+                .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());

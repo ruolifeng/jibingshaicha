@@ -273,6 +273,97 @@ CREATE TABLE IF NOT EXISTS `screening_close_contact` (
     KEY `idx_final_result` (`final_screening_result`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接人群筛查数据表（新模板73列）';
 
+-- ==================== 密接个案表（独立电子表格模块） ====================
+CREATE TABLE IF NOT EXISTS `close_contact_case` (
+    `id`                              BIGINT       NOT NULL AUTO_INCREMENT,
+    `city`                            VARCHAR(64)  DEFAULT NULL COMMENT '市/州',
+    `district`                        VARCHAR(64)  DEFAULT NULL COMMENT '区/县',
+    `source_patient_name`             VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
+    `source_patient_case_no`          VARCHAR(64)  DEFAULT NULL COMMENT '原患者病案号',
+    `source_patient_bacteriology_result` VARCHAR(64) DEFAULT NULL COMMENT '原患者病原学结果',
+    `source_patient_phone`            VARCHAR(32)  DEFAULT NULL COMMENT '原患者电话',
+    `source_patient_id_number`        VARCHAR(64)  DEFAULT NULL COMMENT '原患者身份证号',
+    `report_date`                     DATE         DEFAULT NULL COMMENT '填表日期',
+    `registration_date`               DATE         DEFAULT NULL COMMENT '密切接触者登记日期',
+    `name`                            VARCHAR(64)  DEFAULT NULL COMMENT '接触者姓名',
+    `id_number`                       VARCHAR(64)  DEFAULT NULL COMMENT '接触者身份证号',
+    `age`                             INT          DEFAULT NULL COMMENT '年龄',
+    `phone`                           VARCHAR(32)  DEFAULT NULL COMMENT '接触者电话',
+    `contact_type`                    VARCHAR(32)  DEFAULT NULL COMMENT '接触类型',
+    `contact_place`                   VARCHAR(64)  DEFAULT NULL COMMENT '接触场所',
+    `first_screen_date`               DATE         DEFAULT NULL COMMENT '首次筛查日期',
+    `symptom1`                        VARCHAR(128) DEFAULT NULL COMMENT '结核症状1',
+    `symptom2`                        VARCHAR(128) DEFAULT NULL COMMENT '结核症状2',
+    `infection_check_date`            DATE         DEFAULT NULL COMMENT '感染检测日期',
+    `infection_check_method`          VARCHAR(64)  DEFAULT NULL COMMENT '感染检测方法',
+    `infection_check_result`          VARCHAR(64)  DEFAULT NULL COMMENT '结果判定',
+    `imaging_date`                    DATE         DEFAULT NULL COMMENT '影像检查日期',
+    `imaging_method`                  VARCHAR(64)  DEFAULT NULL COMMENT '影像方法',
+    `imaging_result`                  VARCHAR(128) DEFAULT NULL COMMENT '影像结果',
+    `sputum_check_date`               DATE         DEFAULT NULL COMMENT '痰检留标日期',
+    `sputum_check_method`             VARCHAR(64)  DEFAULT NULL COMMENT '痰检方法',
+    `sputum_check_result`             VARCHAR(64)  DEFAULT NULL COMMENT '痰检结果',
+    `final_screening_result`          VARCHAR(32)  DEFAULT NULL COMMENT '诊断结果：活动性肺结核/潜伏感染者/未做/未发现异常',
+    `has_contraindication`            VARCHAR(32)  DEFAULT NULL COMMENT '有无禁忌症',
+    `no_treatment_reason`             VARCHAR(128) DEFAULT NULL COMMENT '不接受预防治疗的原因',
+    `contraindication_remark`         VARCHAR(256) DEFAULT NULL COMMENT '禁忌症备注',
+    `has_preventive_treatment`        VARCHAR(10)  DEFAULT NULL COMMENT '是否开展预防治疗',
+    `preventive_plan`                 VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
+    `preventive_plan_remark`          VARCHAR(256) DEFAULT NULL COMMENT '其他方案备注',
+    `treatment_completed`             VARCHAR(10)  DEFAULT NULL COMMENT '是否完成治疗',
+    `incomplete_reason`               VARCHAR(128) DEFAULT NULL COMMENT '未完成原因',
+    `followup6_due_date`              DATE         DEFAULT NULL COMMENT '6月随访到期日期',
+    `followup6_screen_date`           DATE         DEFAULT NULL COMMENT '6月-症状筛查日期',
+    `followup6_symptom1`              VARCHAR(128) DEFAULT NULL COMMENT '6月-症状1',
+    `followup6_symptom2`              VARCHAR(128) DEFAULT NULL COMMENT '6月-症状2',
+    `followup6_imaging_date`          DATE         DEFAULT NULL COMMENT '6月-影像检查日期',
+    `followup6_imaging_method`        VARCHAR(64)  DEFAULT NULL COMMENT '6月-影像方法',
+    `followup6_imaging_result`        VARCHAR(128) DEFAULT NULL COMMENT '6月-影像结果',
+    `followup6_sputum_date`           DATE         DEFAULT NULL COMMENT '6月-痰检日期',
+    `followup6_sputum_method`         VARCHAR(64)  DEFAULT NULL COMMENT '6月-病原学方法',
+    `followup6_sputum_result`         VARCHAR(64)  DEFAULT NULL COMMENT '6月-病原学结果',
+    `followup6_result`                VARCHAR(32)  DEFAULT NULL COMMENT '6月随访筛查结果',
+    `followup12_due_date`             DATE         DEFAULT NULL COMMENT '12月随访到期日期',
+    `followup12_screen_date`          DATE         DEFAULT NULL COMMENT '12月-症状筛查日期',
+    `followup12_symptom1`             VARCHAR(128) DEFAULT NULL COMMENT '12月-症状1',
+    `followup12_symptom2`             VARCHAR(128) DEFAULT NULL COMMENT '12月-症状2',
+    `followup12_imaging_date`         DATE         DEFAULT NULL COMMENT '12月-影像检查日期',
+    `followup12_imaging_method`       VARCHAR(64)  DEFAULT NULL COMMENT '12月-影像方法',
+    `followup12_imaging_result`       VARCHAR(128) DEFAULT NULL COMMENT '12月-影像结果',
+    `followup12_sputum_date`          DATE         DEFAULT NULL COMMENT '12月-痰检日期',
+    `followup12_sputum_method`        VARCHAR(64)  DEFAULT NULL COMMENT '12月-病原学方法',
+    `followup12_sputum_result`        VARCHAR(64)  DEFAULT NULL COMMENT '12月-病原学结果',
+    `followup12_result`               VARCHAR(32)  DEFAULT NULL COMMENT '12月随访筛查结果',
+    `followup24_due_date`             DATE         DEFAULT NULL COMMENT '24月随访到期日期',
+    `followup24_screen_date`          DATE         DEFAULT NULL COMMENT '24月-症状筛查日期',
+    `followup24_symptom1`             VARCHAR(128) DEFAULT NULL COMMENT '24月-症状1',
+    `followup24_symptom2`             VARCHAR(128) DEFAULT NULL COMMENT '24月-症状2',
+    `followup24_imaging_date`         DATE         DEFAULT NULL COMMENT '24月-影像检查日期',
+    `followup24_imaging_method`       VARCHAR(64)  DEFAULT NULL COMMENT '24月-影像方法',
+    `followup24_imaging_result`       VARCHAR(128) DEFAULT NULL COMMENT '24月-影像结果',
+    `followup24_sputum_date`          DATE         DEFAULT NULL COMMENT '24月-痰检日期',
+    `followup24_sputum_method`        VARCHAR(64)  DEFAULT NULL COMMENT '24月-病原学方法',
+    `followup24_sputum_result`        VARCHAR(64)  DEFAULT NULL COMMENT '24月-病原学结果',
+    `followup24_result`               VARCHAR(32)  DEFAULT NULL COMMENT '24月随访筛查结果',
+    `remark`                          TEXT         DEFAULT NULL COMMENT '备注',
+    `year`                            VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `gender`                          VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `ethnicity`                       VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `household_address`               VARCHAR(256) DEFAULT NULL COMMENT '户籍地址',
+    `current_address`                 VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `upload_batch`                    VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `department_id`                   BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_username`                VARCHAR(64)  DEFAULT NULL COMMENT '录入用户名',
+    `create_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                         TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_id_number` (`id_number`),
+    KEY `idx_district` (`district`),
+    KEY `idx_final_result` (`final_screening_result`),
+    KEY `idx_creator_username` (`creator_username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接个案表（电子表格，73列）';
+
 -- ==================== 潜伏感染管理表 ====================
 -- V4 新增：胸片检查字段（追踪到位后录入）、首次诊断字段、密接阳性轮次
 
@@ -917,10 +1008,11 @@ WHERE `role` = 6
       'school','keyPopulation','closeContact','statistics',
       'school:screening','school:suspected','school:latent','school:patient','school:history',
       'keyPopulation:screening','keyPopulation:suspected','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
-      'closeContact:screening','closeContact:followUp','closeContact:latent','closeContact:patient','closeContact:history',
+      'closeContact:screening','closeContact:followUp','closeContact:latent','closeContact:patient','closeContact:history','closeContact:case',
       'screening:upload','screening:create','screening:export','screening:edit','screening:delete',
       'keyPopulation:screening:upload','keyPopulation:screening:create','keyPopulation:screening:export','keyPopulation:screening:edit','keyPopulation:screening:delete',
       'closeContact:screening:upload','closeContact:screening:create','closeContact:screening:export','closeContact:screening:edit','closeContact:screening:delete',
+      'closeContact:case:upload','closeContact:case:create','closeContact:case:export','closeContact:case:edit','closeContact:case:delete',
       'latent:track','latent:referral','latent:sendNotice','latent:xray',
       'patient:importEpidemic','patient:sendNotice',
       'statistics:export',
@@ -1323,28 +1415,28 @@ DELIMITER ;
 CALL _v15_migrate_follow_up();
 DROP PROCEDURE IF EXISTS _v15_migrate_follow_up;
 
--- ==================== V16：P4 重构阶段 — 常规筛查、聚合菜单、患者删除、新权限 ====================
+-- ==================== V16：P4 重构阶段 — 疫情筛查、聚合菜单、患者删除、新权限 ====================
 
--- ---------- 1. screening_key_population 增加 source_type 列（区分重点人群 vs 常规筛查） ----------
+-- ---------- 1. screening_key_population 增加 source_type 列（区分重点人群 vs 疫情筛查） ----------
 -- DEFAULT 'keyPopulation' 保证存量数据不受影响。
 ALTER TABLE `screening_key_population`
     ADD COLUMN `source_type` VARCHAR(32) NOT NULL DEFAULT 'keyPopulation'
-        COMMENT 'V16 数据来源：keyPopulation=重点人群 / regular=常规筛查'
+        COMMENT 'V16 数据来源：keyPopulation=重点人群 / regular=疫情筛查'
         AFTER `upload_batch`;
 
 -- ---------- 2. 新增权限码（V16 新增菜单对应的权限，ID 从 400 起） ----------
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
 -- 筛查管理（一级菜单）
 (400, 'screening',                      '筛查管理',             1, 0,   10),
--- 常规筛查子菜单
-(401, 'regular:screening',              '常规筛查',             1, 400, 3),
+-- 疫情筛查子菜单
+(401, 'regular:screening',              '疫情筛查',             1, 400, 3),
 (402, 'regular:screening:create',       '新增记录',             2, 401, 1),
 (403, 'regular:screening:edit',         '编辑记录',             2, 401, 2),
 (404, 'regular:screening:delete',       '删除记录',             2, 401, 3),
 (405, 'regular:screening:upload',       '上传Excel',            2, 401, 4),
 (406, 'regular:screening:export',       '导出',                 2, 401, 5),
--- 常规筛查-待诊断子菜单
-(407, 'regular:suspected',              '常规筛查-待诊断',      1, 400, 4),
+-- 疫情筛查-待诊断子菜单
+(407, 'regular:suspected',              '疫情筛查-待诊断',      1, 400, 4),
 (408, 'regular:suspected:track',        '追踪操作',             2, 407, 1),
 (409, 'regular:suspected:xray',         '录入胸片',             2, 407, 2),
 (410, 'regular:suspected:diagnosis',    '录入诊断',             2, 407, 3),
@@ -1811,3 +1903,89 @@ SET @ddl = IF(@col_exists = 0,
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+-- ==================== V31：推介追踪增加到位时间、追踪过程记录 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'arrival_time'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `arrival_time` DATETIME DEFAULT NULL COMMENT ''到位时间'' AFTER `tracking_remark`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'tracking_history_json'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `tracking_history_json` TEXT DEFAULT NULL COMMENT ''追踪过程记录JSON'' AFTER `arrival_time`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V32：大疫情导入从筛查管理迁移至推介追踪-追踪 ====================
+UPDATE `permission`
+SET `name` = CONCAT('[废弃] ', `name`)
+WHERE `code` IN (
+    'epidemic:screening',
+    'epidemic:screening:import',
+    'epidemic:screening:track',
+    'epidemic:screening:xray',
+    'epidemic:screening:diagnosis'
+)
+  AND `name` NOT LIKE '[废弃]%';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` IN (
+        'epidemic:screening',
+        'epidemic:screening:import',
+        'epidemic:screening:track',
+        'epidemic:screening:xray',
+        'epidemic:screening:diagnosis'
+    )
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement', 'referralManagement:track', 'referralManagement:create',
+    'referralManagement:trackOperate', 'referralManagement:xray', 'referralManagement:diagnosis',
+    'referralManagement:delete', 'referralManagement:epidemicImport', 'referralManagement:export',
+    'referralManagement:edit'
+);
+
+-- ==================== V33：密接个案表（独立电子表格模块） ====================
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(35, 'closeContact:case',           '密接个案表',   1, 3, 2),
+(350, 'closeContact:case:upload',    '导入个案',     2, 35, 1),
+(351, 'closeContact:case:create',    '新增个案',     2, 35, 2),
+(352, 'closeContact:case:export',    '导出个案',     2, 35, 3),
+(353, 'closeContact:case:edit',      '编辑个案',     2, 35, 4),
+(354, 'closeContact:case:delete',    '删除个案',     2, 35, 5);
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 1, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 2, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 3, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 4, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+
+-- ==================== V34：常规筛查改名为疫情筛查 ====================
+UPDATE `permission`
+SET `name` = '疫情筛查'
+WHERE `code` = 'regular:screening';
+
+UPDATE `permission`
+SET `name` = '疫情筛查-待诊断'
+WHERE `code` = 'regular:suspected';

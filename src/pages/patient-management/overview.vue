@@ -2,10 +2,12 @@
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
+import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { isRetreatmentPatient, resolveTreatmentClass } from "@@/utils/patient"
-import { batchDeletePatientsApi, exportAllPatientsApi } from "./apis"
+import { batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const {
@@ -25,6 +27,11 @@ const detailVisible = ref(false)
 const editVisible = ref(false)
 const currentId = ref<number | null>(null)
 const exporting = ref(false)
+const importing = ref(false)
+const templateDownloading = ref(false)
+const importDialogVisible = ref(false)
+const importResultVisible = ref(false)
+const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 function handleSelectionChange(rows: any[]) {
@@ -65,7 +72,9 @@ async function handleExport() {
       idNumber: searchForm.idNumber || undefined,
       phone: searchForm.phone || undefined,
       currentAddress: searchForm.currentAddress || undefined,
-      populationType: searchForm.populationType || undefined
+      diagnosisResult: searchForm.diagnosisResult || undefined,
+      populationType: searchForm.populationType || undefined,
+      ...extractDateRangeParams(searchForm.dateRange)
     })
     downloadBlob(blob as unknown as Blob, "在管患者信息总表.xlsx")
     ElMessage.success("导出成功")
@@ -93,6 +102,47 @@ async function handleBatchDelete() {
     if (err !== "cancel") ElMessage.error("删除失败")
   }
 }
+
+function openImportDialog() {
+  importResult.value = { successCount: 0, errors: [] }
+  importDialogVisible.value = true
+}
+
+async function handleDownloadTemplate() {
+  templateDownloading.value = true
+  try {
+    const blob = await downloadPatientTemplateApi()
+    downloadBlob(blob as unknown as Blob, "在管患者导入模板.xlsx")
+    ElMessage.success("模板下载成功")
+  } catch {
+    ElMessage.error("模板下载失败")
+  } finally {
+    templateDownloading.value = false
+  }
+}
+
+async function handleImport(uploadFile: any) {
+  const file = uploadFile?.raw as File
+  if (!file) return
+  if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+    ElMessage.error("请上传 .xlsx 或 .xls 文件")
+    return
+  }
+  importing.value = true
+  try {
+    const { data } = await importPatientApi(file)
+    importResult.value = data ?? { successCount: 0, errors: [] }
+    importResultVisible.value = true
+    importDialogVisible.value = false
+    if (data?.successCount > 0) {
+      fetchData()
+    }
+  } catch {
+    ElMessage.error("导入失败")
+  } finally {
+    importing.value = false
+  }
+}
 </script>
 
 <template>
@@ -113,8 +163,23 @@ async function handleBatchDelete() {
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入" clearable style="width: 180px" />
         </el-form-item>
-        <el-form-item label="电话">
+        <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="病原学结果">
+          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width: 140px">
+            <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item label="住址">
           <el-input v-model="searchForm.currentAddress" placeholder="请输入现住址" clearable style="width: 160px" />
@@ -123,7 +188,7 @@ async function handleBatchDelete() {
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width: 140px">
             <el-option label="学生筛查" value="school" />
             <el-option label="重点人群" value="keyPopulation" />
-            <el-option label="常规筛查" value="regular" />
+            <el-option label="疫情筛查" value="regular" />
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
@@ -149,6 +214,14 @@ async function handleBatchDelete() {
           @click="openCreate"
         >
           新增
+        </el-button>
+        <el-button
+          v-permission="'patientManagement:overview'"
+          type="primary"
+          plain
+          @click="openImportDialog"
+        >
+          导入
         </el-button>
         <el-button
           v-permission="'patientManagement:overview'"
@@ -191,7 +264,7 @@ async function handleBatchDelete() {
         <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
-        <el-table-column prop="diagnosisResult" label="诊断结果" show-overflow-tooltip />
+        <el-table-column prop="diagnosisResult" label="病原学结果" show-overflow-tooltip />
         <el-table-column label="治疗分类" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">
             <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">
@@ -286,6 +359,75 @@ async function handleBatchDelete() {
       :subject-name="referralRow.name || ''"
       @success="fetchData"
     />
+
+    <el-dialog v-model="importDialogVisible" title="批量导入在管患者" width="600px">
+      <el-alert
+        type="info"
+        :closable="false"
+        class="mb-3"
+        title="请先下载模板，按表头填写数据后上传。字段与「新增」表单一致。"
+      />
+      <div class="mb-3">
+        <p class="text-sm text-gray-500 mb-2">
+          模板包含字段：{{ PATIENT_MANUAL_IMPORT_FIELDS.join("、") }}
+        </p>
+        <p class="text-sm text-gray-500">
+          数据来源可填写：学生筛查、重点人群、疫情筛查、大疫情、推介、密接、专病网
+        </p>
+        <p class="text-sm text-gray-500 mt-2">
+          治疗分类含「复治」的患者将在总览标红；证件号、联系电话列建议设为文本格式
+        </p>
+      </div>
+      <div class="flex gap-2 mb-4">
+        <el-button type="success" :loading="templateDownloading" @click="handleDownloadTemplate">
+          下载模板
+        </el-button>
+        <el-upload
+          :auto-upload="false"
+          :show-file-list="false"
+          accept=".xlsx,.xls"
+          :on-change="handleImport"
+        >
+          <el-button type="primary" :loading="importing">
+            选择文件并导入
+          </el-button>
+        </el-upload>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
+      <el-alert
+        v-if="importResult.successCount > 0"
+        :title="`成功导入 ${importResult.successCount} 条数据`"
+        type="success"
+        :closable="false"
+        class="mb-3"
+      />
+      <el-alert
+        v-else
+        title="未成功导入任何数据，请检查模板与填写内容"
+        type="warning"
+        :closable="false"
+        class="mb-3"
+      />
+      <template v-if="(importResult.errors?.length ?? 0) > 0">
+        <el-alert
+          :title="`发现 ${importResult.errors?.length ?? 0} 条数据存在问题（已跳过）`"
+          type="warning"
+          :closable="false"
+          class="mb-3"
+        />
+        <el-table :data="(importResult.errors ?? []).map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
+          <el-table-column prop="index" label="#" width="60" />
+          <el-table-column prop="msg" label="错误信息" />
+        </el-table>
+      </template>
+      <template #footer>
+        <el-button type="primary" @click="importResultVisible = false">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

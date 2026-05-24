@@ -54,7 +54,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
 
-  // ==================== V2 新增：筛查管理（学生/重点/常规/大疫情） ====================
+  // ==================== V2 新增：筛查管理（学生/重点/疫情） ====================
   {
     path: "/screening",
     component: Layouts,
@@ -89,8 +89,8 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/screening/regular/index.vue"),
         name: "ScreeningRegular",
         meta: {
-          title: "常规筛查",
-          tagTitle: "常规筛查",
+          title: "疫情筛查",
+          tagTitle: "疫情筛查",
           keepAlive: true,
           anyPermission: ["regular:screening", "regular:suspected"]
         }
@@ -225,6 +225,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/close-contact/screening/index.vue"),
         name: "CloseContactScreening",
         meta: { title: "筛查管理", tagTitle: "密接-筛查管理", keepAlive: true, permission: "closeContact:screening" }
+      },
+      {
+        path: "case",
+        component: () => import("@/pages/close-contact/case/index.vue"),
+        name: "CloseContactCase",
+        meta: { title: "密接个案表", tagTitle: "密接-个案表", keepAlive: true, permission: "closeContact:case" }
       },
       {
         path: "latent",

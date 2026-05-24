@@ -1,0 +1,135 @@
+package cn.luyou.controller;
+
+import cn.luyou.common.result.ResultRes;
+import cn.luyou.common.result.ResultResponse;
+import cn.luyou.model.CloseContactCase;
+import cn.luyou.model.ImportResult;
+import cn.luyou.service.CloseContactCaseService;
+import com.alibaba.excel.EasyExcel;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
+
+@Tag(name = "密接个案表管理")
+@RestController
+@RequestMapping("/close-contact/case")
+@RequiredArgsConstructor
+public class CloseContactCaseController {
+
+    private static final String RESULT_LATENT = "潜伏感染者";
+    private static final String RESULT_CONFIRMED = "活动性肺结核";
+
+    private final CloseContactCaseService closeContactCaseService;
+
+    @Operation(summary = "上传密接个案表Excel（73列模板）")
+    @PostMapping("/upload")
+    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
+        return ResultRes.success(closeContactCaseService.uploadAndParse(file));
+    }
+
+    @Operation(summary = "分页查询密接个案表")
+    @GetMapping("/list")
+    public ResultResponse<IPage<CloseContactCase>> list(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String diagnosisResult) {
+        return ResultRes.success(closeContactCaseService.queryPage(
+                page, size, name, idNumber, district, phone, creatorUsername, diagnosisResult));
+    }
+
+    @Operation(summary = "新增密接个案")
+    @PostMapping("/create")
+    public ResultResponse<Void> create(@RequestBody CloseContactCase data) {
+        closeContactCaseService.createCase(data);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "更新密接个案")
+    @PutMapping("/update/{id}")
+    public ResultResponse<Void> update(@PathVariable Long id, @RequestBody CloseContactCase data) {
+        data.setId(id);
+        closeContactCaseService.updateCase(data);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "删除密接个案")
+    @DeleteMapping("/delete/{id}")
+    public ResultResponse<Void> delete(@PathVariable Long id) {
+        closeContactCaseService.deleteCase(id);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "批量删除密接个案")
+    @DeleteMapping("/batch-delete")
+    public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
+        closeContactCaseService.batchDelete(ids);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "按ID查询密接个案详情")
+    @GetMapping("/{id}")
+    public ResultResponse<CloseContactCase> detail(@PathVariable Long id) {
+        return ResultRes.success(closeContactCaseService.getAccessibleById(id));
+    }
+
+    @Operation(summary = "导出密接个案表（支持筛选/勾选/按诊断结果导出）")
+    @GetMapping("/export")
+    public void export(
+            HttpServletResponse response,
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String exportType) throws Exception {
+
+        String effectiveDiagnosis = diagnosisResult;
+        String fileName = "密接个案表.xlsx";
+        if ("latent".equals(exportType)) {
+            effectiveDiagnosis = RESULT_LATENT;
+            fileName = "密接个案表_潜伏感染者.xlsx";
+        } else if ("confirmed".equals(exportType)) {
+            effectiveDiagnosis = RESULT_CONFIRMED;
+            fileName = "密接个案表_确诊患者.xlsx";
+        }
+
+        List<Long> idList = null;
+        if (ids != null && !ids.isBlank()) {
+            idList = Arrays.stream(ids.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && s.matches("\\d+"))
+                    .map(Long::valueOf)
+                    .toList();
+        }
+
+        List<CloseContactCase> list = closeContactCaseService.listForExport(
+                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis, idList);
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment;filename=" +
+                URLEncoder.encode(fileName, StandardCharsets.UTF_8));
+
+        // 与导入 headRowNumber(2) 对齐：跳过前两行表头，数据从第 3 行写入，便于导出后再导入
+        EasyExcel.write(response.getOutputStream(), CloseContactCase.class)
+                .relativeHeadRowIndex(2)
+                .needHead(false)
+                .sheet("密接个案表")
+                .doWrite(list);
+    }
+}

@@ -51,6 +51,29 @@ export function exportAllLatentApi(params: Record<string, any>) {
   })
 }
 
+/** 批量导入潜伏感染者（字段与新增一致） */
+export function importLatentApi(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+    url: "latent/import",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000
+  })
+}
+
+/** 下载潜伏感染者导入模板 */
+export function downloadLatentTemplateApi() {
+  return request<Blob>({
+    url: "template/download",
+    method: "get",
+    params: { type: "latent" },
+    responseType: "blob"
+  })
+}
+
 /** 追踪操作 */
 export function trackLatentApi(data: { id: number; status: number; remark?: string }) {
   return request<ApiResponseData<null>>({

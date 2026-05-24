@@ -4,6 +4,7 @@
  * 支持学校人群（school）、重点人群（keyPopulation）、密接人群（closeContact）三种类型
  */
 import { ACTIVE_ROUND_MAP } from "@@/constants/disease"
+import { formatScreenResultDisplay } from "@@/utils/screening"
 
 const props = defineProps<{
   visible: boolean
@@ -99,7 +100,7 @@ const dialogTitle = computed(() => {
             {{ data.screenMethod }}
           </el-descriptions-item>
           <el-descriptions-item label="筛查结果">
-            {{ data.screenResult }}
+            {{ formatScreenResultDisplay(data.screenResult, data.screenMethod) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">
             {{ data.infectionResult }}
@@ -220,7 +221,7 @@ const dialogTitle = computed(() => {
             {{ data.screenMethod }}
           </el-descriptions-item>
           <el-descriptions-item label="筛查结果">
-            {{ data.screenResult }}
+            {{ formatScreenResultDisplay(data.screenResult, data.screenMethod) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">
             {{ data.infectionResult }}

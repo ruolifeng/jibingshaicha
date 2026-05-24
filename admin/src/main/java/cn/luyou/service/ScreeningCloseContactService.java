@@ -14,7 +14,8 @@ public interface ScreeningCloseContactService extends IService<ScreeningCloseCon
     ImportResult uploadAndParse(MultipartFile file);
 
     IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
-                                            String district, Integer ccStatus, String finalScreeningResult);
+                                            String district, Integer ccStatus, String finalScreeningResult,
+                                            String phone, String dateFrom, String dateTo);
 
     /** 新增单条筛查记录 */
     void createScreening(ScreeningCloseContact data);

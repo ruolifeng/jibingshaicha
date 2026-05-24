@@ -125,10 +125,21 @@ export function buildPriorityImportFields(
   row: Record<string, any> | null | undefined
 ): Array<{ label: string, value: string }> {
   const fields = resolveImportFields(row)
-  return PRIORITY_DETAIL_FIELDS.map(label => ({
+  return PRIORITY_DETAIL_FIELDS.map((label) => ({
     label,
-    value: fields[label] || resolveFieldFromPatient(row, label) || ""
+    value: resolvePriorityFieldValue(fields, row, label)
   }))
+}
+
+function resolvePriorityFieldValue(
+  fields: Record<string, string>,
+  row: Record<string, any> | null | undefined,
+  label: string
+): string {
+  if (label === "病原学结果") {
+    return fields["病原学结果"] || fields["诊断结果"] || row?.diagnosisResult || ""
+  }
+  return fields[label] || resolveFieldFromPatient(row, label) || ""
 }
 
 /** 解析登记号（来自病案信息/专病网导入） */
@@ -161,9 +172,56 @@ export function formatNoticeSentTime(value: unknown): string {
   return text.replace("T", " ").slice(0, 19)
 }
 
+const NOTICE_RECEIVE_TIMEOUT_MS = 72 * 60 * 60 * 1000
+
+function parseNoticeDateTime(value: unknown): number | null {
+  if (value == null || value === "") return null
+  const text = String(value).replace(" ", "T")
+  const time = new Date(text).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+/** 通知单已下发超过 72 小时且未接收 */
+export function isNoticeReceiveOverdue(row: Record<string, any> | null | undefined): boolean {
+  if (!row || row.noticeStatus !== 1) return false
+  const sentAt = parseNoticeDateTime(row.noticeSentTime)
+  if (sentAt == null) return false
+  return Date.now() - sentAt > NOTICE_RECEIVE_TIMEOUT_MS
+}
+
+/** 通知单管理列表：已接收显示接收时间，已下发未接收显示下发时间 */
+export function resolveNoticeManageTime(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  if (row.noticeStatus === 2) {
+    return formatNoticeSentTime(row.noticeConfirmedTime) || formatNoticeSentTime(row.noticeSentTime)
+  }
+  if (row.noticeStatus === 1) {
+    return formatNoticeSentTime(row.noticeSentTime)
+  }
+  return ""
+}
+
 /** 部分重点字段在 patient 主表也有对应值 */
 function resolveFieldFromPatient(row: Record<string, any> | null | undefined, label: string): string {
   if (!row) return ""
-  if (label === "诊断结果") return row.diagnosisResult || ""
+  if (label === "病原学结果" || label === "诊断结果") return row.diagnosisResult || ""
   return ""
+}
+
+/** 手动新增/编辑表单：从 patient 记录解析病案扩展字段 */
+export function resolveManualEpidemicFormFields(row: Record<string, any> | null | undefined) {
+  const fields = resolveImportFields(row)
+  return {
+    registrationNo: fields["登记号"] || "",
+    contactName: fields["联系人姓名"] || "",
+    contactRelation: fields["联系人监护人与本人关系"] || "",
+    contactGuardianPhone: fields["联系人监护人电话号码"] || "",
+    comorbidity: fields["合并症"] || "",
+    treatmentClass: fields["治疗分类"] || row?.treatmentClass || "",
+    medicationManagementUnit: fields["服药管理单位"] || "",
+    patientRemark: fields["备注"] || "",
+    firstTreatmentPlan: fields["首次治疗方案"] || "",
+    drugSensitivityR: fields["药敏结果：利福平（R）"] || "",
+    drugSensitivityH: fields["药敏结果：异烟肼（H）"] || ""
+  }
 }

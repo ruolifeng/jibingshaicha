@@ -4,6 +4,7 @@ import LatentNoticeFormDialog from "@@/components/LatentNoticeFormDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { TRACKING_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel } from "@@/constants/disease"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
   getLatentAggregateListApi,
   closeCaseApi
@@ -19,24 +20,26 @@ const FETCH_ALL_SIZE = 10000
 const searchForm = reactive({
   name: "",
   idNumber: "",
+  phone: "",
+  dateRange: [] as string[],
   trackingStatus: undefined as number | undefined,
   archived: undefined as number | undefined,
-  populationType: "" // 留空 = 全部来源（后端不过滤）
+  populationType: ""
 })
 
-/** 聚合潜伏感染者通知单管理：仅展示经筛查诊断分流为「潜伏感染者」的记录（referralResult=latent）。
- *  不含密接来源；追踪/胸片/确认诊断在筛查管理「待诊断」完成，本页只负责通知单与后续流转。
- */
 async function fetchData() {
   loading.value = true
   try {
+    const { dateRange, ...rest } = searchForm
     const params: Record<string, any> = {
       page: 1,
       size: FETCH_ALL_SIZE,
       referralResult: "latent",
-      ...searchForm
+      ...rest,
+      ...extractDateRangeParams(dateRange)
     }
     if (!params.populationType) delete params.populationType
+    if (!params.phone) delete params.phone
     const { data } = await getLatentAggregateListApi(params)
     const filtered = (data.records ?? []).filter((r: any) => r.populationType !== "closeContact")
     const start = (paginationData.currentPage - 1) * paginationData.pageSize
@@ -55,6 +58,8 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
+  searchForm.dateRange = []
   searchForm.trackingStatus = undefined
   searchForm.archived = undefined
   searchForm.populationType = ""
@@ -107,6 +112,19 @@ async function handleCloseCase(row: any) {
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入" clearable style="width:180px" />
         </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item label="追踪状态">
           <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width:120px">
             <el-option v-for="(label, val) in TRACKING_STATUS_MAP" :key="val" :label="label" :value="Number(val)" />
@@ -116,7 +134,7 @@ async function handleCloseCase(row: any) {
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
             <el-option label="学生筛查" value="school" />
             <el-option label="重点人群" value="keyPopulation" />
-            <el-option label="常规筛查" value="regular" />
+            <el-option label="疫情筛查" value="regular" />
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
           </el-select>

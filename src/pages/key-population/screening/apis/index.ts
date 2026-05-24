@@ -79,6 +79,8 @@ export function getScreeningKeyPopulationListApi(params: {
   screenMethod?: string
   isLatent?: number
   diagnosisFirst?: string
+  dateFrom?: string
+  dateTo?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "screening/key-population/list",

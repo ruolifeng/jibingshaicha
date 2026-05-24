@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { resolveRegistrationNo } from "@@/utils/patient"
 import { usePatientList } from "./composables/usePatientList"
 
@@ -25,11 +25,29 @@ function openMedication(row: any) {
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入" clearable style="width:180px" />
         </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
+        </el-form-item>
+        <el-form-item label="病原学结果">
+          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:140px">
+            <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
             <el-option label="学生筛查" value="school" />
             <el-option label="重点人群" value="keyPopulation" />
-            <el-option label="常规筛查" value="regular" />
+            <el-option label="疫情筛查" value="regular" />
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
@@ -62,7 +80,7 @@ function openMedication(row: any) {
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="diagnosisResult" label="病原学结果" />
         <el-table-column label="操作" fixed="right" width="100">
           <template #default="{ row }">
             <el-button

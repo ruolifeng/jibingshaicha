@@ -5,6 +5,9 @@ export function exportPatientListApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
 }) {
   return request<Blob>({
     url: "export/patient-list",
@@ -21,6 +24,9 @@ export function getPatientListApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "patient/list",
@@ -36,6 +42,7 @@ export function getPatientHistoryApi(params: {
   populationType: string
   name?: string
   idNumber?: string
+  phone?: string
   startTime?: string
   endTime?: string
 }) {

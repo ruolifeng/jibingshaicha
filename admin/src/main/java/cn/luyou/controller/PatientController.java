@@ -41,6 +41,12 @@ public class PatientController {
         return ResultRes.success(patientService.createManual(body));
     }
 
+    @Operation(summary = "批量导入在管患者（字段与手动新增一致）")
+    @PostMapping("/import")
+    public ResultResponse<ImportResult> importManual(@RequestParam("file") MultipartFile file) {
+        return ResultRes.success(patientService.importManualBatch(file));
+    }
+
     @Operation(summary = "患者详情")
     @GetMapping("/{id}")
     public ResultResponse<Patient> detail(@PathVariable Long id) {
@@ -63,8 +69,12 @@ public class PatientController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String phone,
-            @RequestParam(required = false) String currentAddress) {
-        return ResultRes.success(patientService.queryPage(page, size, populationType, name, idNumber, phone, currentAddress, 0));
+            @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo) {
+        return ResultRes.success(patientService.queryPage(
+                page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0, dateFrom, dateTo));
     }
 
     @Operation(summary = "历史患者列表")
@@ -75,9 +85,12 @@ public class PatientController {
             @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String diagnosisResult,
             @RequestParam(required = false) String startTime,
             @RequestParam(required = false) String endTime) {
-        return ResultRes.success(patientService.queryHistoryPage(page, size, populationType, name, idNumber, startTime, endTime));
+        return ResultRes.success(patientService.queryHistoryPage(
+                page, size, populationType, name, idNumber, phone, diagnosisResult, startTime, endTime));
     }
 
     @Operation(summary = "历史患者统计汇总")

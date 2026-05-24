@@ -130,7 +130,7 @@ async function handleSubmit() {
             <el-select v-model="form.populationType" placeholder="请选择" style="width: 100%">
               <el-option label="学生筛查" value="school" />
               <el-option label="重点人群" value="keyPopulation" />
-              <el-option label="常规筛查" value="regular" />
+              <el-option label="疫情筛查" value="regular" />
               <el-option label="大疫情" value="epidemic" />
               <el-option label="推介" value="referral" />
             </el-select>

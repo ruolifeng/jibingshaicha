@@ -4,6 +4,13 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { formatDateTime } from "@@/utils/datetime"
+import {
+  parseTrackingHistory,
+  TRACK_STATUS_LABEL,
+  TRACKING_STATUS_MAP,
+  getRecommendTime
+} from "@@/utils/referralTracking"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   getReferralTrackingListApi,
@@ -20,34 +27,17 @@ import {
 
 const userStore = useUserStore()
 
-/** 解析追踪历史记录 */
-interface TrackingHistoryItem {
-  attempt: number
-  status: number
-  trackTime: string
-  reason?: string
-}
-
-function parseTrackingHistory(json?: string): TrackingHistoryItem[] {
-  if (!json) return []
-  try {
-    return JSON.parse(json)
-  } catch {
-    return []
-  }
-}
-
-const TRACK_STATUS_LABEL: Record<number, string> = {
-  1: "到位",
-  2: "未到位",
-  3: "其他"
-}
-
 // ===== 列表 =====
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
-const searchForm = reactive({ name: "", idNumber: "" })
+const searchForm = reactive({
+  name: "",
+  idNumber: "",
+  phone: "",
+  township: "",
+  dateRange: [] as string[]
+})
 const paginationData = reactive({ currentPage: 1, pageSize: 20 })
 
 async function fetchList() {
@@ -58,7 +48,10 @@ async function fetchList() {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      township: searchForm.township || undefined,
+      ...extractDateRangeParams(searchForm.dateRange)
     })
     tableData.value = res.data?.records ?? []
     total.value = res.data?.total ?? 0
@@ -77,6 +70,9 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
+  searchForm.township = ""
+  searchForm.dateRange = []
   handleSearch()
 }
 
@@ -196,10 +192,38 @@ async function handleTrack() {
     ElMessage.warning("未到位时必须填写原因")
     return
   }
+  const willForceEnd = trackForm.status === 2 && (trackRow.value?.notInPlaceCount ?? 0) >= 2
   await trackReferralApi(trackRow.value.id, trackForm.status, trackForm.remark)
-  ElMessage.success("追踪状态已更新")
+  if (willForceEnd) {
+    ElMessage.warning("已记录第 3 次未到位，追踪已强制结束")
+  } else if (trackForm.status === 1) {
+    ElMessage.success("已确认到位")
+  } else {
+    ElMessage.success("追踪记录已保存")
+  }
   trackDialogVisible.value = false
   fetchList()
+}
+
+// ===== 查看追踪记录（只读） =====
+const historyViewVisible = ref(false)
+const historyViewRow = ref<any>(null)
+const historyViewList = computed(() =>
+  parseTrackingHistory(historyViewRow.value?.trackingHistoryJson)
+)
+
+function openHistoryView(row: any) {
+  historyViewRow.value = row
+  historyViewVisible.value = true
+}
+
+function hasTrackingHistory(row: any) {
+  return parseTrackingHistory(row?.trackingHistoryJson).length > 0
+}
+
+function formatRecommendTime(row: any) {
+  const time = getRecommendTime(row)
+  return time ? formatDateTime(time) : "-"
 }
 
 /** 当前用户是否为推介接收人 */
@@ -280,14 +304,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
   2: { label: "已接受", type: "success" },
   3: { label: "已拒绝", type: "danger" }
 }
-
-const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
-  0: { label: "待追踪", type: "info" },
-  1: { label: "到位", type: "success" },
-  2: { label: "未到位", type: "warning" },
-  3: { label: "其他", type: "" },
-  4: { label: "强制结束", type: "danger" }
-}
 </script>
 
 <template>
@@ -300,6 +316,22 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-form-item>
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="乡镇">
+          <el-input v-model="searchForm.township" placeholder="请输入乡镇" clearable />
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>
@@ -346,7 +378,7 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         <el-table-column prop="diagnosisResult" label="诊断结果" />
         <el-table-column label="推介时间" min-width="160">
           <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
+            {{ formatRecommendTime(row) }}
           </template>
         </el-table-column>
         <el-table-column label="到位时间" min-width="160">
@@ -396,6 +428,12 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >录入诊断</el-button>
+            <!-- 查看追踪记录 -->
+            <el-button
+              v-if="hasTrackingHistory(row)"
+              type="info" link size="small"
+              @click="openHistoryView(row)"
+            >追踪记录</el-button>
             <!-- 删除 -->
             <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -522,6 +560,24 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
       <template #footer>
         <el-button @click="rejectDialogVisible = false">取消</el-button>
         <el-button type="danger" @click="handleReject">确认拒绝</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 查看追踪记录弹窗（只读） -->
+    <el-dialog v-model="historyViewVisible" title="追踪过程" width="520px">
+      <div v-if="historyViewList.length === 0" class="tracking-history-empty">暂无追踪记录</div>
+      <div v-else class="tracking-history">
+        <div v-for="item in historyViewList" :key="item.attempt" class="tracking-history-item">
+          <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
+          <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+            {{ TRACK_STATUS_LABEL[item.status] }}
+          </el-tag>
+          <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+          <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="historyViewVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -702,5 +758,11 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
 .tracking-history-reason {
   width: 100%;
   color: var(--el-text-color-regular);
+}
+
+.tracking-history-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--el-text-color-secondary);
 }
 </style>

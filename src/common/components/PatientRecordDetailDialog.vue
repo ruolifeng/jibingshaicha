@@ -3,7 +3,9 @@ import { getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
 import {
   buildOrderedImportFields,
   buildPriorityImportFields,
+  formatNoticeSentTime,
   isRetreatmentPatient,
+  resolveRegistrationNo,
   resolveTreatmentClass
 } from "@@/utils/patient"
 import { getPatientDetailApi } from "@/pages/patient-management/apis"
@@ -27,6 +29,16 @@ const importSectionTitle = computed(() => {
   if (detail.value?.populationType === "specialDisease") return "专病网导入信息"
   if (detail.value?.populationType === "epidemic") return "大疫情报告卡信息"
   return "导入信息"
+})
+
+const visiblePriorityFields = computed(() => {
+  if (!detail.value) return []
+  return priorityFields.value.filter((item) => {
+    if (item.label === "病原学结果" && detail.value?.diagnosisResult) return false
+    if (item.label === "登记号" && resolveRegistrationNo(detail.value)) return false
+    if (item.label === "治疗分类" && resolveTreatmentClass(detail.value)) return false
+    return true
+  })
 })
 
 async function loadDetail() {
@@ -83,6 +95,9 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="证件号" :span="2">
             {{ detail.idNumber || "-" }}
           </el-descriptions-item>
+          <el-descriptions-item label="登记号">
+            {{ resolveRegistrationNo(detail) || "-" }}
+          </el-descriptions-item>
           <el-descriptions-item label="民族">
             {{ detail.ethnicity || "-" }}
           </el-descriptions-item>
@@ -95,27 +110,18 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="现住址" :span="2">
             {{ detail.currentAddress || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="诊断结果">
+          <el-descriptions-item label="病原学结果">
             {{ detail.diagnosisResult || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item
-            v-if="detail.populationType === 'specialDisease' || detail.crowdCategory"
-            label="人群分类"
-          >
+          <el-descriptions-item label="人群分类">
             {{ detail.crowdCategory || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item
-            v-if="detail.populationType === 'specialDisease' || detail.currentManagementUnit"
-            label="现管单位"
-          >
+          <el-descriptions-item label="现管单位">
             {{ detail.currentManagementUnit || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item
-            v-if="resolveTreatmentClass(detail)"
-            label="治疗分类"
-          >
+          <el-descriptions-item label="治疗分类">
             <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(detail) }">
-              {{ resolveTreatmentClass(detail) }}
+              {{ resolveTreatmentClass(detail) || "-" }}
             </span>
           </el-descriptions-item>
         </el-descriptions>
@@ -139,6 +145,15 @@ watch(() => props.visible, (val) => {
                 : (detail.firstVisitStatus === 0 ? "草稿" : "未完成")
             }}
           </el-descriptions-item>
+          <el-descriptions-item label="通知单发送时间">
+            {{ formatNoticeSentTime(detail.noticeSentTime) || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="服药管理单位">
+            {{ detail.noticeMedicationUnit || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="通知单备注" :span="2">
+            {{ detail.noticeRemark || "-" }}
+          </el-descriptions-item>
           <el-descriptions-item label="胸片检查时间">
             {{ detail.chestXrayDate || "-" }}
           </el-descriptions-item>
@@ -157,33 +172,38 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="创建时间">
             {{ detail.createTime || "-" }}
           </el-descriptions-item>
+          <el-descriptions-item v-if="detail.archived === 1" label="归档时间">
+            {{ detail.archivedTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail.archived === 1" label="归档备注">
+            {{ detail.archiveRemark || "-" }}
+          </el-descriptions-item>
         </el-descriptions>
 
-        <template v-if="hasImportFields || detail.populationType === 'specialDisease' || detail.populationType === 'epidemic'">
-          <div class="section-title">
-            重点信息
-          </div>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item
-              v-for="item in priorityFields"
-              :key="item.label"
-              :label="item.label"
-              :span="item.label === '备注' ? 2 : 1"
+        <div class="section-title">
+          重点信息
+        </div>
+        <el-descriptions :column="2" border>
+          <el-descriptions-item
+            v-for="item in visiblePriorityFields"
+            :key="item.label"
+            :label="item.label"
+            :span="item.label === '备注' ? 2 : 1"
+          >
+            <span
+              v-if="item.label === '治疗分类'"
+              :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(detail) }"
             >
-              <span
-                v-if="item.label === '治疗分类'"
-                :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(detail) }"
-              >
-                {{ item.value || "-" }}
-              </span>
-              <span v-else>{{ item.value || "-" }}</span>
-            </el-descriptions-item>
-          </el-descriptions>
+              {{ item.value || "-" }}
+            </span>
+            <span v-else>{{ item.value || "-" }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
 
-          <div v-if="hasImportFields" class="section-title">
-            {{ importSectionTitle }}（全部）
-          </div>
-          <el-descriptions v-if="hasImportFields" :column="2" border class="import-fields">
+        <div v-if="hasImportFields" class="section-title">
+          {{ importSectionTitle }}（全部）
+        </div>
+        <el-descriptions v-if="hasImportFields" :column="2" border class="import-fields">
             <el-descriptions-item
               v-for="item in allImportFields"
               :key="item.label"
@@ -199,7 +219,6 @@ watch(() => props.visible, (val) => {
               <span v-else>{{ item.value }}</span>
             </el-descriptions-item>
           </el-descriptions>
-        </template>
       </template>
     </div>
   </el-dialog>

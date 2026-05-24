@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
@@ -33,6 +34,7 @@ import cn.luyou.service.ReferralService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -54,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,7 +111,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     public IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
-                                             String referralResult, String diagnosisFirst) {
+                                             String referralResult, String diagnosisFirst,
+                                             String phone, String dateFrom, String dateTo) {
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         if (StrUtil.isNotBlank(populationType)) {
             // 指定来源时精确匹配（密接模块传 closeContact，其他模块传具体值）
@@ -119,6 +125,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         wrapper.like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived)
                 .eq(StrUtil.isNotBlank(diagnosisFirst), LatentInfection::getDiagnosisFirst, diagnosisFirst)
@@ -136,7 +143,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             wrapper.eq(LatentInfection::getReferralResult, referralResult);
         }
 
-        wrapper.orderByDesc(LatentInfection::getCreateTime);
+        wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
+                .le(createTo != null, LatentInfection::getCreateTime, createTo)
+                .orderByDesc(LatentInfection::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             Integer currentRole = BaseContext.getCurrentRole();
             if (currentRole != null && currentRole == 6) {
@@ -854,6 +863,132 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public ImportResult importManualBatch(MultipartFile file) {
+        List<Map<Integer, String>> allRows = new ArrayList<>();
+        try {
+            EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
+                @Override
+                public void invoke(Map<Integer, String> data, AnalysisContext context) {
+                    allRows.add(new LinkedHashMap<>(data));
+                }
+
+                @Override
+                public void doAfterAllAnalysed(AnalysisContext context) {
+                    log.info("潜伏感染者批量导入解析完成，共 {} 行（含表头）", allRows.size());
+                }
+            }).sheet().headRowNumber(0).doRead();
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败：" + e.getMessage());
+        }
+
+        if (allRows.size() < 2) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
+        }
+
+        Map<Integer, String> headerRow = allRows.get(0);
+        Map<String, Integer> headerIndex = new HashMap<>();
+        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
+            if (StrUtil.isNotBlank(entry.getValue())) {
+                headerIndex.put(entry.getValue().trim(), entry.getKey());
+            }
+        }
+
+        if (!headerIndex.containsKey("姓名") || !headerIndex.containsKey("证件号") || !headerIndex.containsKey("数据来源")) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "模板表头不正确，请下载最新模板后重试");
+        }
+
+        ImportResult result = new ImportResult();
+        List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
+        Set<String> importedKeys = new HashSet<>();
+        for (int i = 0; i < dataRows.size(); i++) {
+            Map<Integer, String> row = dataRows.get(i);
+            int rowNum = i + 2;
+            try {
+                String name = getImportField(row, headerIndex, "姓名");
+                String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+                if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+                    continue;
+                }
+
+                String populationTypeRaw = getImportField(row, headerIndex, "数据来源");
+                String populationType = resolvePopulationType(populationTypeRaw);
+                String phone = normalizeExcelCellText(getImportField(row, headerIndex, "联系电话"));
+
+                boolean hasError = false;
+                if (StrUtil.isBlank(name)) {
+                    result.addError(rowNum, idNumber, "姓名不能为空");
+                    hasError = true;
+                }
+                if (StrUtil.isBlank(idNumber)) {
+                    result.addError(rowNum, name, "证件号不能为空");
+                    hasError = true;
+                } else if (!isValidIdCard(idNumber)) {
+                    result.addError(rowNum, name, "身份证号格式不正确");
+                    hasError = true;
+                }
+                if (StrUtil.isBlank(populationType)) {
+                    result.addError(rowNum, name, "数据来源无效（请填写：学生筛查/重点人群/疫情筛查/大疫情/推介）");
+                    hasError = true;
+                }
+                if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
+                    result.addError(rowNum, name, "手机号格式不正确");
+                    hasError = true;
+                }
+                if (hasError) {
+                    continue;
+                }
+
+                String dedupeKey = populationType + ":" + idNumber;
+                if (importedKeys.contains(dedupeKey)) {
+                    result.addError(rowNum, name, "该证件号在本文件中重复");
+                    continue;
+                }
+
+                if (lambdaQuery()
+                        .eq(LatentInfection::getIdNumber, idNumber)
+                        .eq(LatentInfection::getPopulationType, populationType)
+                        .eq(LatentInfection::getArchived, 0)
+                        .exists()) {
+                    result.addError(rowNum, name, "该证件号在此数据来源下已存在");
+                    continue;
+                }
+
+                LatentInfection latent = LatentInfection.builder()
+                        .populationType(populationType)
+                        .name(name)
+                        .idNumber(idNumber)
+                        .phone(phone)
+                        .gender(getImportField(row, headerIndex, "性别"))
+                        .age(parseIntegerField(getImportField(row, headerIndex, "年龄")))
+                        .infectionResult(getImportField(row, headerIndex, "感染筛查结果"))
+                        .diagnosisFirst(getImportField(row, headerIndex, "首次诊断"))
+                        .hasChestXray(getImportField(row, headerIndex, "是否胸片检查"))
+                        .chestXrayDate(parseDateCell(getImportField(row, headerIndex, "胸片检查日期")))
+                        .chestXrayResult(getImportField(row, headerIndex, "胸片检查结果"))
+                        .trackingRemark(getImportField(row, headerIndex, "追踪备注"))
+                        .trackingStatus(0)
+                        .notInPlaceCount(0)
+                        .archived(0)
+                        .departmentId(BaseContext.getCurrentDepartmentId())
+                        .build();
+                save(latent);
+                importedKeys.add(dedupeKey);
+                result.setSuccessCount(result.getSuccessCount() + 1);
+            } catch (Exception e) {
+                result.addError(rowNum, getImportField(row, headerIndex, "姓名"), "数据解析失败：" + e.getMessage());
+            }
+        }
+
+        if (result.getSuccessCount() == 0 && result.getErrors().isEmpty()) {
+            result.addError(0, "", "未找到有效数据行，请确认已填写姓名和证件号");
+        }
+
+        log.info("潜伏感染者批量导入完成，成功 {} 条，错误 {} 条", result.getSuccessCount(), result.getErrors().size());
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteCascade(Long id) {
         LatentInfection latent = getById(id);
         if (latent == null) {
@@ -925,7 +1060,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     private Integer parseIntegerField(Object val) {
         if (val == null || StrUtil.isBlank(val.toString())) return null;
-        return Integer.valueOf(val.toString());
+        try {
+            String digits = val.toString().trim().replaceAll("[^0-9]", "");
+            if (StrUtil.isBlank(digits)) return null;
+            return Integer.parseInt(digits);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private boolean isValidIdCard(String id) {
@@ -934,5 +1075,43 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     private boolean isValidPhone(String phone) {
         return phone != null && phone.matches("^1[3-9]\\d{9}$");
+    }
+
+    private String getImportField(Map<Integer, String> row, Map<String, Integer> headerIndex, String... headers) {
+        for (String header : headers) {
+            Integer idx = headerIndex.get(header);
+            if (idx == null) continue;
+            String val = row.get(idx);
+            if (StrUtil.isNotBlank(val)) return val.trim();
+        }
+        return "";
+    }
+
+    /** 兼容 Excel 数值单元格（科学计数法、末尾 .0） */
+    private String normalizeExcelCellText(String val) {
+        if (StrUtil.isBlank(val)) return "";
+        String text = val.trim();
+        if (text.matches(".*[eE].*") || text.matches("\\d+\\.0+")) {
+            try {
+                return new java.math.BigDecimal(text).toPlainString();
+            } catch (Exception ignored) {
+                return text;
+            }
+        }
+        return text;
+    }
+
+    private String resolvePopulationType(String raw) {
+        if (StrUtil.isBlank(raw)) return "";
+        String v = raw.trim();
+        if (MANUAL_POPULATION_TYPES.contains(v)) return v;
+        return switch (v) {
+            case "学生筛查" -> "school";
+            case "重点人群" -> "keyPopulation";
+            case "疫情筛查", "常规筛查" -> "regular";
+            case "大疫情" -> "epidemic";
+            case "推介" -> "referral";
+            default -> "";
+        };
     }
 }

@@ -39,6 +39,29 @@ export function exportAllPatientsApi(params: Record<string, any>) {
   })
 }
 
+/** 批量导入在管患者（字段与新增一致） */
+export function importPatientApi(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+    url: "patient/import",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000
+  })
+}
+
+/** 下载在管患者导入模板 */
+export function downloadPatientTemplateApi() {
+  return request<Blob>({
+    url: "template/download",
+    method: "get",
+    params: { type: "patient" },
+    responseType: "blob"
+  })
+}
+
 /** 历史患者列表 */
 export function getPatientHistoryListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "patient/history", method: "get", params })

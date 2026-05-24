@@ -7,7 +7,7 @@ const templateDownloading = ref<string | null>(null)
 const TEMPLATE_OPTIONS = [
   { label: "学生筛查数据模板", type: "school" },
   { label: "重点人群筛查数据模板", type: "keyPopulation" },
-  { label: "常规筛查数据模板", type: "regular" }
+  { label: "疫情筛查数据模板", type: "regular" }
 ]
 
 async function handleDownloadTemplate(type: string, label: string) {

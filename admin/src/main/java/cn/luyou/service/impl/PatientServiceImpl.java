@@ -5,9 +5,11 @@ import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.constant.PatientImportHeaders;
+import cn.luyou.constant.PatientManualImportHeaders;
 import cn.luyou.model.EpidemicReport;
 import cn.luyou.model.FirstVisit;
 import cn.luyou.model.FollowUpVisit;
+import cn.luyou.model.ImportResult;
 import cn.luyou.model.MedicationManagement;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
@@ -26,6 +28,7 @@ import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -45,6 +48,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +71,23 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             "密接", "学生", "教职工", "老年人", "糖尿病", "双感", "既往结核", "非重点人群"
     );
 
+    /** 手动新增/导入：前端 camelCase 字段 → epidemicData 中文键 */
+    private static final List<String[]> MANUAL_EPIDEMIC_MAPPINGS = List.of(
+            new String[]{"crowdCategory", "人群分类"},
+            new String[]{"currentManagementUnit", "现管单位"},
+            new String[]{"registrationNo", "登记号"},
+            new String[]{"contactName", "联系人姓名"},
+            new String[]{"contactRelation", "联系人监护人与本人关系"},
+            new String[]{"contactGuardianPhone", "联系人监护人电话号码"},
+            new String[]{"comorbidity", "合并症"},
+            new String[]{"treatmentClass", "治疗分类"},
+            new String[]{"medicationManagementUnit", "服药管理单位"},
+            new String[]{"patientRemark", "备注"},
+            new String[]{"firstTreatmentPlan", "首次治疗方案"},
+            new String[]{"drugSensitivityR", "药敏结果：利福平（R）"},
+            new String[]{"drugSensitivityH", "药敏结果：异烟肼（H）"}
+    );
+
     private final DepartmentService departmentService;
     private final EpidemicReportService epidemicReportService;
     private final ObjectMapper objectMapper;
@@ -80,9 +102,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
-                                     Integer archived) {
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
-                populationType, name, idNumber, phone, currentAddress, archived);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo);
         wrapper.orderByDesc(Patient::getCreateTime);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
@@ -94,9 +116,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public List<Patient> listForExport(String populationType, String name, String idNumber,
-                                        String phone, String currentAddress, Integer archived) {
+                                        String phone, String currentAddress, String diagnosisResult,
+                                        Integer archived, String dateFrom, String dateTo) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
-                populationType, name, idNumber, phone, currentAddress, archived);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo);
         wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getCreateTime);
         List<Patient> patients = list(wrapper);
         fillEpidemicExtraFields(patients);
@@ -105,14 +128,21 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private LambdaQueryWrapper<Patient> buildPatientQueryWrapper(String populationType, String name,
                                                                   String idNumber, String phone,
-                                                                  String currentAddress, Integer archived) {
+                                                                  String currentAddress, String diagnosisResult,
+                                                                  Integer archived,
+                                                                  String dateFrom, String dateTo) {
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
-                .eq(archived != null, Patient::getArchived, archived);
+                .eq(StrUtil.isNotBlank(diagnosisResult), Patient::getDiagnosisResult, diagnosisResult)
+                .eq(archived != null, Patient::getArchived, archived)
+                .ge(createFrom != null, Patient::getCreateTime, createFrom)
+                .le(createTo != null, Patient::getCreateTime, createTo);
         applyPatientScopeFilter(wrapper);
         return wrapper;
     }
@@ -258,6 +288,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setNoticeStatus(n.getStatus());
                 p.setNoticeId(n.getId());
                 p.setNoticeSentTime(n.getSentTime());
+                p.setNoticeConfirmedTime(n.getConfirmedTime());
                 p.setNoticeMedicationUnit(n.getMedicationManagementUnit());
                 p.setNoticeRemark(n.getRemark());
             }
@@ -428,13 +459,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public IPage<Patient> queryHistoryPage(int page, int size, String populationType,
-                                            String name, String idNumber,
-                                            String startTime, String endTime) {
+                                            String name, String idNumber, String phone,
+                                            String diagnosisResult, String startTime, String endTime) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .eq(Patient::getArchived, 1)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
+                .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
+                .eq(StrUtil.isNotBlank(diagnosisResult), Patient::getDiagnosisResult, diagnosisResult)
                 .ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
@@ -877,9 +910,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         updateLinkedScreening(patient, body);
     }
 
-    /** 合并专病网扩展字段到 epidemicData JSON */
+    /** 合并手动录入扩展字段到 epidemicData JSON */
     private void mergeEpidemicExtraFields(Patient patient, Map<String, Object> body) {
-        if (!body.containsKey("crowdCategory") && !body.containsKey("currentManagementUnit")) {
+        boolean hasManualField = MANUAL_EPIDEMIC_MAPPINGS.stream()
+                .anyMatch(pair -> body.containsKey(pair[0]));
+        if (!hasManualField) {
             return;
         }
         Map<String, Object> extra = new LinkedHashMap<>();
@@ -892,20 +927,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 // 原 JSON 无效时重建
             }
         }
-        if (body.containsKey("crowdCategory")) {
-            String crowdCategory = body.get("crowdCategory") == null ? "" : body.get("crowdCategory").toString().trim();
-            if (StrUtil.isNotBlank(crowdCategory)) {
-                extra.put("人群分类", crowdCategory);
-            } else {
-                extra.remove("人群分类");
+        for (String[] pair : MANUAL_EPIDEMIC_MAPPINGS) {
+            String bodyKey = pair[0];
+            String jsonKey = pair[1];
+            if (!body.containsKey(bodyKey)) {
+                continue;
             }
-        }
-        if (body.containsKey("currentManagementUnit")) {
-            String currentUnit = body.get("currentManagementUnit") == null ? "" : body.get("currentManagementUnit").toString().trim();
-            if (StrUtil.isNotBlank(currentUnit)) {
-                extra.put("现管单位", currentUnit);
+            String value = body.get(bodyKey) == null ? "" : body.get(bodyKey).toString().trim();
+            if (StrUtil.isNotBlank(value)) {
+                extra.put(jsonKey, value);
             } else {
-                extra.remove("现管单位");
+                extra.remove(jsonKey);
             }
         }
         try {
@@ -955,7 +987,20 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private LocalDate parseLocalDateField(Object val) {
         if (val == null || StrUtil.isBlank(val.toString())) return null;
-        return LocalDate.parse(val.toString());
+        String str = val.toString().trim();
+        try {
+            return LocalDate.parse(str);
+        } catch (Exception e1) {
+            try {
+                return LocalDate.parse(str, java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+            } catch (Exception e2) {
+                try {
+                    return LocalDate.parse(str, java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+                } catch (Exception e3) {
+                    return null;
+                }
+            }
+        }
     }
 
     private String stringField(Object val) {
@@ -1009,12 +1054,173 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
 
         save(patient);
-        if (body.containsKey("crowdCategory") || body.containsKey("currentManagementUnit")) {
-            mergeEpidemicExtraFields(patient, body);
+        mergeEpidemicExtraFields(patient, body);
+        if (StrUtil.isNotBlank(patient.getEpidemicData())) {
             updateById(patient);
         }
         log.info("手动新增在管患者 id={}, populationType={}", patient.getId(), populationType);
         return patient.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ImportResult importManualBatch(MultipartFile file) {
+        List<Map<Integer, String>> allRows = new ArrayList<>();
+        try {
+            EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
+                @Override
+                public void invoke(Map<Integer, String> data, AnalysisContext context) {
+                    allRows.add(new LinkedHashMap<>(data));
+                }
+
+                @Override
+                public void doAfterAllAnalysed(AnalysisContext context) {
+                    log.info("在管患者批量导入解析完成，共 {} 行（含表头）", allRows.size());
+                }
+            }).sheet().headRowNumber(0).doRead();
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败：" + e.getMessage());
+        }
+
+        if (allRows.size() < 2) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
+        }
+
+        Map<Integer, String> headerRow = allRows.get(0);
+        Map<String, Integer> headerIndex = new HashMap<>();
+        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
+            if (StrUtil.isNotBlank(entry.getValue())) {
+                headerIndex.put(entry.getValue().trim(), entry.getKey());
+            }
+        }
+
+        if (!headerIndex.containsKey("姓名") || !headerIndex.containsKey("证件号") || !headerIndex.containsKey("数据来源")) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "模板表头不正确，请下载最新模板后重试");
+        }
+
+        ImportResult result = new ImportResult();
+        List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
+        Set<String> importedKeys = new HashSet<>();
+        for (int i = 0; i < dataRows.size(); i++) {
+            Map<Integer, String> row = dataRows.get(i);
+            int rowNum = i + 2;
+            try {
+                String name = getImportField(row, headerIndex, "姓名");
+                String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+                if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+                    continue;
+                }
+
+                String populationTypeRaw = getImportField(row, headerIndex, "数据来源");
+                String populationType = resolvePopulationType(populationTypeRaw);
+                String phone = normalizeExcelCellText(getImportField(row, headerIndex, "联系电话"));
+
+                boolean hasError = false;
+                if (StrUtil.isBlank(name)) {
+                    result.addError(rowNum, idNumber, "姓名不能为空");
+                    hasError = true;
+                }
+                if (StrUtil.isBlank(idNumber)) {
+                    result.addError(rowNum, name, "证件号不能为空");
+                    hasError = true;
+                } else if (!isValidIdCard(idNumber)) {
+                    result.addError(rowNum, name, "身份证号格式不正确");
+                    hasError = true;
+                }
+                if (StrUtil.isBlank(populationType)) {
+                    result.addError(rowNum, name, "数据来源无效");
+                    hasError = true;
+                }
+                if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
+                    result.addError(rowNum, name, "手机号格式不正确");
+                    hasError = true;
+                }
+                if (hasError) {
+                    continue;
+                }
+
+                String dedupeKey = populationType + ":" + idNumber;
+                if (importedKeys.contains(dedupeKey)) {
+                    result.addError(rowNum, name, "该证件号在本文件中重复");
+                    continue;
+                }
+                if (lambdaQuery()
+                        .eq(Patient::getIdNumber, idNumber)
+                        .eq(Patient::getPopulationType, populationType)
+                        .eq(Patient::getArchived, 0)
+                        .exists()) {
+                    result.addError(rowNum, name, "该证件号在此数据来源下已存在");
+                    continue;
+                }
+
+                Map<String, String> epidemicFields = buildEpidemicFieldsFromImportRow(row, headerIndex);
+                String epidemicJson = epidemicFields.isEmpty()
+                        ? null
+                        : objectMapper.writeValueAsString(epidemicFields);
+
+                Patient patient = Patient.builder()
+                        .populationType(populationType)
+                        .name(name)
+                        .idNumber(idNumber)
+                        .phone(phone)
+                        .gender(getImportField(row, headerIndex, "性别"))
+                        .age(parseIntegerField(getImportField(row, headerIndex, "年龄")))
+                        .idType(StrUtil.blankToDefault(getImportField(row, headerIndex, "证件类型"), "居民身份证"))
+                        .ethnicity(getImportField(row, headerIndex, "民族"))
+                        .householdAddress(getImportField(row, headerIndex, "户籍地址"))
+                        .currentAddress(getImportField(row, headerIndex, "现住址"))
+                        .diagnosisResult(getImportField(row, headerIndex, "诊断结果"))
+                        .epidemicData(epidemicJson)
+                        .source("manual")
+                        .archived(0)
+                        .departmentId(BaseContext.getCurrentDepartmentId())
+                        .build();
+
+                String birthDate = getImportField(row, headerIndex, "出生日期");
+                if (StrUtil.isNotBlank(birthDate)) {
+                    LocalDate parsedBirthDate = parseLocalDateField(birthDate);
+                    if (parsedBirthDate == null) {
+                        result.addError(rowNum, name, "出生日期格式不正确");
+                        continue;
+                    }
+                    patient.setBirthDate(parsedBirthDate);
+                }
+
+                save(patient);
+                importedKeys.add(dedupeKey);
+                result.setSuccessCount(result.getSuccessCount() + 1);
+            } catch (Exception e) {
+                result.addError(rowNum, getImportField(row, headerIndex, "姓名"), "数据解析失败：" + e.getMessage());
+            }
+        }
+
+        if (result.getSuccessCount() == 0 && result.getErrors().isEmpty()) {
+            result.addError(0, "", "未找到有效数据行，请确认已填写姓名和证件号");
+        }
+
+        log.info("在管患者批量导入完成，成功 {} 条，错误 {} 条", result.getSuccessCount(), result.getErrors().size());
+        return result;
+    }
+
+    private Map<String, String> buildEpidemicFieldsFromImportRow(
+            Map<Integer, String> row, Map<String, Integer> headerIndex) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String header : PatientManualImportHeaders.FIELDS) {
+            if ("数据来源".equals(header) || "姓名".equals(header) || "性别".equals(header)
+                    || "出生日期".equals(header) || "年龄".equals(header) || "证件类型".equals(header)
+                    || "证件号".equals(header) || "民族".equals(header) || "联系电话".equals(header)
+                    || "户籍地址".equals(header) || "现住址".equals(header) || "诊断结果".equals(header)) {
+                continue;
+            }
+            String value = getImportField(row, headerIndex, header);
+            if ("联系人监护人电话号码".equals(header)) {
+                value = normalizeExcelCellText(value);
+            }
+            if (StrUtil.isNotBlank(value)) {
+                fields.put(header, value);
+            }
+        }
+        return fields;
     }
 
     @Override
@@ -1027,7 +1233,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private Integer parseIntegerField(Object val) {
         if (val == null || StrUtil.isBlank(val.toString())) return null;
-        return Integer.valueOf(val.toString());
+        try {
+            String digits = val.toString().trim().replaceAll("[^0-9]", "");
+            if (StrUtil.isBlank(digits)) return null;
+            return Integer.parseInt(digits);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private boolean isValidIdCard(String id) {
@@ -1036,5 +1248,44 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private boolean isValidPhone(String phone) {
         return phone != null && phone.matches("^1[3-9]\\d{9}$");
+    }
+
+    private String getImportField(Map<Integer, String> row, Map<String, Integer> headerIndex, String... headers) {
+        for (String header : headers) {
+            Integer idx = headerIndex.get(header);
+            if (idx == null) continue;
+            String val = row.get(idx);
+            if (StrUtil.isNotBlank(val)) return val.trim();
+        }
+        return "";
+    }
+
+    private String normalizeExcelCellText(String val) {
+        if (StrUtil.isBlank(val)) return "";
+        String text = val.trim();
+        if (text.matches(".*[eE].*") || text.matches("\\d+\\.0+")) {
+            try {
+                return new java.math.BigDecimal(text).toPlainString();
+            } catch (Exception ignored) {
+                return text;
+            }
+        }
+        return text;
+    }
+
+    private String resolvePopulationType(String raw) {
+        if (StrUtil.isBlank(raw)) return "";
+        String v = raw.trim();
+        if (MANUAL_POPULATION_TYPES.contains(v)) return v;
+        return switch (v) {
+            case "学生筛查" -> "school";
+            case "重点人群" -> "keyPopulation";
+            case "疫情筛查", "常规筛查" -> "regular";
+            case "大疫情" -> "epidemic";
+            case "推介" -> "referral";
+            case "密接" -> "closeContact";
+            case "专病网" -> "specialDisease";
+            default -> "";
+        };
     }
 }
