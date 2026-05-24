@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
 import { NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { formatNoticeSentTime } from "@@/utils/patient"
 import { confirmNoticeApi, getNoticeListByBizApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -116,8 +117,14 @@ async function handleConfirmNotice(noticeId: number) {
       <el-descriptions-item label="治疗机构">
         {{ noticeDetailData.treatmentInstitution || "-" }}
       </el-descriptions-item>
+      <el-descriptions-item label="服药管理单位">
+        {{ noticeDetailData.medicationManagementUnit || "-" }}
+      </el-descriptions-item>
       <el-descriptions-item label="下发时间">
         {{ noticeDetailData.issuedTime || "-" }}
+      </el-descriptions-item>
+      <el-descriptions-item label="备注" :span="2">
+        {{ noticeDetailData.remark || "-" }}
       </el-descriptions-item>
       <el-descriptions-item v-if="noticeDetailData.otherNotes" label="其他注意事项" :span="2">
         {{ noticeDetailData.otherNotes }}
@@ -130,8 +137,8 @@ async function handleConfirmNotice(noticeId: number) {
         {{ noticeDetailData.receiverName || "-" }}
         <span v-if="noticeDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.receiverOrgName }}）</span>
       </el-descriptions-item>
-      <el-descriptions-item label="发送时间">
-        {{ noticeDetailData.sentTime }}
+      <el-descriptions-item label="通知管理时间">
+        {{ formatNoticeSentTime(noticeDetailData.sentTime) || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="状态">
         <el-tag :type="noticeDetailData.status === 2 ? 'success' : noticeDetailData.status === 0 ? 'info' : 'warning'" size="small">

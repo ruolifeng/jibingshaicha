@@ -117,11 +117,19 @@ async function openPrintFirstVisit(row: any) {
               :disabled="row.archived === 1"
               @click="openFirstVisit(row)"
             >
-              {{ row.hasFirstVisit ? "编辑首次随访" : "填写首次随访" }}
+              {{
+                !row.hasFirstVisit
+                  ? "填写首次随访"
+                  : (row.firstVisitEditable === false ? "查看首次随访" : "编辑首次随访")
+              }}
             </el-button>
             <template v-if="row.hasFirstVisit">
-              <el-button type="info" link size="small" @click="viewFirstVisit(row)">查看</el-button>
-              <el-button type="warning" link size="small" @click="openPrintFirstVisit(row)">打印</el-button>
+              <el-button type="info" link size="small" @click="viewFirstVisit(row)">
+                查看
+              </el-button>
+              <el-button type="warning" link size="small" @click="openPrintFirstVisit(row)">
+                打印
+              </el-button>
             </template>
           </template>
         </el-table-column>

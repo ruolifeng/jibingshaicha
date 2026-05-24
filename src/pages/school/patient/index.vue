@@ -31,6 +31,7 @@ import {
   VISIT_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { ArrowDown } from "@element-plus/icons-vue"
+import { applyFirstVisitChemotherapyDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { idCardRule } from "@@/utils/validate"
 import { confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
@@ -342,6 +343,7 @@ const firstVisitRow = ref<any>(null)
 const firstVisitCompleted = ref(false)
 const firstVisitForm = reactive({
   id: undefined as number | undefined,
+  formNo: "",
   visitDate: "",
   visitMethod: "",
   patientType: "",
@@ -372,6 +374,7 @@ function openFirstVisitDialog(row: any) {
   firstVisitCompleted.value = false
   Object.assign(firstVisitForm, {
     id: undefined,
+    formNo: "",
     visitDate: "",
     visitMethod: "",
     patientType: "",
@@ -402,18 +405,20 @@ function openFirstVisitDialog(row: any) {
 async function loadFirstVisitForm(patientId: number) {
   try {
     const { data } = await getFirstVisitApi(patientId)
-    if (!data) return
-    firstVisitCompleted.value = data.status === 1
-    Object.assign(firstVisitForm, {
-      ...data,
-      symptoms: data.symptoms ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-      drugForm: data.drugForm ? String(data.drugForm).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-      educationItems: data.educationItems
-        ? (typeof data.educationItems === "string" ? JSON.parse(data.educationItems) : data.educationItems)
-        : {},
-      attachmentUrls: data.attachmentUrls ?? ""
-    })
+    if (data) {
+      firstVisitCompleted.value = data.status === 1
+      Object.assign(firstVisitForm, {
+        ...data,
+        symptoms: data.symptoms ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        drugForm: data.drugForm ? String(data.drugForm).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        educationItems: data.educationItems
+          ? (typeof data.educationItems === "string" ? JSON.parse(data.educationItems) : data.educationItems)
+          : {},
+        attachmentUrls: data.attachmentUrls ?? ""
+      })
+    }
   } catch { /* 首次填写 */ }
+  applyFirstVisitChemotherapyDefault(firstVisitForm, firstVisitRow.value)
 }
 
 function buildFirstVisitPayload() {
@@ -437,6 +442,10 @@ async function handleSaveFirstVisitDraft() {
 }
 
 async function handleSaveFirstVisit() {
+  if (!isValidFirstVisitFormNo(firstVisitForm.formNo)) {
+    ElMessage.warning("请填写8位编号")
+    return
+  }
   try {
     await saveFirstVisitApi(buildFirstVisitPayload())
     ElMessage.success("首次随访保存成功")
@@ -1125,6 +1134,18 @@ watch(
     <!-- 首次随访弹窗 -->
     <el-dialog v-model="firstVisitDialogVisible" title="肺结核患者第一次入户随访记录" width="920px" top="5vh">
       <el-form :model="firstVisitForm" label-width="110px" size="default">
+        <el-row justify="end" class="form-no-row">
+          <el-col :span="8">
+            <el-form-item label="编号" label-width="60px">
+              <el-input
+                v-model="firstVisitForm.formNo"
+                maxlength="8"
+                placeholder="请输入8位编号"
+                @input="firstVisitForm.formNo = sanitizeFirstVisitFormNo(firstVisitForm.formNo)"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-divider content-position="left">
           基本信息
         </el-divider>
@@ -1171,11 +1192,6 @@ watch(
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="其他症状">
-              <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写" />
-            </el-form-item>
-          </el-col>
         </el-row>
         <el-form-item label="症状及体征">
           <el-checkbox-group v-model="firstVisitForm.symptoms">
@@ -1184,6 +1200,9 @@ watch(
             </el-checkbox>
           </el-checkbox-group>
         </el-form-item>
+        <el-form-item label="其他症状">
+          <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写" />
+        </el-form-item>
 
         <el-divider content-position="left">
           用药情况
@@ -1191,7 +1210,7 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="化疗方案">
-              <el-input v-model="firstVisitForm.chemotherapy" placeholder="化疗方案" />
+              <el-input v-model="firstVisitForm.chemotherapy" placeholder="来自病案首次治疗方案，可修改" />
             </el-form-item>
           </el-col>
           <el-col :span="8">

@@ -78,6 +78,10 @@ public class Notice extends BaseEntity {
     private String pathologyTest;
     /** 其他注意事项 */
     private String otherNotes;
+    /** 服药管理单位（来自病案信息，患者通知单） */
+    private String medicationManagementUnit;
+    /** 备注（手动填写，患者通知单） */
+    private String remark;
 
     // ===== 流转字段 =====
     private Long senderId;

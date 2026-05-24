@@ -75,6 +75,7 @@ export function getScreeningSchoolListApi(params: {
   schoolName?: string
   district?: string
   isLatent?: number
+  diagnosisFirst?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "screening/school/list",

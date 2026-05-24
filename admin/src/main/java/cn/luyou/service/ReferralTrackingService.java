@@ -3,6 +3,8 @@ package cn.luyou.service;
 import cn.luyou.model.ReferralTracking;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
@@ -14,7 +16,17 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 分页查询 */
     IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                       String name, String idNumber,
-                                      Integer trackingStatus, Integer archived);
+                                      Integer trackingStatus, Integer archived,
+                                      String phone, String township,
+                                      String dateFrom, String dateTo, String sourceType);
+
+    /** 大疫情表导入（创建 bizMode=track, sourceType=epidemic 记录） */
+    Map<String, Object> importEpidemic(MultipartFile file);
+
+    /** 导出追踪记录 Excel */
+    void exportTrack(HttpServletResponse response, String bizMode,
+                     String name, String idNumber, String phone, String township,
+                     String dateFrom, String dateTo, String sourceType);
 
     /** 更新基本信息 */
     void update(Long id, Map<String, Object> params);

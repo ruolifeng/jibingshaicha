@@ -9,6 +9,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
+import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +119,17 @@ public class PatientController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "解锁停止治疗归档的患者（管理员）")
+    @PostMapping("/unarchive/{id}")
+    public ResultResponse<Void> unarchiveFromStopTreatment(@PathVariable Long id) {
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role == 6) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无权限解锁患者档案");
+        }
+        patientService.unarchivePatientFromStopTreatment(id);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "批量删除患者（级联删除首次随访/后续随访/服药/通知单）")
     @DeleteMapping("/batch-delete")
     public ResultResponse<Void> batchDelete(@RequestBody Map<String, Object> body) {
@@ -140,6 +153,27 @@ public class PatientController {
 
     // ==================== 首次随访 ====================
 
+    /** 五级用户已完成首次随访：创建后 10 天内可修改；管理员（非五级）随时可改 */
+    private static final int FIRST_VISIT_EDIT_DAYS_LEVEL5 = 10;
+
+    private void assertFirstVisitEditable(FirstVisit existing) {
+        if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role != 6) {
+            return;
+        }
+        LocalDateTime baseTime = existing.getCreateTime();
+        if (baseTime == null) {
+            return;
+        }
+        if (baseTime.plusDays(FIRST_VISIT_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "首次入户随访已超过10天修改期限，请联系上级管理员");
+        }
+    }
+
     @Operation(summary = "保存首次随访草稿（部分填写即可）")
     @PostMapping("/first-visit/draft")
     public ResultResponse<Void> saveFirstVisitDraft(@RequestBody FirstVisit firstVisit) {
@@ -150,6 +184,9 @@ public class PatientController {
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
                 : firstVisitService.lambdaQuery().eq(FirstVisit::getPatientId, firstVisit.getPatientId()).one();
+        if (existing != null) {
+            assertFirstVisitEditable(existing);
+        }
         if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "首次随访已完成，请直接保存正式记录");
         }
@@ -163,6 +200,12 @@ public class PatientController {
     public ResultResponse<Void> saveFirstVisit(@RequestBody FirstVisit firstVisit) {
         validateFirstVisitRequired(firstVisit);
         mergeExistingFirstVisitId(firstVisit);
+        FirstVisit existing = firstVisit.getId() != null
+                ? firstVisitService.getById(firstVisit.getId())
+                : firstVisitService.lambdaQuery().eq(FirstVisit::getPatientId, firstVisit.getPatientId()).one();
+        if (existing != null) {
+            assertFirstVisitEditable(existing);
+        }
         firstVisit.setStatus(1);
         firstVisitService.saveOrUpdate(firstVisit);
         return ResultRes.success(null);
@@ -193,6 +236,12 @@ public class PatientController {
     private void validateFirstVisitRequired(FirstVisit fv) {
         if (fv.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
+        }
+        if (StrUtil.isBlank(fv.getFormNo())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写编号");
+        }
+        if (!fv.getFormNo().matches("\\d{8}")) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "编号须为8位数字");
         }
         if (fv.getVisitDate() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择随访时间");
@@ -271,6 +320,40 @@ public class PatientController {
 
     // ==================== 后续随访 ====================
 
+    /** 五级用户已完成后续随访：创建后 10 天内可修改；管理员（非五级）随时可改 */
+    private static final int FOLLOW_UP_EDIT_DAYS_LEVEL5 = 10;
+
+    private void assertFollowUpEditable(FollowUpVisit existing) {
+        if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role != 6) {
+            return;
+        }
+        LocalDateTime baseTime = existing.getCreateTime();
+        if (baseTime == null) {
+            return;
+        }
+        if (baseTime.plusDays(FOLLOW_UP_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "后续随访已超过10天修改期限，请联系上级管理员");
+        }
+    }
+
+    private boolean isFollowUpEditable(Integer role, FollowUpVisit visit) {
+        if (visit == null || !Integer.valueOf(1).equals(visit.getStatus())) {
+            return true;
+        }
+        if (role == null || role != 6) {
+            return true;
+        }
+        if (visit.getCreateTime() == null) {
+            return true;
+        }
+        return !visit.getCreateTime().plusDays(FOLLOW_UP_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
+    }
+
     @Operation(summary = "查询后续随访草稿")
     @GetMapping("/follow-up/draft/{patientId}")
     public ResultResponse<FollowUpVisit> getFollowUpDraft(@PathVariable Long patientId) {
@@ -289,6 +372,7 @@ public class PatientController {
         if (followUpVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
+        assertPatientNotArchivedForNewFollowUp(followUpVisit);
         FollowUpVisit existingDraft = followUpVisitService.lambdaQuery()
                 .eq(FollowUpVisit::getPatientId, followUpVisit.getPatientId())
                 .eq(FollowUpVisit::getStatus, 0)
@@ -313,12 +397,20 @@ public class PatientController {
         if (followUpVisit.getVisitDate() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访时间");
         }
+        assertPatientNotArchivedForNewFollowUp(followUpVisit);
+        validateStopTreatmentOnSave(followUpVisit);
         if (followUpVisit.getId() != null) {
             FollowUpVisit existing = followUpVisitService.getById(followUpVisit.getId());
-            if (existing != null && Integer.valueOf(0).equals(existing.getStatus())) {
+            if (existing != null) {
+                assertFollowUpEditable(existing);
                 followUpVisit.setStatus(1);
-                followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));
+                if (Integer.valueOf(0).equals(existing.getStatus())) {
+                    followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));
+                } else {
+                    followUpVisit.setVisitSeq(existing.getVisitSeq());
+                }
                 followUpVisitService.updateById(followUpVisit);
+                handleStopTreatmentAfterSave(followUpVisit);
                 return ResultRes.success(null);
             }
         }
@@ -326,7 +418,74 @@ public class PatientController {
         followUpVisit.setStatus(1);
         followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));
         followUpVisitService.save(followUpVisit);
+        handleStopTreatmentAfterSave(followUpVisit);
         return ResultRes.success(null);
+    }
+
+    /** 新建后续随访时，已归档患者不可再填写（修改已有记录除外） */
+    private void assertPatientNotArchivedForNewFollowUp(FollowUpVisit followUpVisit) {
+        if (followUpVisit.getId() != null) {
+            FollowUpVisit existing = followUpVisitService.getById(followUpVisit.getId());
+            if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
+                return;
+            }
+        }
+        Patient patient = patientService.getById(followUpVisit.getPatientId());
+        if (patient != null && Integer.valueOf(1).equals(patient.getArchived())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者已归档，无法填写后续随访");
+        }
+    }
+
+    private void validateStopTreatmentOnSave(FollowUpVisit followUpVisit) {
+        if (!"是".equals(followUpVisit.getStopTreatment())) {
+            return;
+        }
+        if (followUpVisit.getStopTreatmentDate() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择停止治疗时间");
+        }
+        if (StrUtil.isBlank(followUpVisit.getStopTreatmentReason())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择停止治疗原因");
+        }
+        if ("其它".equals(followUpVisit.getStopTreatmentReason())
+                && StrUtil.isBlank(followUpVisit.getStopTreatmentReasonOther())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写停止治疗原因");
+        }
+    }
+
+    /** 停止治疗：前四项（完成疗程/死亡/丢失/其它）归档；转入耐多药治疗可继续随访 */
+    private void handleStopTreatmentAfterSave(FollowUpVisit followUpVisit) {
+        if (!"是".equals(followUpVisit.getStopTreatment())) {
+            return;
+        }
+        String reason = followUpVisit.getStopTreatmentReason();
+        if (StrUtil.isBlank(reason)) {
+            return;
+        }
+        Patient patient = patientService.getById(followUpVisit.getPatientId());
+        if (patient == null) {
+            return;
+        }
+        if (PatientService.STOP_TREATMENT_REASON_MDR.equals(reason)) {
+            if (Integer.valueOf(1).equals(patient.getArchived())
+                    && PatientService.isStopTreatmentArchiveRemark(patient.getArchiveRemark())) {
+                patientService.unarchivePatientFromStopTreatment(followUpVisit.getPatientId());
+            }
+            return;
+        }
+        if (!PatientService.shouldArchiveOnStopTreatment(followUpVisit.getStopTreatment(), reason)) {
+            return;
+        }
+        String displayReason = reason;
+        if ("其它".equals(reason) && StrUtil.isNotBlank(followUpVisit.getStopTreatmentReasonOther())) {
+            displayReason = followUpVisit.getStopTreatmentReasonOther();
+        }
+        String archiveRemark = PatientService.ARCHIVE_REMARK_STOP_TREATMENT_PREFIX + displayReason;
+        if (!Integer.valueOf(1).equals(patient.getArchived())) {
+            patientService.archivePatient(followUpVisit.getPatientId(), archiveRemark);
+        } else if (PatientService.isStopTreatmentArchiveRemark(patient.getArchiveRemark())) {
+            patient.setArchiveRemark(archiveRemark);
+            patientService.updateById(patient);
+        }
     }
 
     private int nextFollowUpSeq(Long patientId) {
@@ -344,7 +503,10 @@ public class PatientController {
         wrapper.eq(FollowUpVisit::getPatientId, patientId)
                 .eq(FollowUpVisit::getStatus, 1)
                 .orderByAsc(FollowUpVisit::getCreateTime);
-        return ResultRes.success(followUpVisitService.list(wrapper));
+        List<FollowUpVisit> list = followUpVisitService.list(wrapper);
+        Integer role = BaseContext.getCurrentRole();
+        list.forEach(v -> v.setEditable(isFollowUpEditable(role, v)));
+        return ResultRes.success(list);
     }
 
     // ==================== 服药管理 ====================

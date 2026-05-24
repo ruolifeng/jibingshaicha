@@ -12,7 +12,9 @@ import {
   VENTILATION_OPTIONS,
   VISIT_METHOD_OPTIONS
 } from "@@/constants/disease"
+import { applyFirstVisitChemotherapyDefault, canEditFirstVisit, FIRST_VISIT_EDIT_DAYS_LEVEL5, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
+import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
   visible: boolean
@@ -31,6 +33,7 @@ function createEmptyForm() {
   })
   return {
     id: undefined as number | undefined,
+    formNo: "",
     visitDate: "",
     visitMethod: "",
     patientType: "",
@@ -61,8 +64,16 @@ const formRef = ref<FormInstance>()
 const saving = ref(false)
 const draftSaving = ref(false)
 const firstVisitCompleted = ref(false)
+const visitCreateTime = ref<string | null>(null)
+const userStore = useUserStore()
+
+const formLocked = computed(() =>
+  firstVisitCompleted.value
+  && !canEditFirstVisit(userStore.userRole, { status: 1, createTime: visitCreateTime.value })
+)
 
 const rules: FormRules = {
+  formNo: FIRST_VISIT_FORM_NO_RULES,
   visitDate: [{ required: true, message: "请选择随访时间", trigger: "change" }],
   visitMethod: [{ required: true, message: "请选择随访方式", trigger: "change" }],
   patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
@@ -144,14 +155,17 @@ function parseLoadedData(data: Record<string, any>) {
 async function loadExisting() {
   if (!props.patientRow) return
   firstVisitCompleted.value = false
+  visitCreateTime.value = null
   Object.assign(firstVisitForm, createEmptyForm())
   try {
     const { data } = await getFirstVisitDetailApi(props.patientRow.id)
     if (data) {
       parseLoadedData(data)
       firstVisitCompleted.value = data.status === 1
+      visitCreateTime.value = data.createTime ?? null
     }
   } catch { /* 首次填写 */ }
+  applyFirstVisitChemotherapyDefault(firstVisitForm, props.patientRow)
 }
 
 watch(
@@ -222,7 +236,27 @@ async function handleSave() {
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
-    <el-form ref="formRef" :model="firstVisitForm" :rules="rules" label-width="110px" size="default">
+    <el-alert
+      v-if="formLocked"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="mb-3"
+      :title="`首次入户随访已超过 ${FIRST_VISIT_EDIT_DAYS_LEVEL5} 天修改期限，仅可查看。如需修改请联系上级管理员。`"
+    />
+    <el-form ref="formRef" :model="firstVisitForm" :rules="rules" label-width="110px" size="default" :disabled="formLocked">
+      <el-row justify="end" class="form-no-row">
+        <el-col :span="8">
+          <el-form-item label="编号" prop="formNo" label-width="60px">
+            <el-input
+              v-model="firstVisitForm.formNo"
+              maxlength="8"
+              placeholder="请输入8位编号"
+              @input="firstVisitForm.formNo = sanitizeFirstVisitFormNo(firstVisitForm.formNo)"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
       <el-divider content-position="left">
         基本信息
       </el-divider>
@@ -269,11 +303,6 @@ async function handleSave() {
             </el-select>
           </el-form-item>
         </el-col>
-        <el-col :span="8">
-          <el-form-item label="其他症状" prop="otherSymptoms">
-            <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写，无则填「无」" />
-          </el-form-item>
-        </el-col>
       </el-row>
       <el-form-item label="症状及体征" prop="symptoms">
         <el-checkbox-group v-model="firstVisitForm.symptoms">
@@ -282,6 +311,9 @@ async function handleSave() {
           </el-checkbox>
         </el-checkbox-group>
       </el-form-item>
+      <el-form-item label="其他症状" prop="otherSymptoms">
+        <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写，无则填「无」" />
+      </el-form-item>
 
       <el-divider content-position="left">
         用药情况
@@ -289,7 +321,7 @@ async function handleSave() {
       <el-row :gutter="16">
         <el-col :span="8">
           <el-form-item label="化疗方案" prop="chemotherapy">
-            <el-input v-model="firstVisitForm.chemotherapy" placeholder="化疗方案" />
+            <el-input v-model="firstVisitForm.chemotherapy" placeholder="来自病案首次治疗方案，可修改" />
           </el-form-item>
         </el-col>
         <el-col :span="8">
@@ -421,14 +453,16 @@ async function handleSave() {
     </el-form>
     <template #footer>
       <el-button @click="close">
-        取消
+        关闭
       </el-button>
-      <el-button v-if="!firstVisitCompleted" type="primary" plain :loading="draftSaving" :disabled="saving" @click="handleSaveDraft">
-        保存草稿
-      </el-button>
-      <el-button type="primary" :loading="saving" :disabled="draftSaving" @click="handleSave">
-        保存
-      </el-button>
+      <template v-if="!formLocked">
+        <el-button v-if="!firstVisitCompleted" type="primary" plain :loading="draftSaving" :disabled="saving" @click="handleSaveDraft">
+          保存草稿
+        </el-button>
+        <el-button type="primary" :loading="saving" :disabled="draftSaving" @click="handleSave">
+          保存
+        </el-button>
+      </template>
     </template>
   </el-dialog>
 </template>

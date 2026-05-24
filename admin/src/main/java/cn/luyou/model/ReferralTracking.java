@@ -26,6 +26,9 @@ public class ReferralTracking extends BaseEntity {
     /** 业务模式：recommend=推介 / track=追踪 */
     private String bizMode;
 
+    /** 数据来源：manual=手动录入 epidemic=大疫情导入 */
+    private String sourceType;
+
     // ===== 基本信息（手动录入）=====
     private String name;
     private String gender;
@@ -43,6 +46,28 @@ public class ReferralTracking extends BaseEntity {
     /** 追踪原因（bizMode=track 时手动录入） */
     private String trackReason;
 
+    // ===== 大疫情导入字段（sourceType=epidemic 时使用）=====
+    /** 卡片ID */
+    private String cardId;
+    /** 患儿家长姓名 */
+    private String parentName;
+    /** 患者工作单位 */
+    private String workplace;
+    /** 乡镇（筛选/展示） */
+    private String township;
+    /** 病例分类 */
+    private String caseCategory;
+    /** 疾病名称 */
+    private String diseaseName;
+    /** 报告单位 */
+    private String reportUnit;
+    /** 报告卡录入时间 */
+    private LocalDateTime reportCardTime;
+    /** 大疫情备注 */
+    private String epidemicRemark;
+    /** 导入批次号 */
+    private String uploadBatch;
+
     // ===== 推介专用字段（bizMode=recommend 时使用）=====
     /** 接收推介的三/四级用户ID */
     private Long receiverUserId;
@@ -59,6 +84,10 @@ public class ReferralTracking extends BaseEntity {
     private Integer trackingStatus;
     private Integer notInPlaceCount;
     private String trackingRemark;
+    /** 到位时间（追踪状态变为到位时记录） */
+    private LocalDateTime arrivalTime;
+    /** 追踪过程记录 JSON：[{attempt,status,trackTime,reason}] */
+    private String trackingHistoryJson;
 
     // ===== 到位后补录 =====
     private String hasInfectionScreen;

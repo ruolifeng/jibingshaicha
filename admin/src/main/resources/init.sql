@@ -350,6 +350,8 @@ CREATE TABLE IF NOT EXISTS `notice` (
     `molecular_test`         VARCHAR(32)  DEFAULT NULL COMMENT '分子检查',
     `pathology_test`         VARCHAR(32)  DEFAULT NULL COMMENT '病理学检查',
     `other_notes`            TEXT         DEFAULT NULL COMMENT '其他注意事项',
+    `medication_management_unit` VARCHAR(256) DEFAULT NULL COMMENT '服药管理单位（来自病案信息）',
+    `remark`                 TEXT         DEFAULT NULL COMMENT '备注（手动填写）',
     -- 流转字段
     `sender_id`              BIGINT       NOT NULL COMMENT '发送人ID（4级）',
     `receiver_org_id`        BIGINT       DEFAULT NULL COMMENT '接收单位ID（5级）',
@@ -380,6 +382,7 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     `gender`                 VARCHAR(10)  DEFAULT NULL COMMENT '性别',
     `age`                    INT          DEFAULT NULL COMMENT '年龄',
     `phone`                  VARCHAR(32)  DEFAULT NULL COMMENT '电话号码',
+    `phone_remark`           VARCHAR(256) DEFAULT NULL COMMENT '电话备注（非本人电话时说明）',
     `current_address`        VARCHAR(256) DEFAULT NULL COMMENT '现住址',
     `household_address`      VARCHAR(255) DEFAULT NULL COMMENT '户籍地址',
     `id_number`              VARCHAR(50)  DEFAULT NULL COMMENT '身份证号',
@@ -474,6 +477,7 @@ CREATE TABLE IF NOT EXISTS `patient` (
     `source`              VARCHAR(32)  NOT NULL DEFAULT 'confirmed' COMMENT '来源：confirmed=转诊确诊 epidemic=大疫情导入',
     `archived`            TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已归档（历史患者）',
     `archived_time`       DATETIME     DEFAULT NULL COMMENT '归档时间',
+    `archive_remark`      VARCHAR(128) DEFAULT NULL COMMENT '归档备注（如：已转出）',
     `epidemic_data`       JSON         DEFAULT NULL COMMENT '大疫情表额外字段（JSON）',
     `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -490,6 +494,7 @@ CREATE TABLE IF NOT EXISTS `first_visit` (
     `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
     `patient_id`            BIGINT       NOT NULL COMMENT '关联患者ID',
     `population_type`       VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `form_no`               VARCHAR(8)   DEFAULT NULL COMMENT '编号（8位数字，手动录入）',
     `visit_date`            DATE         DEFAULT NULL COMMENT '随访时间',
     `visit_method`          VARCHAR(16)  DEFAULT NULL COMMENT '随访方式：门诊/家庭',
     `patient_type`          VARCHAR(16)  DEFAULT NULL COMMENT '患者类型：初治/复治',
@@ -1366,7 +1371,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (424, 'patientManagement:medication',   '服药管理',             1, 420, 4),
 (425, 'patientManagement:specialDisease','专病网导入',          1, 420, 5),
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
-(427, 'patientManagement:referral',     '转诊',                 2, 421, 1),
+(427, 'patientManagement:referral',     '转出',                 2, 462, 2),
 (428, 'patientManagement:delete',       '删除患者',             2, 421, 2);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
@@ -1409,6 +1414,18 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `crowd_category`         VARCHAR(128)                            COMMENT '人群分类',
     `recommend_reason`       VARCHAR(512)                            COMMENT '推介原因（recommend模式）',
     `track_reason`           VARCHAR(512)                            COMMENT '追踪原因（track模式）',
+    `source_type`            VARCHAR(16)   NOT NULL DEFAULT 'manual' COMMENT 'manual=手动 epidemic=大疫情导入',
+    -- 大疫情导入字段
+    `card_id`                VARCHAR(64)                             COMMENT '卡片ID',
+    `parent_name`            VARCHAR(64)                             COMMENT '患儿家长姓名',
+    `workplace`              VARCHAR(256)                            COMMENT '患者工作单位',
+    `township`               VARCHAR(128)                            COMMENT '乡镇',
+    `case_category`          VARCHAR(64)                             COMMENT '病例分类',
+    `disease_name`           VARCHAR(128)                            COMMENT '疾病名称',
+    `report_unit`            VARCHAR(256)                            COMMENT '报告单位',
+    `report_card_time`       DATETIME                                COMMENT '报告卡录入时间',
+    `epidemic_remark`        TEXT                                    COMMENT '大疫情备注',
+    `upload_batch`           VARCHAR(64)                             COMMENT '导入批次号',
     -- 推介专用字段（biz_mode=recommend 时使用）
     `receiver_user_id`       BIGINT                                  COMMENT '接收推介的三/四级用户ID',
     `receiver_dept_id`       BIGINT                                  COMMENT '接收推介的用户所在部门ID（自动派生）',
@@ -1420,6 +1437,8 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `tracking_status`        TINYINT       NOT NULL DEFAULT 0        COMMENT '0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`     INT           NOT NULL DEFAULT 0,
     `tracking_remark`        TEXT,
+    `arrival_time`           DATETIME                                COMMENT '到位时间',
+    `tracking_history_json`  TEXT                                    COMMENT '追踪过程记录JSON',
     -- 到位后补录
     `has_infection_screen`   VARCHAR(10),
     `screen_date`            DATE,
@@ -1461,6 +1480,19 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
 -- 兼容已部署环境：补充推介/追踪原因字段（列已存在时可忽略报错）
 -- ALTER TABLE `referral_tracking` ADD COLUMN `recommend_reason` VARCHAR(512) COMMENT '推介原因（recommend模式）' AFTER `crowd_category`;
 -- ALTER TABLE `referral_tracking` ADD COLUMN `track_reason` VARCHAR(512) COMMENT '追踪原因（track模式）' AFTER `recommend_reason`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `arrival_time` DATETIME COMMENT '到位时间' AFTER `tracking_remark`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `tracking_history_json` TEXT COMMENT '追踪过程记录JSON' AFTER `arrival_time`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `source_type` VARCHAR(16) NOT NULL DEFAULT 'manual' COMMENT 'manual=手动 epidemic=大疫情导入' AFTER `track_reason`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `card_id` VARCHAR(64) COMMENT '卡片ID' AFTER `source_type`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `parent_name` VARCHAR(64) COMMENT '患儿家长姓名' AFTER `card_id`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `workplace` VARCHAR(256) COMMENT '患者工作单位' AFTER `parent_name`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `township` VARCHAR(128) COMMENT '乡镇' AFTER `workplace`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `case_category` VARCHAR(64) COMMENT '病例分类' AFTER `township`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `disease_name` VARCHAR(128) COMMENT '疾病名称' AFTER `case_category`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `report_unit` VARCHAR(256) COMMENT '报告单位' AFTER `disease_name`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `report_card_time` DATETIME COMMENT '报告卡录入时间' AFTER `report_unit`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `epidemic_remark` TEXT COMMENT '大疫情备注' AFTER `report_card_time`;
+-- ALTER TABLE `referral_tracking` ADD COLUMN `upload_batch` VARCHAR(64) COMMENT '导入批次号' AFTER `epidemic_remark`;
 
 -- ---------- 2. 推介追踪权限码（ID 从 430 起） ----------
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
@@ -1473,7 +1505,16 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (436, 'referralManagement:xray',         '录入胸片',             2, 431, 5),
 (437, 'referralManagement:diagnosis',    '录入诊断',             2, 431, 6),
 (438, 'referralManagement:delete',       '删除推介/追踪记录',    2, 431, 7),
-(439, 'referralManagement:track',        '追踪',                 1, 430, 2);
+(439, 'referralManagement:track',        '追踪',                 1, 430, 2),
+(440, 'referralManagement:epidemicImport','大疫情导入',          2, 439, 1),
+(441, 'referralManagement:export',       '导出追踪记录',         2, 439, 2),
+(442, 'referralManagement:edit',           '编辑追踪记录',         2, 439, 3);
+
+-- 兼容：原拥有 epidemic:screening 权限的角色同步获得追踪模块大疫情导入权限
+-- INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+-- SELECT rp.role, p.id FROM `role_permission` rp
+-- JOIN `permission` old_p ON old_p.id = rp.permission_id AND old_p.`code` = 'epidemic:screening'
+-- CROSS JOIN `permission` p WHERE p.`code` IN ('referralManagement:track', 'referralManagement:epidemicImport', 'referralManagement:export', 'referralManagement:edit');
 
 -- ---------- 3. 将 V17 推介追踪权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -1484,7 +1525,8 @@ WHERE p.`code` IN (
     'referralManagement', 'referralManagement:recommend', 'referralManagement:track',
     'referralManagement:create', 'referralManagement:send', 'referralManagement:confirm',
     'referralManagement:trackOperate', 'referralManagement:xray', 'referralManagement:diagnosis',
-    'referralManagement:delete'
+    'referralManagement:delete', 'referralManagement:epidemicImport', 'referralManagement:export',
+    'referralManagement:edit'
 );
 
 -- ==================== V18：supervision_form 补充人员基本信息字段（P4 聚合潜伏督导表修复） ====================
@@ -1670,3 +1712,102 @@ END //
 DELIMITER ;
 CALL _v24_migrate_visit_draft_status();
 DROP PROCEDURE IF EXISTS _v24_migrate_visit_draft_status;
+
+-- ==================== V25：督导表增加电话备注 ====================
+DROP PROCEDURE IF EXISTS _v25_migrate_supervision_phone_remark;
+DELIMITER //
+CREATE PROCEDURE _v25_migrate_supervision_phone_remark()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supervision_form' AND COLUMN_NAME = 'phone_remark'
+    ) THEN
+        ALTER TABLE `supervision_form`
+            ADD COLUMN `phone_remark` VARCHAR(256) DEFAULT NULL COMMENT '电话备注（非本人电话时说明）' AFTER `phone`;
+    END IF;
+END //
+DELIMITER ;
+CALL _v25_migrate_supervision_phone_remark();
+DROP PROCEDURE IF EXISTS _v25_migrate_supervision_phone_remark;
+
+-- ==================== V26：患者管理「转出」权限挂到在管总览下 ====================
+UPDATE `permission`
+SET `name` = '转出', `parent_id` = 462, `sort` = 2
+WHERE `code` = 'patientManagement:referral'
+  AND (`name` <> '转出' OR `parent_id` <> 462);
+
+-- ==================== V27：患者表增加归档备注（转出归档用） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'patient' AND COLUMN_NAME = 'archive_remark'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `patient` ADD COLUMN `archive_remark` VARCHAR(128) DEFAULT NULL COMMENT ''归档备注（如：已转出）'' AFTER `archived_time`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V28：通知单增加服药管理单位、备注 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notice' AND COLUMN_NAME = 'medication_management_unit'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `notice` ADD COLUMN `medication_management_unit` VARCHAR(256) DEFAULT NULL COMMENT ''服药管理单位（来自病案信息）'' AFTER `other_notes`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notice' AND COLUMN_NAME = 'remark'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `notice` ADD COLUMN `remark` TEXT DEFAULT NULL COMMENT ''备注（手动填写）'' AFTER `medication_management_unit`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V29：后续随访增加是否停止治疗、停止治疗原因-其它 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'follow_up_visit' AND COLUMN_NAME = 'stop_treatment'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `follow_up_visit` ADD COLUMN `stop_treatment` VARCHAR(8) DEFAULT NULL COMMENT ''是否停止治疗（是/否）'' AFTER `doctor_signature`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'follow_up_visit' AND COLUMN_NAME = 'stop_treatment_reason_other'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `follow_up_visit` ADD COLUMN `stop_treatment_reason_other` VARCHAR(256) DEFAULT NULL COMMENT ''停止治疗原因-其它（手动录入）'' AFTER `stop_treatment_reason`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V30：首次随访增加编号（8位数字） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'first_visit' AND COLUMN_NAME = 'form_no'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `first_visit` ADD COLUMN `form_no` VARCHAR(8) DEFAULT NULL COMMENT ''编号（8位数字，手动录入）'' AFTER `population_type`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

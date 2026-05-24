@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
 
@@ -16,6 +17,8 @@ const isCreate = computed(() => props.patientId == null)
 
 const formRef = ref()
 const submitting = ref(false)
+const screeningId = ref<number | null>(null)
+
 const form = reactive({
   populationType: "",
   name: "",
@@ -28,8 +31,25 @@ const form = reactive({
   phone: "",
   householdAddress: "",
   currentAddress: "",
-  diagnosisResult: ""
+  diagnosisResult: "",
+  crowdCategory: "",
+  currentManagementUnit: "",
+  screenDate: "",
+  screenMethod: "",
+  infectionResult: "",
+  chestXrayDate: "",
+  chestXrayResult: ""
 })
+
+const showSpecialDiseaseFields = computed(() =>
+  form.populationType === "specialDisease" || !!form.crowdCategory || !!form.currentManagementUnit
+)
+
+const showScreeningFields = computed(() => screeningId.value != null)
+
+const showInfectionScreeningFields = computed(() =>
+  showScreeningFields.value && form.populationType !== "closeContact"
+)
 
 const rules = computed(() => ({
   ...(isCreate.value
@@ -41,6 +61,7 @@ const rules = computed(() => ({
 }))
 
 function resetForm() {
+  screeningId.value = null
   Object.assign(form, {
     populationType: "",
     name: "",
@@ -53,7 +74,14 @@ function resetForm() {
     phone: "",
     householdAddress: "",
     currentAddress: "",
-    diagnosisResult: ""
+    diagnosisResult: "",
+    crowdCategory: "",
+    currentManagementUnit: "",
+    screenDate: "",
+    screenMethod: "",
+    infectionResult: "",
+    chestXrayDate: "",
+    chestXrayResult: ""
   })
 }
 
@@ -61,6 +89,7 @@ async function loadDetail() {
   if (!props.patientId) return
   const { data } = await getPatientDetailApi(props.patientId)
   if (!data) return
+  screeningId.value = data.screeningId ?? null
   Object.assign(form, {
     populationType: data.populationType || "",
     name: data.name || "",
@@ -73,7 +102,14 @@ async function loadDetail() {
     phone: data.phone || "",
     householdAddress: data.householdAddress || "",
     currentAddress: data.currentAddress || "",
-    diagnosisResult: data.diagnosisResult || ""
+    diagnosisResult: data.diagnosisResult || "",
+    crowdCategory: data.crowdCategory || "",
+    currentManagementUnit: data.currentManagementUnit || "",
+    screenDate: data.screenDate || "",
+    screenMethod: data.screenMethod || "",
+    infectionResult: data.infectionResult || "",
+    chestXrayDate: data.chestXrayDate || "",
+    chestXrayResult: data.chestXrayResult || ""
   })
 }
 
@@ -94,6 +130,26 @@ function close() {
   emit("update:visible", false)
 }
 
+function buildPayload() {
+  const payload: Record<string, unknown> = { ...form }
+  if (!showScreeningFields.value) {
+    delete payload.screenDate
+    delete payload.screenMethod
+    delete payload.infectionResult
+    delete payload.chestXrayDate
+    delete payload.chestXrayResult
+  } else if (form.populationType === "closeContact") {
+    delete payload.screenDate
+    delete payload.screenMethod
+    delete payload.infectionResult
+  }
+  if (!showSpecialDiseaseFields.value) {
+    delete payload.crowdCategory
+    delete payload.currentManagementUnit
+  }
+  return payload
+}
+
 async function handleSubmit() {
   try {
     await formRef.value?.validate()
@@ -103,10 +159,10 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (isCreate.value) {
-      await createPatientApi({ ...form })
+      await createPatientApi(buildPayload())
       ElMessage.success("新增成功")
     } else {
-      await updatePatientApi(props.patientId!, { ...form })
+      await updatePatientApi(props.patientId!, buildPayload())
       ElMessage.success("保存成功")
     }
     close()
@@ -121,15 +177,23 @@ async function handleSubmit() {
   <el-dialog
     :model-value="visible"
     :title="isCreate ? '新增患者' : '修改患者信息'"
-    width="660px"
+    width="720px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+      <el-divider content-position="left">
+        基本信息
+      </el-divider>
       <el-row :gutter="16">
-        <el-col v-if="isCreate" :span="24">
-          <el-form-item label="数据来源" prop="populationType">
-            <el-select v-model="form.populationType" placeholder="请选择" style="width: 100%">
+        <el-col :span="12">
+          <el-form-item label="数据来源" :prop="isCreate ? 'populationType' : undefined">
+            <el-select
+              v-model="form.populationType"
+              placeholder="请选择"
+              style="width: 100%"
+              :disabled="!isCreate && !!screeningId"
+            >
               <el-option label="学生筛查" value="school" />
               <el-option label="重点人群" value="keyPopulation" />
               <el-option label="常规筛查" value="regular" />
@@ -147,9 +211,11 @@ async function handleSubmit() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="性别">
-            <el-select v-model="form.gender" style="width: 100%">
+            <el-select v-model="form.gender" clearable style="width: 100%">
               <el-option label="男" value="男" />
               <el-option label="女" value="女" />
+              <el-option label="男性" value="男性" />
+              <el-option label="女性" value="女性" />
             </el-select>
           </el-form-item>
         </el-col>
@@ -183,6 +249,12 @@ async function handleSubmit() {
             <el-input v-model="form.phone" />
           </el-form-item>
         </el-col>
+      </el-row>
+
+      <el-divider content-position="left">
+        地址信息
+      </el-divider>
+      <el-row :gutter="16">
         <el-col :span="24">
           <el-form-item label="户籍地址">
             <el-input v-model="form.householdAddress" />
@@ -193,12 +265,67 @@ async function handleSubmit() {
             <el-input v-model="form.currentAddress" />
           </el-form-item>
         </el-col>
+      </el-row>
+
+      <el-divider content-position="left">
+        诊断信息
+      </el-divider>
+      <el-row :gutter="16">
         <el-col :span="24">
           <el-form-item label="诊断结果">
             <el-input v-model="form.diagnosisResult" />
           </el-form-item>
         </el-col>
+        <template v-if="showSpecialDiseaseFields">
+          <el-col :span="12">
+            <el-form-item label="人群分类">
+              <el-select v-model="form.crowdCategory" clearable filterable allow-create style="width: 100%">
+                <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="现管单位">
+              <el-input v-model="form.currentManagementUnit" />
+            </el-form-item>
+          </el-col>
+        </template>
       </el-row>
+
+      <template v-if="showScreeningFields">
+        <el-divider content-position="left">
+          筛查信息
+        </el-divider>
+        <el-row :gutter="16">
+          <template v-if="showInfectionScreeningFields">
+            <el-col :span="12">
+              <el-form-item label="感染筛查日期">
+                <el-date-picker v-model="form.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="感染检查方法">
+                <el-input v-model="form.screenMethod" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="感染筛查结果">
+                <el-input v-model="form.infectionResult" />
+              </el-form-item>
+            </el-col>
+          </template>
+          <el-col :span="12">
+            <el-form-item label="胸片检查日期">
+              <el-date-picker v-model="form.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="胸片检查结果">
+              <el-input v-model="form.chestXrayResult" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </template>
     </el-form>
     <template #footer>
       <el-button @click="close">

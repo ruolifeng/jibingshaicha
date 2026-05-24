@@ -2,7 +2,11 @@
 import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
-import { getPatientHistoryListApi } from "./apis"
+import { isStopTreatmentArchive } from "@@/utils/followUpVisit"
+import { useUserStore } from "@/pinia/stores/user"
+import { getPatientHistoryListApi, unarchivePatientFromStopTreatmentApi } from "./apis"
+
+const userStore = useUserStore()
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -35,7 +39,10 @@ async function fetchData() {
   }
 }
 
-function handleSearch() { paginationData.currentPage = 1; fetchData() }
+function handleSearch() {
+  paginationData.currentPage = 1
+  fetchData()
+}
 function handleReset() {
   Object.assign(searchForm, { name: "", idNumber: "", populationType: "", startTime: "", endTime: "" })
   handleSearch()
@@ -43,6 +50,19 @@ function handleReset() {
 
 onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
+
+async function handleUnarchive(row: Record<string, any>) {
+  try {
+    await ElMessageBox.confirm(
+      `确认解锁患者 ${row.name} 的档案？解锁后可重新填写后续随访。`,
+      "解锁档案",
+      { type: "warning" }
+    )
+    await unarchivePatientFromStopTreatmentApi(row.id)
+    ElMessage.success("已解锁，患者已恢复为在管状态")
+    fetchData()
+  } catch { /* cancelled or handled */ }
+}
 </script>
 
 <template>
@@ -72,8 +92,12 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
           <el-date-picker v-model="searchForm.endTime" type="date" value-format="YYYY-MM-DD" placeholder="结束日期" style="width:140px" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -94,9 +118,23 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column prop="archivedTime" label="归档时间" />
-        <el-table-column label="操作" fixed="right" width="360">
+        <el-table-column prop="archiveRemark" label="备注" min-width="100">
           <template #default="{ row }">
+            {{ row.archiveRemark || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="archivedTime" label="归档时间" />
+        <el-table-column label="操作" fixed="right" width="420">
+          <template #default="{ row }">
+            <el-button
+              v-if="userStore.userRole !== 6 && isStopTreatmentArchive(row.archiveRemark)"
+              type="warning"
+              link
+              size="small"
+              @click="handleUnarchive(row)"
+            >
+              解锁
+            </el-button>
             <ArchivedPatientRecordsActions :row="row" />
           </template>
         </el-table-column>

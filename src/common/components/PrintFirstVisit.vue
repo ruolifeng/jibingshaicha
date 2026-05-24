@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 /** 肺结核患者第一次入户随访记录表打印组件 */
+import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
 import { printElement } from "@@/utils/print"
 
@@ -31,7 +32,11 @@ const parsedEducationItems = computed<[string, string][]>(() => {
   if (!raw) return []
   let obj: Record<string, string> = {}
   if (typeof raw === "string") {
-    try { obj = JSON.parse(raw) } catch { return [] }
+    try {
+      obj = JSON.parse(raw)
+    } catch {
+      return []
+    }
   } else {
     obj = raw as Record<string, string>
   }
@@ -61,14 +66,21 @@ function handlePrint() {
     @update:model-value="emit('update:visible', $event)"
   >
     <div id="print-visit-content" class="print-area">
-      <h2 class="print-title">
-        肺结核患者第一次入户随访记录表
-      </h2>
+      <div class="print-header">
+        <h2 class="print-title">
+          肺结核患者第一次入户随访记录表
+        </h2>
+        <div class="print-form-no">
+          编号：{{ visitData?.formNo || "" }}
+        </div>
+      </div>
       <table class="visit-table">
         <tbody>
           <!-- 基本信息 -->
           <tr class="section-header">
-            <td colspan="6">基本信息</td>
+            <td colspan="6">
+              基本信息
+            </td>
           </tr>
           <tr>
             <th>患者姓名</th>
@@ -88,14 +100,22 @@ function handlePrint() {
           </tr>
           <tr>
             <th>症状及体征</th>
-            <td colspan="3">{{ symptomLabels }}</td>
+            <td colspan="5">
+              {{ symptomLabels }}
+            </td>
+          </tr>
+          <tr>
             <th>其他症状</th>
-            <td>{{ visitData?.otherSymptoms }}</td>
+            <td colspan="5">
+              {{ visitData?.otherSymptoms || "-" }}
+            </td>
           </tr>
 
           <!-- 用药情况 -->
           <tr class="section-header">
-            <td colspan="6">用药情况</td>
+            <td colspan="6">
+              用药情况
+            </td>
           </tr>
           <tr>
             <th>化疗方案</th>
@@ -107,12 +127,16 @@ function handlePrint() {
           </tr>
           <tr>
             <th>药品剂型</th>
-            <td colspan="5">{{ visitData?.drugForm }}</td>
+            <td colspan="5">
+              {{ visitData?.drugForm }}
+            </td>
           </tr>
 
           <!-- 居住环境与生活方式 -->
           <tr class="section-header">
-            <td colspan="6">居住环境与生活方式</td>
+            <td colspan="6">
+              居住环境与生活方式
+            </td>
           </tr>
           <tr>
             <th>单独居室</th>
@@ -133,7 +157,9 @@ function handlePrint() {
 
           <!-- 健康教育及培训 -->
           <tr class="section-header">
-            <td colspan="6">健康教育及培训</td>
+            <td colspan="6">
+              健康教育及培训
+            </td>
           </tr>
           <template v-if="educationRows.length > 0">
             <tr v-for="(row, rIdx) in educationRows" :key="rIdx">
@@ -158,7 +184,9 @@ function handlePrint() {
 
           <!-- 其他 -->
           <tr class="section-header">
-            <td colspan="6">其他</td>
+            <td colspan="6">
+              其他
+            </td>
           </tr>
           <tr>
             <th>下次随访时间</th>
@@ -170,8 +198,15 @@ function handlePrint() {
               {{ visitData?.doctorSignature }}
             </td>
           </tr>
+          <tr>
+            <th>备注</th>
+            <td colspan="5">
+              {{ visitData?.remarks || "-" }}
+            </td>
+          </tr>
         </tbody>
       </table>
+      <PrintAttachmentImages :urls="visitData?.attachmentUrls" title="附件照片" />
     </div>
     <template #footer>
       <el-button @click="emit('update:visible', false)">
@@ -189,11 +224,23 @@ function handlePrint() {
   padding: 8px;
 }
 
+.print-header {
+  position: relative;
+  margin-bottom: 16px;
+}
+
 .print-title {
   text-align: center;
   font-size: 18px;
   font-weight: bold;
-  margin-bottom: 16px;
+  margin: 0;
+}
+
+.print-form-no {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 14px;
 }
 
 .visit-table {
@@ -229,4 +276,3 @@ function handlePrint() {
   }
 }
 </style>
-

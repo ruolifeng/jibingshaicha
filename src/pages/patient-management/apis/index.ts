@@ -54,6 +54,11 @@ export function archivePatientApi(id: number) {
   return request<ApiResponseData<null>>({ url: `patient/archive/${id}`, method: "post" })
 }
 
+/** 解锁停止治疗归档的患者（管理员） */
+export function unarchivePatientFromStopTreatmentApi(id: number) {
+  return request<ApiResponseData<null>>({ url: `patient/unarchive/${id}`, method: "post" })
+}
+
 /** 发送患者通知单 */
 export function sendPatientNoticeApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "notice/send", method: "post", data })
@@ -119,7 +124,7 @@ export function getMedicationDetailApi(patientId: number) {
 }
 
 /** 转诊操作（患者） */
-export function referralPatientApi(data: { id: number; result: string; remark?: string }) {
+export function referralPatientApi(data: { id: number, result: string, remark?: string }) {
   return request<ApiResponseData<null>>({ url: "patient/referral", method: "post", data })
 }
 

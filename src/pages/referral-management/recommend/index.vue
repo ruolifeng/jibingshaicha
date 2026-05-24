@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from "vue"
+import { ref, reactive, onMounted, nextTick, computed } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
+import { formatDateTime } from "@@/utils/datetime"
+import { useUserStore } from "@/pinia/stores/user"
 import {
   getReferralTrackingListApi,
   createReferralTrackingApi,
@@ -15,6 +17,31 @@ import {
   deleteReferralTrackingApi,
   getLevel34UsersApi
 } from "../apis/index"
+
+const userStore = useUserStore()
+
+/** 解析追踪历史记录 */
+interface TrackingHistoryItem {
+  attempt: number
+  status: number
+  trackTime: string
+  reason?: string
+}
+
+function parseTrackingHistory(json?: string): TrackingHistoryItem[] {
+  if (!json) return []
+  try {
+    return JSON.parse(json)
+  } catch {
+    return []
+  }
+}
+
+const TRACK_STATUS_LABEL: Record<number, string> = {
+  1: "到位",
+  2: "未到位",
+  3: "其他"
+}
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -148,6 +175,12 @@ const trackDialogVisible = ref(false)
 const trackRow = ref<any>(null)
 const trackForm = reactive({ status: undefined as number | undefined, remark: "" })
 
+const trackHistory = computed(() =>
+  parseTrackingHistory(trackRow.value?.trackingHistoryJson)
+)
+
+const nextAttemptNo = computed(() => trackHistory.value.length + 1)
+
 function openTrackDialog(row: any) {
   trackRow.value = row
   Object.assign(trackForm, { status: undefined, remark: "" })
@@ -159,10 +192,19 @@ async function handleTrack() {
     ElMessage.warning("请选择追踪状态")
     return
   }
+  if (trackForm.status === 2 && !trackForm.remark.trim()) {
+    ElMessage.warning("未到位时必须填写原因")
+    return
+  }
   await trackReferralApi(trackRow.value.id, trackForm.status, trackForm.remark)
   ElMessage.success("追踪状态已更新")
   trackDialogVisible.value = false
   fetchList()
+}
+
+/** 当前用户是否为推介接收人 */
+function isReceiver(row: any) {
+  return Number(row.receiverUserId) === Number(userStore.userId)
 }
 
 // ===== 筛查信息 =====
@@ -302,7 +344,21 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
           </template>
         </el-table-column>
         <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column prop="createTime" label="创建时间" />
+        <el-table-column label="推介时间" min-width="160">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="到位时间" min-width="160">
+          <template #default="{ row }">
+            {{ row.arrivalTime ? formatDateTime(row.arrivalTime) : "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="追踪次数" width="100">
+          <template #default="{ row }">
+            {{ row.notInPlaceCount > 0 ? `${row.notInPlaceCount}次未到位` : "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <!-- 发送推介：未发送且未归档 -->
@@ -311,32 +367,32 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
               type="primary" link size="small"
               @click="handleSend(row)"
             >发送推介</el-button>
-            <!-- 确认/拒绝：已发送 -->
+            <!-- 确认/拒绝：已发送，仅接收人可操作 -->
             <el-button
-              v-if="row.recommendStatus === 1"
+              v-if="row.recommendStatus === 1 && isReceiver(row)"
               type="success" link size="small"
               @click="handleConfirm(row)"
             >确认接受</el-button>
             <el-button
-              v-if="row.recommendStatus === 1"
+              v-if="row.recommendStatus === 1 && isReceiver(row)"
               type="danger" link size="small"
               @click="openRejectDialog(row)"
             >拒绝</el-button>
-            <!-- 追踪：已接受且未到位/待追踪 -->
+            <!-- 追踪：已接受且未到位/待追踪，仅接收人可操作 -->
             <el-button
-              v-if="row.recommendStatus === 2 && [0, 2].includes(row.trackingStatus) && !row.archived"
+              v-if="row.recommendStatus === 2 && [0, 2].includes(row.trackingStatus) && !row.archived && isReceiver(row)"
               type="warning" link size="small"
               @click="openTrackDialog(row)"
             >追踪</el-button>
-            <!-- 筛查信息：已到位 -->
+            <!-- 筛查信息：已到位，仅接收人可操作 -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisResult"
+              v-if="row.trackingStatus === 1 && !row.diagnosisResult && isReceiver(row)"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >录入筛查</el-button>
-            <!-- 诊断：已到位 -->
+            <!-- 诊断：已到位，仅接收人可操作 -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisResult"
+              v-if="row.trackingStatus === 1 && !row.diagnosisResult && isReceiver(row)"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >录入诊断</el-button>
@@ -470,8 +526,21 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-dialog>
 
     <!-- 追踪操作弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="420px">
+    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
       <el-form label-width="100px">
+        <!-- 已有追踪记录 -->
+        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
+          <div class="tracking-history">
+            <div v-for="item in trackHistory" :key="item.attempt" class="tracking-history-item">
+              <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
+              <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                {{ TRACK_STATUS_LABEL[item.status] }}
+              </el-tag>
+              <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+              <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="追踪状态">
           <el-radio-group v-model="trackForm.status">
             <el-radio :value="1">到位</el-radio>
@@ -479,9 +548,23 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
             <el-radio :value="3">其他</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" />
+        <el-form-item v-if="trackForm.status === 2" label="未到位原因" required>
+          <el-input
+            v-model="trackForm.remark"
+            type="textarea"
+            :rows="3"
+            placeholder="请填写未到位原因"
+          />
         </el-form-item>
+        <el-form-item v-else-if="trackForm.status === 3" label="备注">
+          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
+        </el-form-item>
+        <el-alert
+          v-if="trackForm.status === 2 && trackRow"
+          :title="`第 ${nextAttemptNo} 次追踪，当前已未到位 ${trackRow.notInPlaceCount ?? 0} 次，3 次未到位将自动结束追踪`"
+          type="warning"
+          :closable="false"
+        />
       </el-form>
       <template #footer>
         <el-button @click="trackDialogVisible = false">取消</el-button>
@@ -587,3 +670,37 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-dialog>
   </div>
 </template>
+
+<style scoped lang="scss">
+.tracking-history {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tracking-history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.tracking-history-attempt {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.tracking-history-time {
+  color: var(--el-text-color-secondary);
+}
+
+.tracking-history-reason {
+  width: 100%;
+  color: var(--el-text-color-regular);
+}
+</style>

@@ -262,13 +262,14 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     @Override
     public IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
-                                             String schoolName, String district, Integer isLatent) {
+                                             String schoolName, String district, Integer isLatent, String diagnosisFirst) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningSchool::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningSchool::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(schoolName), ScreeningSchool::getSchoolName, schoolName)
                 .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
+                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningSchool::getDiagnosisFirst, diagnosisFirst)
                 .orderByDesc(ScreeningSchool::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());

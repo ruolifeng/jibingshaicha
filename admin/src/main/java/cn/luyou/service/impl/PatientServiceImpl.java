@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.constant.PatientImportHeaders;
 import cn.luyou.model.EpidemicReport;
 import cn.luyou.model.FirstVisit;
 import cn.luyou.model.FollowUpVisit;
@@ -43,6 +44,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +98,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, archived);
         wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getCreateTime);
-        return list(wrapper);
+        List<Patient> patients = list(wrapper);
+        fillEpidemicExtraFields(patients);
+        return patients;
     }
 
     private LambdaQueryWrapper<Patient> buildPatientQueryWrapper(String populationType, String name,
@@ -129,26 +133,53 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
     }
 
+    /** 五级用户已完成首次随访的可编辑天数 */
+    private static final int FIRST_VISIT_EDIT_DAYS_LEVEL5 = 10;
+
     /** 批量查询首次随访状态并填充到每条记录 */
     private void fillFirstVisitStatus(List<Patient> patients) {
         if (patients == null || patients.isEmpty()) return;
         List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
         LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
         fw.in(FirstVisit::getPatientId, patientIds)
-                .select(FirstVisit::getPatientId, FirstVisit::getStatus);
+                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime,
+                        FirstVisit::getMedicationPickTime, FirstVisit::getChemotherapy, FirstVisit::getDrugForm);
         Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
                 .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
+        Integer currentRole = BaseContext.getCurrentRole();
         patients.forEach(p -> {
             FirstVisit visit = visitMap.get(p.getId());
             if (visit == null) {
                 p.setHasFirstVisit(false);
                 p.setFirstVisitStatus(null);
+                p.setFirstVisitEditable(true);
+                p.setMedicationPickTime(null);
+                p.setMedicationChemotherapy(null);
+                p.setMedicationDrugForm(null);
                 return;
             }
             boolean completed = Integer.valueOf(1).equals(visit.getStatus());
             p.setHasFirstVisit(completed);
             p.setFirstVisitStatus(visit.getStatus());
+            p.setFirstVisitEditable(isFirstVisitEditable(currentRole, visit));
+            p.setMedicationPickTime(visit.getMedicationPickTime());
+            p.setMedicationChemotherapy(visit.getChemotherapy());
+            p.setMedicationDrugForm(visit.getDrugForm());
         });
+    }
+
+    /** 五级用户：已完成首次随访创建后 10 天内可改；管理员（非五级）随时可改 */
+    private boolean isFirstVisitEditable(Integer role, FirstVisit visit) {
+        if (visit == null || !Integer.valueOf(1).equals(visit.getStatus())) {
+            return true;
+        }
+        if (role == null || role != 6) {
+            return true;
+        }
+        if (visit.getCreateTime() == null) {
+            return true;
+        }
+        return !visit.getCreateTime().plusDays(FIRST_VISIT_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
     }
 
     /** 从筛查表关联填充胸片检查日期和结果（仅转诊确诊患者有 screeningId） */
@@ -226,6 +257,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             if (n != null) {
                 p.setNoticeStatus(n.getStatus());
                 p.setNoticeId(n.getId());
+                p.setNoticeSentTime(n.getSentTime());
+                p.setNoticeMedicationUnit(n.getMedicationManagementUnit());
+                p.setNoticeRemark(n.getRemark());
             }
         });
     }
@@ -278,11 +312,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 continue;
             }
 
+            Map<String, String> namedRow = buildNamedRowFields(row, headerIndex);
             String rawJson;
             try {
-                rawJson = objectMapper.writeValueAsString(row);
+                rawJson = objectMapper.writeValueAsString(namedRow);
             } catch (Exception e) {
-                rawJson = row.toString();
+                rawJson = namedRow.toString();
             }
 
             // 优先按证件号精确匹配，再按姓名模糊匹配
@@ -338,12 +373,56 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public void archivePatient(Long id) {
+        archivePatient(id, null);
+    }
+
+    @Override
+    public void archivePatient(Long id, String archiveRemark) {
         Patient patient = getById(id);
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
         patient.setArchived(1);
         patient.setArchivedTime(LocalDateTime.now());
+        if (StrUtil.isNotBlank(archiveRemark)) {
+            patient.setArchiveRemark(archiveRemark);
+        }
+        updateById(patient);
+    }
+
+    @Override
+    public void restoreTransferredPatient(Long id) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            return;
+        }
+        if (!Integer.valueOf(1).equals(patient.getArchived())) {
+            return;
+        }
+        if (!PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark())) {
+            return;
+        }
+        patient.setArchived(0);
+        patient.setArchivedTime(null);
+        patient.setArchiveRemark(null);
+        updateById(patient);
+    }
+
+    @Override
+    public void unarchivePatientFromStopTreatment(Long id) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        if (!Integer.valueOf(1).equals(patient.getArchived())) {
+            return;
+        }
+        if (!PatientService.isStopTreatmentArchiveRemark(patient.getArchiveRemark())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅停止治疗归档的患者可解锁");
+        }
+        patient.setArchived(0);
+        patient.setArchivedTime(null);
+        patient.setArchiveRemark(null);
         updateById(patient);
     }
 
@@ -378,26 +457,119 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         return result;
     }
 
-    /** 从 epidemicData JSON 解析专病网导入的扩展字段（人群分类、现管单位） */
+    /** 从 epidemicData JSON 解析导入扩展字段（人群分类、现管单位、治疗分类及完整导入字段） */
     private void fillEpidemicExtraFields(List<Patient> patients) {
         if (patients == null || patients.isEmpty()) return;
         for (Patient patient : patients) {
-            if (StrUtil.isBlank(patient.getEpidemicData())) continue;
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> extra = objectMapper.readValue(patient.getEpidemicData(), Map.class);
-                Object crowdCategory = extra.get("人群分类");
-                if (crowdCategory != null && StrUtil.isNotBlank(crowdCategory.toString())) {
-                    patient.setCrowdCategory(crowdCategory.toString());
+            Map<String, String> fields = parseImportFields(patient);
+            patient.setImportFields(fields);
+            patient.setRegistrationNo(fields.getOrDefault("登记号", ""));
+            patient.setTreatmentClass(fields.getOrDefault("治疗分类", ""));
+            if ("specialDisease".equals(patient.getPopulationType()) && hasKeyPopulationColumns(fields)) {
+                patient.setCrowdCategory(resolveCrowdCategoryFromImportFields(fields));
+            } else {
+                String crowdCategory = fields.get("人群分类");
+                if (StrUtil.isNotBlank(crowdCategory)) {
+                    patient.setCrowdCategory(crowdCategory);
                 }
-                Object currentUnit = extra.get("现管单位");
-                if (currentUnit != null && StrUtil.isNotBlank(currentUnit.toString())) {
-                    patient.setCurrentManagementUnit(currentUnit.toString());
-                }
-            } catch (Exception ignored) {
-                // epidemicData 非 JSON 时忽略
+            }
+            String currentUnit = fields.getOrDefault("现管单位", fields.get("现管理单位"));
+            if (StrUtil.isNotBlank(currentUnit)) {
+                patient.setCurrentManagementUnit(currentUnit);
             }
         }
+    }
+
+    private boolean hasKeyPopulationColumns(Map<String, String> fields) {
+        return fields.keySet().stream().anyMatch(k -> k.startsWith("重点人群"));
+    }
+
+    /** 从已解析的导入字段 Map 推导专病网人群分类 */
+    private String resolveCrowdCategoryFromImportFields(Map<String, String> fields) {
+        List<String> matched = new ArrayList<>();
+        if ("是".equals(fields.get("重点人群-A.密切接触者"))) matched.add("密接");
+        if ("是".equals(fields.get("重点人群-E.学校托幼机构人员"))) matched.add("学生");
+        if ("是".equals(fields.get("重点人群-D.医务人员"))) matched.add("教职工");
+        if ("是".equals(fields.get("重点人群-J.养老院居住者"))
+                || "是".equals(fields.get("重点人群-K.福利院居住者"))) {
+            matched.add("老年人");
+        }
+        if ("是".equals(fields.get("重点人群-C.糖尿病患者"))) matched.add("糖尿病");
+        if ("是".equals(fields.get("重点人群-B.HIV/AIDS患者"))) matched.add("双感");
+
+        String keyPopulation = fields.get("重点人群");
+        if (StrUtil.isNotBlank(keyPopulation) && !"否".equals(keyPopulation.trim())) {
+            String mapped = mapKeyPopulationLabel(keyPopulation);
+            if (mapped != null && !matched.contains(mapped)) {
+                matched.add(mapped);
+            }
+        }
+
+        if (matched.isEmpty()) {
+            String stored = fields.get("人群分类");
+            if (StrUtil.isNotBlank(stored) && CROWD_CATEGORY_PRIORITY.contains(stored)) {
+                return stored;
+            }
+            return StrUtil.isNotBlank(stored) ? stored : "非重点人群";
+        }
+        for (String category : CROWD_CATEGORY_PRIORITY) {
+            if (matched.contains(category)) {
+                return category;
+            }
+        }
+        return matched.get(0);
+    }
+
+    /** 解析 epidemicData：支持表头键名 JSON 及 legacy 列索引 JSON */
+    private Map<String, String> parseImportFields(Patient patient) {
+        if (StrUtil.isBlank(patient.getEpidemicData())) {
+            return Collections.emptyMap();
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> raw = objectMapper.readValue(patient.getEpidemicData(), Map.class);
+            if (raw.isEmpty()) {
+                return Collections.emptyMap();
+            }
+            boolean indexKeys = raw.keySet().stream().allMatch(k -> k.matches("\\d+"));
+            Map<String, String> fields = new LinkedHashMap<>();
+            if (indexKeys) {
+                List<String> headers = "specialDisease".equals(patient.getPopulationType())
+                        ? PatientImportHeaders.SPECIAL_DISEASE
+                        : PatientImportHeaders.EPIDEMIC_REPORT;
+                raw.entrySet().stream()
+                        .sorted((a, b) -> Integer.compare(
+                                Integer.parseInt(a.getKey()), Integer.parseInt(b.getKey())))
+                        .forEach(entry -> {
+                            int idx = Integer.parseInt(entry.getKey());
+                            if (idx >= 0 && idx < headers.size() && entry.getValue() != null
+                                    && StrUtil.isNotBlank(entry.getValue().toString())) {
+                                fields.put(headers.get(idx), entry.getValue().toString().trim());
+                            }
+                        });
+            } else {
+                raw.forEach((key, value) -> {
+                    if (value != null && StrUtil.isNotBlank(value.toString())) {
+                        fields.put(key, value.toString().trim());
+                    }
+                });
+            }
+            return fields;
+        } catch (Exception ignored) {
+            return Collections.emptyMap();
+        }
+    }
+
+    /** 将 Excel 行按表头映射为 字段名 -> 值 */
+    private Map<String, String> buildNamedRowFields(Map<Integer, String> row, Map<String, Integer> headerIndex) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> entry : headerIndex.entrySet()) {
+            String val = row.get(entry.getValue());
+            if (StrUtil.isNotBlank(val)) {
+                fields.put(entry.getKey(), val.trim());
+            }
+        }
+        return fields;
     }
 
     /**
@@ -484,6 +656,34 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     /**
+     * 根据表头名称从数据行中提取字段值（仅精确匹配）。
+     */
+    private String getFieldByHeaderExact(Map<Integer, String> row, Map<String, Integer> headerIndex,
+                                         String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            Integer idx = headerIndex.get(fieldName);
+            if (idx == null) continue;
+            String val = row.get(idx);
+            if (StrUtil.isNotBlank(val)) {
+                return val.trim();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 专病网现住址：去掉省、市级前缀，仅保留区县及后续详细地址。
+     * 例：四川省自贡市富顺县代寺镇… → 富顺县代寺镇…
+     */
+    private String normalizeSpecialDiseaseCurrentAddress(String address) {
+        if (StrUtil.isBlank(address)) return address;
+        String normalized = address.trim();
+        normalized = normalized.replaceFirst("^[^省\\s]+省", "");
+        normalized = normalized.replaceFirst("^[^市\\s]+市", "");
+        return normalized.trim();
+    }
+
+    /**
      * 根据表头名称从数据行中提取字段值。
      * 支持多个候选字段名，先精确匹配，再按"表头包含关键字"模糊匹配。
      */
@@ -556,16 +756,21 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             String birthDateStr = getFieldByHeader(row, headerIndex, "出生日期");
             String ageStr = getFieldByHeader(row, headerIndex, "年龄");
             String phone = getFieldByHeader(row, headerIndex, "患者联系电话", "联系电话", "电话");
-            String currentAddress = getFieldByHeader(row, headerIndex, "现地址详细", "现详细住址", "现住地址", "现住址", "现地址");
-            String householdAddress = getFieldByHeader(row, headerIndex, "户籍地址详细", "户籍地址", "户籍所在地");
+            // 专病表地址须精确匹配「详细」列，避免误取「现地址类型」「户籍地址类别」
+            String currentAddress = normalizeSpecialDiseaseCurrentAddress(
+                    getFieldByHeaderExact(row, headerIndex, "现地址详细", "现详细住址"));
+            String householdAddress = getFieldByHeaderExact(row, headerIndex, "户籍地址详细");
             String diagnosisResult = getFieldByHeader(row, headerIndex, "诊断结果");
             String crowdCategory = resolveSpecialDiseaseCrowdCategory(row, headerIndex);
             String currentUnit = getFieldByHeader(row, headerIndex, "现管理单位", "现管单位", "首管理单位");
 
-            // 将人群分类和现管单位等额外字段存入 epidemicData JSON
-            java.util.Map<String, String> extraFields = new java.util.LinkedHashMap<>();
+            // 将全部专病网导入字段存入 epidemicData JSON
+            Map<String, String> extraFields = buildNamedRowFields(row, headerIndex);
             if (StrUtil.isNotBlank(crowdCategory)) extraFields.put("人群分类", crowdCategory);
-            if (StrUtil.isNotBlank(currentUnit)) extraFields.put("现管单位", currentUnit);
+            if (StrUtil.isNotBlank(currentUnit)) {
+                extraFields.put("现管单位", currentUnit);
+                extraFields.put("现管理单位", currentUnit);
+            }
             String extraJson = null;
             try {
                 extraJson = objectMapper.writeValueAsString(extraFields);
@@ -629,24 +834,132 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
         }
+        if (body.get("populationType") != null) {
+            String populationType = body.get("populationType").toString().trim();
+            if (StrUtil.isNotBlank(populationType)) {
+                if (!MANUAL_POPULATION_TYPES.contains(populationType)) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的数据来源");
+                }
+                patient.setPopulationType(populationType);
+            }
+        }
         if (body.get("name") != null) patient.setName(body.get("name").toString());
         if (body.get("gender") != null) patient.setGender(body.get("gender").toString());
-        if (body.get("birthDate") != null) {
-            String bd = body.get("birthDate").toString();
-            patient.setBirthDate(StrUtil.isNotBlank(bd) ? java.time.LocalDate.parse(bd) : null);
+        if (body.containsKey("birthDate")) {
+            String bd = body.get("birthDate") == null ? "" : body.get("birthDate").toString();
+            patient.setBirthDate(StrUtil.isNotBlank(bd) ? LocalDate.parse(bd) : null);
         }
-        if (body.get("age") != null) {
+        if (body.containsKey("age")) {
             Object ageVal = body.get("age");
-            patient.setAge(ageVal == null || "".equals(ageVal.toString()) ? null : Integer.valueOf(ageVal.toString()));
+            patient.setAge(ageVal == null || "".equals(String.valueOf(ageVal)) ? null : Integer.valueOf(ageVal.toString()));
         }
         if (body.get("idType") != null) patient.setIdType(body.get("idType").toString());
-        if (body.get("idNumber") != null) patient.setIdNumber(body.get("idNumber").toString());
+        if (body.get("idNumber") != null) {
+            String idNumber = body.get("idNumber").toString().trim();
+            if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+            }
+            patient.setIdNumber(idNumber);
+        }
         if (body.get("ethnicity") != null) patient.setEthnicity(body.get("ethnicity").toString());
-        if (body.get("phone") != null) patient.setPhone(body.get("phone").toString());
+        if (body.get("phone") != null) {
+            String phone = body.get("phone").toString().trim();
+            if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+            }
+            patient.setPhone(phone);
+        }
         if (body.get("householdAddress") != null) patient.setHouseholdAddress(body.get("householdAddress").toString());
         if (body.get("currentAddress") != null) patient.setCurrentAddress(body.get("currentAddress").toString());
         if (body.get("diagnosisResult") != null) patient.setDiagnosisResult(body.get("diagnosisResult").toString());
+        mergeEpidemicExtraFields(patient, body);
         updateById(patient);
+        updateLinkedScreening(patient, body);
+    }
+
+    /** 合并专病网扩展字段到 epidemicData JSON */
+    private void mergeEpidemicExtraFields(Patient patient, Map<String, Object> body) {
+        if (!body.containsKey("crowdCategory") && !body.containsKey("currentManagementUnit")) {
+            return;
+        }
+        Map<String, Object> extra = new LinkedHashMap<>();
+        if (StrUtil.isNotBlank(patient.getEpidemicData())) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> existing = objectMapper.readValue(patient.getEpidemicData(), Map.class);
+                extra.putAll(existing);
+            } catch (Exception ignored) {
+                // 原 JSON 无效时重建
+            }
+        }
+        if (body.containsKey("crowdCategory")) {
+            String crowdCategory = body.get("crowdCategory") == null ? "" : body.get("crowdCategory").toString().trim();
+            if (StrUtil.isNotBlank(crowdCategory)) {
+                extra.put("人群分类", crowdCategory);
+            } else {
+                extra.remove("人群分类");
+            }
+        }
+        if (body.containsKey("currentManagementUnit")) {
+            String currentUnit = body.get("currentManagementUnit") == null ? "" : body.get("currentManagementUnit").toString().trim();
+            if (StrUtil.isNotBlank(currentUnit)) {
+                extra.put("现管单位", currentUnit);
+            } else {
+                extra.remove("现管单位");
+            }
+        }
+        try {
+            patient.setEpidemicData(extra.isEmpty() ? null : objectMapper.writeValueAsString(extra));
+        } catch (Exception e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "扩展字段保存失败");
+        }
+    }
+
+    /** 同步更新关联筛查记录中的筛查/胸片字段 */
+    private void updateLinkedScreening(Patient patient, Map<String, Object> body) {
+        if (patient.getScreeningId() == null) return;
+        Long screeningId = patient.getScreeningId();
+        String populationType = patient.getPopulationType();
+        LocalDate screenDate = body.containsKey("screenDate") ? parseLocalDateField(body.get("screenDate")) : null;
+        String screenMethod = body.containsKey("screenMethod") ? stringField(body.get("screenMethod")) : null;
+        String infectionResult = body.containsKey("infectionResult") ? stringField(body.get("infectionResult")) : null;
+        LocalDate chestXrayDate = body.containsKey("chestXrayDate") ? parseLocalDateField(body.get("chestXrayDate")) : null;
+        String chestXrayResult = body.containsKey("chestXrayResult") ? stringField(body.get("chestXrayResult")) : null;
+
+        if ("school".equals(populationType)) {
+            ScreeningSchool screening = screeningSchoolMapper.selectById(screeningId);
+            if (screening == null) return;
+            if (body.containsKey("screenDate")) screening.setScreenDate(screenDate);
+            if (body.containsKey("screenMethod")) screening.setScreenMethod(screenMethod);
+            if (body.containsKey("infectionResult")) screening.setInfectionResult(infectionResult);
+            if (body.containsKey("chestXrayDate")) screening.setChestXrayDate(chestXrayDate);
+            if (body.containsKey("chestXrayResult")) screening.setChestXrayResult(chestXrayResult);
+            screeningSchoolMapper.updateById(screening);
+        } else if ("keyPopulation".equals(populationType) || "regular".equals(populationType)) {
+            ScreeningKeyPopulation screening = screeningKeyPopulationMapper.selectById(screeningId);
+            if (screening == null) return;
+            if (body.containsKey("screenDate")) screening.setScreenDate(screenDate);
+            if (body.containsKey("screenMethod")) screening.setScreenMethod(screenMethod);
+            if (body.containsKey("infectionResult")) screening.setInfectionResult(infectionResult);
+            if (body.containsKey("chestXrayDate")) screening.setChestXrayDate(chestXrayDate);
+            if (body.containsKey("chestXrayResult")) screening.setChestXrayResult(chestXrayResult);
+            screeningKeyPopulationMapper.updateById(screening);
+        } else if ("closeContact".equals(populationType)) {
+            ScreeningCloseContact screening = screeningCloseContactMapper.selectById(screeningId);
+            if (screening == null) return;
+            if (body.containsKey("chestXrayDate")) screening.setImagingDate(chestXrayDate);
+            if (body.containsKey("chestXrayResult")) screening.setImagingResult(chestXrayResult);
+            screeningCloseContactMapper.updateById(screening);
+        }
+    }
+
+    private LocalDate parseLocalDateField(Object val) {
+        if (val == null || StrUtil.isBlank(val.toString())) return null;
+        return LocalDate.parse(val.toString());
+    }
+
+    private String stringField(Object val) {
+        return val == null ? null : val.toString();
     }
 
     @Override
@@ -696,6 +1009,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
 
         save(patient);
+        if (body.containsKey("crowdCategory") || body.containsKey("currentManagementUnit")) {
+            mergeEpidemicExtraFields(patient, body);
+            updateById(patient);
+        }
         log.info("手动新增在管患者 id={}, populationType={}", patient.getId(), populationType);
         return patient.getId();
     }

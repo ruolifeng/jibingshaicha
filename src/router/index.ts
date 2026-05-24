@@ -95,13 +95,8 @@ export const constantRoutes: RouteRecordRaw[] = [
           anyPermission: ["regular:screening", "regular:suspected"]
         }
       },
-      {
-        path: "epidemic",
-        component: () => import("@/pages/epidemic/index.vue"),
-        name: "ScreeningEpidemic",
-        meta: { title: "大疫情导入", tagTitle: "大疫情导入", keepAlive: true, permission: "epidemic:screening" }
-      },
       // 旧路径重定向（书签/外链兼容）
+      { path: "epidemic", redirect: "/referral-management/track", meta: { hidden: true } },
       { path: "population", redirect: to => resolvePopulationLegacyRedirect(to), meta: { hidden: true } },
       { path: "school/screening", redirect: { name: "ScreeningStudent", query: { view: "screening" } }, meta: { hidden: true } },
       { path: "school/suspected", redirect: { name: "ScreeningStudent", query: { view: "suspected" } }, meta: { hidden: true } },

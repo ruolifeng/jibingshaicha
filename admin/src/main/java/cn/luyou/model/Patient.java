@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Data
 @Builder
@@ -37,6 +38,8 @@ public class Patient extends BaseEntity {
     private String source;
     private Integer archived;
     private LocalDateTime archivedTime;
+    /** 归档备注（如：已转出） */
+    private String archiveRemark;
     /** 大疫情表额外字段（JSON） */
     private String epidemicData;
     /** 所属部门ID */
@@ -57,6 +60,10 @@ public class Patient extends BaseEntity {
     /** 首次随访状态（非数据库字段）：0草稿 1已完成 null无记录 */
     @TableField(exist = false)
     private Integer firstVisitStatus;
+
+    /** 当前用户是否可编辑已完成首次随访（非数据库字段，五级用户 10 天限制） */
+    @TableField(exist = false)
+    private Boolean firstVisitEditable;
 
     /** 胸片检查日期（非数据库字段，从筛查表关联填充） */
     @TableField(exist = false)
@@ -85,4 +92,40 @@ public class Patient extends BaseEntity {
     /** 现管单位（非数据库字段，专病网导入时从 epidemicData 解析） */
     @TableField(exist = false)
     private String currentManagementUnit;
+
+    /** 治疗分类（非数据库字段，专病网导入时从 epidemicData 解析） */
+    @TableField(exist = false)
+    private String treatmentClass;
+
+    /** 导入 Excel 全部字段（非数据库字段，从 epidemicData 解析） */
+    @TableField(exist = false)
+    private Map<String, String> importFields;
+
+    /** 通知单发送时间（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private LocalDateTime noticeSentTime;
+
+    /** 通知单服药管理单位（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private String noticeMedicationUnit;
+
+    /** 通知单备注（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private String noticeRemark;
+
+    /** 登记号（非数据库字段，专病网/大疫情导入时从 epidemicData 解析） */
+    @TableField(exist = false)
+    private String registrationNo;
+
+    /** 取药时间（非数据库字段，首次随访列表查询时填充） */
+    @TableField(exist = false)
+    private String medicationPickTime;
+
+    /** 取药-化疗方案（非数据库字段，首次随访列表查询时填充） */
+    @TableField(exist = false)
+    private String medicationChemotherapy;
+
+    /** 取药-药品剂型（非数据库字段，首次随访列表查询时填充） */
+    @TableField(exist = false)
+    private String medicationDrugForm;
 }

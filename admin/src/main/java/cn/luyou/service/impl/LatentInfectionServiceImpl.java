@@ -86,7 +86,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             "school", "keyPopulation", "regular", "epidemic", "referral"
     );
 
-    private static final List<String> DIAGNOSIS_TO_PATIENT = Arrays.asList("疑似肺结核", "确诊患者");
+    /** 导入时含首次诊断且需自动结案归档的诊断（不进入患者管理） */
+    private static final List<String> DIAGNOSIS_AUTO_CLOSE = List.of("确诊患者");
 
     /**
      * 首次诊断结果（diagnosisFirst）→ 转诊编码（referralResult）映射。
@@ -107,7 +108,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     public IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
-                                             String referralResult) {
+                                             String referralResult, String diagnosisFirst) {
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         if (StrUtil.isNotBlank(populationType)) {
             // 指定来源时精确匹配（密接模块传 closeContact，其他模块传具体值）
@@ -120,7 +121,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived)
-                // 潜伏感染列表始终排除确诊患者/疑似肺结核，这些数据属于患者管理模块。
+                .eq(StrUtil.isNotBlank(diagnosisFirst), LatentInfection::getDiagnosisFirst, diagnosisFirst)
+                // 潜伏感染列表始终排除确诊患者/疑似肺结核（已结案归档，不进入患者管理）。
                 // 注意：SQL 中 NULL NOT IN (...) 结果为 NULL（即被过滤掉），
                 // 必须显式放行 diagnosisResult 为 NULL 的记录（导入后未录入诊断的待诊断数据）。
                 .and(w -> w.isNull(LatentInfection::getDiagnosisResult)
@@ -600,9 +602,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     /**
-     * 执行转诊后的状态变更：写入 referralResult/diagnosisResult，
-     * 必要时创建患者档案并将潜伏感染记录归档。
-     * 注意：方法只负责状态写入，不做参数合法性校验，调用方须自行校验。
+     * 执行转诊后的状态变更：写入 referralResult/diagnosisResult，并按结果归档或进入潜伏感染管理。
      */
     private void applyReferralOutcome(LatentInfection entity, String result, String remark) {
         entity.setReferralResult(result);
@@ -619,9 +619,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 entity.setArchived(1);
                 entity.setArchivedTime(LocalDateTime.now());
             }
-            case "confirmed", "suspected" -> {
-                entity.setDiagnosisResult("confirmed".equals(result) ? "确诊患者" : "疑似肺结核");
-                createPatientFromLatent(entity);
+            case "confirmed" -> {
+                // 筛查确诊患者仅结案归档，不进入患者管理（患者管理数据仅来自专病信息表导入）
+                entity.setDiagnosisResult("确诊患者");
+                entity.setArchived(1);
+                entity.setArchivedTime(LocalDateTime.now());
+            }
+            case "suspected" -> {
+                entity.setDiagnosisResult("疑似肺结核");
                 entity.setArchived(1);
                 entity.setArchivedTime(LocalDateTime.now());
             }
@@ -717,14 +722,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     public void autoReferralForDirectDiagnosis(List<LatentInfection> latents) {
         for (LatentInfection entity : latents) {
             String diagnosisFirst = entity.getDiagnosisFirst();
-            if (!DIAGNOSIS_TO_PATIENT.contains(diagnosisFirst)) continue;
+            if (!DIAGNOSIS_AUTO_CLOSE.contains(diagnosisFirst)) continue;
 
-            // 设置诊断结果用于患者档案；若已存在对应患者记录则跳过创建
-            entity.setDiagnosisResult(diagnosisFirst);
-            createPatientFromLatent(entity);
-
-            // 将潜伏感染记录标记为已转诊归档
-            String referralResult = "确诊患者".equals(diagnosisFirst) ? "confirmed" : "suspected";
+            String referralResult = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
             lambdaUpdate()
                     .eq(LatentInfection::getId, entity.getId())
                     .set(LatentInfection::getReferralResult, referralResult)
@@ -733,7 +733,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     .set(LatentInfection::getArchivedTime, LocalDateTime.now())
                     .update();
 
-            log.info("导入时自动转诊 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);
+            log.info("导入时自动结案 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);
         }
     }
 

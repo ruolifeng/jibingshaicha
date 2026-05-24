@@ -83,8 +83,9 @@ public class LatentInfectionController {
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) Integer trackingStatus,
             @RequestParam(required = false) Integer archived,
-            @RequestParam(required = false) String referralResult) {
-        return ResultRes.success(latentInfectionService.queryPage(page, size, populationType, name, idNumber, trackingStatus, archived, referralResult));
+            @RequestParam(required = false) String referralResult,
+            @RequestParam(required = false) String diagnosisFirst) {
+        return ResultRes.success(latentInfectionService.queryPage(page, size, populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst));
     }
 
     @Operation(summary = "追踪操作")

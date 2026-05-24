@@ -21,9 +21,12 @@ import {
   FOLLOW_UP_SYMPTOM_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OPTIONS,
   STOP_TREATMENT_REASON_OPTIONS,
+  STOP_TREATMENT_YES_NO_OPTIONS,
   YES_NO_OPTIONS
 } from "@@/constants/disease"
+import { canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, shouldArchiveOnStopTreatment, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
 import { getFollowUpDraftApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
+import { useUserStore } from "@/pinia/stores/user"
 import ImageUploader from "./ImageUploader.vue"
 
 interface Props {
@@ -31,10 +34,13 @@ interface Props {
   patientId: number | null
   patientName?: string
   populationType: "school" | "keyPopulation" | "regular" | "epidemic" | "referral" | "specialDisease" | "closeContact" | string
+  /** 传入已有记录时为修改模式 */
+  initialData?: Record<string, any> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  patientName: ""
+  patientName: "",
+  initialData: null
 })
 
 const emit = defineEmits<{
@@ -42,9 +48,31 @@ const emit = defineEmits<{
   (e: "saved"): void
 }>()
 
+const userStore = useUserStore()
+
 const localVisible = computed({
   get: () => props.visible,
   set: v => emit("update:visible", v)
+})
+
+const isEditMode = computed(() => !!props.initialData?.id)
+const visitCreateTime = ref<string | null>(null)
+
+const formLocked = computed(() =>
+  isEditMode.value
+  && !canEditFollowUpVisit(userStore.userRole, {
+    status: 1,
+    createTime: visitCreateTime.value,
+    editable: props.initialData?.editable
+  })
+)
+
+const dialogTitle = computed(() => {
+  const suffix = props.patientName ? `——${props.patientName}` : ""
+  if (isEditMode.value) {
+    return formLocked.value ? `查看后续随访记录${suffix}` : `修改后续随访记录${suffix}`
+  }
+  return `填写后续随访记录${suffix}`
 })
 
 const submitting = ref(false)
@@ -75,8 +103,10 @@ interface FollowUpForm {
   handlingOpinion: string
   nextVisitDate: string
   doctorSignature: string
+  stopTreatment: string
   stopTreatmentDate: string
   stopTreatmentReason: string
+  stopTreatmentReasonOther: string
   shouldVisitCount: number | null
   actualVisitCount: number | null
   shouldDoseCount: number | null
@@ -114,8 +144,10 @@ function createEmptyForm(): FollowUpForm {
     handlingOpinion: "",
     nextVisitDate: "",
     doctorSignature: "",
+    stopTreatment: "否",
     stopTreatmentDate: "",
     stopTreatmentReason: "",
+    stopTreatmentReasonOther: "",
     shouldVisitCount: null,
     actualVisitCount: null,
     shouldDoseCount: null,
@@ -128,8 +160,11 @@ function createEmptyForm(): FollowUpForm {
 }
 
 function parseDraftData(data: Record<string, any>) {
+  const stopTreatment = data.stopTreatment
+    || (data.stopTreatmentDate || data.stopTreatmentReason ? "是" : "否")
   Object.assign(form, createEmptyForm(), {
     ...data,
+    stopTreatment,
     symptoms: data.symptoms
       ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean)
       : []
@@ -137,9 +172,34 @@ function parseDraftData(data: Record<string, any>) {
   draftId.value = data.id ?? null
 }
 
+function clearStopTreatmentFields() {
+  form.stopTreatmentDate = ""
+  form.stopTreatmentReason = ""
+  form.stopTreatmentReasonOther = ""
+}
+
+watch(
+  () => form.stopTreatment,
+  (val) => {
+    if (val !== "是") {
+      clearStopTreatmentFields()
+    }
+  }
+)
+
+watch(
+  () => form.stopTreatmentReason,
+  (val) => {
+    if (val !== "其它") {
+      form.stopTreatmentReasonOther = ""
+    }
+  }
+)
+
 async function loadDraft() {
   if (!props.patientId) return
   draftId.value = null
+  visitCreateTime.value = null
   Object.assign(form, createEmptyForm())
   try {
     const { data } = await getFollowUpDraftApi(props.patientId)
@@ -149,21 +209,60 @@ async function loadDraft() {
   } catch { /* 无草稿 */ }
 }
 
+function loadInitialData() {
+  if (!props.initialData) return
+  parseDraftData(props.initialData)
+  visitCreateTime.value = props.initialData.createTime ?? null
+}
+
+async function initForm() {
+  if (props.initialData) {
+    loadInitialData()
+  } else {
+    await loadDraft()
+  }
+}
+
 watch(
   () => props.visible,
   (v) => {
-    if (v) loadDraft()
+    if (v) initForm()
   }
 )
 
 function buildPayload() {
-  return {
+  const payload: Record<string, any> = {
     id: draftId.value ?? undefined,
     patientId: props.patientId,
     populationType: props.populationType,
     ...form,
     symptoms: form.symptoms.join(",")
   }
+  if (form.stopTreatment !== "是") {
+    payload.stopTreatmentDate = null
+    payload.stopTreatmentReason = null
+    payload.stopTreatmentReasonOther = null
+  } else if (form.stopTreatmentReason !== "其它") {
+    payload.stopTreatmentReasonOther = null
+  }
+  return payload
+}
+
+function validateStopTreatment(): boolean {
+  if (form.stopTreatment !== "是") return true
+  if (!form.stopTreatmentDate) {
+    ElMessage.warning("请选择停止治疗时间")
+    return false
+  }
+  if (!form.stopTreatmentReason) {
+    ElMessage.warning("请选择停止治疗原因")
+    return false
+  }
+  if (form.stopTreatmentReason === "其它" && !form.stopTreatmentReasonOther.trim()) {
+    ElMessage.warning("请填写停止治疗原因")
+    return false
+  }
+  return true
 }
 
 async function handleSaveDraft() {
@@ -185,11 +284,25 @@ async function handleSave() {
     ElMessage.warning("请填写随访时间")
     return
   }
+  if (!validateStopTreatment()) return
+  if (form.stopTreatment === "是" && shouldArchiveOnStopTreatment(form.stopTreatment, form.stopTreatmentReason)) {
+    try {
+      await ElMessageBox.confirm(
+        "选择该停止治疗原因后，患者档案将被锁定归档，不再出现在后续随访列表。是否确认保存？",
+        "提示",
+        { type: "warning" }
+      )
+    } catch {
+      return
+    }
+  }
   if (submitting.value) return
   submitting.value = true
   try {
     await saveFollowUpApi(buildPayload())
-    ElMessage.success("后续随访保存成功")
+    const archived = form.stopTreatment === "是"
+      && shouldArchiveOnStopTreatment(form.stopTreatment, form.stopTreatmentReason)
+    ElMessage.success(archived ? "后续随访保存成功，患者已归档" : "后续随访保存成功")
     emit("saved")
     localVisible.value = false
   } catch { /* handled by interceptor */ } finally {
@@ -201,12 +314,20 @@ async function handleSave() {
 <template>
   <el-dialog
     v-model="localVisible"
-    :title="`填写后续随访记录${patientName ? '——' + patientName : ''}`"
+    :title="dialogTitle"
     width="900px"
     top="5vh"
     destroy-on-close
   >
-    <el-form :model="form" label-width="120px" size="default">
+    <el-alert
+      v-if="formLocked"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="mb-3"
+      :title="`后续随访已超过 ${FOLLOW_UP_EDIT_DAYS_LEVEL5} 天修改期限，仅可查看。如需修改请联系上级管理员。`"
+    />
+    <el-form :model="form" label-width="120px" size="default" :disabled="formLocked">
       <!-- 基本信息 -->
       <el-divider content-position="left">
         基本信息
@@ -399,25 +520,57 @@ async function handleSave() {
       <el-divider content-position="left">
         停止治疗
       </el-divider>
+      <el-alert
+        v-if="form.stopTreatment === '是' && shouldArchiveOnStopTreatment(form.stopTreatment, form.stopTreatmentReason)"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="mb-3"
+        title="选择该原因保存后，患者档案将被锁定归档，不再出现在后续随访列表"
+      />
+      <el-alert
+        v-else-if="form.stopTreatment === '是' && form.stopTreatmentReason === STOP_TREATMENT_REASON_MDR"
+        type="info"
+        :closable="false"
+        show-icon
+        class="mb-3"
+        title="转入耐多药治疗可继续填写后续随访，不会归档"
+      />
       <el-row :gutter="16">
         <el-col :span="8">
-          <el-form-item label="停止治疗时间">
-            <el-date-picker
-              v-model="form.stopTreatmentDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="选择日期"
-              style="width: 100%"
-            />
+          <el-form-item label="是否停止治疗" required>
+            <el-radio-group v-model="form.stopTreatment">
+              <el-radio v-for="o in STOP_TREATMENT_YES_NO_OPTIONS" :key="o.value" :value="o.value">
+                {{ o.label }}
+              </el-radio>
+            </el-radio-group>
           </el-form-item>
         </el-col>
-        <el-col :span="16">
-          <el-form-item label="停止治疗原因">
-            <el-select v-model="form.stopTreatmentReason" placeholder="请选择" clearable style="width: 100%">
-              <el-option v-for="o in STOP_TREATMENT_REASON_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-            </el-select>
-          </el-form-item>
-        </el-col>
+        <template v-if="form.stopTreatment === '是'">
+          <el-col :span="8">
+            <el-form-item label="停止治疗时间" required>
+              <el-date-picker
+                v-model="form.stopTreatmentDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="选择日期"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="停止治疗原因" required>
+              <el-select v-model="form.stopTreatmentReason" placeholder="请选择" style="width: 100%">
+                <el-option v-for="o in STOP_TREATMENT_REASON_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.stopTreatmentReason === '其它'" :span="24">
+            <el-form-item label="原因说明" required>
+              <el-input v-model="form.stopTreatmentReasonOther" placeholder="请手动填写停止治疗原因" />
+            </el-form-item>
+          </el-col>
+        </template>
       </el-row>
 
       <!-- 全程管理 -->
@@ -495,14 +648,23 @@ async function handleSave() {
 
     <template #footer>
       <el-button @click="localVisible = false">
-        取消
+        {{ formLocked ? "关闭" : "取消" }}
       </el-button>
-      <el-button type="primary" plain :loading="draftSaving" :disabled="submitting" @click="handleSaveDraft">
-        保存草稿
-      </el-button>
-      <el-button type="primary" :loading="submitting" :disabled="draftSaving" @click="handleSave">
-        保存
-      </el-button>
+      <template v-if="!formLocked">
+        <el-button
+          v-if="!isEditMode"
+          type="primary"
+          plain
+          :loading="draftSaving"
+          :disabled="submitting"
+          @click="handleSaveDraft"
+        >
+          保存草稿
+        </el-button>
+        <el-button type="primary" :loading="submitting" :disabled="draftSaving" @click="handleSave">
+          保存
+        </el-button>
+      </template>
     </template>
   </el-dialog>
 </template>

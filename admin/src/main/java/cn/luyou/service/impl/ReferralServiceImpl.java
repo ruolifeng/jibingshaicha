@@ -8,6 +8,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.User;
 import cn.luyou.model.vo.ReferralDetailVO;
 import cn.luyou.model.vo.SentReferralVO;
+import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
@@ -17,6 +18,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,6 +33,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
 
     private final SysMessageService sysMessageService;
     private final UserMapper userMapper;
+    private final PatientService patientService;
 
     private static final Map<String, String> MODULE_LABEL = Map.of(
             "screening", "筛查管理",
@@ -46,11 +49,13 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     );
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void send(Referral referral) {
         referral.setSenderId(BaseContext.getCurrentId());
         referral.setStatus(1);
         referral.setSentTime(LocalDateTime.now());
         save(referral);
+        archivePatientIfTransferred(referral);
 
         // 向接收方推送消息通知
         if (referral.getReceiverOrgId() != null) {
@@ -100,6 +105,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void reject(Long id, String rejectReason) {
         Referral referral = getById(id);
         if (referral == null) {
@@ -115,6 +121,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         referral.setRejectedTime(LocalDateTime.now());
         referral.setRejectReason(rejectReason);
         updateById(referral);
+        restorePatientIfTransferRejected(referral);
 
         // 通知发送方被拒绝
         if (referral.getSenderId() != null) {
@@ -130,6 +137,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void resend(Long id) {
         Referral referral = getById(id);
         if (referral == null) {
@@ -143,6 +151,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         referral.setRejectedTime(null);
         referral.setRejectReason(null);
         updateById(referral);
+        archivePatientIfTransferred(referral);
 
         if (referral.getReceiverOrgId() != null) {
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
@@ -261,5 +270,21 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         IPage<SentReferralVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
         result.setRecords(voList);
         return result;
+    }
+
+    /** 患者管理模块发起/重新发起转出时，移入历史患者并备注「已转出」 */
+    private void archivePatientIfTransferred(Referral referral) {
+        if (!"patient".equals(referral.getModuleType()) || referral.getBizId() == null) {
+            return;
+        }
+        patientService.archivePatient(referral.getBizId(), PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT);
+    }
+
+    /** 转出被拒绝时，恢复为在管患者 */
+    private void restorePatientIfTransferRejected(Referral referral) {
+        if (!"patient".equals(referral.getModuleType()) || referral.getBizId() == null) {
+            return;
+        }
+        patientService.restoreTransferredPatient(referral.getBizId());
     }
 }

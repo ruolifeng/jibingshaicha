@@ -281,7 +281,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     public IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent,
-                                                    String sourceType) {
+                                                    String sourceType, String diagnosisFirst) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         // sourceType 为空时默认只查 keyPopulation（向后兼容），传 regular 时查常规
         String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
@@ -292,7 +292,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .eq(StrUtil.isNotBlank(district), ScreeningKeyPopulation::getDistrict, district)
                 .like(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
                 .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
-                .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent);
+                .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
+                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst);
         // 人群分类：按选项匹配对应的独立列
         if (StrUtil.isNotBlank(crowdCategory)) {
             switch (crowdCategory) {

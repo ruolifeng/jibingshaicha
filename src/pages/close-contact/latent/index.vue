@@ -7,7 +7,7 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
  * 密接人群 — 潜伏感染者管理
  *
  * 业务流程（基于 finalScreeningResult / ccStatus）：
- * ① 活动性肺结核  → 自动进患者管理（此页不展示）
+ * ① 活动性肺结核  → 标红结案（不进入患者管理，此页不展示）
  * ② 潜伏感染者    → 是否进行预防治疗？
  *    - 是 → 填写督导表 + 设置预计完成治疗时间 → 到期确认（完成→归档，未完成→随访监测）
  *    - 否 → 进入监测随访流程（见待诊断-监测随访页）
@@ -17,13 +17,18 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
+  formatLatentNoticeTreatmentPlan,
+  formatLatentSupervisionTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
   INTERRUPT_MEDICATION_OPTIONS,
+  isLatentIndividualPlan,
+  LATENT_TREATMENT_PLAN_OPTIONS,
   NOTICE_STATUS_MAP,
+  parseLatentNoticeTreatmentPlan,
+  parseLatentSupervisionTreatmentPlan,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
-  SUPERVISION_METHOD_OPTIONS,
-  TREATMENT_PLAN_OPTIONS
+  SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
 import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
@@ -259,10 +264,12 @@ const supervisionForm = reactive({
   gender: "",
   age: null as number | null,
   phone: "",
+  phoneRemark: "",
   currentAddress: "",
   treatmentStartDate: "",
   treatmentEndDate: "",
   treatmentPlan: "",
+  customPlanDetail: "",
   supervisionRecords: [] as { time: string, content: string, method: string, remark: string }[],
   interruptMedication: "",
   interruptCount: null as number | null,
@@ -281,10 +288,13 @@ function openSupervisionDialog(row: any) {
   supervisionForm.gender = row.gender || ""
   supervisionForm.age = row.age || null
   supervisionForm.phone = row.phone || ""
+  supervisionForm.phoneRemark = ""
   supervisionForm.currentAddress = row.currentAddress || ""
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
-  supervisionForm.treatmentPlan = row.preventivePlan || ""
+  const parsedPlan = parseLatentSupervisionTreatmentPlan(row.preventivePlan || "")
+  supervisionForm.treatmentPlan = parsedPlan.treatmentPlan
+  supervisionForm.customPlanDetail = parsedPlan.customPlanDetail
   supervisionForm.supervisionRecords = [{ time: "", content: "", method: "", remark: "" }]
   supervisionForm.interruptMedication = ""
   supervisionForm.interruptCount = null
@@ -297,6 +307,9 @@ function openSupervisionDialog(row: any) {
   supervisionForm.attachmentUrls = ""
   attachmentFileList.value = []
   supervisionDialogVisible.value = true
+  getSupervisionDetailApi(row.id).then(({ data }) => {
+    if (data?.phoneRemark) supervisionForm.phoneRemark = data.phoneRemark
+  }).catch(() => {})
 }
 
 async function handleSaveSupervision() {
@@ -317,10 +330,11 @@ async function handleSaveSupervision() {
       gender: supervisionForm.gender || undefined,
       age: supervisionForm.age || undefined,
       phone: supervisionForm.phone || undefined,
+      phoneRemark: supervisionForm.phoneRemark || undefined,
       currentAddress: supervisionForm.currentAddress || undefined,
       treatmentStartDate: supervisionForm.treatmentStartDate,
       treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
-      treatmentPlan: supervisionForm.treatmentPlan,
+      treatmentPlan: formatLatentSupervisionTreatmentPlan(supervisionForm.treatmentPlan, supervisionForm.customPlanDetail),
       supervisionRecords: JSON.stringify(supervisionForm.supervisionRecords),
       interruptMedication: supervisionForm.interruptMedication || undefined,
       interruptCount: supervisionForm.interruptMedication === "有" ? supervisionForm.interruptCount : undefined,
@@ -394,6 +408,7 @@ function getNowDateStr() {
 
 function openNoticeDialog(row: any) {
   noticeRow.value = row
+  const parsedPlan = parseLatentNoticeTreatmentPlan(row.preventivePlan || "")
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "",
     gender: row.gender || "",
@@ -409,8 +424,8 @@ function openNoticeDialog(row: any) {
     infectionResultValue: row.infectionCheckResult || "",
     chestXrayDate: row.imagingDate || "",
     chestXrayResult: row.imagingResult || "",
-    treatmentPlan: row.preventivePlan || "",
-    customPlanDetail: "",
+    treatmentPlan: parsedPlan.treatmentPlan,
+    customPlanDetail: parsedPlan.customPlanDetail,
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
     receiverOrgId: undefined
@@ -429,7 +444,7 @@ async function handleSendNotice() {
       bizId: noticeRow.value.id,
       patientName: noticeRow.value.name,
       ...noticeForm,
-      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+      treatmentPlan: formatLatentNoticeTreatmentPlan(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
       senderId: userStore.userId
     })
     ElMessage.success("通知单发送成功")
@@ -842,6 +857,12 @@ async function handleSaveFollowupInput() {
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="电话备注">
+          <el-input
+            v-model="supervisionForm.phoneRemark"
+            placeholder="非本人电话时请填写说明（如与本人关系）"
+          />
+        </el-form-item>
         <el-form-item label="现住址">
           <el-input v-model="supervisionForm.currentAddress" />
         </el-form-item>
@@ -857,8 +878,15 @@ async function handleSaveFollowupInput() {
           <el-col :span="12">
             <el-form-item label="治疗方案">
               <el-select v-model="supervisionForm.treatmentPlan" clearable style="width: 100%">
-                <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row v-if="isLatentIndividualPlan(supervisionForm.treatmentPlan)">
+          <el-col :span="24">
+            <el-form-item label="方案详情">
+              <el-input v-model="supervisionForm.customPlanDetail" type="textarea" :rows="3" placeholder="请手动录入个体治疗方案详情" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -1016,6 +1044,12 @@ async function handleSaveFollowupInput() {
         <el-descriptions-item label="年龄">
           {{ supervisionDetailData.age ?? "—" }}
         </el-descriptions-item>
+        <el-descriptions-item label="电话号码">
+          {{ supervisionDetailData.phone || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="电话备注">
+          {{ supervisionDetailData.phoneRemark || "—" }}
+        </el-descriptions-item>
         <el-descriptions-item label="治疗方案">
           {{ supervisionDetailData.treatmentPlan || "—" }}
         </el-descriptions-item>
@@ -1141,11 +1175,11 @@ async function handleSaveFollowupInput() {
         </el-divider>
         <el-form-item label="治疗方案">
           <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
-            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
+        <el-form-item v-if="isLatentIndividualPlan(noticeForm.treatmentPlan)" label="方案详情">
+          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请手动录入个体治疗方案详情" />
         </el-form-item>
         <el-form-item label="接收单位" prop="receiverOrgId">
           <el-select v-model="noticeForm.receiverOrgId" placeholder="请选择接收单位（必填）" filterable style="width:100%">
@@ -1345,7 +1379,7 @@ async function handleSaveFollowupInput() {
         </el-form-item>
         <el-alert
           v-if="followupInputForm.result === '活动性肺结核'"
-          title="判定为活动性肺结核后，该记录将自动进入患者管理流程"
+          title="判定为活动性肺结核后，该记录将标红结案，不进入患者管理"
           type="warning"
           :closable="false"
           show-icon

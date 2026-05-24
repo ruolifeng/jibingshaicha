@@ -19,6 +19,8 @@ public class FirstVisit extends BaseEntity {
 
     private Long patientId;
     private String populationType;
+    /** 编号（8位数字，手动录入） */
+    private String formNo;
     /** 随访时间 */
     private LocalDate visitDate;
     /** 随访方式：门诊/家庭 */

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
+import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 /** 首次入户随访记录 — 查看详情弹窗（学校人群 & 重点人群共用） */
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
-import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
 
 const props = defineProps<{
@@ -32,7 +32,11 @@ const educationEntries = computed<[string, string][]>(() => {
   if (!raw) return []
   let obj: Record<string, string> = {}
   if (typeof raw === "string") {
-    try { obj = JSON.parse(raw) } catch { return [] }
+    try {
+      obj = JSON.parse(raw)
+    } catch {
+      return []
+    }
   } else {
     obj = raw as Record<string, string>
   }
@@ -55,6 +59,9 @@ const printVisible = ref(false)
         基本信息
       </el-divider>
       <el-descriptions :column="3" border size="small">
+        <el-descriptions-item label="编号">
+          {{ visitData.formNo || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="患者姓名">
           {{ patientName || visitData.patientName || "-" }}
         </el-descriptions-item>
@@ -73,10 +80,10 @@ const printVisible = ref(false)
         <el-descriptions-item label="耐药情况">
           {{ visitData.drugResistance || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="症状及体征" :span="2">
+        <el-descriptions-item label="症状及体征" :span="3">
           {{ symptomLabels }}
         </el-descriptions-item>
-        <el-descriptions-item label="其他症状">
+        <el-descriptions-item label="其他症状" :span="3">
           {{ visitData.otherSymptoms || "-" }}
         </el-descriptions-item>
       </el-descriptions>
@@ -159,6 +166,9 @@ const printVisible = ref(false)
         </el-descriptions-item>
         <el-descriptions-item label="填写时间">
           {{ visitData.createTime || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="备注" :span="3">
+          {{ visitData.remarks || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="附件" :span="3">
           <AttachmentPreviewList :urls="visitData.attachmentUrls" />

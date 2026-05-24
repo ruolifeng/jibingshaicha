@@ -4,8 +4,7 @@ import { useUserStore } from "@/pinia/stores/user"
 const SCREENING_ENTRIES = [
   { path: "/screening/student", perms: ["school:screening", "school:suspected"] },
   { path: "/screening/key-population", perms: ["keyPopulation:screening", "keyPopulation:suspected"] },
-  { path: "/screening/regular", perms: ["regular:screening", "regular:suspected"] },
-  { path: "/screening/epidemic", perms: ["epidemic:screening"] }
+  { path: "/screening/regular", perms: ["regular:screening", "regular:suspected"] }
 ] as const
 
 const SOURCE_PATH_MAP: Record<string, string> = {

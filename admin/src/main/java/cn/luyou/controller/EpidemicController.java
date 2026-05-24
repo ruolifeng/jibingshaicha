@@ -42,9 +42,10 @@ public class EpidemicController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) Integer trackingStatus,
-            @RequestParam(required = false) Integer archived
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String diagnosisResult
     ) {
-        return ResultRes.success(epidemicImportService.queryPage(page, size, name, idNumber, trackingStatus, archived));
+        return ResultRes.success(epidemicImportService.queryPage(page, size, name, idNumber, trackingStatus, archived, diagnosisResult));
     }
 
     @Operation(summary = "追踪操作")

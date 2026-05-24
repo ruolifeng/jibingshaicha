@@ -283,7 +283,7 @@ async function handleSaveFollowupInput() {
         <el-table-column label="状态">
           <template #default="{ row }">
             <span v-if="checkActiveInFollowup(row)" class="text-red-500 font-bold">
-              第{{ checkActiveInFollowup(row) }}月→患者管理
+              第{{ checkActiveInFollowup(row) }}月→结案
             </span>
             <span v-else-if="hasFollowup(row, 24)" class="text-green-600">全部完成</span>
             <span v-else class="text-gray-400">监测中</span>
@@ -469,7 +469,7 @@ async function handleSaveFollowupInput() {
         </el-form-item>
         <el-alert
           v-if="followupInputForm.result === '活动性肺结核'"
-          title="判定为活动性肺结核后，该记录将自动进入患者管理流程"
+          title="判定为活动性肺结核后，该记录将标红结案，不进入患者管理"
           type="warning"
           :closable="false"
           show-icon

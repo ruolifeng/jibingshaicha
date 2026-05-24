@@ -17,7 +17,8 @@ public interface EpidemicImportService extends IService<EpidemicImport> {
             String name,
             String idNumber,
             Integer trackingStatus,
-            Integer archived
+            Integer archived,
+            String diagnosisResult
     );
 
     void track(Long id, Integer status, String remark);

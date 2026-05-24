@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -67,10 +68,14 @@ public class FollowUpVisit extends BaseEntity {
     private LocalDate nextVisitDate;
     /** 随访医生签名 —— V15 */
     private String doctorSignature;
+    /** 是否停止治疗（是/否） */
+    private String stopTreatment;
     /** 停止治疗时间 —— V15 */
     private LocalDate stopTreatmentDate;
-    /** 停止治疗原因（完成疗程/死亡/丢失/转入耐多药）—— V15 */
+    /** 停止治疗原因（完成疗程/死亡/丢失/转入耐多药治疗/其它）—— V15 */
     private String stopTreatmentReason;
+    /** 停止治疗原因-其它（手动录入） */
+    private String stopTreatmentReasonOther;
     /** 全程管理-应访视次数 —— V15 */
     private Integer shouldVisitCount;
     /** 全程管理-实际访视次数 —— V15 */
@@ -97,4 +102,8 @@ public class FollowUpVisit extends BaseEntity {
     @Deprecated
     private String attachmentUrl;
     private Long filledBy;
+
+    /** 非数据库字段：当前用户是否可修改（列表接口填充） */
+    @TableField(exist = false)
+    private Boolean editable;
 }

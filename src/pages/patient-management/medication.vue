@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { resolveRegistrationNo } from "@@/utils/patient"
 import { usePatientList } from "./composables/usePatientList"
 
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
@@ -52,12 +53,17 @@ function openMedication(row: any) {
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="登记号" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolveRegistrationNo(row) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="100">
           <template #default="{ row }">
             <el-button
               v-permission="'patientManagement:medication'"
@@ -69,6 +75,25 @@ function openMedication(row: any) {
             >
               服药管理
             </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="取药情况" min-width="200" fixed="right">
+          <template #default="{ row }">
+            <div
+              v-if="row.medicationPickTime || row.medicationChemotherapy || row.medicationDrugForm"
+              class="medication-pickup-cell"
+            >
+              <div v-if="row.medicationPickTime">
+                时间：{{ row.medicationPickTime }}
+              </div>
+              <div v-if="row.medicationChemotherapy">
+                药品：{{ row.medicationChemotherapy }}
+              </div>
+              <div v-if="row.medicationDrugForm">
+                数量：{{ row.medicationDrugForm }}
+              </div>
+            </div>
+            <span v-else class="text-gray-400">-</span>
           </template>
         </el-table-column>
       </el-table>
@@ -92,3 +117,10 @@ function openMedication(row: any) {
     />
   </div>
 </template>
+
+<style lang="scss" scoped>
+.medication-pickup-cell {
+  line-height: 1.6;
+  font-size: 13px;
+}
+</style>

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -17,7 +18,8 @@ const searchForm = reactive({
   phone: "",
   crowdCategory: "",
   screenMethod: "",
-  isLatent: undefined as number | undefined
+  isLatent: undefined as number | undefined,
+  diagnosisFirst: "" as string
 })
 
 async function fetchData() {
@@ -49,7 +51,12 @@ function handleReset() {
   searchForm.crowdCategory = ""
   searchForm.screenMethod = ""
   searchForm.isLatent = undefined
+  searchForm.diagnosisFirst = ""
   handleSearch()
+}
+
+function getRowClass({ row }: { row: any }) {
+  return isConfirmedPatientDiagnosis(row) ? "confirmed-row" : ""
 }
 
 // 转诊
@@ -319,6 +326,11 @@ watch(
             <el-option label="正常" :value="0" />
           </el-select>
         </el-form-item>
+        <el-form-item label="诊断结果">
+          <el-select v-model="searchForm.diagnosisFirst" placeholder="全部" clearable style="width: 140px">
+            <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -364,7 +376,7 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="year" label="年份" />
@@ -850,5 +862,12 @@ watch(
 }
 .edit-form {
   padding: 0 8px;
+}
+</style>
+
+<style lang="scss">
+.el-table .confirmed-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
 }
 </style>

@@ -45,7 +45,7 @@ export const TRACKING_STATUS_MAP: Record<number, string> = {
 
 /**
  * 诊断结果选项（V4新增，追踪到位后录入）
- * 排除/疑似肺结核 → 归档；确诊患者 → 患者管理；潜伏感染者 → 通知单；其他 → 备注归档
+ * 排除/疑似肺结核 → 归档；确诊患者 → 结案（不进入患者管理）；潜伏感染者 → 潜伏感染管理；其他 → 备注归档
  */
 export const DIAGNOSIS_RESULT_OPTIONS = [
   { label: "排除", value: "排除" },
@@ -89,6 +89,23 @@ export const SUSPECTED_DIAGNOSIS_TO_REFERRAL: Record<string, string> = {
   排除: "excluded",
   确诊患者: "confirmed",
   潜伏感染者: "latent"
+}
+
+/** 筛查管理列表 — 诊断结果搜索选项 */
+export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
+  { label: "确诊患者", value: "确诊患者" },
+  { label: "潜伏感染者", value: "潜伏感染者" }
+]
+
+/** 是否为筛查确诊患者（待诊断/筛查列表标红用） */
+export function isConfirmedPatientDiagnosis(row: {
+  diagnosisFirst?: string
+  referralResult?: string
+  diagnosisResult?: string
+}): boolean {
+  return row.diagnosisFirst === "确诊患者"
+    || row.referralResult === "confirmed"
+    || row.diagnosisResult === "确诊患者"
 }
 
 /** 获取待诊断列表「确认诊断」列展示文本 */
@@ -197,8 +214,95 @@ export const NOTICE_STATUS_MAP: Record<number, string> = {
   2: "已确认"
 }
 
-/** 潜伏感染者通知单治疗方案 */
-export const LATENT_TREATMENT_OPTIONS = ["免费药品", "生物制剂", "未治疗"]
+/** 潜伏感染者个体方案选项值 */
+export const LATENT_INDIVIDUAL_PLAN = "个体方案（需手动录入）"
+
+/** 潜伏感染者治疗方案选项（与患者管理治疗方案不同） */
+export const LATENT_TREATMENT_PLAN_OPTIONS = [
+  "6H/9H",
+  "3HP",
+  "3HR/4R",
+  "母牛分枝杆菌",
+  LATENT_INDIVIDUAL_PLAN,
+  "不服药"
+]
+
+/** @deprecated 请使用 LATENT_TREATMENT_PLAN_OPTIONS */
+export const LATENT_TREATMENT_OPTIONS = LATENT_TREATMENT_PLAN_OPTIONS
+
+/** 判断是否为潜伏感染者个体方案（含历史「个体化方案」） */
+export function isLatentIndividualPlan(plan?: string): boolean {
+  return plan === LATENT_INDIVIDUAL_PLAN || plan === "个体化方案"
+}
+
+/** 解析潜伏感染者通知单治疗方案（表单回填） */
+export function parseLatentNoticeTreatmentPlan(
+  treatmentPlan?: string,
+  customPlanDetail?: string
+): { treatmentPlan: string, customPlanDetail: string } {
+  const tp = treatmentPlan || ""
+  if (tp && !LATENT_TREATMENT_PLAN_OPTIONS.includes(tp)) {
+    return {
+      treatmentPlan: LATENT_INDIVIDUAL_PLAN,
+      customPlanDetail: customPlanDetail || tp
+    }
+  }
+  if (isLatentIndividualPlan(tp)) {
+    return {
+      treatmentPlan: LATENT_INDIVIDUAL_PLAN,
+      customPlanDetail: customPlanDetail || ""
+    }
+  }
+  return {
+    treatmentPlan: tp,
+    customPlanDetail: customPlanDetail || ""
+  }
+}
+
+/** 潜伏感染者通知单提交时格式化治疗方案 */
+export function formatLatentNoticeTreatmentPlan(treatmentPlan: string, customPlanDetail?: string): string {
+  if (isLatentIndividualPlan(treatmentPlan)) {
+    return customPlanDetail || treatmentPlan
+  }
+  return treatmentPlan
+}
+
+/** 解析潜伏感染者督导表治疗方案（表单回填） */
+export function parseLatentSupervisionTreatmentPlan(plan?: string): { treatmentPlan: string, customPlanDetail: string } {
+  if (!plan) return { treatmentPlan: "", customPlanDetail: "" }
+
+  const legacyPrefix = "个体化方案："
+  const newPrefix = `${LATENT_INDIVIDUAL_PLAN}：`
+  if (plan.startsWith(legacyPrefix)) {
+    return {
+      treatmentPlan: LATENT_INDIVIDUAL_PLAN,
+      customPlanDetail: plan.slice(legacyPrefix.length)
+    }
+  }
+  if (plan.startsWith(newPrefix)) {
+    return {
+      treatmentPlan: LATENT_INDIVIDUAL_PLAN,
+      customPlanDetail: plan.slice(newPrefix.length)
+    }
+  }
+  if (isLatentIndividualPlan(plan)) {
+    return { treatmentPlan: LATENT_INDIVIDUAL_PLAN, customPlanDetail: "" }
+  }
+  if (!LATENT_TREATMENT_PLAN_OPTIONS.includes(plan)) {
+    return { treatmentPlan: LATENT_INDIVIDUAL_PLAN, customPlanDetail: plan }
+  }
+  return { treatmentPlan: plan, customPlanDetail: "" }
+}
+
+/** 潜伏感染者督导表提交时格式化治疗方案 */
+export function formatLatentSupervisionTreatmentPlan(treatmentPlan: string, customPlanDetail?: string): string {
+  if (isLatentIndividualPlan(treatmentPlan)) {
+    return customPlanDetail
+      ? `${LATENT_INDIVIDUAL_PLAN}：${customPlanDetail}`
+      : LATENT_INDIVIDUAL_PLAN
+  }
+  return treatmentPlan
+}
 
 /** 患者类型（患者通知单） */
 export const PATIENT_TYPE_OPTIONS = ["初治", "复治"]
@@ -377,16 +481,23 @@ export const YES_NO_OPTIONS = [
   { value: "2", label: "有" }
 ]
 
+/** 是否停止治疗 */
+export const STOP_TREATMENT_YES_NO_OPTIONS = [
+  { value: "是", label: "是" },
+  { value: "否", label: "否" }
+]
+
 /** 停止治疗原因 */
 export const STOP_TREATMENT_REASON_OPTIONS = [
   { value: "完成疗程", label: "完成疗程" },
   { value: "死亡", label: "死亡" },
   { value: "丢失", label: "丢失" },
-  { value: "转入耐多药治疗", label: "转入耐多药治疗" }
+  { value: "转入耐多药治疗", label: "转入耐多药治疗" },
+  { value: "其它", label: "其它" }
 ]
 
 /** V16/V17 数据来源（populationType）标签映射，用于聚合列表的"数据来源"列 */
-export const POPULATION_TYPE_LABEL_MAP: Record<string, { label: string; type: "primary" | "success" | "warning" | "danger" | "info" }> = {
+export const POPULATION_TYPE_LABEL_MAP: Record<string, { label: string, type: "primary" | "success" | "warning" | "danger" | "info" }> = {
   school: { label: "学生筛查", type: "primary" },
   keyPopulation: { label: "重点人群", type: "success" },
   regular: { label: "常规筛查", type: "warning" },

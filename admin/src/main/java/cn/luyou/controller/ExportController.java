@@ -86,7 +86,7 @@ public class ExportController {
     private static final List<String> ALL_PATIENT_EXPORT_HEADERS = List.of(
             "序号", "数据来源", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
             "民族", "联系电话", "户籍地址", "现住址", "最终诊断结果", "通知单状态",
-            "首次随访", "后续随访次数", "服药管理", "是否归档", "归档时间", "创建时间"
+            "首次随访", "后续随访次数", "服药管理", "是否归档", "归档备注", "归档时间", "创建时间"
     );
 
     /** 大汇总表：三类人群筛查数据合并导出 */
@@ -624,6 +624,7 @@ public class ExportController {
             row.put("后续随访次数", followUpCountMap.getOrDefault(p.getId(), 0L));
             row.put("服药管理", med != null ? "已录入" : "未录入");
             row.put("是否归档", Integer.valueOf(1).equals(p.getArchived()) ? "已归档" : "未归档");
+            row.put("归档备注", p.getArchiveRemark() != null ? p.getArchiveRemark() : "");
             row.put("归档时间", p.getArchivedTime() != null ? p.getArchivedTime().format(DATETIME_FMT) : "");
             row.put("创建时间", p.getCreateTime() != null ? p.getCreateTime().format(DATETIME_FMT) : "");
             rows.add(row);

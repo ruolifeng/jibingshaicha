@@ -8,11 +8,11 @@ import {
   PATIENT_TYPE_OPTIONS,
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
+import { resolveMedicationManagementUnit, resolvePatientCrowdCategory, resolvePatientCurrentUnit } from "@@/utils/patient"
 import { idCardRule } from "@@/utils/validate"
-import { resolvePatientCrowdCategory, resolvePatientCurrentUnit } from "@@/utils/patient"
+import { getNoticeListByBizApi } from "@/pages/patient-management/apis"
 import { saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { useUserStore } from "@/pinia/stores/user"
-import { getNoticeListByBizApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
   visible: boolean
@@ -59,6 +59,8 @@ const noticeForm = reactive({
   molecularTest: "",
   pathologyTest: "",
   otherNotes: "",
+  medicationManagementUnit: "",
+  remark: "",
   receiverOrgId: undefined as number | undefined
 })
 
@@ -86,6 +88,8 @@ function resetFormFromRow(row: Record<string, any>) {
     molecularTest: "",
     pathologyTest: "",
     otherNotes: "",
+    medicationManagementUnit: resolveMedicationManagementUnit(row),
+    remark: "",
     receiverOrgId: undefined
   })
 }
@@ -112,6 +116,8 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     molecularTest: notice.molecularTest || "",
     pathologyTest: notice.pathologyTest || "",
     otherNotes: notice.otherNotes || "",
+    medicationManagementUnit: notice.medicationManagementUnit || resolveMedicationManagementUnit(row),
+    remark: notice.remark || "",
     receiverOrgId: notice.receiverOrgId || undefined
   })
   const tp = notice.treatmentPlan || ""
@@ -125,7 +131,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
 }
 
 async function loadDraftIfNeeded(row: Record<string, any>) {
-  if ((row.noticeStatus === 0 || row.noticeStatus === 2) && row.noticeId) {
+  if (row.noticeStatus === 0 || row.noticeStatus === 2) {
     try {
       const { data } = await getNoticeListByBizApi(row.id, "patient")
       const notice = data?.[0]
@@ -378,6 +384,12 @@ async function handleSaveDraft() {
           </el-form-item>
         </el-col>
       </el-row>
+      <el-form-item label="服药管理单位">
+        <el-input v-model="noticeForm.medicationManagementUnit" placeholder="来自病案信息，可手动调整" />
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input v-model="noticeForm.remark" type="textarea" :rows="2" placeholder="手动填写备注信息，打印时将显示" />
+      </el-form-item>
       <el-form-item label="其他注意事项">
         <el-input v-model="noticeForm.otherNotes" type="textarea" :rows="2" />
       </el-form-item>

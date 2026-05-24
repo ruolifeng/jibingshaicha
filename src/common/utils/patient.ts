@@ -1,4 +1,10 @@
-/** 从 patient.epidemicData JSON 中读取专病网导入的扩展字段 */
+import {
+  EPIDEMIC_REPORT_HEADERS,
+  PRIORITY_DETAIL_FIELDS,
+  SPECIAL_DISEASE_HEADERS
+} from "@@/constants/patient-import"
+
+/** 从 patient.epidemicData JSON 中读取专病网/大疫情导入的扩展字段 */
 export function parseEpidemicDataField(
   epidemicData: string | Record<string, unknown> | null | undefined,
   field: string
@@ -26,5 +32,138 @@ export function resolvePatientCrowdCategory(
 /** 解析专病网导入的现管单位 */
 export function resolvePatientCurrentUnit(row: Record<string, any> | null | undefined): string {
   if (!row) return ""
-  return row.currentManagementUnit || parseEpidemicDataField(row.epidemicData, "现管单位")
+  return row.currentManagementUnit
+    || parseEpidemicDataField(row.epidemicData, "现管单位")
+    || parseEpidemicDataField(row.epidemicData, "现管理单位")
+}
+
+/** 解析治疗分类 */
+export function resolveTreatmentClass(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  return row.treatmentClass
+    || row.importFields?.["治疗分类"]
+    || parseEpidemicDataField(row.epidemicData, "治疗分类")
+}
+
+/** 是否为复治患者（治疗分类含「复治」） */
+export function isRetreatmentPatient(row: Record<string, any> | null | undefined): boolean {
+  const tc = resolveTreatmentClass(row)
+  return !!tc && tc.includes("复治")
+}
+
+/** 获取导入字段 Map（优先 API 返回的 importFields，兼容 legacy 列索引 JSON） */
+export function resolveImportFields(row: Record<string, any> | null | undefined): Record<string, string> {
+  if (!row) return {}
+  if (row.importFields && typeof row.importFields === "object" && Object.keys(row.importFields).length) {
+    return row.importFields as Record<string, string>
+  }
+  if (!row.epidemicData) return {}
+  try {
+    const raw = typeof row.epidemicData === "string" ? JSON.parse(row.epidemicData) : row.epidemicData
+    if (!raw || typeof raw !== "object") return {}
+    const keys = Object.keys(raw)
+    const indexKeys = keys.length > 0 && keys.every(k => /^\d+$/.test(k))
+    if (indexKeys) {
+      const headers = row.populationType === "specialDisease"
+        ? SPECIAL_DISEASE_HEADERS
+        : row.populationType === "epidemic"
+          ? EPIDEMIC_REPORT_HEADERS
+          : []
+      const result: Record<string, string> = {}
+      keys.sort((a, b) => Number(a) - Number(b)).forEach((k) => {
+        const idx = Number(k)
+        const val = raw[k]
+        if (headers[idx] && val != null && String(val).trim()) {
+          result[headers[idx]] = String(val).trim()
+        }
+      })
+      return result
+    }
+    const result: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (v != null && String(v).trim()) result[k] = String(v).trim()
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+/** 按表头顺序整理详情展示字段 */
+export function buildOrderedImportFields(
+  row: Record<string, any> | null | undefined
+): Array<{ label: string, value: string }> {
+  const fields = resolveImportFields(row)
+  if (!fields || !Object.keys(fields).length) return []
+
+  const headerOrder = row?.populationType === "specialDisease"
+    ? SPECIAL_DISEASE_HEADERS
+    : row?.populationType === "epidemic"
+      ? EPIDEMIC_REPORT_HEADERS
+      : []
+
+  const ordered: Array<{ label: string, value: string }> = []
+  const used = new Set<string>()
+
+  for (const label of headerOrder) {
+    const value = fields[label]
+    if (value) {
+      ordered.push({ label, value })
+      used.add(label)
+    }
+  }
+  for (const [label, value] of Object.entries(fields)) {
+    if (!used.has(label) && value) {
+      ordered.push({ label, value })
+    }
+  }
+  return ordered
+}
+
+/** 详情优先展示字段（专病网标红部分） */
+export function buildPriorityImportFields(
+  row: Record<string, any> | null | undefined
+): Array<{ label: string, value: string }> {
+  const fields = resolveImportFields(row)
+  return PRIORITY_DETAIL_FIELDS.map(label => ({
+    label,
+    value: fields[label] || resolveFieldFromPatient(row, label) || ""
+  }))
+}
+
+/** 解析登记号（来自病案信息/专病网导入） */
+export function resolveRegistrationNo(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  return row.registrationNo
+    || row.importFields?.["登记号"]
+    || parseEpidemicDataField(row.epidemicData, "登记号")
+}
+
+/** 解析服药管理单位（来自病案信息/专病网导入） */
+export function resolveMedicationManagementUnit(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  return row.noticeMedicationUnit
+    || row.importFields?.["服药管理单位"]
+    || parseEpidemicDataField(row.epidemicData, "服药管理单位")
+}
+
+/** 解析首次治疗方案（来自病案信息/专病网导入） */
+export function resolveFirstTreatmentPlan(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  const fields = resolveImportFields(row)
+  return fields["首次治疗方案"] || parseEpidemicDataField(row.epidemicData, "首次治疗方案")
+}
+
+/** 格式化通知管理时间（下发通知单时间） */
+export function formatNoticeSentTime(value: unknown): string {
+  if (value == null || value === "") return ""
+  const text = typeof value === "string" ? value : String(value)
+  return text.replace("T", " ").slice(0, 19)
+}
+
+/** 部分重点字段在 patient 主表也有对应值 */
+function resolveFieldFromPatient(row: Record<string, any> | null | undefined, label: string): string {
+  if (!row) return ""
+  if (label === "诊断结果") return row.diagnosisResult || ""
+  return ""
 }

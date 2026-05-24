@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 /** 肺结核患者随访服务记录表 — 打印 / 保存 PDF */
+import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
 import {
   followUpFormatters,
   formatFollowUpSupervisor,
@@ -46,7 +47,8 @@ const display = computed(() => {
     nextVisitDate: d.nextVisitDate || "-",
     doctorSignature: d.doctorSignature || "-",
     stopTreatmentDate: d.stopTreatmentDate || "-",
-    stopTreatmentReason: followUpFormatters.stopTreatmentReason(d.stopTreatmentReason),
+    stopTreatment: d.stopTreatment || (d.stopTreatmentDate || d.stopTreatmentReason ? "是" : "否"),
+    stopTreatmentReason: followUpFormatters.stopTreatmentReason(d.stopTreatmentReason, d.stopTreatmentReasonOther),
     shouldVisitCount: d.shouldVisitCount ?? "-",
     actualVisitCount: d.actualVisitCount ?? "-",
     shouldDoseCount: d.shouldDoseCount ?? "-",
@@ -75,12 +77,14 @@ function handlePrint() {
         肺结核患者随访服务记录表
       </h2>
       <p v-if="patientName" class="print-subtitle">
-        患者姓名：{{ patientName }}　　第 {{ display.visitSeq }} 次随访
+        患者姓名：{{ patientName }} · 第 {{ display.visitSeq }} 次随访
       </p>
       <table class="visit-table">
         <tbody>
           <tr class="section-header">
-            <td colspan="6">基本信息</td>
+            <td colspan="6">
+              基本信息
+            </td>
           </tr>
           <tr>
             <th>随访时间</th>
@@ -92,29 +96,41 @@ function handlePrint() {
           </tr>
           <tr>
             <th>督导人员</th>
-            <td colspan="5">{{ display.supervisor }}</td>
+            <td colspan="5">
+              {{ display.supervisor }}
+            </td>
           </tr>
           <tr>
             <th>症状及体征</th>
-            <td colspan="3">{{ display.symptoms }}</td>
+            <td colspan="3">
+              {{ display.symptoms }}
+            </td>
             <th>症状-其它</th>
             <td>{{ display.symptomsOther }}</td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">生活方式指导</td>
+            <td colspan="6">
+              生活方式指导
+            </td>
           </tr>
           <tr>
             <th>吸烟(支/天)</th>
             <td>{{ display.smokingAmount }}</td>
             <th>饮酒(两/天)</th>
-            <td colspan="3">{{ display.drinkingAmount }}</td>
+            <td colspan="3">
+              {{ display.drinkingAmount }}
+            </td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">用药</td>
+            <td colspan="6">
+              用药
+            </td>
           </tr>
           <tr>
             <th>化疗方案</th>
-            <td colspan="5">{{ display.chemotherapyPlan }}</td>
+            <td colspan="5">
+              {{ display.chemotherapyPlan }}
+            </td>
           </tr>
           <tr>
             <th>用法</th>
@@ -125,57 +141,91 @@ function handlePrint() {
             <td>{{ display.missedDoses }}</td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">不良反应 / 并发症</td>
+            <td colspan="6">
+              不良反应 / 并发症
+            </td>
           </tr>
           <tr>
             <th>药物不良反应</th>
             <td>{{ display.adverseReaction }}</td>
             <th>不良反应详情</th>
-            <td colspan="3">{{ display.adverseReactionDetail }}</td>
+            <td colspan="3">
+              {{ display.adverseReactionDetail }}
+            </td>
           </tr>
           <tr>
             <th>并发症/合并症</th>
             <td>{{ display.complication }}</td>
             <th>并发症详情</th>
-            <td colspan="3">{{ display.complicationDetail }}</td>
+            <td colspan="3">
+              {{ display.complicationDetail }}
+            </td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">转诊</td>
+            <td colspan="6">
+              转诊
+            </td>
           </tr>
           <tr>
             <th>转诊科别</th>
             <td>{{ display.referralDepartment }}</td>
             <th>转诊原因</th>
-            <td colspan="3">{{ display.referralReason }}</td>
+            <td colspan="3">
+              {{ display.referralReason }}
+            </td>
           </tr>
           <tr>
             <th>2周内随访结果</th>
-            <td colspan="5">{{ display.referralTwoWeekResult }}</td>
+            <td colspan="5">
+              {{ display.referralTwoWeekResult }}
+            </td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">处理意见</td>
+            <td colspan="6">
+              处理意见
+            </td>
           </tr>
           <tr>
             <th>处理意见</th>
-            <td colspan="5">{{ display.handlingOpinion }}</td>
+            <td colspan="5">
+              {{ display.handlingOpinion }}
+            </td>
           </tr>
           <tr>
             <th>下次随访时间</th>
             <td>{{ display.nextVisitDate }}</td>
             <th>随访医生签名</th>
-            <td colspan="3">{{ display.doctorSignature }}</td>
+            <td colspan="3">
+              {{ display.doctorSignature }}
+            </td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">停止治疗</td>
+            <td colspan="6">
+              停止治疗
+            </td>
           </tr>
           <tr>
-            <th>停止治疗时间</th>
-            <td>{{ display.stopTreatmentDate }}</td>
+            <th>是否停止治疗</th>
+            <td :colspan="display.stopTreatment === '是' ? 1 : 5">
+              {{ display.stopTreatment }}
+            </td>
+            <template v-if="display.stopTreatment === '是'">
+              <th>停止治疗时间</th>
+              <td colspan="3">
+                {{ display.stopTreatmentDate }}
+              </td>
+            </template>
+          </tr>
+          <tr v-if="display.stopTreatment === '是'">
             <th>停止治疗原因</th>
-            <td colspan="3">{{ display.stopTreatmentReason }}</td>
+            <td colspan="5">
+              {{ display.stopTreatmentReason }}
+            </td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">全程管理情况</td>
+            <td colspan="6">
+              全程管理情况
+            </td>
           </tr>
           <tr>
             <th>应访视次数</th>
@@ -194,14 +244,19 @@ function handlePrint() {
             <td>{{ display.evaluatorSignature }}</td>
           </tr>
           <tr class="section-header">
-            <td colspan="6">备注</td>
+            <td colspan="6">
+              备注
+            </td>
           </tr>
           <tr>
             <th>备注</th>
-            <td colspan="5">{{ display.remarks }}</td>
+            <td colspan="5">
+              {{ display.remarks }}
+            </td>
           </tr>
         </tbody>
       </table>
+      <PrintAttachmentImages :urls="visitData?.attachmentUrls" title="附件照片" />
     </div>
     <template #footer>
       <el-button @click="emit('update:visible', false)">

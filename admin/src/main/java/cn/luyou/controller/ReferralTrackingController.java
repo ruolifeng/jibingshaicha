@@ -10,8 +10,10 @@ import cn.luyou.service.ReferralTrackingService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
@@ -32,9 +34,38 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) Integer trackingStatus,
-            @RequestParam(required = false) Integer archived) {
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String township,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String sourceType) {
         return ResultRes.success(referralTrackingService.queryPage(
-                page, size, bizMode, name, idNumber, trackingStatus, archived));
+                page, size, bizMode, name, idNumber, trackingStatus, archived,
+                phone, township, dateFrom, dateTo, sourceType));
+    }
+
+    @OperationLog(type = "import", module = "referral", action = "大疫情导入追踪记录")
+    @Operation(summary = "大疫情表导入（追踪模块）")
+    @PostMapping("/import-epidemic")
+    public ResultResponse<Map<String, Object>> importEpidemic(@RequestParam("file") MultipartFile file) {
+        return ResultRes.success(referralTrackingService.importEpidemic(file));
+    }
+
+    @OperationLog(type = "export", module = "referral", action = "导出追踪记录")
+    @Operation(summary = "导出追踪记录")
+    @GetMapping("/export")
+    public void export(
+            HttpServletResponse response,
+            @RequestParam(required = false) String bizMode,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String township,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String sourceType) {
+        referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township, dateFrom, dateTo, sourceType);
     }
 
     @OperationLog(type = "create", module = "referral", action = "新增推介/追踪记录")

@@ -147,13 +147,15 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
             String name,
             String idNumber,
             Integer trackingStatus,
-            Integer archived
+            Integer archived,
+            String diagnosisResult
     ) {
         LambdaQueryWrapper<EpidemicImport> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), EpidemicImport::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), EpidemicImport::getIdNumber, idNumber)
                 .eq(trackingStatus != null, EpidemicImport::getTrackingStatus, trackingStatus)
                 .eq(archived != null, EpidemicImport::getArchived, archived)
+                .eq(StrUtil.isNotBlank(diagnosisResult), EpidemicImport::getDiagnosisResult, diagnosisResult)
                 .orderByDesc(EpidemicImport::getCreateTime);
 
         if (!BaseContext.isSuperAdmin()) {
@@ -258,8 +260,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
                 entity.setArchived(1);
             }
             case "确诊患者" -> {
-                Long patientId = createPatientFromEpidemic(entity);
-                entity.setTargetPatientId(patientId);
+                // 大疫情筛查确诊患者仅结案，不进入患者管理（患者管理数据仅来自专病信息表导入）
                 entity.setArchived(1);
             }
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的诊断结果");

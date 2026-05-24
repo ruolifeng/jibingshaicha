@@ -10,6 +10,27 @@ import java.util.Map;
 
 public interface PatientService extends IService<Patient> {
 
+    String ARCHIVE_REMARK_TRANSFERRED_OUT = "已转出";
+
+    /** 停止治疗归档备注前缀（后接具体原因） */
+    String ARCHIVE_REMARK_STOP_TREATMENT_PREFIX = "停止治疗：";
+
+    /** 停止治疗原因：转入耐多药治疗（不归档，可继续随访） */
+    String STOP_TREATMENT_REASON_MDR = "转入耐多药治疗";
+
+    /** 停止治疗是否应归档（完成疗程/死亡/丢失/其它） */
+    static boolean shouldArchiveOnStopTreatment(String stopTreatment, String reason) {
+        return "是".equals(stopTreatment)
+                && reason != null
+                && !reason.isBlank()
+                && !STOP_TREATMENT_REASON_MDR.equals(reason);
+    }
+
+    /** 是否为停止治疗导致的归档 */
+    static boolean isStopTreatmentArchiveRemark(String archiveRemark) {
+        return archiveRemark != null && archiveRemark.startsWith(ARCHIVE_REMARK_STOP_TREATMENT_PREFIX);
+    }
+
     IPage<Patient> queryPage(int page, int size, String populationType,
                               String name, String idNumber, String phone, String currentAddress,
                               Integer archived);
@@ -29,6 +50,15 @@ public interface PatientService extends IService<Patient> {
 
     /** 归档患者（停止完成时间） */
     void archivePatient(Long id);
+
+    /** 归档患者并写入备注 */
+    void archivePatient(Long id, String archiveRemark);
+
+    /** 转出被拒绝后恢复为在管（仅 archiveRemark=已转出 时生效） */
+    void restoreTransferredPatient(Long id);
+
+    /** 停止治疗归档解锁（管理员操作，仅停止治疗归档可解锁） */
+    void unarchivePatientFromStopTreatment(Long id);
 
     /** 历史患者列表 */
     IPage<Patient> queryHistoryPage(int page, int size, String populationType,

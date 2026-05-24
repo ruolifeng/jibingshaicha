@@ -79,6 +79,7 @@ export function getScreeningRegularListApi(params: {
   crowdCategory?: string
   screenMethod?: string
   isLatent?: number
+  diagnosisFirst?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "screening/key-population/list",

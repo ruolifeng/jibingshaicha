@@ -50,9 +50,10 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String screenMethod,
             @RequestParam(required = false) Integer isLatent,
-            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
+            @RequestParam(required = false) String diagnosisFirst) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
-                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent, sourceType));
+                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent, sourceType, diagnosisFirst));
     }
 
     @Operation(summary = "新增重点人群筛查记录")

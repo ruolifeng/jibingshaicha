@@ -44,8 +44,9 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String schoolName,
             @RequestParam(required = false) String district,
-            @RequestParam(required = false) Integer isLatent) {
-        IPage<ScreeningSchool> result = screeningSchoolService.queryPage(page, size, name, idNumber, schoolName, district, isLatent);
+            @RequestParam(required = false) Integer isLatent,
+            @RequestParam(required = false) String diagnosisFirst) {
+        IPage<ScreeningSchool> result = screeningSchoolService.queryPage(page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst);
         return ResultRes.success(result);
     }
 

@@ -161,11 +161,6 @@ function goToLatent() {
   router.push("/close-contact/latent")
 }
 
-/** 跳转到密接患者管理页 */
-function goToPatient() {
-  router.push("/patient-management/follow-up")
-}
-
 /** 编辑弹窗 */
 const editVisible = ref(false)
 const editSaving = ref(false)
@@ -363,9 +358,6 @@ async function handleThreeMonthSubmit() {
         <span class="text-sm text-gray-500 font-bold">快速跳转：</span>
         <el-button type="warning" size="small" @click="goToLatent">
           密接潜伏感染管理 →
-        </el-button>
-        <el-button type="danger" size="small" @click="goToPatient">
-          密接患者管理 →
         </el-button>
       </div>
     </el-card>

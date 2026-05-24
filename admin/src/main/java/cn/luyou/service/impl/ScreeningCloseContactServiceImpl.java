@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * 密接人群筛查 Service（新模板73列，基于 finalScreeningResult 分类）
  *
  * 分类规则（AE列 = final_screening_result）：
- *  - 活动性肺结核  → ccStatus=1，直接创建患者管理记录
+ *  - 活动性肺结核  → ccStatus=1，标红结案（不进入患者管理）
  *  - 潜伏感染者    → ccStatus=2，进入密接潜伏感染专属流程
  *  - 未做          → ccStatus=4，进入6/12/24月随访监测
  *  - 未发现异常    → ccStatus=6，进入3月复查流程
@@ -160,28 +160,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
         if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
 
-        // 对新录入且为活动性肺结核的，直接创建患者记录
-        List<ScreeningCloseContact> newRecords = new ArrayList<>(toInsert);
-        List<ScreeningCloseContact> updatedActiveRecords = toUpdate.stream()
-                .filter(d -> RESULT_ACTIVE_TB.equals(d.getFinalScreeningResult()))
-                .toList();
-        newRecords.addAll(updatedActiveRecords);
-
-        List<Patient> patientList = new ArrayList<>();
-        for (ScreeningCloseContact d : newRecords) {
-            if (!RESULT_ACTIVE_TB.equals(d.getFinalScreeningResult())) continue;
-            boolean alreadyExists = patientService.lambdaQuery()
-                    .eq(Patient::getScreeningId, d.getId())
-                    .eq(Patient::getPopulationType, "closeContact")
-                    .exists();
-            if (alreadyExists) continue;
-            patientList.add(buildPatient(d));
-        }
-        if (!patientList.isEmpty()) {
-            patientService.saveBatch(patientList, 500);
-            log.info("密接人群 - 活动性肺结核自动创建患者记录 {} 条", patientList.size());
-        }
-
+        // 活动性肺结核（确诊）仅标记 ccStatus，不自动创建患者管理记录（患者管理数据仅来自专病信息表导入）
         result.setSuccessCount(dataList.size());
         return result;
     }
@@ -394,9 +373,6 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         determineStatus(data);
         data.setDepartmentId(BaseContext.getCurrentDepartmentId());
         save(data);
-        if (RESULT_ACTIVE_TB.equals(data.getFinalScreeningResult())) {
-            patientService.save(buildPatient(data));
-        }
     }
 
     @Override

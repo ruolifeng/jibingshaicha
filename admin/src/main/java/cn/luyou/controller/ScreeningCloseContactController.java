@@ -196,7 +196,7 @@ public class ScreeningCloseContactController {
     private String toCnStatus(Integer status) {
         if (status == null) return "待处理";
         return switch (status) {
-            case 1 -> "活动性肺结核-患者管理";
+            case 1 -> "活动性肺结核-结案";
             case 2 -> "潜伏感染者-管理中";
             case 3 -> "潜伏感染者-已归档";
             case 4 -> "随访监测中";

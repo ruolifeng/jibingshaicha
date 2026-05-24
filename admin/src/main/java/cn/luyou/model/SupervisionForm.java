@@ -34,6 +34,8 @@ public class SupervisionForm extends BaseEntity {
     private Integer age;
     /** 电话号码 */
     private String phone;
+    /** 电话备注（非本人电话时说明） */
+    private String phoneRemark;
     /** 现住址 */
     private String currentAddress;
     /** 户籍地址（V18新增） */

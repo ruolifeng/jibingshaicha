@@ -1,33 +1,73 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from "vue"
+import { ref, reactive, onMounted, nextTick, computed } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
+import { formatDateTime } from "@@/utils/datetime"
+import { downloadBlob } from "@@/utils/download"
 import {
   getReferralTrackingListApi,
   createReferralTrackingApi,
+  updateReferralTrackingApi,
   trackReferralApi,
   saveScreeningInfoApi,
   saveDiagnosisApi,
-  deleteReferralTrackingApi
+  deleteReferralTrackingApi,
+  importEpidemicTrackApi,
+  exportReferralTrackApi
 } from "../apis/index"
+
+/** 解析追踪历史记录 */
+interface TrackingHistoryItem {
+  attempt: number
+  status: number
+  trackTime: string
+  reason?: string
+}
+
+function parseTrackingHistory(json?: string): TrackingHistoryItem[] {
+  if (!json) return []
+  try {
+    return JSON.parse(json)
+  } catch {
+    return []
+  }
+}
+
+const TRACK_STATUS_LABEL: Record<number, string> = {
+  1: "到位",
+  2: "未到位",
+  3: "其他"
+}
 
 // ===== 列表 =====
 const loading = ref(false)
+const exporting = ref(false)
+const uploading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
-const searchForm = reactive({ name: "", idNumber: "" })
-const paginationData = reactive({ currentPage: 1, pageSize: 20 })
+const searchForm = reactive({
+  name: "",
+  idNumber: "",
+  phone: "",
+  township: "",
+  dateRange: [] as string[]
+})
 
 async function fetchList() {
   loading.value = true
   try {
+    const [dateFrom, dateTo] = searchForm.dateRange ?? []
     const res = await getReferralTrackingListApi({
       bizMode: "track",
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      township: searchForm.township || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined
     })
     tableData.value = res.data?.records ?? []
     total.value = res.data?.total ?? 0
@@ -35,6 +75,8 @@ async function fetchList() {
     loading.value = false
   }
 }
+
+const paginationData = reactive({ currentPage: 1, pageSize: 20 })
 
 onMounted(fetchList)
 
@@ -46,7 +88,123 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
+  searchForm.phone = ""
+  searchForm.township = ""
+  searchForm.dateRange = []
   handleSearch()
+}
+
+// ===== 大疫情导入 =====
+const importDialogVisible = ref(false)
+const importResult = ref<{ count: number, batchNo: string } | null>(null)
+
+function openImportDialog() {
+  importResult.value = null
+  importDialogVisible.value = true
+}
+
+async function handleEpidemicFileChange(uploadFile: any) {
+  const file = uploadFile?.raw as File
+  if (!file) return
+  if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+    ElMessage.error("请上传 .xlsx 或 .xls 格式的大疫情表文件")
+    return
+  }
+  uploading.value = true
+  importResult.value = null
+  try {
+    const res = await importEpidemicTrackApi(file)
+    importResult.value = res.data
+    ElMessage.success(`导入成功，共创建 ${res.data.count} 条追踪记录`)
+    importDialogVisible.value = false
+    fetchList()
+  } catch {
+    ElMessage.error("导入失败，请确认文件格式是否符合大疫情表模板")
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    const [dateFrom, dateTo] = searchForm.dateRange ?? []
+    const blob = await exportReferralTrackApi({
+      bizMode: "track",
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      township: searchForm.township || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined
+    })
+    downloadBlob(blob as unknown as Blob, "追踪记录导出.xlsx")
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
+
+// ===== 编辑 =====
+const editDialogVisible = ref(false)
+const editRow = ref<any>(null)
+const editForm = reactive({
+  name: "",
+  gender: "",
+  birthDate: "",
+  age: undefined as number | undefined,
+  idNumber: "",
+  phone: "",
+  currentAddress: "",
+  crowdCategory: "",
+  trackReason: "",
+  cardId: "",
+  parentName: "",
+  workplace: "",
+  township: "",
+  caseCategory: "",
+  diseaseName: "",
+  reportUnit: "",
+  reportCardTime: "",
+  epidemicRemark: ""
+})
+
+function openEditDialog(row: any) {
+  editRow.value = row
+  Object.assign(editForm, {
+    name: row.name ?? "",
+    gender: row.gender ?? "",
+    birthDate: row.birthDate ?? "",
+    age: row.age,
+    idNumber: row.idNumber ?? "",
+    phone: row.phone ?? "",
+    currentAddress: row.currentAddress ?? "",
+    crowdCategory: row.crowdCategory ?? "",
+    trackReason: row.trackReason ?? "",
+    cardId: row.cardId ?? "",
+    parentName: row.parentName ?? "",
+    workplace: row.workplace ?? "",
+    township: row.township ?? "",
+    caseCategory: row.caseCategory ?? "",
+    diseaseName: row.diseaseName ?? "",
+    reportUnit: row.reportUnit ?? "",
+    reportCardTime: row.reportCardTime ?? "",
+    epidemicRemark: row.epidemicRemark ?? ""
+  })
+  editDialogVisible.value = true
+}
+
+async function handleEditSave() {
+  await updateReferralTrackingApi(editRow.value.id, { ...editForm })
+  ElMessage.success("保存成功")
+  editDialogVisible.value = false
+  fetchList()
+}
+
+function isEpidemicRow(row: any) {
+  return row?.sourceType === "epidemic"
 }
 
 // ===== 新增追踪 =====
@@ -104,6 +262,12 @@ const trackDialogVisible = ref(false)
 const trackRow = ref<any>(null)
 const trackForm = reactive({ status: undefined as number | undefined, remark: "" })
 
+const trackHistory = computed(() =>
+  parseTrackingHistory(trackRow.value?.trackingHistoryJson)
+)
+
+const nextAttemptNo = computed(() => trackHistory.value.length + 1)
+
 function openTrackDialog(row: any) {
   trackRow.value = row
   Object.assign(trackForm, { status: undefined, remark: "" })
@@ -113,6 +277,10 @@ function openTrackDialog(row: any) {
 async function handleTrack() {
   if (!trackForm.status) {
     ElMessage.warning("请选择追踪状态")
+    return
+  }
+  if (trackForm.status === 2 && !trackForm.remark.trim()) {
+    ElMessage.warning("未到位时必须填写原因")
     return
   }
   await trackReferralApi(trackRow.value.id, trackForm.status, trackForm.remark)
@@ -208,6 +376,22 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         <el-form-item label="证件号">
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
+        </el-form-item>
+        <el-form-item label="乡镇">
+          <el-input v-model="searchForm.township" placeholder="请输入乡镇" clearable />
+        </el-form-item>
+        <el-form-item label="时间段">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
@@ -216,17 +400,40 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 16px">
-      <div class="toolbar-wrapper" style="margin-bottom: 12px">
+      <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
         <el-button type="primary" @click="openCreateDialog">新增追踪</el-button>
+        <el-button type="success" @click="openImportDialog">大疫情导入</el-button>
+        <el-button type="warning" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
-        <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="crowdCategory" label="人群分类" />
+        <el-table-column label="来源" width="100">
+          <template #default="{ row }">
+            <el-tag :type="isEpidemicRow(row) ? 'danger' : 'info'" size="small">
+              {{ isEpidemicRow(row) ? "大疫情" : "手动" }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="cardId" label="卡片ID" width="120" show-overflow-tooltip />
+        <el-table-column prop="name" label="患者姓名" />
+        <el-table-column prop="parentName" label="患儿家长姓名" show-overflow-tooltip />
+        <el-table-column prop="gender" label="性别" width="60" />
+        <el-table-column prop="age" label="年龄" width="60" />
+        <el-table-column prop="idNumber" label="有效证件号" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="workplace" label="工作单位" show-overflow-tooltip />
+        <el-table-column prop="phone" label="联系电话" width="120" />
+        <el-table-column prop="township" label="乡镇" width="100" show-overflow-tooltip />
+        <el-table-column prop="currentAddress" label="现住详细地址" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="crowdCategory" label="人群分类" show-overflow-tooltip />
+        <el-table-column prop="caseCategory" label="病例分类" show-overflow-tooltip />
+        <el-table-column prop="diseaseName" label="疾病名称" show-overflow-tooltip />
+        <el-table-column prop="reportUnit" label="报告单位" show-overflow-tooltip />
+        <el-table-column label="报告卡录入时间" min-width="160">
+          <template #default="{ row }">
+            {{ row.reportCardTime ? formatDateTime(row.reportCardTime) : "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="epidemicRemark" label="备注" show-overflow-tooltip />
         <el-table-column prop="trackReason" label="追踪原因" show-overflow-tooltip />
         <el-table-column label="追踪状态">
           <template #default="{ row }">
@@ -244,9 +451,19 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
           </template>
         </el-table-column>
         <el-table-column prop="diagnosisResult" label="诊断结果" />
-        <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="创建时间" min-width="160">
           <template #default="{ row }">
+            {{ formatDateTime(row.createTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="到位时间" min-width="160">
+          <template #default="{ row }">
+            {{ row.arrivalTime ? formatDateTime(row.arrivalTime) : "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" fixed="right" width="220">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
             <!-- 追踪：待追踪或未到位 -->
             <el-button
               v-if="[0, 2].includes(row.trackingStatus) && !row.archived"
@@ -281,6 +498,95 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
         @current-change="(val: number) => { paginationData.currentPage = val; fetchList() }"
       />
     </el-card>
+
+    <!-- 大疫情导入弹窗 -->
+    <el-dialog v-model="importDialogVisible" title="大疫情导入" width="680px">
+      <el-alert type="info" :closable="false" style="margin-bottom: 16px">
+        <template #title>
+          上传大疫情网（报告卡）导出文件（.xlsx / .xls），系统自动提取以下字段并创建追踪记录。
+        </template>
+        <template #default>
+          <div style="margin-top: 8px; font-size: 13px; line-height: 1.8; color: #606266">
+            卡片ID、患者姓名、患儿家长姓名、有效证件号、性别、出生日期、年龄、患者工作单位、联系电话、现住详细地址、人群分类、病例分类、疾病名称、报告单位、报告卡录入时间、备注
+          </div>
+        </template>
+      </el-alert>
+      <el-upload
+        :auto-upload="false"
+        :show-file-list="false"
+        accept=".xlsx,.xls"
+        :on-change="handleEpidemicFileChange"
+        drag
+        style="width: 100%"
+      >
+        <div style="padding: 24px 0">
+          <div style="font-size: 16px; color: #606266">
+            拖拽大疫情表文件到此处，或 <span style="color: #409eff">点击上传</span>
+          </div>
+          <div style="font-size: 12px; color: #909399; margin-top: 8px">支持 .xlsx / .xls 格式</div>
+        </div>
+      </el-upload>
+      <div v-if="uploading" style="text-align: center; margin-top: 16px; color: #606266">
+        正在解析并导入，请稍候...
+      </div>
+      <el-result
+        v-if="importResult"
+        icon="success"
+        :title="`成功导入 ${importResult.count} 条追踪记录`"
+        :sub-title="`批次号：${importResult.batchNo}`"
+      />
+      <template #footer>
+        <el-button @click="importDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑弹窗 -->
+    <el-dialog v-model="editDialogVisible" title="编辑追踪记录" width="720px">
+      <el-form :model="editForm" label-width="120px">
+        <el-row :gutter="16">
+          <template v-if="isEpidemicRow(editRow)">
+            <el-col :span="12"><el-form-item label="卡片ID"><el-input v-model="editForm.cardId" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="患儿家长姓名"><el-input v-model="editForm.parentName" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="工作单位"><el-input v-model="editForm.workplace" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="乡镇"><el-input v-model="editForm.township" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="病例分类"><el-input v-model="editForm.caseCategory" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="疾病名称"><el-input v-model="editForm.diseaseName" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="报告单位"><el-input v-model="editForm.reportUnit" /></el-form-item></el-col>
+            <el-col :span="12">
+              <el-form-item label="报告卡录入时间">
+                <el-date-picker v-model="editForm.reportCardTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="24"><el-form-item label="备注"><el-input v-model="editForm.epidemicRemark" type="textarea" :rows="2" /></el-form-item></el-col>
+          </template>
+          <el-col :span="12"><el-form-item label="患者姓名"><el-input v-model="editForm.name" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="性别">
+              <el-select v-model="editForm.gender" style="width: 100%">
+                <el-option label="男" value="男" /><el-option label="女" value="女" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="出生日期">
+              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="年龄"><el-input-number v-model="editForm.age" :min="0" :max="150" style="width: 100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="有效证件号"><el-input v-model="editForm.idNumber" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="现住详细地址"><el-input v-model="editForm.currentAddress" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="人群分类"><el-input v-model="editForm.crowdCategory" /></el-form-item></el-col>
+          <el-col v-if="!isEpidemicRow(editRow)" :span="24">
+            <el-form-item label="追踪原因"><el-input v-model="editForm.trackReason" type="textarea" :rows="2" /></el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleEditSave">保存</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 新增追踪弹窗 -->
     <el-dialog v-model="createDialogVisible" title="新增追踪记录" width="660px">
@@ -370,8 +676,20 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-dialog>
 
     <!-- 追踪操作弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="420px">
+    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
       <el-form label-width="100px">
+        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
+          <div class="tracking-history">
+            <div v-for="item in trackHistory" :key="item.attempt" class="tracking-history-item">
+              <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
+              <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                {{ TRACK_STATUS_LABEL[item.status] }}
+              </el-tag>
+              <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+              <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="追踪状态">
           <el-radio-group v-model="trackForm.status">
             <el-radio :value="1">到位</el-radio>
@@ -379,9 +697,23 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
             <el-radio :value="3">其他</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" />
+        <el-form-item v-if="trackForm.status === 2" label="未到位原因" required>
+          <el-input
+            v-model="trackForm.remark"
+            type="textarea"
+            :rows="3"
+            placeholder="请填写未到位原因"
+          />
         </el-form-item>
+        <el-form-item v-else-if="trackForm.status === 3" label="备注">
+          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
+        </el-form-item>
+        <el-alert
+          v-if="trackForm.status === 2 && trackRow"
+          :title="`第 ${nextAttemptNo} 次追踪，当前已未到位 ${trackRow.notInPlaceCount ?? 0} 次，3 次未到位将自动结束追踪`"
+          type="warning"
+          :closable="false"
+        />
       </el-form>
       <template #footer>
         <el-button @click="trackDialogVisible = false">取消</el-button>
@@ -487,3 +819,37 @@ const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-dialog>
   </div>
 </template>
+
+<style scoped lang="scss">
+.tracking-history {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tracking-history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.tracking-history-attempt {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.tracking-history-time {
+  color: var(--el-text-color-secondary);
+}
+
+.tracking-history-reason {
+  width: 100%;
+  color: var(--el-text-color-regular);
+}
+</style>

@@ -3,9 +3,13 @@ import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.v
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { canEditFollowUpVisit } from "@@/utils/followUpVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
-import { usePatientList } from "./composables/usePatientList"
+import { useUserStore } from "@/pinia/stores/user"
 import { getFollowUpVisitListApi } from "./apis"
+import { usePatientList } from "./composables/usePatientList"
+
+const userStore = useUserStore()
 
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
@@ -20,6 +24,11 @@ function openFollowUp(row: any) {
 const historyVisible = ref(false)
 const historyList = ref<any[]>([])
 const historyPatientName = ref("")
+const historyPatient = ref<any>(null)
+const historyDialogTitle = computed(() => `${historyPatientName.value} - 随访记录`)
+
+const editDialogVisible = ref(false)
+const editVisit = ref<Record<string, any> | null>(null)
 
 const detailVisible = ref(false)
 const detailData = ref<Record<string, any> | null>(null)
@@ -29,10 +38,27 @@ const printData = ref<Record<string, any> | null>(null)
 const printPatientName = ref("")
 
 async function viewHistory(row: any) {
+  historyPatient.value = row
   historyPatientName.value = row.name
   const { data } = await getFollowUpVisitListApi(row.id)
   historyList.value = data || []
   historyVisible.value = true
+}
+
+async function refreshHistoryList() {
+  if (!historyPatient.value) return
+  const { data } = await getFollowUpVisitListApi(historyPatient.value.id)
+  historyList.value = data || []
+}
+
+function openEdit(record: Record<string, any>) {
+  editVisit.value = record
+  editDialogVisible.value = true
+}
+
+async function onEditSaved() {
+  await refreshHistoryList()
+  fetchData()
 }
 
 function viewDetail(row: Record<string, any>) {
@@ -69,8 +95,12 @@ function openPrint(row: Record<string, any>) {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -92,10 +122,16 @@ function openPrint(row: Record<string, any>) {
         <el-table-column prop="diagnosisResult" label="诊断结果" />
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'patientManagement:followUp'" type="primary" link size="small"
+            <el-button
+              v-permission="'patientManagement:followUp'" type="primary" link size="small"
               :disabled="row.archived === 1"
-              @click="openFollowUp(row)">填写后续随访</el-button>
-            <el-button type="info" link size="small" @click="viewHistory(row)">查看记录</el-button>
+              @click="openFollowUp(row)"
+            >
+              填写后续随访
+            </el-button>
+            <el-button type="info" link size="small" @click="viewHistory(row)">
+              查看记录
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -121,21 +157,52 @@ function openPrint(row: Record<string, any>) {
       @saved="fetchData"
     />
 
-    <el-dialog v-model="historyVisible" :title="`${historyPatientName} - 随访记录`" width="900px" append-to-body>
+    <FollowUpVisitDialog
+      v-if="historyPatient && editVisit"
+      v-model:visible="editDialogVisible"
+      :patient-id="historyPatient.id"
+      :patient-name="historyPatient.name"
+      :population-type="historyPatient.populationType"
+      :initial-data="editVisit"
+      @saved="onEditSaved"
+    />
+
+    <el-dialog
+      v-model="historyVisible"
+      :title="historyDialogTitle"
+      width="900px"
+      append-to-body
+    >
       <el-table :data="historyList" border stripe>
         <el-table-column prop="visitSeq" label="第几次" />
         <el-table-column prop="visitDate" label="随访日期" />
         <el-table-column prop="treatmentMonth" label="治疗月序" />
         <el-table-column label="随访方式">
-          <template #default="{ row }">{{ followUpFormatters.visitMethod(row.visitMethod) }}</template>
+          <template #default="{ row }">
+            {{ followUpFormatters.visitMethod(row.visitMethod) }}
+          </template>
         </el-table-column>
         <el-table-column prop="missedDoses" label="漏服次数" />
         <el-table-column prop="nextVisitDate" label="下次随访" />
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="viewDetail(row)">查看详情</el-button>
-            <el-button type="info" link size="small" @click="openPrint(row)">打印</el-button>
+            <el-button type="primary" link size="small" @click="viewDetail(row)">
+              查看详情
+            </el-button>
+            <el-button
+              v-if="canEditFollowUpVisit(userStore.userRole, row)"
+              v-permission="'patientManagement:followUp'"
+              type="warning"
+              link
+              size="small"
+              @click="openEdit(row)"
+            >
+              修改
+            </el-button>
+            <el-button type="info" link size="small" @click="openPrint(row)">
+              打印
+            </el-button>
           </template>
         </el-table-column>
       </el-table>

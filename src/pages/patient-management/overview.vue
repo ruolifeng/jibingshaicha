@@ -1,14 +1,24 @@
 <script lang="ts" setup>
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
-import { NOTICE_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
+import { isRetreatmentPatient, resolveTreatmentClass } from "@@/utils/patient"
 import { batchDeletePatientsApi, exportAllPatientsApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const {
-  paginationData, handleCurrentChange, handleSizeChange,
-  loading, tableData, total, searchForm, fetchData, handleSearch, handleReset
+  paginationData,
+  handleCurrentChange,
+  handleSizeChange,
+  loading,
+  tableData,
+  total,
+  searchForm,
+  fetchData,
+  handleSearch,
+  handleReset
 } = usePatientList(0)
 
 const detailVisible = ref(false)
@@ -34,6 +44,14 @@ function openCreate() {
 function openEdit(row: any) {
   currentId.value = row.id
   editVisible.value = true
+}
+
+const referralDialogVisible = ref(false)
+const referralRow = ref<any>(null)
+
+function openReferral(row: any) {
+  referralRow.value = row
+  referralDialogVisible.value = true
 }
 
 async function handleExport() {
@@ -156,17 +174,31 @@ async function handleBatchDelete() {
         border
         stripe
         row-key="id"
+        :row-class-name="({ row }) => (isRetreatmentPatient(row) ? 'retreatment-row' : '')"
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
-        <el-table-column prop="name" label="姓名" />
+        <el-table-column label="姓名">
+          <template #default="{ row }">
+            <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">
+              {{ row.name }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
         <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
         <el-table-column prop="diagnosisResult" label="诊断结果" show-overflow-tooltip />
+        <el-table-column label="治疗分类" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">
+              {{ resolveTreatmentClass(row) || "-" }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
             <el-tag v-if="row.noticeStatus === 2" type="success" size="small">
@@ -209,6 +241,15 @@ async function handleBatchDelete() {
             >
               修改
             </el-button>
+            <el-button
+              v-permission="'patientManagement:referral'"
+              type="info"
+              link
+              size="small"
+              @click="openReferral(row)"
+            >
+              转出
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -234,5 +275,22 @@ async function handleBatchDelete() {
       :patient-id="currentId"
       @success="fetchData"
     />
+
+    <ReferralDialog
+      v-if="referralRow"
+      v-model="referralDialogVisible"
+      :biz-id="referralRow.id"
+      biz-type="patient_aggregate"
+      module-type="patient"
+      :population-type="referralRow.populationType"
+      :subject-name="referralRow.name || ''"
+      @success="fetchData"
+    />
   </div>
 </template>
+
+<style scoped lang="scss">
+:deep(.retreatment-row) {
+  --el-table-tr-bg-color: #fef2f2;
+}
+</style>

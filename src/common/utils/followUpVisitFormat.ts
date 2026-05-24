@@ -8,7 +8,7 @@ import {
   YES_NO_OPTIONS
 } from "@@/constants/disease"
 
-type Option = { value: string, label: string }
+interface Option { value: string, label: string }
 
 export function optionLabel(options: Option[], value?: string | null) {
   if (!value) return "-"
@@ -35,9 +35,15 @@ export function formatYesNo(value?: string | null) {
   return optionLabel(YES_NO_OPTIONS, value)
 }
 
+export function formatStopTreatmentReason(reason?: string | null, other?: string | null) {
+  if (!reason) return "-"
+  if (reason === "其它" && other) return `其它（${other}）`
+  return optionLabel(STOP_TREATMENT_REASON_OPTIONS, reason)
+}
+
 export const followUpFormatters = {
   visitMethod: (v?: string | null) => optionLabel(FOLLOW_UP_VISIT_METHOD_OPTIONS, v),
   medicationUsage: (v?: string | null) => optionLabel(FOLLOW_UP_MEDICATION_USAGE_OPTIONS, v),
   drugForm: (v?: string | null) => optionLabel(FOLLOW_UP_DRUG_FORM_OPTIONS, v),
-  stopTreatmentReason: (v?: string | null) => optionLabel(STOP_TREATMENT_REASON_OPTIONS, v)
+  stopTreatmentReason: (v?: string | null, other?: string | null) => formatStopTreatmentReason(v, other)
 }

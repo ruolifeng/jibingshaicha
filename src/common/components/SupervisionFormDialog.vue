@@ -1,11 +1,14 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
 import {
+  formatLatentSupervisionTreatmentPlan,
   INTERRUPT_MEDICATION_OPTIONS,
+  isLatentIndividualPlan,
+  LATENT_TREATMENT_PLAN_OPTIONS,
+  parseLatentSupervisionTreatmentPlan,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
-  SUPERVISION_METHOD_OPTIONS,
-  TREATMENT_PLAN_OPTIONS
+  SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
 import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
@@ -36,6 +39,7 @@ const supervisionForm = reactive({
   gender: "",
   age: null as number | null,
   phone: "",
+  phoneRemark: "",
   currentAddress: "",
   treatmentStartDate: "",
   treatmentEndDate: "",
@@ -92,16 +96,9 @@ function createEmptyRecord(): SupervisionRecord {
 }
 
 function parseTreatmentPlan(plan?: string) {
-  if (plan?.startsWith("个体化方案：")) {
-    supervisionForm.treatmentPlan = "个体化方案"
-    supervisionForm.customPlanDetail = plan.replace("个体化方案：", "")
-  } else if (plan === "个体化方案") {
-    supervisionForm.treatmentPlan = "个体化方案"
-    supervisionForm.customPlanDetail = ""
-  } else {
-    supervisionForm.treatmentPlan = plan ?? ""
-    supervisionForm.customPlanDetail = ""
-  }
+  const parsed = parseLatentSupervisionTreatmentPlan(plan)
+  supervisionForm.treatmentPlan = parsed.treatmentPlan
+  supervisionForm.customPlanDetail = parsed.customPlanDetail
 }
 
 function parseSupervisionRecords(records?: string) {
@@ -126,6 +123,7 @@ function resetFormFromRow(row: any) {
   supervisionForm.gender = row.gender || ""
   supervisionForm.age = row.age ?? null
   supervisionForm.phone = row.phone || ""
+  supervisionForm.phoneRemark = ""
   supervisionForm.currentAddress = row.currentAddress || ""
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
@@ -150,6 +148,7 @@ function applyDetailToForm(data: Record<string, any>, row: any) {
   supervisionForm.gender = data.gender ?? supervisionForm.gender
   supervisionForm.age = data.age ?? supervisionForm.age
   supervisionForm.phone = data.phone ?? supervisionForm.phone
+  supervisionForm.phoneRemark = data.phoneRemark ?? ""
   supervisionForm.currentAddress = data.currentAddress ?? supervisionForm.currentAddress
   supervisionForm.treatmentStartDate = formatDateValue(data.treatmentStartDate)
   supervisionForm.treatmentEndDate = formatDateValue(data.treatmentEndDate)
@@ -233,12 +232,7 @@ function resolveMedicationRate() {
 }
 
 function resolveTreatmentPlan() {
-  if (supervisionForm.treatmentPlan === "个体化方案") {
-    return supervisionForm.customPlanDetail
-      ? `个体化方案：${supervisionForm.customPlanDetail}`
-      : "个体化方案"
-  }
-  return supervisionForm.treatmentPlan
+  return formatLatentSupervisionTreatmentPlan(supervisionForm.treatmentPlan, supervisionForm.customPlanDetail)
 }
 
 function buildPayload(status: number) {
@@ -252,6 +246,7 @@ function buildPayload(status: number) {
     gender: supervisionForm.gender || undefined,
     age: supervisionForm.age ?? undefined,
     phone: supervisionForm.phone || undefined,
+    phoneRemark: supervisionForm.phoneRemark || undefined,
     currentAddress: supervisionForm.currentAddress || undefined,
     treatmentStartDate: supervisionForm.treatmentStartDate || undefined,
     treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
@@ -372,6 +367,12 @@ async function handleArchive() {
           </el-form-item>
         </el-col>
       </el-row>
+      <el-form-item label="电话备注">
+        <el-input
+          v-model="supervisionForm.phoneRemark"
+          placeholder="非本人电话时请填写说明（如与本人关系）"
+        />
+      </el-form-item>
       <el-form-item label="现住址">
         <el-input v-model="supervisionForm.currentAddress" placeholder="请输入现住址" />
       </el-form-item>
@@ -394,19 +395,19 @@ async function handleArchive() {
         <el-col :span="12">
           <el-form-item label="治疗方案" prop="treatmentPlan">
             <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" clearable style="width: 100%">
-              <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+              <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>
       </el-row>
-      <el-row v-if="supervisionForm.treatmentPlan === '个体化方案'">
+      <el-row v-if="isLatentIndividualPlan(supervisionForm.treatmentPlan)">
         <el-col :span="24">
           <el-form-item label="方案详情">
             <el-input
               v-model="supervisionForm.customPlanDetail"
               type="textarea"
               :rows="3"
-              placeholder="请注明详细的抗结核治疗方案"
+              placeholder="请手动录入个体治疗方案详情"
             />
           </el-form-item>
         </el-col>

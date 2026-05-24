@@ -16,7 +16,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
      */
     IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                       String name, String idNumber, Integer trackingStatus, Integer archived,
-                                      String referralResult);
+                                      String referralResult, String diagnosisFirst);
 
     /** 追踪操作 */
     void track(Long id, Integer status, String remark);

@@ -3,8 +3,11 @@ import { getLevel5UsersApi } from "@@/apis/users"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
+  formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
-  TREATMENT_PLAN_OPTIONS
+  isLatentIndividualPlan,
+  LATENT_TREATMENT_PLAN_OPTIONS,
+  parseLatentNoticeTreatmentPlan
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { saveNoticeDraftApi, sendNoticeApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
@@ -105,14 +108,9 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     issuedTime: notice.issuedTime || getNowDateStr(),
     receiverOrgId: notice.receiverOrgId || undefined
   })
-  const tp = notice.treatmentPlan || ""
-  if (tp && !TREATMENT_PLAN_OPTIONS.includes(tp)) {
-    noticeForm.treatmentPlan = "个体化方案"
-    noticeForm.customPlanDetail = notice.customPlanDetail || tp
-  } else {
-    noticeForm.treatmentPlan = tp
-    noticeForm.customPlanDetail = notice.customPlanDetail || ""
-  }
+  const parsed = parseLatentNoticeTreatmentPlan(notice.treatmentPlan, notice.customPlanDetail)
+  noticeForm.treatmentPlan = parsed.treatmentPlan
+  noticeForm.customPlanDetail = parsed.customPlanDetail
 }
 
 async function loadDraftIfNeeded(row: Record<string, any>) {
@@ -157,9 +155,7 @@ function buildPayload() {
     bizId: row.id,
     patientName: row.name,
     ...noticeForm,
-    treatmentPlan: noticeForm.treatmentPlan === "个体化方案"
-      ? noticeForm.customPlanDetail
-      : noticeForm.treatmentPlan,
+    treatmentPlan: formatLatentNoticeTreatmentPlan(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
     senderId: userStore.userId
   }
 }
@@ -322,11 +318,11 @@ async function handleSaveDraft() {
       </el-divider>
       <el-form-item label="治疗方案">
         <el-select v-model="noticeForm.treatmentPlan" style="width: 100%" placeholder="请选择治疗方案">
-          <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+          <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
         </el-select>
       </el-form-item>
-      <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-        <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
+      <el-form-item v-if="isLatentIndividualPlan(noticeForm.treatmentPlan)" label="方案详情">
+        <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请手动录入个体治疗方案详情" />
       </el-form-item>
       <el-divider content-position="left">
         机构信息

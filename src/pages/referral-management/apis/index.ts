@@ -87,6 +87,27 @@ export function deleteReferralTrackingApi(id: number) {
   })
 }
 
+/** 大疫情表导入（追踪模块） */
+export function importEpidemicTrackApi(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<{ count: number, batchNo: string }>>({
+    url: "referral-tracking/import-epidemic",
+    method: "post",
+    data: formData
+  })
+}
+
+/** 导出追踪记录 */
+export function exportReferralTrackApi(params: Record<string, any>) {
+  return request<Blob>({
+    url: "referral-tracking/export",
+    method: "get",
+    params,
+    responseType: "blob"
+  })
+}
+
 /** 获取三/四级用户列表（推介追踪接收人选择） */
 export function getLevel34UsersApi() {
   return request<ApiResponseData<any[]>>({

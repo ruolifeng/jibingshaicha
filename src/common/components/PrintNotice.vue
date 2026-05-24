@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { formatNoticeSentTime } from "@@/utils/patient"
 import { printElement } from "@@/utils/print"
 
 /** 通用通知单打印组件（潜伏者通知单 / 患者通知单） */
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 }>()
 
 const title = computed(() => props.noticeType === "patient" ? "肺结核患者管理通知单" : "结核病潜伏感染者预防性治疗通知单")
+const isPatient = computed(() => props.noticeType === "patient")
 
 function handlePrint() {
   printElement("print-notice-content", title.value)
@@ -74,28 +76,68 @@ function handlePrint() {
             <th>治疗方案</th>
             <td>{{ noticeData?.treatmentPlan }}</td>
           </tr>
-          <tr>
-            <th>感染检查日期</th>
-            <td>{{ noticeData?.infectionDate }}</td>
-            <th>检查方法</th>
-            <td>{{ noticeData?.infectionMethod }}</td>
-          </tr>
-          <tr>
-            <th>检查结果</th>
-            <td>{{ noticeData?.infectionResultValue }}</td>
-            <th>胸片日期</th>
-            <td>{{ noticeData?.chestXrayDate }}</td>
-          </tr>
+          <template v-if="isPatient">
+            <tr>
+              <th>患者类型</th>
+              <td>{{ noticeData?.patientType }}</td>
+              <th>管理方式</th>
+              <td>{{ noticeData?.managementMethod }}</td>
+            </tr>
+            <tr>
+              <th>痰涂片</th>
+              <td>{{ noticeData?.sputumSmear }}</td>
+              <th>痰培养</th>
+              <td>{{ noticeData?.sputumCulture }}</td>
+            </tr>
+            <tr>
+              <th>分子检查</th>
+              <td>{{ noticeData?.molecularTest }}</td>
+              <th>病理学检查</th>
+              <td>{{ noticeData?.pathologyTest }}</td>
+            </tr>
+          </template>
+          <template v-else>
+            <tr>
+              <th>感染检查日期</th>
+              <td>{{ noticeData?.infectionDate }}</td>
+              <th>检查方法</th>
+              <td>{{ noticeData?.infectionMethod }}</td>
+            </tr>
+            <tr>
+              <th>检查结果</th>
+              <td>{{ noticeData?.infectionResultValue }}</td>
+              <th>胸片日期</th>
+              <td>{{ noticeData?.chestXrayDate }}</td>
+            </tr>
+          </template>
           <tr>
             <th>胸片结果</th>
             <td>{{ noticeData?.chestXrayResult }}</td>
             <th>治疗机构</th>
             <td>{{ noticeData?.treatmentInstitution }}</td>
           </tr>
+          <tr v-if="isPatient">
+            <th>服药管理单位</th>
+            <td colspan="3">
+              {{ noticeData?.medicationManagementUnit }}
+            </td>
+          </tr>
           <tr>
             <th>下发时间</th>
+            <td>{{ noticeData?.issuedTime }}</td>
+            <th>通知管理时间</th>
+            <td>{{ formatNoticeSentTime(noticeData?.sentTime) }}</td>
+          </tr>
+          <tr v-if="isPatient">
+            <th>备注</th>
             <td colspan="3">
-              {{ noticeData?.issuedTime }}
+              {{ noticeData?.remark || "" }}
+            </td>
+          </tr>
+          <tr v-if="noticeData?.otherNotes">
+            <th>其他注意事项</th>
+            <td colspan="3">
+              {{ noticeData?.otherNotes }}
             </td>
           </tr>
         </tbody>

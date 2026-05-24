@@ -18,7 +18,11 @@ import {
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS,
   TREATMENT_PHASE_MAP,
-  TREATMENT_PLAN_OPTIONS
+  formatLatentNoticeTreatmentPlan,
+  formatLatentSupervisionTreatmentPlan,
+  isLatentIndividualPlan,
+  LATENT_TREATMENT_PLAN_OPTIONS,
+  parseLatentNoticeTreatmentPlan
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
 import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
@@ -345,14 +349,9 @@ async function loadNoticeDraft(row: any) {
       issuedTime: notice.issuedTime || getNowDateStr(),
       receiverOrgId: notice.receiverOrgId || undefined
     })
-    const tp = notice.treatmentPlan || ""
-    if (tp && !TREATMENT_PLAN_OPTIONS.includes(tp)) {
-      noticeForm.treatmentPlan = "个体化方案"
-      noticeForm.customPlanDetail = notice.customPlanDetail || tp
-    } else {
-      noticeForm.treatmentPlan = tp
-      noticeForm.customPlanDetail = notice.customPlanDetail || ""
-    }
+    const parsed = parseLatentNoticeTreatmentPlan(notice.treatmentPlan, notice.customPlanDetail)
+    noticeForm.treatmentPlan = parsed.treatmentPlan
+    noticeForm.customPlanDetail = parsed.customPlanDetail
   } catch { /* ignore */ }
 }
 
@@ -363,7 +362,7 @@ function buildNoticePayload() {
     bizId: noticeRow.value.id,
     patientName: noticeRow.value.name,
     ...noticeForm,
-    treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+    treatmentPlan: formatLatentNoticeTreatmentPlan(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
     senderId: userStore.userId
   }
 }
@@ -489,6 +488,7 @@ const supervisionForm = reactive({
   gender: "",
   age: null as number | null,
   phone: "",
+  phoneRemark: "",
   currentAddress: "",
   treatmentStartDate: "",
   treatmentEndDate: "",
@@ -512,6 +512,7 @@ function openSupervisionDialog(row: any) {
   supervisionForm.gender = row.gender || ""
   supervisionForm.age = row.age || null
   supervisionForm.phone = row.phone || ""
+  supervisionForm.phoneRemark = ""
   supervisionForm.currentAddress = row.currentAddress || ""
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
@@ -529,6 +530,9 @@ function openSupervisionDialog(row: any) {
   supervisionForm.attachmentUrls = ""
   attachmentFileList.value = []
   supervisionDialogVisible.value = true
+  getSupervisionDetailApi(row.id).then(({ data }) => {
+    if (data?.phoneRemark) supervisionForm.phoneRemark = data.phoneRemark
+  }).catch(() => {})
 }
 
 async function handleSaveSupervision() {
@@ -549,14 +553,11 @@ async function handleSaveSupervision() {
       gender: supervisionForm.gender || undefined,
       age: supervisionForm.age || undefined,
       phone: supervisionForm.phone || undefined,
+      phoneRemark: supervisionForm.phoneRemark || undefined,
       currentAddress: supervisionForm.currentAddress || undefined,
       treatmentStartDate: supervisionForm.treatmentStartDate,
       treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
-      treatmentPlan: supervisionForm.treatmentPlan === "个体化方案"
-        ? supervisionForm.customPlanDetail
-          ? `个体化方案：${supervisionForm.customPlanDetail}`
-          : "个体化方案"
-        : supervisionForm.treatmentPlan,
+      treatmentPlan: formatLatentSupervisionTreatmentPlan(supervisionForm.treatmentPlan, supervisionForm.customPlanDetail),
       supervisionRecords: supervisionForm.supervisionRecords.length > 0
         ? JSON.stringify(supervisionForm.supervisionRecords)
         : undefined,
@@ -1115,11 +1116,11 @@ watch(
         </el-divider>
         <el-form-item label="治疗方案">
           <el-select v-model="noticeForm.treatmentPlan" style="width: 100%" placeholder="请选择治疗方案">
-            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
+        <el-form-item v-if="isLatentIndividualPlan(noticeForm.treatmentPlan)" label="方案详情">
+          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="3" placeholder="请手动录入个体治疗方案详情" />
         </el-form-item>
         <el-divider content-position="left">
           机构信息
@@ -1280,6 +1281,12 @@ watch(
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="电话备注">
+          <el-input
+            v-model="supervisionForm.phoneRemark"
+            placeholder="非本人电话时请填写说明（如与本人关系）"
+          />
+        </el-form-item>
         <el-form-item label="现住址">
           <el-input v-model="supervisionForm.currentAddress" placeholder="请输入现住址" />
         </el-form-item>
@@ -1296,15 +1303,15 @@ watch(
           <el-col :span="12">
             <el-form-item label="治疗方案">
               <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" clearable style="width: 100%">
-                <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row v-if="supervisionForm.treatmentPlan === '个体化方案'">
+        <el-row v-if="isLatentIndividualPlan(supervisionForm.treatmentPlan)">
           <el-col :span="24">
             <el-form-item label="方案详情">
-              <el-input v-model="supervisionForm.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
+              <el-input v-model="supervisionForm.customPlanDetail" type="textarea" :rows="3" placeholder="请手动录入个体治疗方案详情" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -1462,6 +1469,9 @@ watch(
         </el-descriptions-item>
         <el-descriptions-item label="电话号码">
           {{ supervisionDetailData.phone || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="电话备注">
+          {{ supervisionDetailData.phoneRemark || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="现住址">
           {{ supervisionDetailData.currentAddress || "-" }}
@@ -1747,6 +1757,9 @@ watch(
           <el-descriptions-item label="电话号码">
             {{ aggregateSupervision.phone || "-" }}
           </el-descriptions-item>
+          <el-descriptions-item label="电话备注">
+            {{ aggregateSupervision.phoneRemark || "-" }}
+          </el-descriptions-item>
           <el-descriptions-item label="现住址" :span="2">
             {{ aggregateSupervision.currentAddress || "-" }}
           </el-descriptions-item>
@@ -1928,8 +1941,15 @@ watch(
           <el-input v-model="referralRemark" type="textarea" :rows="3" placeholder="请填写备注原因" />
         </el-form-item>
         <el-alert
-          v-if="referralResultValue === 'confirmed' || referralResultValue === 'suspected'"
-          :title="`确认后该记录将进入患者管理模块（${referralResultValue === 'confirmed' ? '确诊患者' : '疑似肺结核'}）`"
+          v-if="referralResultValue === 'confirmed'"
+          title="确认后该记录将标红结案，不进入患者管理"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <el-alert
+          v-if="referralResultValue === 'suspected'"
+          title="确认后该记录将归档结案，不进入患者管理"
           type="warning"
           :closable="false"
           show-icon

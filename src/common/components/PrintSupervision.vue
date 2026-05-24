@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import { Printer } from "@element-plus/icons-vue"
+import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
+import { formatNoticeSentTime } from "@@/utils/patient"
 import { printElement } from "@@/utils/print"
 
 /** 结核病潜伏感染者预防性治疗督导表打印/PDF 预览组件 */
-defineProps<{
+const props = defineProps<{
   visible: boolean
   data: Record<string, any> | null
 }>()
@@ -11,6 +12,17 @@ defineProps<{
 const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
 }>()
+
+const supervisionRecords = computed(() => {
+  const raw = props.data?.supervisionRecords
+  if (!raw) return []
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+})
 
 function handlePrint() {
   printElement("print-supervision-content", "结核病潜伏感染者预防性治疗督导表")
@@ -21,7 +33,7 @@ function handlePrint() {
   <el-dialog
     :model-value="visible"
     title="预览 — 结核病潜伏感染者预防性治疗督导表"
-    width="820px"
+    width="860px"
     @update:model-value="emit('update:visible', $event)"
   >
     <div id="print-supervision-content" class="print-area">
@@ -31,6 +43,11 @@ function handlePrint() {
 
       <table class="sup-table">
         <tbody>
+          <tr class="section-header">
+            <td colspan="4">
+              基本信息
+            </td>
+          </tr>
           <tr>
             <th>姓名</th>
             <td>{{ data?.patientName || "-" }}</td>
@@ -48,6 +65,18 @@ function handlePrint() {
             <td>{{ data?.idNumber || "-" }}</td>
             <th>性别</th>
             <td>{{ data?.gender || "-" }}</td>
+          </tr>
+          <tr>
+            <th>年龄</th>
+            <td>{{ data?.age ?? "-" }}</td>
+            <th>电话号码</th>
+            <td>{{ data?.phone || "-" }}</td>
+          </tr>
+          <tr>
+            <th>电话备注</th>
+            <td colspan="3">
+              {{ data?.phoneRemark || "-" }}
+            </td>
           </tr>
           <tr>
             <th>出生日期</th>
@@ -73,21 +102,87 @@ function handlePrint() {
             <th>督导医生</th>
             <td>{{ data?.supervisingDoctor || "-" }}</td>
           </tr>
+
+          <tr class="section-header">
+            <td colspan="4">
+              督导记录
+            </td>
+          </tr>
+          <template v-if="supervisionRecords.length">
+            <tr v-for="(record, index) in supervisionRecords" :key="index">
+              <th>第{{ index + 1 }}次</th>
+              <td colspan="3">
+                督导时间：{{ record.time || "-" }}；
+                督导方式：{{ record.method || "-" }}；
+                督导内容：{{ record.content || "-" }}；
+                备注：{{ record.remark || "-" }}
+              </td>
+            </tr>
+          </template>
+          <tr v-else>
+            <td colspan="4" class="empty-cell">
+              —
+            </td>
+          </tr>
+
+          <tr class="section-header">
+            <td colspan="4">
+              全疗程规律治疗评价
+            </td>
+          </tr>
+          <tr>
+            <th>中断用药</th>
+            <td>{{ data?.interruptMedication || "-" }}</td>
+            <th>中断次数</th>
+            <td>{{ data?.interruptCount ?? "-" }}</td>
+          </tr>
+          <tr>
+            <th>全程应用药次数</th>
+            <td>{{ data?.totalDoses ?? "-" }}</td>
+            <th>实际用药次数</th>
+            <td>{{ data?.actualDoses ?? "-" }}</td>
+          </tr>
+          <tr>
+            <th>用药率(%)</th>
+            <td>{{ data?.medicationRate || "-" }}</td>
+            <th>结束疗程时间</th>
+            <td>{{ data?.treatmentEndDate || "-" }}</td>
+          </tr>
+          <tr>
+            <th>管理人员类型</th>
+            <td>{{ data?.managerType || "-" }}</td>
+            <th>管理人员姓名</th>
+            <td>{{ data?.managerName || "-" }}</td>
+          </tr>
+
+          <tr class="section-header">
+            <td colspan="4">
+              其他
+            </td>
+          </tr>
           <tr>
             <th>备注</th>
             <td colspan="3">
               {{ data?.remark || "-" }}
             </td>
           </tr>
+          <tr v-if="data?.createTime">
+            <th>填写时间</th>
+            <td colspan="3">
+              {{ formatNoticeSentTime(data.createTime) }}
+            </td>
+          </tr>
         </tbody>
       </table>
+
+      <PrintAttachmentImages :urls="data?.attachmentUrls" title="附件照片" />
     </div>
 
     <template #footer>
       <el-button @click="emit('update:visible', false)">
         关闭
       </el-button>
-      <el-button type="primary" :icon="Printer" @click="handlePrint">
+      <el-button type="primary" @click="handlePrint">
         打印 / 保存PDF
       </el-button>
     </template>
@@ -116,12 +211,24 @@ function handlePrint() {
     border: 1px solid #ddd;
     padding: 7px 10px;
     font-size: 13px;
+    vertical-align: top;
   }
 
   th {
     background: #f5f7fa;
     white-space: nowrap;
     width: 130px;
+  }
+
+  .section-header td {
+    background: #e8f0fe;
+    font-weight: bold;
+    color: #1a3a6b;
+  }
+
+  .empty-cell {
+    text-align: center;
+    color: #999;
   }
 }
 </style>

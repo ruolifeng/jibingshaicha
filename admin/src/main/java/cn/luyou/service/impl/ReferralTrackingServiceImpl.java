@@ -1,6 +1,8 @@
 package cn.luyou.service.impl;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.utils.BaseContext;
@@ -14,17 +16,31 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralTrackingService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.service.UserService;
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.read.listener.ReadListener;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -50,6 +66,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         ReferralTracking record = ReferralTracking.builder()
                 .bizMode(bizMode)
+                .sourceType("manual")
                 .name(getStr(params, "name"))
                 .gender(getStr(params, "gender"))
                 .birthDate(parseDate(params.get("birthDate")))
@@ -91,18 +108,14 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Override
     public IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                               String name, String idNumber,
-                                              Integer trackingStatus, Integer archived) {
-        LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<ReferralTracking>()
-                .eq(StrUtil.isNotBlank(bizMode), ReferralTracking::getBizMode, bizMode)
-                .like(StrUtil.isNotBlank(name), ReferralTracking::getName, name)
-                .like(StrUtil.isNotBlank(idNumber), ReferralTracking::getIdNumber, idNumber)
-                .eq(trackingStatus != null, ReferralTracking::getTrackingStatus, trackingStatus)
-                .eq(archived != null, ReferralTracking::getArchived, archived)
-                .orderByDesc(ReferralTracking::getCreateTime);
+                                              Integer trackingStatus, Integer archived,
+                                              String phone, String township,
+                                              String dateFrom, String dateTo, String sourceType) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
+                bizMode, name, idNumber, trackingStatus, archived, phone, township, dateFrom, dateTo, sourceType);
 
         IPage<ReferralTracking> pageResult = page(new Page<>(page, size), wrapper);
 
-        // 填充接收人姓名
         pageResult.getRecords().forEach(r -> {
             if (r.getReceiverUserId() != null) {
                 User receiver = userService.getById(r.getReceiverUserId());
@@ -117,11 +130,128 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> importEpidemic(MultipartFile file) {
+        String batchNo = IdUtil.fastSimpleUUID();
+        List<Map<Integer, String>> allRows = readExcelRows(file);
+
+        if (allRows.size() < 2) {
+            return Map.of("count", 0, "batchNo", batchNo);
+        }
+
+        Map<Integer, String> headerRow = allRows.get(0);
+        Map<String, Integer> headerIndex = buildHeaderIndex(headerRow);
+        int count = 0;
+
+        for (Map<Integer, String> row : allRows.subList(1, allRows.size())) {
+            String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
+            String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
+            String idNumber = getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证");
+            if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber) && StrUtil.isBlank(cardId)) {
+                continue;
+            }
+
+            if (existsEpidemicRecord(cardId, idNumber, name,
+                    getFieldByHeader(row, headerIndex, "出生日期"),
+                    getFieldByHeader(row, headerIndex, "联系电话", "电话"))) {
+                continue;
+            }
+
+            String currentAddress = getFieldByHeader(row, headerIndex,
+                    "现住详细地址", "现详细住址", "现住地址区现住详细", "现住址", "现住地址");
+            String township = getFieldByHeader(row, headerIndex, "乡镇", "病人属于");
+            if (StrUtil.isBlank(township)) {
+                township = extractTownship(currentAddress);
+            }
+
+            ReferralTracking entity = ReferralTracking.builder()
+                    .bizMode("track")
+                    .sourceType("epidemic")
+                    .cardId(cardId)
+                    .name(name)
+                    .parentName(getFieldByHeader(row, headerIndex, "患儿家长姓名"))
+                    .idNumber(idNumber)
+                    .gender(getFieldByHeader(row, headerIndex, "性别"))
+                    .birthDate(parseDate(getFieldByHeader(row, headerIndex, "出生日期")))
+                    .age(parseInt(getFieldByHeader(row, headerIndex, "年龄")))
+                    .workplace(getFieldByHeader(row, headerIndex, "患者工作单位"))
+                    .phone(getFieldByHeader(row, headerIndex, "联系电话", "电话"))
+                    .currentAddress(currentAddress)
+                    .township(township)
+                    .crowdCategory(getFieldByHeader(row, headerIndex, "人群分类"))
+                    .caseCategory(getFieldByHeader(row, headerIndex, "病例分类"))
+                    .diseaseName(getFieldByHeader(row, headerIndex, "疾病名称"))
+                    .reportUnit(getFieldByHeader(row, headerIndex, "报告单位"))
+                    .reportCardTime(parseDateTime(getFieldByHeader(row, headerIndex, "报告卡录入时间")))
+                    .epidemicRemark(getFieldByHeader(row, headerIndex, "备注"))
+                    .trackReason("大疫情导入")
+                    .trackingStatus(0)
+                    .notInPlaceCount(0)
+                    .archived(0)
+                    .uploadBatch(batchNo)
+                    .departmentId(BaseContext.getCurrentDepartmentId())
+                    .creatorId(BaseContext.getCurrentId())
+                    .build();
+            save(entity);
+            count++;
+        }
+
+        log.info("大疫情导入追踪记录完成，count={}, batchNo={}", count, batchNo);
+        return Map.of("count", count, "batchNo", batchNo);
+    }
+
+    @Override
+    public void exportTrack(HttpServletResponse response, String bizMode,
+                            String name, String idNumber, String phone, String township,
+                            String dateFrom, String dateTo, String sourceType) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
+                bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+        List<ReferralTracking> records = list(wrapper);
+
+        List<List<String>> head = Arrays.asList(
+                List.of("数据来源"), List.of("卡片ID"), List.of("患者姓名"), List.of("患儿家长姓名"),
+                List.of("有效证件号"), List.of("性别"), List.of("出生日期"), List.of("年龄"),
+                List.of("患者工作单位"), List.of("联系电话"), List.of("乡镇"), List.of("现住详细地址"),
+                List.of("人群分类"), List.of("病例分类"), List.of("疾病名称"), List.of("报告单位"),
+                List.of("报告卡录入时间"), List.of("备注"), List.of("追踪状态"), List.of("诊断结果"),
+                List.of("创建时间"), List.of("到位时间")
+        );
+
+        List<List<Object>> rows = new ArrayList<>();
+        for (ReferralTracking r : records) {
+            rows.add(Arrays.asList(
+                    "epidemic".equals(r.getSourceType()) ? "大疫情导入" : "手动录入",
+                    r.getCardId(), r.getName(), r.getParentName(), r.getIdNumber(), r.getGender(),
+                    r.getBirthDate() != null ? r.getBirthDate().toString() : "",
+                    r.getAge(), r.getWorkplace(), r.getPhone(), r.getTownship(), r.getCurrentAddress(),
+                    r.getCrowdCategory(), r.getCaseCategory(), r.getDiseaseName(), r.getReportUnit(),
+                    r.getReportCardTime() != null ? r.getReportCardTime().toString() : "",
+                    r.getEpidemicRemark(), trackingStatusLabel(r.getTrackingStatus()),
+                    r.getDiagnosisResult(),
+                    r.getCreateTime() != null ? r.getCreateTime().toString() : "",
+                    r.getArrivalTime() != null ? r.getArrivalTime().toString() : ""
+            ));
+        }
+
+        try {
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding("utf-8");
+            String fileName = URLEncoder.encode("追踪记录导出", StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+            response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
+            EasyExcel.write(response.getOutputStream()).head(head).sheet("追踪记录").doWrite(rows);
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "导出失败");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void update(Long id, Map<String, Object> params) {
         ReferralTracking record = getAndCheckExist(id);
         if (getStr(params, "name") != null) record.setName(getStr(params, "name"));
         if (getStr(params, "gender") != null) record.setGender(getStr(params, "gender"));
-        if (params.get("birthDate") != null) record.setBirthDate(parseDate(params.get("birthDate")));
+        if (params.get("birthDate") != null && StrUtil.isNotBlank(params.get("birthDate").toString())) {
+            record.setBirthDate(parseDate(params.get("birthDate")));
+        }
         if (getInt(params, "age") != null) record.setAge(getInt(params, "age"));
         if (getStr(params, "idType") != null) record.setIdType(getStr(params, "idType"));
         if (getStr(params, "idNumber") != null) record.setIdNumber(getStr(params, "idNumber"));
@@ -130,6 +260,18 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (getStr(params, "householdAddress") != null) record.setHouseholdAddress(getStr(params, "householdAddress"));
         if (getStr(params, "currentAddress") != null) record.setCurrentAddress(getStr(params, "currentAddress"));
         if (getStr(params, "crowdCategory") != null) record.setCrowdCategory(getStr(params, "crowdCategory"));
+        if (getStr(params, "trackReason") != null) record.setTrackReason(getStr(params, "trackReason"));
+        if (getStr(params, "cardId") != null) record.setCardId(getStr(params, "cardId"));
+        if (getStr(params, "parentName") != null) record.setParentName(getStr(params, "parentName"));
+        if (getStr(params, "workplace") != null) record.setWorkplace(getStr(params, "workplace"));
+        if (getStr(params, "township") != null) record.setTownship(getStr(params, "township"));
+        if (getStr(params, "caseCategory") != null) record.setCaseCategory(getStr(params, "caseCategory"));
+        if (getStr(params, "diseaseName") != null) record.setDiseaseName(getStr(params, "diseaseName"));
+        if (getStr(params, "reportUnit") != null) record.setReportUnit(getStr(params, "reportUnit"));
+        if (params.get("reportCardTime") != null && StrUtil.isNotBlank(params.get("reportCardTime").toString())) {
+            record.setReportCardTime(parseDateTime(params.get("reportCardTime").toString()));
+        }
+        if (getStr(params, "epidemicRemark") != null) record.setEpidemicRemark(getStr(params, "epidemicRemark"));
         updateById(record);
     }
 
@@ -175,6 +317,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!Integer.valueOf(1).equals(record.getRecommendStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "当前状态无法确认（须为已发送状态）");
         }
+        checkRecommendReceiver(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -202,6 +345,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!Integer.valueOf(1).equals(record.getRecommendStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "当前状态无法拒绝（须为已发送状态）");
         }
+        checkRecommendReceiver(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -226,11 +370,14 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public void track(Long id, Integer status, String remark) {
         ReferralTracking record = getAndCheckExist(id);
-
-        // 推介模式须已被接收才能追踪
         if ("recommend".equals(record.getBizMode())
                 && !Integer.valueOf(2).equals(record.getRecommendStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "推介通知单尚未被接收方确认，暂不可追踪");
+        }
+
+        // 推介模式：仅接收方可进行追踪
+        if ("recommend".equals(record.getBizMode())) {
+            checkRecommendReceiver(record);
         }
 
         // 已归档/已完成流程则不允许再操作
@@ -238,29 +385,59 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法继续追踪");
         }
 
+        // 仅待追踪或未到位状态可继续追踪
+        Integer trackingStatus = record.getTrackingStatus();
+        if (trackingStatus != null && trackingStatus != 0 && trackingStatus != 2) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "当前追踪状态不允许继续操作");
+        }
+
         if (status == null || status < 1 || status > 3) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "追踪状态值无效（1到位 2未到位 3其他）");
         }
 
+        // 未到位必须填写原因
+        if (status == 2 && StrUtil.isBlank(remark)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "未到位时必须填写原因");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Map<String, Object>> history = parseTrackingHistory(record.getTrackingHistoryJson());
+
         switch (status) {
             case 1 -> {
-                // 到位
+                // 到位：记录到位时间，不需要原因
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("attempt", history.size() + 1);
+                entry.put("status", 1);
+                entry.put("trackTime", now.toString());
+                history.add(entry);
+
                 lambdaUpdate()
                         .eq(ReferralTracking::getId, id)
                         .set(ReferralTracking::getTrackingStatus, 1)
-                        .set(StrUtil.isNotBlank(remark), ReferralTracking::getTrackingRemark, remark)
+                        .set(ReferralTracking::getArrivalTime, now)
+                        .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                         .update();
                 log.info("推介追踪到位，recordId={}", id);
             }
             case 2 -> {
-                // 未到位：累计次数，第3次强制结束
+                // 未到位：累计次数，记录追踪时间和原因，第3次强制结束
                 int newCount = (record.getNotInPlaceCount() == null ? 0 : record.getNotInPlaceCount()) + 1;
+
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("attempt", history.size() + 1);
+                entry.put("status", 2);
+                entry.put("trackTime", now.toString());
+                entry.put("reason", remark);
+                history.add(entry);
+
                 if (newCount >= 3) {
                     lambdaUpdate()
                             .eq(ReferralTracking::getId, id)
                             .set(ReferralTracking::getTrackingStatus, 4)
                             .set(ReferralTracking::getNotInPlaceCount, newCount)
-                            .set(StrUtil.isNotBlank(remark), ReferralTracking::getTrackingRemark, remark)
+                            .set(ReferralTracking::getTrackingRemark, remark)
+                            .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                             .set(ReferralTracking::getArchived, 1)
                             .update();
                     log.info("推介追踪3次未到位强制结束，recordId={}", id);
@@ -269,20 +446,44 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                             .eq(ReferralTracking::getId, id)
                             .set(ReferralTracking::getTrackingStatus, 2)
                             .set(ReferralTracking::getNotInPlaceCount, newCount)
-                            .set(StrUtil.isNotBlank(remark), ReferralTracking::getTrackingRemark, remark)
+                            .set(ReferralTracking::getTrackingRemark, remark)
+                            .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                             .update();
                 }
             }
             case 3 -> {
                 // 其他：归档
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("attempt", history.size() + 1);
+                entry.put("status", 3);
+                entry.put("trackTime", now.toString());
+                if (StrUtil.isNotBlank(remark)) {
+                    entry.put("reason", remark);
+                }
+                history.add(entry);
+
                 lambdaUpdate()
                         .eq(ReferralTracking::getId, id)
                         .set(ReferralTracking::getTrackingStatus, 3)
                         .set(StrUtil.isNotBlank(remark), ReferralTracking::getTrackingRemark, remark)
+                        .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                         .set(ReferralTracking::getArchived, 1)
                         .update();
                 log.info("推介追踪选择其他，已归档，recordId={}", id);
             }
+        }
+    }
+
+    /** 解析追踪历史 JSON */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseTrackingHistory(String json) {
+        if (StrUtil.isBlank(json)) {
+            return new ArrayList<>();
+        }
+        try {
+            return JSONUtil.toList(json, Map.class);
+        } catch (Exception e) {
+            return new ArrayList<>();
         }
     }
 
@@ -293,6 +494,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!Integer.valueOf(1).equals(record.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后才可录入筛查信息");
         }
+        checkRecommendReceiver(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -332,6 +534,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (record.getArchived() != null && record.getArchived() == 1) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法修改诊断结果");
         }
+        checkRecommendReceiver(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -388,6 +591,17 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             throw new ServiceException(StatusEnum.PARAM_INVALID, "推介追踪记录不存在");
         }
         return record;
+    }
+
+    /** 推介模式：校验当前用户是否为接收人 */
+    private void checkRecommendReceiver(ReferralTracking record) {
+        if (!"recommend".equals(record.getBizMode())) {
+            return;
+        }
+        Long currentUserId = BaseContext.getCurrentId();
+        if (record.getReceiverUserId() == null || !record.getReceiverUserId().equals(currentUserId)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介接收人可进行此操作");
+        }
     }
 
     /** 从推介追踪记录创建患者档案（populationType='referral'） */
@@ -509,10 +723,194 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     private LocalDate parseDate(Object val) {
         if (val == null) return null;
+        String text = val.toString().trim();
+        if (StrUtil.isBlank(text)) return null;
+
+        if (text.matches("^\\d+(\\.\\d+)?$")) {
+            try {
+                double serial = Double.parseDouble(text);
+                if (serial > 59) {
+                    return LocalDate.of(1899, 12, 30).plusDays((long) Math.floor(serial));
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
         try {
-            return LocalDate.parse(val.toString());
-        } catch (Exception e) {
+            return LocalDate.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        } catch (Exception e1) {
+            try {
+                return LocalDate.parse(text, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+            } catch (Exception e2) {
+                try {
+                    return LocalDate.parse(text, DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+                } catch (Exception e3) {
+                    return null;
+                }
+            }
+        }
+    }
+
+    private LocalDateTime parseDateTime(String text) {
+        if (StrUtil.isBlank(text)) return null;
+        String val = text.trim();
+        if (val.matches("^\\d+(\\.\\d+)?$")) {
+            LocalDate date = parseDate(val);
+            return date != null ? date.atStartOfDay() : null;
+        }
+        for (String pattern : new String[]{"yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyy-MM-dd", "yyyy/MM/dd"}) {
+            try {
+                if (pattern.contains("HH")) {
+                    return LocalDateTime.parse(val, DateTimeFormatter.ofPattern(pattern));
+                }
+                LocalDate date = LocalDate.parse(val, DateTimeFormatter.ofPattern(pattern));
+                return date.atStartOfDay();
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private Integer parseInt(String text) {
+        if (StrUtil.isBlank(text)) return null;
+        try {
+            return Integer.parseInt(text.replaceAll("[^0-9]", ""));
+        } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private List<Map<Integer, String>> readExcelRows(MultipartFile file) {
+        List<Map<Integer, String>> allRows = new ArrayList<>();
+        try {
+            EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
+                @Override
+                public void invoke(Map<Integer, String> data, AnalysisContext context) {
+                    allRows.add(new LinkedHashMap<>(data));
+                }
+
+                @Override
+                public void doAfterAllAnalysed(AnalysisContext context) {
+                    log.info("大疫情表解析完成，共 {} 行（含表头）", allRows.size());
+                }
+            }).sheet().headRowNumber(0).doRead();
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel读取失败");
+        }
+        return allRows;
+    }
+
+    private Map<String, Integer> buildHeaderIndex(Map<Integer, String> headerRow) {
+        Map<String, Integer> headerIndex = new LinkedHashMap<>();
+        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
+            if (StrUtil.isNotBlank(entry.getValue())) {
+                headerIndex.put(entry.getValue().trim(), entry.getKey());
+            }
+        }
+        return headerIndex;
+    }
+
+    private String getFieldByHeader(Map<Integer, String> row, Map<String, Integer> headerIndex, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            Integer idx = headerIndex.get(fieldName);
+            if (idx != null) {
+                String val = row.get(idx);
+                if (StrUtil.isNotBlank(val)) {
+                    return val.trim();
+                }
+            }
+            for (Map.Entry<String, Integer> entry : headerIndex.entrySet()) {
+                // 短字段名仅精确匹配，避免「姓名」误匹配「患儿家长姓名」
+                if (fieldName.length() <= 2) {
+                    if (entry.getKey().equals(fieldName)) {
+                        String val = row.get(entry.getValue());
+                        if (StrUtil.isNotBlank(val)) {
+                            return val.trim();
+                        }
+                    }
+                } else if (entry.getKey().contains(fieldName)) {
+                    String val = row.get(entry.getValue());
+                    if (StrUtil.isNotBlank(val)) {
+                        return val.trim();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean existsEpidemicRecord(String cardId, String idNumber, String name, String birthDateText, String phone) {
+        if (StrUtil.isNotBlank(cardId)) {
+            return lambdaQuery()
+                    .eq(ReferralTracking::getBizMode, "track")
+                    .eq(ReferralTracking::getSourceType, "epidemic")
+                    .eq(ReferralTracking::getCardId, cardId)
+                    .exists();
+        }
+        LocalDate birthDate = parseDate(birthDateText);
+        return lambdaQuery()
+                .eq(ReferralTracking::getBizMode, "track")
+                .eq(ReferralTracking::getSourceType, "epidemic")
+                .and(w -> {
+                    if (StrUtil.isNotBlank(idNumber)) {
+                        w.eq(ReferralTracking::getIdNumber, idNumber);
+                    } else {
+                        w.eq(ReferralTracking::getName, name)
+                                .eq(birthDate != null, ReferralTracking::getBirthDate, birthDate)
+                                .eq(StrUtil.isNotBlank(phone), ReferralTracking::getPhone, phone);
+                    }
+                })
+                .exists();
+    }
+
+    private String extractTownship(String address) {
+        if (StrUtil.isBlank(address)) return null;
+        int idx = address.indexOf("乡");
+        if (idx > 0) {
+            int start = Math.max(address.lastIndexOf("县", idx), address.lastIndexOf("区", idx));
+            start = Math.max(start, address.lastIndexOf("市", idx));
+            return address.substring(start + 1, idx + 1);
+        }
+        idx = address.indexOf("镇");
+        if (idx > 0) {
+            int start = Math.max(address.lastIndexOf("县", idx), address.lastIndexOf("区", idx));
+            start = Math.max(start, address.lastIndexOf("市", idx));
+            return address.substring(start + 1, idx + 1);
+        }
+        return null;
+    }
+
+    private LambdaQueryWrapper<ReferralTracking> buildQueryWrapper(
+            String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
+            String phone, String township, String dateFrom, String dateTo, String sourceType) {
+        LocalDateTime from = parseDateTime(dateFrom);
+        LocalDateTime to = parseDateTime(dateTo);
+        if (to != null && to.toLocalTime().equals(java.time.LocalTime.MIDNIGHT)) {
+            to = to.plusDays(1).minusSeconds(1);
+        }
+
+        return new LambdaQueryWrapper<ReferralTracking>()
+                .eq(StrUtil.isNotBlank(bizMode), ReferralTracking::getBizMode, bizMode)
+                .like(StrUtil.isNotBlank(name), ReferralTracking::getName, name)
+                .like(StrUtil.isNotBlank(idNumber), ReferralTracking::getIdNumber, idNumber)
+                .like(StrUtil.isNotBlank(phone), ReferralTracking::getPhone, phone)
+                .like(StrUtil.isNotBlank(township), ReferralTracking::getTownship, township)
+                .eq(trackingStatus != null, ReferralTracking::getTrackingStatus, trackingStatus)
+                .eq(archived != null, ReferralTracking::getArchived, archived)
+                .eq(StrUtil.isNotBlank(sourceType), ReferralTracking::getSourceType, sourceType)
+                .ge(from != null, ReferralTracking::getCreateTime, from)
+                .le(to != null, ReferralTracking::getCreateTime, to)
+                .orderByDesc(ReferralTracking::getCreateTime);
+    }
+
+    private String trackingStatusLabel(Integer status) {
+        if (status == null) return "待追踪";
+        return switch (status) {
+            case 1 -> "到位";
+            case 2 -> "未到位";
+            case 3 -> "其他";
+            case 4 -> "强制结束";
+            default -> "待追踪";
+        };
     }
 }

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { TRACKING_STATUS_MAP } from "@@/constants/disease"
+import { isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, TRACKING_STATUS_MAP } from "@@/constants/disease"
 import {
   getEpidemicListApi,
   importEpidemicDataApi,
@@ -25,7 +25,8 @@ const searchForm = reactive({
   name: "",
   idNumber: "",
   trackingStatus: undefined as number | undefined,
-  archived: 0 as number | undefined
+  archived: 0 as number | undefined,
+  diagnosisResult: "" as string
 })
 
 const trackDialogVisible = ref(false)
@@ -55,9 +56,13 @@ function diagnosisDesc(result: string) {
   if (result === "排除") return "将归档"
   if (result === "疑似肺结核") return "保留在待诊断列表"
   if (result === "潜伏感染者") return "分流到潜伏感染者管理"
-  if (result === "确诊患者") return "分流到患者管理（来源：大疫情）"
+  if (result === "确诊患者") return "标红结案，不进入患者管理"
   if (result === "其他") return "归档"
   return ""
+}
+
+function getRowClass({ row }: { row: any }) {
+  return isConfirmedPatientDiagnosis(row) ? "confirmed-row" : ""
 }
 
 async function handleFileChange(uploadFile: any) {
@@ -98,6 +103,9 @@ async function fetchData() {
     if (params.archived === undefined) {
       delete params.archived
     }
+    if (!params.diagnosisResult) {
+      delete params.diagnosisResult
+    }
     const { data } = await getEpidemicListApi(params)
     tableData.value = data.records ?? []
     total.value = data.total ?? 0
@@ -116,6 +124,7 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.trackingStatus = undefined
   searchForm.archived = 0
+  searchForm.diagnosisResult = ""
   handleSearch()
 }
 
@@ -281,6 +290,11 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
                 <el-option label="已归档" :value="1" />
               </el-select>
             </el-form-item>
+            <el-form-item label="诊断结果">
+              <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable style="width: 140px">
+                <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="handleSearch">搜索</el-button>
               <el-button @click="handleReset">重置</el-button>
@@ -289,7 +303,7 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
         </el-card>
 
         <el-card shadow="never" style="margin-top: 10px">
-          <el-table :data="tableData" v-loading="loading" border stripe>
+          <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
             <el-table-column type="index" label="#" />
             <el-table-column prop="name" label="患者姓名" />
             <el-table-column prop="gender" label="性别" />
@@ -313,8 +327,8 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
             <el-table-column prop="diagnosisResult" label="诊断结果" />
             <el-table-column label="归档">
               <template #default="{ row }">
-                <el-tag :type="row.archived ? 'success' : 'info'" size="small">
-                  {{ row.archived ? "已归档" : "进行中" }}
+                <el-tag :type="row.archived ? (isConfirmedPatientDiagnosis(row) ? 'danger' : 'success') : 'info'" size="small">
+                  {{ row.archived ? (isConfirmedPatientDiagnosis(row) ? "结案" : "已归档") : "进行中" }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -429,3 +443,10 @@ watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchDa
     </el-dialog>
   </div>
 </template>
+
+<style lang="scss">
+.el-table .confirmed-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
+}
+</style>

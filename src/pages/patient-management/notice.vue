@@ -3,8 +3,9 @@ import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.v
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
-import { usePatientList } from "./composables/usePatientList"
+import { formatNoticeSentTime, resolveMedicationManagementUnit } from "@@/utils/patient"
 import { deletePatientApi } from "./apis"
+import { usePatientList } from "./composables/usePatientList"
 
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
@@ -85,6 +86,21 @@ function openReferral(row: any) {
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column label="通知管理时间" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ formatNoticeSentTime(row.noticeSentTime) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="备注" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.noticeRemark || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="患者通知单">
           <template #default="{ row }">
             <template v-if="row.noticeStatus === 1 || row.noticeStatus === 2">
@@ -128,7 +144,7 @@ function openReferral(row: any) {
               </el-button>
             </template>
             <el-button v-permission="'patientManagement:referral'" type="info" link size="small" @click="openReferral(row)">
-              转诊
+              转出
             </el-button>
             <el-button v-permission="'patientManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">
               删除
@@ -169,6 +185,7 @@ function openReferral(row: any) {
       module-type="patient"
       :population-type="referralRow.populationType"
       :subject-name="referralRow.name || ''"
+      @success="fetchData"
     />
   </div>
 </template>

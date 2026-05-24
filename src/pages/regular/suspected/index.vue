@@ -5,6 +5,8 @@ import { usePagination } from "@@/composables/usePagination"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
   getSuspectedConfirmDiagnosisLabel,
+  isConfirmedPatientDiagnosis,
+  SCREENING_DIAGNOSIS_SEARCH_OPTIONS,
   SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS,
   SUSPECTED_DIAGNOSIS_TO_REFERRAL,
   SUSPECTED_REFERRAL_RESULT_OPTIONS,
@@ -32,19 +34,23 @@ const searchForm = reactive({
   name: "",
   idNumber: "",
   trackingStatus: undefined as number | undefined,
-  archived: undefined as number | undefined
+  archived: undefined as number | undefined,
+  diagnosisFirst: "" as string
 })
 
 async function fetchData() {
   loading.value = true
   try {
-    const { data } = await getSuspectedListApi({
+    const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       populationType: POPULATION_TYPE,
-      referralResult: "pending",
       ...searchForm
-    })
+    }
+    if (!searchForm.diagnosisFirst && searchForm.archived === undefined) {
+      params.referralResult = "pending"
+    }
+    const { data } = await getSuspectedListApi(params)
     tableData.value = data.records
     total.value = data.total
   } finally {
@@ -62,6 +68,7 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.trackingStatus = undefined
   searchForm.archived = undefined
+  searchForm.diagnosisFirst = ""
   handleSearch()
 }
 
@@ -76,6 +83,7 @@ function openTierCare(row: any) {
 }
 
 function getRowClass({ row }: { row: any }) {
+  if (isConfirmedPatientDiagnosis(row)) return "confirmed-row"
   if (row.trackingStatus === 1 && !row.chestXrayResult && row.updateTime) {
     const diffDays = (Date.now() - new Date(row.updateTime).getTime()) / 86400000
     if (diffDays > 7) return "overdue-row"
@@ -276,6 +284,11 @@ watch(
             <el-option label="已归档" :value="1" />
           </el-select>
         </el-form-item>
+        <el-form-item label="诊断结果">
+          <el-select v-model="searchForm.diagnosisFirst" placeholder="全部" clearable style="width: 140px">
+            <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -328,8 +341,8 @@ watch(
         </el-table-column>
         <el-table-column label="归档">
           <template #default="{ row }">
-            <el-tag :type="row.archived ? 'info' : 'success'" size="small">
-              {{ row.archived ? "已归档" : "进行中" }}
+            <el-tag :type="row.archived ? (isConfirmedPatientDiagnosis(row) ? 'danger' : 'info') : 'success'" size="small">
+              {{ row.archived ? (isConfirmedPatientDiagnosis(row) ? "结案" : "已归档") : "进行中" }}
             </el-tag>
           </template>
         </el-table-column>
@@ -480,7 +493,7 @@ watch(
           </el-select>
           <div class="mt-1 text-xs text-gray-400">
             <span v-if="diagnosisForm.diagnosisFirst === '排除'">→ 归档</span>
-            <span v-else-if="diagnosisForm.diagnosisFirst === '确诊患者'">→ 进入患者管理</span>
+            <span v-else-if="diagnosisForm.diagnosisFirst === '确诊患者'">→ 标红结案，不进入患者管理</span>
             <span v-else-if="diagnosisForm.diagnosisFirst === '潜伏感染者'">→ 进入潜伏感染管理</span>
           </div>
         </el-form-item>
@@ -543,6 +556,10 @@ watch(
 
 <style lang="scss">
 .el-table .overdue-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
+}
+.el-table .confirmed-row td.el-table__cell {
   background-color: #fff2f0 !important;
   color: #f56c6c;
 }
