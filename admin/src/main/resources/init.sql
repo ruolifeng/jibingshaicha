@@ -468,6 +468,7 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     `latent_infection_id`    BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
     `population_type`        VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `patient_name`           VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
+    `form_seq`               INT          DEFAULT NULL COMMENT '第几次督导表（status>=1时有效）',
     -- V5 新增基本信息
     `category`               VARCHAR(64)  DEFAULT NULL COMMENT '类别：密接/新生筛查/65岁以上老年人/糖尿病人/双感/其他',
     `gender`                 VARCHAR(10)  DEFAULT NULL COMMENT '性别',
@@ -1450,7 +1451,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (414, 'latentManagement:track',         '追踪',                 2, 413, 1),
 (415, 'latentManagement:xray',          '录入胸片',             2, 413, 2),
 (416, 'latentManagement:diagnosis',     '录入诊断',             2, 413, 3),
-(417, 'latentManagement:referral',      '转诊',                 2, 413, 4),
+(417, 'latentManagement:referral',      '转出',                 2, 460, 2),
 (418, 'latentManagement:close',         '归档',                 2, 413, 5),
 (419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
 -- 聚合患者管理（一级菜单）
@@ -1989,3 +1990,183 @@ WHERE `code` = 'regular:screening';
 UPDATE `permission`
 SET `name` = '疫情筛查-待诊断'
 WHERE `code` = 'regular:suspected';
+
+-- ==================== V35：潜伏感染者管理「转出」权限挂到在管总览下 ====================
+UPDATE `permission`
+SET `name` = '转出', `parent_id` = 460, `sort` = 2
+WHERE `code` = 'latentManagement:referral'
+  AND (`name` <> '转出' OR `parent_id` <> 460);
+
+-- ==================== V36：待诊断阶段清除误写入 latent 的首次诊断 ====================
+-- 筛查导入时 diagnosisFirst 应仅保存在筛查表，待「确认诊断」后再写入 latent 并分流
+UPDATE `latent_infection` li
+    INNER JOIN `screening_school` ss ON li.`screening_id` = ss.`id`
+SET li.`diagnosis_first` = NULL
+WHERE li.`population_type` = 'school'
+  AND li.`referral_result` IS NULL
+  AND li.`archived` = 0
+  AND li.`diagnosis_first` IS NOT NULL;
+
+UPDATE `latent_infection` li
+    INNER JOIN `screening_key_population` sk ON li.`screening_id` = sk.`id`
+SET li.`diagnosis_first` = NULL
+WHERE li.`population_type` IN ('keyPopulation', 'regular')
+  AND li.`referral_result` IS NULL
+  AND li.`archived` = 0
+  AND li.`diagnosis_first` IS NOT NULL;
+
+-- ==================== V37：督导表支持一对多记录（form_seq） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supervision_form' AND COLUMN_NAME = 'form_seq'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `supervision_form` ADD COLUMN `form_seq` INT DEFAULT NULL COMMENT ''第几次督导表（status>=1时有效）'' AFTER `patient_name`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE `supervision_form` sf
+    INNER JOIN (
+        SELECT id,
+               ROW_NUMBER() OVER (PARTITION BY latent_infection_id ORDER BY create_time ASC) AS seq
+        FROM `supervision_form`
+        WHERE `status` >= 1
+    ) ranked ON sf.id = ranked.id
+SET sf.`form_seq` = ranked.seq
+WHERE sf.`status` >= 1;
+
+-- ==================== V38：推介追踪表补充大疫情导入字段 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'source_type'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `source_type` VARCHAR(16) NOT NULL DEFAULT ''manual'' COMMENT ''manual=手动 epidemic=大疫情导入'' AFTER `track_reason`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'card_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `card_id` VARCHAR(64) DEFAULT NULL COMMENT ''卡片ID'' AFTER `source_type`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'parent_name'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `parent_name` VARCHAR(64) DEFAULT NULL COMMENT ''患儿家长姓名'' AFTER `card_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'workplace'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `workplace` VARCHAR(256) DEFAULT NULL COMMENT ''患者工作单位'' AFTER `parent_name`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'township'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `township` VARCHAR(128) DEFAULT NULL COMMENT ''乡镇'' AFTER `workplace`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'case_category'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `case_category` VARCHAR(64) DEFAULT NULL COMMENT ''病例分类'' AFTER `township`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'disease_name'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `disease_name` VARCHAR(128) DEFAULT NULL COMMENT ''疾病名称'' AFTER `case_category`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'report_unit'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `report_unit` VARCHAR(256) DEFAULT NULL COMMENT ''报告单位'' AFTER `disease_name`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'report_card_time'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `report_card_time` DATETIME DEFAULT NULL COMMENT ''报告卡录入时间'' AFTER `report_unit`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'epidemic_remark'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `epidemic_remark` TEXT DEFAULT NULL COMMENT ''大疫情备注'' AFTER `report_card_time`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'upload_batch'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `upload_batch` VARCHAR(64) DEFAULT NULL COMMENT ''导入批次号'' AFTER `epidemic_remark`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

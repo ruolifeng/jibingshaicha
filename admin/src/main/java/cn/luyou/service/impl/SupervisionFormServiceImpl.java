@@ -1,6 +1,8 @@
 package cn.luyou.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.common.customError.ServiceException;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
@@ -12,16 +14,21 @@ import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.mapper.SupervisionFormMapper;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.utils.BaseContext;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMapper, SupervisionForm>
         implements SupervisionFormService {
+
+    private static final int EDIT_DAYS_LEVEL5 = 10;
 
     private final LatentInfectionService latentInfectionService;
     private final ScreeningSchoolMapper screeningSchoolMapper;
@@ -40,11 +47,51 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
     }
 
     @Override
+    public SupervisionForm getDraft(Long latentInfectionId) {
+        return lambdaQuery()
+                .eq(SupervisionForm::getLatentInfectionId, latentInfectionId)
+                .eq(SupervisionForm::getStatus, 0)
+                .orderByDesc(SupervisionForm::getUpdateTime)
+                .last("LIMIT 1")
+                .one();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveDraft(SupervisionForm form) {
+        SupervisionForm existingDraft = getDraft(form.getLatentInfectionId());
+        if (existingDraft != null) {
+            form.setId(existingDraft.getId());
+        } else {
+            form.setId(null);
+        }
+        form.setStatus(0);
+        form.setFormSeq(null);
+        form.setArchivedTime(null);
+        saveOrUpdate(form);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveSubmit(SupervisionForm form) {
         form.setStatus(1);
         form.setArchivedTime(null);
-        saveOrUpdate(form);
+        if (form.getId() != null) {
+            SupervisionForm existing = getById(form.getId());
+            if (existing != null) {
+                assertSubmittable(existing);
+                if (Integer.valueOf(0).equals(existing.getStatus())) {
+                    form.setFormSeq(nextFormSeq(form.getLatentInfectionId()));
+                } else {
+                    form.setFormSeq(existing.getFormSeq());
+                }
+                updateById(form);
+                return;
+            }
+        }
+        form.setId(null);
+        form.setFormSeq(nextFormSeq(form.getLatentInfectionId()));
+        save(form);
     }
 
     @Override
@@ -76,8 +123,80 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             form.setPreventiveResult("规范完成");
         }
 
-        saveOrUpdate(form);
+        if (form.getId() != null) {
+            SupervisionForm existing = getById(form.getId());
+            if (existing != null) {
+                if (Integer.valueOf(2).equals(existing.getStatus())) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID, "该督导表已归档，不可重复归档");
+                }
+                if (Integer.valueOf(1).equals(existing.getStatus())) {
+                    assertEditable(existing);
+                }
+                if (Integer.valueOf(0).equals(existing.getStatus())) {
+                    form.setFormSeq(nextFormSeq(form.getLatentInfectionId()));
+                } else {
+                    form.setFormSeq(existing.getFormSeq());
+                }
+                updateById(form);
+                triggerArchiveSideEffects(form);
+                return;
+            }
+        }
+        form.setId(null);
+        form.setFormSeq(nextFormSeq(form.getLatentInfectionId()));
+        save(form);
+        triggerArchiveSideEffects(form);
+    }
 
+    @Override
+    public List<SupervisionForm> listCompleted(Long latentInfectionId, Integer role) {
+        LambdaQueryWrapper<SupervisionForm> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SupervisionForm::getLatentInfectionId, latentInfectionId)
+                .ge(SupervisionForm::getStatus, 1)
+                .orderByAsc(SupervisionForm::getCreateTime);
+        List<SupervisionForm> list = list(wrapper);
+        list.forEach(form -> form.setEditable(isEditable(role, form)));
+        return list;
+    }
+
+    private int nextFormSeq(Long latentInfectionId) {
+        long count = lambdaQuery()
+                .eq(SupervisionForm::getLatentInfectionId, latentInfectionId)
+                .ge(SupervisionForm::getStatus, 1)
+                .count();
+        return (int) count + 1;
+    }
+
+    private boolean isEditable(Integer role, SupervisionForm form) {
+        if (form == null || !Integer.valueOf(1).equals(form.getStatus())) {
+            return false;
+        }
+        if (role == null || role != 6) {
+            return true;
+        }
+        if (form.getCreateTime() == null) {
+            return true;
+        }
+        return !form.getCreateTime().plusDays(EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
+    }
+
+    private void assertSubmittable(SupervisionForm existing) {
+        if (Integer.valueOf(2).equals(existing.getStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可修改");
+        }
+        if (Integer.valueOf(1).equals(existing.getStatus())) {
+            assertEditable(existing);
+        }
+    }
+
+    private void assertEditable(SupervisionForm existing) {
+        if (!isEditable(BaseContext.getCurrentRole(), existing)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "督导表已超过10天修改期限，请联系上级管理员");
+        }
+    }
+
+    private void triggerArchiveSideEffects(SupervisionForm form) {
         if (form.getLatentInfectionId() == null) return;
 
         LatentInfection latent = latentInfectionService.getById(form.getLatentInfectionId());
@@ -133,8 +252,6 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             case "closeContact" -> {
                 ScreeningCloseContact c = screeningCloseContactMapper.selectById(screeningId);
                 if (c != null) {
-                    // 密接模型中仅有 hasPreventiveTreatment 与 preventivePlan 两个预防治疗字段
-                    // 治疗开始/结束日期、管理人员等详情保存在 supervision_form 表，无需回写
                     c.setHasPreventiveTreatment("是");
                     c.setPreventivePlan(form.getTreatmentPlan());
                     screeningCloseContactMapper.updateById(c);

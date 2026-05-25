@@ -125,7 +125,7 @@ export function buildPriorityImportFields(
   row: Record<string, any> | null | undefined
 ): Array<{ label: string, value: string }> {
   const fields = resolveImportFields(row)
-  return PRIORITY_DETAIL_FIELDS.map((label) => ({
+  return PRIORITY_DETAIL_FIELDS.map(label => ({
     label,
     value: resolvePriorityFieldValue(fields, row, label)
   }))
@@ -161,6 +161,7 @@ export function resolveMedicationManagementUnit(row: Record<string, any> | null 
 /** 解析首次治疗方案（来自病案信息/专病网导入） */
 export function resolveFirstTreatmentPlan(row: Record<string, any> | null | undefined): string {
   if (!row) return ""
+  if (row.firstTreatmentPlan?.trim()) return String(row.firstTreatmentPlan).trim()
   const fields = resolveImportFields(row)
   return fields["首次治疗方案"] || parseEpidemicDataField(row.epidemicData, "首次治疗方案")
 }

@@ -1,5 +1,17 @@
+import { resolveFirstTreatmentPlan } from "@@/utils/patient"
+
 /** 五级用户（role=6）已完成后续随访的可编辑天数 */
 export const FOLLOW_UP_EDIT_DAYS_LEVEL5 = 10
+
+/** 后续随访化疗方案：关联病案「首次治疗方案」预填，已有值则不覆盖 */
+export function applyFollowUpChemotherapyDefault(
+  form: { chemotherapyPlan?: string },
+  patientRow: Record<string, any> | null | undefined
+) {
+  if (form.chemotherapyPlan?.trim()) return
+  const plan = resolveFirstTreatmentPlan(patientRow)
+  if (plan) form.chemotherapyPlan = plan
+}
 
 /** 停止治疗原因：转入耐多药治疗（不归档，可继续随访） */
 export const STOP_TREATMENT_REASON_MDR = "转入耐多药治疗"

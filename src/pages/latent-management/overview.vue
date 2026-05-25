@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue"
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
+import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
-import { TRACKING_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteLatentApi, downloadLatentTemplateApi, exportAllLatentApi, importLatentApi } from "./apis"
@@ -41,6 +42,15 @@ function openCreate() {
 function openEdit(row: any) {
   currentId.value = row.id
   editVisible.value = true
+}
+
+// ==================== 转出 ====================
+const referralDialogVisible = ref(false)
+const referralRow = ref<any>(null)
+
+function openReferral(row: any) {
+  referralRow.value = row
+  referralDialogVisible.value = true
 }
 
 async function handleExport() {
@@ -224,17 +234,6 @@ async function handleImport(uploadFile: any) {
         <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="infectionResult" label="感染筛查结果" show-overflow-tooltip />
-        <el-table-column label="追踪状态">
-          <template #default="{ row }">
-            <el-tag
-              :type="row.trackingStatus === 1 ? 'success' : row.trackingStatus === 2 ? 'warning' : 'info'"
-              size="small"
-            >
-              {{ TRACKING_STATUS_MAP[row.trackingStatus] ?? "待追踪" }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="diagnosisFirst" label="诊断结果" show-overflow-tooltip />
         <el-table-column label="通知单">
           <template #default="{ row }">
             <el-tag v-if="row.noticeStatus === 1 || row.noticeStatus === 2" type="success" size="small">
@@ -269,6 +268,15 @@ async function handleImport(uploadFile: any) {
             >
               修改
             </el-button>
+            <el-button
+              v-permission="'latentManagement:referral'"
+              type="info"
+              link
+              size="small"
+              @click="openReferral(row)"
+            >
+              转出
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -293,6 +301,17 @@ async function handleImport(uploadFile: any) {
       v-model:visible="editVisible"
       :latent-id="currentId"
       @success="fetchData"
+    />
+
+    <!-- 转出弹窗 -->
+    <ReferralDialog
+      v-if="referralRow"
+      v-model="referralDialogVisible"
+      :biz-id="referralRow.id"
+      biz-type="latent_aggregate"
+      module-type="latent"
+      :population-type="referralRow.populationType"
+      :subject-name="referralRow.name || ''"
     />
 
     <el-dialog v-model="importDialogVisible" title="批量导入潜伏感染者" width="560px">

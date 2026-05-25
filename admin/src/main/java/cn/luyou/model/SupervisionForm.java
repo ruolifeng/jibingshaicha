@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,6 +26,8 @@ public class SupervisionForm extends BaseEntity {
     private Long latentInfectionId;
     private String populationType;
     private String patientName;
+    /** 第几次督导表（status>=1 时由后端自动累加） */
+    private Integer formSeq;
 
     /** 类别：密接/新生筛查/65岁以上老年人/糖尿病人/双感/其他 */
     private String category;
@@ -97,7 +100,11 @@ public class SupervisionForm extends BaseEntity {
 
     /** 填写人ID */
     private Long filledBy;
-    /** 状态：0未填写 1已填写 2已归档 */
+    /** 状态：0草稿 1已提交 2已归档 */
     private Integer status;
     private LocalDateTime archivedTime;
+
+    /** 非数据库字段：当前用户是否可修改（列表接口填充） */
+    @TableField(exist = false)
+    private Boolean editable;
 }

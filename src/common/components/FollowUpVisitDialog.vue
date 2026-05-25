@@ -24,7 +24,7 @@ import {
   STOP_TREATMENT_YES_NO_OPTIONS,
   YES_NO_OPTIONS
 } from "@@/constants/disease"
-import { canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, shouldArchiveOnStopTreatment, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
+import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, shouldArchiveOnStopTreatment, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
 import { getFollowUpDraftApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import ImageUploader from "./ImageUploader.vue"
@@ -33,6 +33,8 @@ interface Props {
   visible: boolean
   patientId: number | null
   patientName?: string
+  /** 患者行数据，用于预填化疗方案（病案首次治疗方案） */
+  patientRow?: Record<string, any> | null
   populationType: "school" | "keyPopulation" | "regular" | "epidemic" | "referral" | "specialDisease" | "closeContact" | string
   /** 传入已有记录时为修改模式 */
   initialData?: Record<string, any> | null
@@ -40,6 +42,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   patientName: "",
+  patientRow: null,
   initialData: null
 })
 
@@ -207,6 +210,7 @@ async function loadDraft() {
       parseDraftData(data)
     }
   } catch { /* 无草稿 */ }
+  applyFollowUpChemotherapyDefault(form, props.patientRow)
 }
 
 function loadInitialData() {
@@ -409,7 +413,7 @@ async function handleSave() {
       <el-row :gutter="16">
         <el-col :span="24">
           <el-form-item label="化疗方案">
-            <el-input v-model="form.chemotherapyPlan" placeholder="请填写" />
+            <el-input v-model="form.chemotherapyPlan" placeholder="来自病案首次治疗方案，可修改" />
           </el-form-item>
         </el-col>
         <el-col :span="8">

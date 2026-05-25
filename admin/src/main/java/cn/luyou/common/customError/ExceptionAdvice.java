@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,6 +40,14 @@ public class ExceptionAdvice {
      * @param request          请求参数
      * @return 接口响应
      */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseBody
+    public ResultResponse<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+                                                                     HttpServletRequest request) {
+        log.warn("request {} upload size exceeded \n", request, ex);
+        return ResultRes.error(StatusEnum.PARAM_INVALID, "文件大小超过限制，单个文件不能超过 25MB");
+    }
+
     @ExceptionHandler(ServiceException.class)
     @ResponseBody
     public ResultResponse<Void> handleServiceException(ServiceException serviceException, HttpServletRequest request) {
@@ -110,4 +119,4 @@ public class ExceptionAdvice {
         return ResultRes.error(StatusEnum.HTTP_METHOD_NOT_SUPPORT);
     }
 
-}    
+}

@@ -69,7 +69,7 @@ function handleReset() {
 onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
 
-// ==================== 转诊 ====================
+// ==================== 转出 ====================
 const referralDialogVisible = ref(false)
 const referralRow = ref<any>(null)
 function openReferral(row: any) {
@@ -217,7 +217,7 @@ async function handleCloseCase(row: any) {
               :disabled="row.archived === 1"
               @click="openReferral(row)"
             >
-              转诊
+              转出
             </el-button>
             <el-button v-permission="'latentManagement:close'" type="danger" link size="small"
               :disabled="row.archived === 1"
@@ -250,7 +250,7 @@ async function handleCloseCase(row: any) {
       @success="fetchData"
     />
 
-    <!-- 转诊弹窗 -->
+    <!-- 转出弹窗 -->
     <ReferralDialog
       v-if="referralRow"
       v-model="referralDialogVisible"

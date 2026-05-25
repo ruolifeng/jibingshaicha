@@ -168,7 +168,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         List<LatentInfection> latentList = toInsert.stream()
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> {
-                    boolean directXray = hasDirectXrayAndDiagnosis(d);
                     // sourceType 决定 populationType（regular→regular；其余→keyPopulation）
                     String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
                     return LatentInfection.builder()
@@ -180,13 +179,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .age(d.getAge())
                             .phone(d.getPhone())
                             .infectionResult(d.getInfectionResult())
-                            .trackingStatus(directXray ? 1 : 0)
+                            .trackingStatus(0)
                             .notInPlaceCount(0)
                             .archived(0)
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .build();
                 })
@@ -199,7 +197,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                         .in(LatentInfection::getPopulationType, "keyPopulation", "regular")
                         .exists())
                 .map(d -> {
-                    boolean directXray = hasDirectXrayAndDiagnosis(d);
                     String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
                     return LatentInfection.builder()
                             .screeningId(d.getId())
@@ -210,13 +207,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .age(d.getAge())
                             .phone(d.getPhone())
                             .infectionResult(d.getInfectionResult())
-                            .trackingStatus(directXray ? 1 : 0)
+                            .trackingStatus(0)
                             .notInPlaceCount(0)
                             .archived(0)
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .build();
                 })
@@ -249,7 +245,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .one();
             if (latent == null) continue;
 
-            boolean directXray = hasDirectXrayAndDiagnosis(d);
             var update = latentInfectionService.lambdaUpdate()
                     .eq(LatentInfection::getId, latent.getId());
             boolean changed = false;
@@ -263,14 +258,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             }
             if (StrUtil.isNotBlank(d.getChestXrayResult())) {
                 update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
-                changed = true;
-            }
-            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
-                update.set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
-                changed = true;
-            }
-            if (directXray && Integer.valueOf(0).equals(latent.getTrackingStatus())) {
-                update.set(LatentInfection::getTrackingStatus, 1);
                 changed = true;
             }
             if (changed) {
@@ -362,13 +349,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .age(data.getAge())
                     .phone(data.getPhone())
                     .infectionResult(data.getInfectionResult())
-                    .trackingStatus(directXray ? 1 : 0)
+                    .trackingStatus(0)
                     .notInPlaceCount(0)
                     .archived(0)
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(data.getDiagnosisFirst())
                     .departmentId(data.getDepartmentId())
                     .build();
             latentInfectionService.save(latent);

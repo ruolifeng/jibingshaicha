@@ -171,6 +171,7 @@ function openPrint(row: Record<string, any>) {
       v-model:visible="followUpDialogVisible"
       :patient-id="followUpPatient.id"
       :patient-name="followUpPatient.name"
+      :patient-row="followUpPatient"
       :population-type="followUpPatient.populationType"
       @saved="fetchData"
     />
@@ -180,6 +181,7 @@ function openPrint(row: Record<string, any>) {
       v-model:visible="editDialogVisible"
       :patient-id="historyPatient.id"
       :patient-name="historyPatient.name"
+      :patient-row="historyPatient"
       :population-type="historyPatient.populationType"
       :initial-data="editVisit"
       @saved="onEditSaved"

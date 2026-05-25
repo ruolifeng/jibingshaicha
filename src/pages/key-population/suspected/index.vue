@@ -8,8 +8,6 @@ import {
   isConfirmedPatientDiagnosis,
   SCREENING_DIAGNOSIS_SEARCH_OPTIONS,
   SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS,
-  SUSPECTED_DIAGNOSIS_TO_REFERRAL,
-  SUSPECTED_REFERRAL_RESULT_OPTIONS,
   TRACKING_STATUS_MAP
 } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
@@ -17,7 +15,6 @@ import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/scree
 import {
   getSuspectedListApi,
   importXrayApi,
-  referralSuspectedApi,
   submitDiagnosisApi,
   submitXrayOnlyApi,
   trackSuspectedApi
@@ -175,7 +172,7 @@ const diagnosisForm = reactive({ diagnosisFirst: "" })
 
 function openDiagnosisDialog(row: any) {
   diagnosisRow.value = row
-  diagnosisForm.diagnosisFirst = row.diagnosisFirst || ""
+  diagnosisForm.diagnosisFirst = row.diagnosisFirst || row.screeningDiagnosisFirst || ""
   diagnosisDialogVisible.value = true
 }
 
@@ -209,35 +206,6 @@ async function handleImportXray(uploadFile: any) {
     ElMessage.error("批量导入失败")
   } finally {
     xrayImportLoading.value = false
-  }
-}
-
-// ==================== 诊断弹窗 ====================
-const referralDialogVisible = ref(false)
-const referralRow = ref<any>(null)
-const referralForm = reactive({ result: "", remark: "" })
-
-function openReferralDialog(row: any) {
-  referralRow.value = row
-  referralForm.result = SUSPECTED_DIAGNOSIS_TO_REFERRAL[row.diagnosisFirst] || ""
-  referralForm.remark = ""
-  referralDialogVisible.value = true
-}
-
-async function handleReferral() {
-  if (!referralForm.result) {
-    ElMessage.warning("请选择确认诊断")
-    return
-  }
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await referralSuspectedApi({ id: referralRow.value.id, result: referralForm.result, remark: referralForm.remark })
-    ElMessage.success("操作成功")
-    referralDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally {
-    submitting.value = false
   }
 }
 
@@ -395,25 +363,15 @@ watch(
             >
               录入胸片结果
             </el-button>
-            <!-- 确认诊断（追踪到位后、诊断未录入时可操作；与胸片解耦） -->
+            <!-- 确认诊断（追踪到位后、尚未完成诊断分流时可操作） -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisFirst && !row.referralResult"
+              v-if="row.trackingStatus === 1 && !row.referralResult"
               v-permission="'latent:diagnosis'"
               type="warning"
               size="small"
               @click="openDiagnosisDialog(row)"
             >
               确认诊断
-            </el-button>
-            <!-- 转诊确认（诊断完成后由系统自动驱动，此按钮用于手动二次确认/补救） -->
-            <el-button
-              v-if="row.trackingStatus === 1 && row.diagnosisFirst && !row.referralResult"
-              v-permission="'latent:referral'"
-              type="warning"
-              size="small"
-              @click="openReferralDialog(row)"
-            >
-              诊断
             </el-button>
             <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
               转诊
@@ -510,17 +468,11 @@ watch(
 
     <!-- 确认诊断弹窗 -->
     <el-dialog v-model="diagnosisDialogVisible" title="确认诊断" width="520px">
-      <el-alert type="info" :closable="false" class="mb-4" description="确认诊断后，系统将根据结果自动驱动后续转诊流程。" />
-      <el-form :model="diagnosisForm" label-width="110px">
-        <el-form-item label="确认诊断" required>
-          <el-select v-model="diagnosisForm.diagnosisFirst" placeholder="请选择" style="width: 100%">
+      <el-form :model="diagnosisForm" label-width="0">
+        <el-form-item required>
+          <el-select v-model="diagnosisForm.diagnosisFirst" placeholder="请选择诊断结果" style="width: 100%">
             <el-option v-for="item in SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
-          <div class="mt-1 text-xs text-gray-400">
-            <span v-if="diagnosisForm.diagnosisFirst === '排除'">→ 归档</span>
-            <span v-else-if="diagnosisForm.diagnosisFirst === '确诊患者'">→ 标红结案，不进入患者管理</span>
-            <span v-else-if="diagnosisForm.diagnosisFirst === '潜伏感染者'">→ 进入潜伏感染管理</span>
-          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -528,7 +480,7 @@ watch(
           取消
         </el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmitDiagnosis">
-          确认录入
+          确定
         </el-button>
       </template>
     </el-dialog>
@@ -544,26 +496,6 @@ watch(
       :subject-name="tierCareRow.name || ''"
     />
 
-    <!-- 诊断弹窗 -->
-    <el-dialog v-model="referralDialogVisible" title="确认诊断" width="450px">
-      <el-form label-width="80px">
-        <el-form-item label="确认诊断">
-          <el-radio-group v-model="referralForm.result">
-            <el-radio v-for="item in SUSPECTED_REFERRAL_RESULT_OPTIONS" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="referralDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleReferral">
-          确认
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 

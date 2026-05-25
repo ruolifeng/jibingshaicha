@@ -1242,7 +1242,7 @@ watch(
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="其他症状">
-          <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写" />
+          <el-input v-model="firstVisitForm.otherSymptoms" placeholder="选填，如有其他症状请填写" />
         </el-form-item>
         <el-divider content-position="left">
           用药情况
@@ -1388,6 +1388,7 @@ watch(
       v-model:visible="followUpDialogVisible"
       :patient-id="followUpRow?.id ?? null"
       :patient-name="followUpRow?.name"
+      :patient-row="followUpRow"
       population-type="keyPopulation"
       @saved="fetchData"
     />

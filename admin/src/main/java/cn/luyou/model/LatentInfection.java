@@ -44,6 +44,9 @@ public class LatentInfection extends BaseEntity {
     private String chestXrayResult;
     /** 首次诊断结果：排除/疑似肺结核/潜伏感染者/确诊患者/其他 */
     private String diagnosisFirst;
+    /** 筛查表中的待确认诊断（非持久化，仅待诊断列表展示/预填） */
+    @TableField(exist = false)
+    private String screeningDiagnosisFirst;
     /** 密接阳性轮次：1首次 2半年后 3一年后（仅密接人群使用） */
     private Integer activeRound;
 

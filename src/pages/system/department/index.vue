@@ -7,25 +7,64 @@ import {
   updateDepartmentApi
 } from "@@/apis/department"
 
+type DepartmentTree = Department & { children?: DepartmentTree[] }
+
 const LEVEL_MAP: Record<number, string> = {
   1: "市级",
   2: "区县",
-  3: "社区"
+  3: "社区/街道/乡镇"
+}
+
+const LEVEL_TAG: Record<number, "primary" | "success" | "warning"> = {
+  1: "primary",
+  2: "success",
+  3: "warning"
 }
 
 const LEVEL_OPTIONS = [
   { value: 1, label: "市级（可挂下属区县/社区数据）" },
   { value: 2, label: "区县（仅本区及下属社区，与兄弟区县隔离）" },
-  { value: 3, label: "社区（仅本机构及下属，挂在区县下）" }
+  { value: 3, label: "社区/街道/乡镇（挂在区县下）" }
 ]
 
 const loading = ref(false)
 const tableData = ref<Department[]>([])
+const tableRef = ref()
+const isExpandAll = ref(true)
 
-function getParentName(parentId: number | null | undefined) {
-  if (parentId == null) return "—"
-  return tableData.value.find((d: Department) => d.id === parentId)?.name || "—"
+function buildDepartmentTree(list: Department[]): DepartmentTree[] {
+  const map = new Map<number, DepartmentTree>()
+  const roots: DepartmentTree[] = []
+
+  for (const item of list) {
+    if (item.id == null) continue
+    map.set(item.id, { ...item, children: [] })
+  }
+
+  for (const node of map.values()) {
+    const parentId = node.parentId
+    if (parentId != null && map.has(parentId)) {
+      map.get(parentId)!.children!.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  const sortNodes = (nodes: DepartmentTree[]) => {
+    nodes.sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || (a.id ?? 0) - (b.id ?? 0))
+    nodes.forEach((node) => {
+      if (node.children?.length) {
+        sortNodes(node.children)
+      } else {
+        delete node.children
+      }
+    })
+  }
+  sortNodes(roots)
+  return roots
 }
+
+const treeData = computed(() => buildDepartmentTree(tableData.value))
 
 async function fetchData() {
   loading.value = true
@@ -35,6 +74,19 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+function toggleExpandAll() {
+  isExpandAll.value = !isExpandAll.value
+  const toggle = (rows: DepartmentTree[]) => {
+    rows.forEach((row) => {
+      tableRef.value?.toggleRowExpansion(row, isExpandAll.value)
+      if (row.children?.length) {
+        toggle(row.children)
+      }
+    })
+  }
+  toggle(treeData.value)
 }
 
 // ==================== 新增/编辑弹窗 ====================
@@ -74,14 +126,26 @@ const parentOptions = computed(() => {
   return [] as { id: number, name: string }[]
 })
 
-function openCreateDialog() {
-  isEdit.value = false
-  dialogTitle.value = "新增部门"
+function resetForm(level = 1, parentId?: number) {
   formData.id = null
   formData.name = ""
   formData.description = ""
-  formData.level = 1
-  formData.parentId = undefined
+  formData.level = level
+  formData.parentId = parentId
+}
+
+function openCreateDialog() {
+  isEdit.value = false
+  dialogTitle.value = "新增部门"
+  resetForm(1)
+  dialogVisible.value = true
+}
+
+function openCreateChildDialog(row: Department) {
+  if ((row.level ?? 1) >= 3) return
+  isEdit.value = false
+  dialogTitle.value = "新增下级部门"
+  resetForm((row.level ?? 1) + 1, row.id)
   dialogVisible.value = true
 }
 
@@ -108,7 +172,7 @@ watch(
 async function handleSubmit() {
   await formRef.value?.validate()
   if (formData.level !== 1 && (formData.parentId == null || formData.parentId === undefined)) {
-    ElMessage.warning("区县或社区部门必须选择上级部门")
+    ElMessage.warning("区县或社区/街道/乡镇必须选择上级部门")
     return
   }
   try {
@@ -159,35 +223,60 @@ fetchData()
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">部门管理</span>
-          <el-button type="primary" @click="openCreateDialog">
-            新增部门
-          </el-button>
+          <div class="toolbar-actions">
+            <el-button @click="toggleExpandAll">
+              {{ isExpandAll ? "折叠全部" : "展开全部" }}
+            </el-button>
+            <el-button type="primary" @click="openCreateDialog">
+              新增部门
+            </el-button>
+          </div>
         </div>
       </template>
 
-      <el-alert type="info" :closable="false" class="mb-3" title="三级结构：市级（1）可查看全部下属区县与社区数据；同级区县互不可见；社区挂在区县下。" />
+      <el-alert
+        type="info"
+        :closable="false"
+        class="mb-3"
+        title="三级结构：市级 → 区县 → 社区/街道/乡镇。市级可查看全部下属数据；同级区县互不可见。"
+      />
 
-      <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="id" label="ID" />
-        <el-table-column label="层级">
+      <el-table
+        ref="tableRef"
+        v-loading="loading"
+        :data="treeData"
+        row-key="id"
+        border
+        stripe
+        default-expand-all
+        :tree-props="{ children: 'children' }"
+      >
+        <el-table-column prop="name" label="部门名称" min-width="260" show-overflow-tooltip />
+        <el-table-column label="层级" width="140" align="center">
           <template #default="{ row }">
-            {{ LEVEL_MAP[row.level ?? 1] || "—" }}
+            <el-tag :type="LEVEL_TAG[row.level ?? 1]" size="small">
+              {{ LEVEL_MAP[row.level ?? 1] || "—" }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="部门名称" />
-        <el-table-column label="上级部门">
+        <el-table-column prop="id" label="ID" width="80" align="center" />
+        <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="createTime" label="创建时间" width="180" />
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
-            {{ getParentName(row.parentId) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" @click="openEditDialog(row)">
+            <el-button
+              v-if="(row.level ?? 1) < 3"
+              type="success"
+              link
+              size="small"
+              @click="openCreateChildDialog(row)"
+            >
+              新增下级
+            </el-button>
+            <el-button type="primary" link size="small" @click="openEditDialog(row)">
               编辑
             </el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">
+            <el-button type="danger" link size="small" @click="handleDelete(row)">
               删除
             </el-button>
           </template>
@@ -245,5 +334,10 @@ fetchData()
 <style lang="scss" scoped>
 .mb-3 {
   margin-bottom: 12px;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

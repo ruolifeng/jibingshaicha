@@ -10,10 +10,16 @@ import {
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { getToken } from "@@/utils/cache/cookies"
 import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
+import { getToken } from "@@/utils/cache/cookies"
+import { canEditSupervisionForm } from "@@/utils/supervisionForm"
 import { Upload } from "@element-plus/icons-vue"
-import { getSupervisionDetailApi, saveSupervisionApi } from "@/pages/latent-management/apis"
+import {
+  getSupervisionDraftApi,
+  saveSupervisionApi,
+  saveSupervisionDraftApi
+} from "@/pages/latent-management/apis"
+import { useUserStore } from "@/pinia/stores/user"
 
 interface SupervisionRecord {
   time: string
@@ -24,15 +30,37 @@ interface SupervisionRecord {
 
 const props = defineProps<{
   latentRow: any | null
+  /** 传入已有记录时为修改模式 */
+  initialData?: Record<string, any> | null
   readonly?: boolean
 }>()
 
 const emit = defineEmits<{ success: [] }>()
 const visible = defineModel<boolean>({ default: false })
+const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const draftSaving = ref(false)
 const archiving = ref(false)
-const formId = ref<number | undefined>(undefined)
+const draftId = ref<number | undefined>(undefined)
+const recordCreateTime = ref<string | null>(null)
+
+const isEditMode = computed(() => !!props.initialData?.id)
+const formLocked = computed(() =>
+  isEditMode.value
+  && !canEditSupervisionForm(userStore.userRole, {
+    status: props.initialData?.status,
+    createTime: recordCreateTime.value,
+    editable: props.initialData?.editable
+  })
+)
+
+const dialogTitle = computed(() => {
+  const suffix = props.latentRow?.name ? ` — ${props.latentRow.name}` : ""
+  if (props.readonly || formLocked.value) return `查看督导表${suffix}`
+  if (isEditMode.value) return `修改督导表${suffix}`
+  return `填写督导表${suffix}`
+})
 
 const supervisionForm = reactive({
   category: "",
@@ -64,6 +92,7 @@ const rules: FormRules = {
 const attachmentFileList = ref<{ name: string, url: string }[]>([])
 const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
+const formDisabled = computed(() => props.readonly || formLocked.value)
 
 function formatDateValue(value: unknown): string {
   if (!value) return ""
@@ -116,9 +145,9 @@ function parseSupervisionRecords(records?: string) {
   }
 }
 
-
 function resetFormFromRow(row: any) {
-  formId.value = undefined
+  draftId.value = undefined
+  recordCreateTime.value = null
   supervisionForm.category = row.crowdCategory || row.category || ""
   supervisionForm.gender = row.gender || ""
   supervisionForm.age = row.age ?? null
@@ -141,9 +170,10 @@ function resetFormFromRow(row: any) {
   attachmentFileList.value = []
 }
 
-function applyDetailToForm(data: Record<string, any>, row: any) {
+function applyFormData(data: Record<string, any>, row: any) {
   resetFormFromRow(row)
-  formId.value = data.id
+  draftId.value = data.id
+  recordCreateTime.value = data.createTime ?? null
   supervisionForm.category = data.category ?? supervisionForm.category
   supervisionForm.gender = data.gender ?? supervisionForm.gender
   supervisionForm.age = data.age ?? supervisionForm.age
@@ -165,25 +195,35 @@ function applyDetailToForm(data: Record<string, any>, row: any) {
   parseAttachmentUrlsField(data.attachmentUrls)
 }
 
-async function loadFormData() {
+async function loadDraft() {
   if (!props.latentRow?.id) return
+  resetFormFromRow(props.latentRow)
   try {
-    const { data } = await getSupervisionDetailApi(props.latentRow.id)
+    const { data } = await getSupervisionDraftApi(props.latentRow.id)
     if (data) {
-      applyDetailToForm(data, props.latentRow)
-    } else {
-      resetFormFromRow(props.latentRow)
+      applyFormData(data, props.latentRow)
     }
-  } catch {
-    resetFormFromRow(props.latentRow)
+  } catch { /* 无草稿 */ }
+}
+
+function loadInitialData() {
+  if (!props.initialData || !props.latentRow) return
+  applyFormData(props.initialData, props.latentRow)
+}
+
+async function initForm() {
+  if (props.initialData) {
+    loadInitialData()
+  } else {
+    await loadDraft()
   }
 }
 
 watch(
-  () => [visible.value, props.latentRow?.id] as const,
+  () => [visible.value, props.latentRow?.id, props.initialData?.id] as const,
   ([open]) => {
     if (open && props.latentRow) {
-      loadFormData()
+      initForm()
       nextTick(() => formRef.value?.clearValidate())
     }
   }
@@ -238,7 +278,7 @@ function resolveTreatmentPlan() {
 function buildPayload(status: number) {
   const attachmentUrls = attachmentFileList.value.map(f => f.url).join(",")
   return {
-    ...(formId.value ? { id: formId.value } : {}),
+    id: draftId.value ?? props.initialData?.id ?? undefined,
     latentInfectionId: props.latentRow!.id,
     populationType: props.latentRow!.populationType,
     patientName: props.latentRow!.name,
@@ -277,14 +317,28 @@ async function validateForm() {
   }
 }
 
-/** 保存草稿（status=1） */
 async function handleSaveDraft() {
-  if (!props.latentRow?.id || submitting.value) return
+  if (!props.latentRow?.id || draftSaving.value || formDisabled.value) return
+
+  draftSaving.value = true
+  try {
+    await saveSupervisionDraftApi(buildPayload(0))
+    ElMessage.success("督导表草稿已保存")
+    visible.value = false
+    emit("success")
+  } catch { /* handled by interceptor */ } finally {
+    draftSaving.value = false
+  }
+}
+
+async function handleSubmit() {
+  if (!props.latentRow?.id || submitting.value || formDisabled.value) return
+  if (!await validateForm()) return
 
   submitting.value = true
   try {
     await saveSupervisionApi(buildPayload(1))
-    ElMessage.success("督导表草稿已保存")
+    ElMessage.success(isEditMode.value ? "督导表修改成功" : "督导表提交成功")
     visible.value = false
     emit("success")
   } catch { /* handled by interceptor */ } finally {
@@ -292,9 +346,8 @@ async function handleSaveDraft() {
   }
 }
 
-/** 归档督导表（status=2） */
 async function handleArchive() {
-  if (!props.latentRow?.id || archiving.value) return
+  if (!props.latentRow?.id || archiving.value || formDisabled.value) return
   if (!await validateForm()) return
 
   try {
@@ -318,7 +371,7 @@ async function handleArchive() {
 <template>
   <el-dialog
     v-model="visible"
-    title="填写预防性治疗督导表"
+    :title="dialogTitle"
     width="960px"
     append-to-body
     destroy-on-close
@@ -326,9 +379,9 @@ async function handleArchive() {
     <el-form
       ref="formRef"
       :model="supervisionForm"
-      :rules="readonly ? undefined : rules"
+      :rules="formDisabled ? undefined : rules"
       label-width="140px"
-      :disabled="readonly"
+      :disabled="formDisabled"
     >
       <el-divider content-position="left">
         基本信息
@@ -442,7 +495,7 @@ async function handleArchive() {
           </el-col>
           <el-col :span="8" class="flex items-center justify-end">
             <el-button
-              v-if="!readonly && supervisionForm.supervisionRecords.length > 1"
+              v-if="!formDisabled && supervisionForm.supervisionRecords.length > 1"
               type="danger"
               link
               size="small"
@@ -459,7 +512,7 @@ async function handleArchive() {
           <el-input v-model="record.remark" placeholder="请填写备注" />
         </el-form-item>
       </div>
-      <div v-if="!readonly" class="mb-4">
+      <div v-if="!formDisabled" class="mb-4">
         <el-button
           type="primary"
           link
@@ -554,10 +607,10 @@ async function handleArchive() {
           :on-change="handleAttachmentChange"
           :on-remove="handleAttachmentRemove"
           :on-error="handleAttachmentError"
-          :disabled="readonly"
+          :disabled="formDisabled"
           multiple
         >
-          <el-button type="primary" size="small" :disabled="readonly">
+          <el-button type="primary" size="small" :disabled="formDisabled">
             <el-icon class="mr-1">
               <Upload />
             </el-icon>
@@ -573,13 +626,16 @@ async function handleArchive() {
     </el-form>
     <template #footer>
       <el-button @click="visible = false">
-        {{ readonly ? "关闭" : "取消" }}
+        {{ formDisabled ? "关闭" : "取消" }}
       </el-button>
-      <template v-if="!readonly">
-        <el-button type="primary" :loading="submitting" @click="handleSaveDraft">
+      <template v-if="!formDisabled">
+        <el-button type="info" :loading="draftSaving" :disabled="submitting || archiving" @click="handleSaveDraft">
           保存草稿
         </el-button>
-        <el-button type="success" :loading="archiving" @click="handleArchive">
+        <el-button type="primary" :loading="submitting" :disabled="draftSaving || archiving" @click="handleSubmit">
+          {{ isEditMode ? "保存修改" : "提交" }}
+        </el-button>
+        <el-button type="success" :loading="archiving" :disabled="draftSaving || submitting" @click="handleArchive">
           归档
         </el-button>
       </template>

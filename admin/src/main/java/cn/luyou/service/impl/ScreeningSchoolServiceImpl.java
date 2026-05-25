@@ -157,7 +157,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         // 导致导入的确诊/疑似记录在"待诊断"中不可见。
         // 无论导入数据是否已含胸片与诊断，trackingStatus 始终初始化为 0（待追踪）。
         // 操作员需手动完成追踪流程后，才可进行诊断。
-        // 若导入数据已含 diagnosisFirst，追踪到位后系统会直接显示"诊断"按钮，无需重复录入胸片。
+        // 若导入数据已含 diagnosisFirst（保存在筛查表），待诊断页确认后才会写入 latent 并分流。
         List<LatentInfection> latentList = toInsert.stream()
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> LatentInfection.builder()
@@ -175,7 +175,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .build())
                 .toList();
@@ -201,7 +200,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .build())
                 .toList();
@@ -232,7 +230,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .one();
             if (latent == null) continue;
 
-            boolean directXray = hasDirectXrayAndDiagnosis(d);
             var update = latentInfectionService.lambdaUpdate()
                     .eq(LatentInfection::getId, latent.getId());
             boolean changed = false;
@@ -246,14 +243,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             }
             if (StrUtil.isNotBlank(d.getChestXrayResult())) {
                 update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
-                changed = true;
-            }
-            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
-                update.set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
-                changed = true;
-            }
-            if (directXray && Integer.valueOf(0).equals(latent.getTrackingStatus())) {
-                update.set(LatentInfection::getTrackingStatus, 1);
                 changed = true;
             }
             if (changed) {
@@ -332,7 +321,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(data.getDiagnosisFirst())
                     .departmentId(data.getDepartmentId())
                     .build();
             latentInfectionService.save(latent);
@@ -402,7 +390,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(data.getDiagnosisFirst())
                     .departmentId(null)
                     .build();
             latentInfectionService.save(latent);

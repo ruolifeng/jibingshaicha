@@ -79,16 +79,6 @@ const rules: FormRules = {
   patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
   sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
   drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
-  otherSymptoms: [{
-    validator: (_rule, value, callback) => {
-      if (!value || !String(value).trim()) {
-        callback(new Error("请填写其他症状"))
-      } else {
-        callback()
-      }
-    },
-    trigger: "blur"
-  }],
   symptoms: [{
     type: "array",
     required: true,
@@ -311,8 +301,8 @@ async function handleSave() {
           </el-checkbox>
         </el-checkbox-group>
       </el-form-item>
-      <el-form-item label="其他症状" prop="otherSymptoms">
-        <el-input v-model="firstVisitForm.otherSymptoms" placeholder="如有其他症状请填写，无则填「无」" />
+      <el-form-item label="其他症状">
+        <el-input v-model="firstVisitForm.otherSymptoms" placeholder="选填，如有其他症状请填写" />
       </el-form-item>
 
       <el-divider content-position="left">

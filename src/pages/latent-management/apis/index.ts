@@ -75,7 +75,7 @@ export function downloadLatentTemplateApi() {
 }
 
 /** 追踪操作 */
-export function trackLatentApi(data: { id: number; status: number; remark?: string }) {
+export function trackLatentApi(data: { id: number, status: number, remark?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/track",
     method: "post",
@@ -84,7 +84,7 @@ export function trackLatentApi(data: { id: number; status: number; remark?: stri
 }
 
 /** 转诊操作 */
-export function referralLatentApi(data: { id: number; result: string; remark?: string }) {
+export function referralLatentApi(data: { id: number, result: string, remark?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/referral",
     method: "post",
@@ -121,12 +121,32 @@ export function getNoticeListByBizApi(bizId: number, noticeType: string) {
   })
 }
 
-/** 保存督导表 */
+/** 保存督导表草稿 */
+export function saveSupervisionDraftApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: "supervision/draft", method: "post", data })
+}
+
+/** 保存/提交督导表 */
 export function saveSupervisionApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "supervision/save", method: "post", data })
 }
 
-/** 查询督导表详情 */
+/** 查询督导表草稿 */
+export function getSupervisionDraftApi(latentInfectionId: number) {
+  return request<ApiResponseData<any>>({ url: `supervision/draft/${latentInfectionId}`, method: "get" })
+}
+
+/** 督导表记录列表 */
+export function getSupervisionListApi(latentInfectionId: number) {
+  return request<ApiResponseData<any[]>>({ url: `supervision/list/${latentInfectionId}`, method: "get" })
+}
+
+/** 按 ID 查询督导表详情 */
+export function getSupervisionByIdApi(id: number) {
+  return request<ApiResponseData<any>>({ url: `supervision/${id}`, method: "get" })
+}
+
+/** 查询最新督导表详情（兼容旧接口） */
 export function getSupervisionDetailApi(latentInfectionId: number) {
   return request<ApiResponseData<any>>({ url: `supervision/detail/${latentInfectionId}`, method: "get" })
 }
@@ -147,6 +167,6 @@ export function submitXrayOnlyApi(data: {
 }
 
 /** 录入诊断结果 */
-export function submitDiagnosisApi(data: { id: number; diagnosisFirst: string }) {
+export function submitDiagnosisApi(data: { id: number, diagnosisFirst: string }) {
   return request<ApiResponseData<null>>({ url: "latent/diagnosis", method: "post", data })
 }

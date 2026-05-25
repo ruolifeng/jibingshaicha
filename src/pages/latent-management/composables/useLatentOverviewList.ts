@@ -27,6 +27,7 @@ export function useLatentOverviewList() {
         page: 1,
         size: FETCH_ALL_SIZE,
         archived: 0,
+        referralResult: "latent",
         ...rest,
         ...extractDateRangeParams(dateRange)
       }

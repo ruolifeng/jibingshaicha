@@ -60,9 +60,7 @@ const STATUS_TAG_TYPE: Record<number, "warning" | "success" | "danger"> = {
   3: "danger"
 }
 
-/** 患者管理模块使用「转出」文案，其他模块仍用「转诊」 */
-const isPatientModule = computed(() => props.moduleType === "patient")
-const actionLabel = computed(() => (isPatientModule.value ? "转出" : "转诊"))
+const actionLabel = "转出"
 const populationLabel = computed(() =>
   LEGACY_POPULATION_LABEL[props.populationType] ?? getPopulationTypeLabel(props.populationType)
 )
@@ -101,7 +99,7 @@ async function handleSend() {
       referralReason: sendForm.referralReason.trim() || undefined,
       receiverOrgId: sendForm.receiverOrgId
     })
-    ElMessage.success(`${actionLabel.value}推送已发送`)
+    ElMessage.success(`${actionLabel}推送已发送`)
     sendForm.receiverOrgId = undefined
     sendForm.referralReason = ""
     await loadHistory()
@@ -129,7 +127,7 @@ async function loadHistory() {
 async function handleResend(record: ReferralRecord) {
   try {
     await resendReferralApi(record.id)
-    ElMessage.success(`已重新发起${actionLabel.value}`)
+    ElMessage.success(`已重新发起${actionLabel}`)
     await loadHistory()
     emit("success")
   } catch { /* handled */ }

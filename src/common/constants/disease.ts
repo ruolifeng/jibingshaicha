@@ -100,10 +100,12 @@ export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
 /** 是否为筛查确诊患者（待诊断/筛查列表标红用） */
 export function isConfirmedPatientDiagnosis(row: {
   diagnosisFirst?: string
+  screeningDiagnosisFirst?: string
   referralResult?: string
   diagnosisResult?: string
 }): boolean {
   return row.diagnosisFirst === "确诊患者"
+    || row.screeningDiagnosisFirst === "确诊患者"
     || row.referralResult === "confirmed"
     || row.diagnosisResult === "确诊患者"
 }
@@ -111,12 +113,14 @@ export function isConfirmedPatientDiagnosis(row: {
 /** 获取待诊断列表「确认诊断」列展示文本 */
 export function getSuspectedConfirmDiagnosisLabel(row: {
   diagnosisFirst?: string
+  screeningDiagnosisFirst?: string
   referralResult?: string
 }): string {
-  if (row.diagnosisFirst) {
-    const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === row.diagnosisFirst)
+  const draft = row.diagnosisFirst || row.screeningDiagnosisFirst
+  if (draft) {
+    const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === draft)
     if (matched) return matched.label
-    return row.diagnosisFirst
+    return draft
   }
   const referral = SUSPECTED_REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)
   return referral?.label || "-"

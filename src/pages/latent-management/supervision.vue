@@ -1,10 +1,15 @@
 <script lang="ts" setup>
+import PrintSupervision from "@@/components/PrintSupervision.vue"
+import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
 import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { getLatentAggregateListApi } from "./apis"
+import { canEditSupervisionForm, getSupervisionStatusLabel } from "@@/utils/supervisionForm"
+import { useUserStore } from "@/pinia/stores/user"
+import { getLatentAggregateListApi, getSupervisionListApi } from "./apis"
 
+const userStore = useUserStore()
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
 const loading = ref(false)
@@ -63,12 +68,6 @@ function handleReset() {
 onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
 
-function getSupervisionStatusLabel(status?: number) {
-  if (status === 2) return "已归档"
-  if (status === 1) return "已提交"
-  return "待填写"
-}
-
 function getSupervisionStatusType(status?: number): "success" | "warning" | "info" {
   if (status === 2) return "success"
   if (status === 1) return "info"
@@ -80,7 +79,61 @@ const supervisionRow = ref<any>(null)
 
 function openSupervision(row: any) {
   supervisionRow.value = row
+  editRecord.value = null
   supervisionDialogVisible.value = true
+}
+
+const historyVisible = ref(false)
+const historyList = ref<any[]>([])
+const historyPatientName = ref("")
+const historyRow = ref<any>(null)
+const historyDialogTitle = computed(() => `${historyPatientName.value} - 督导表记录`)
+
+const editDialogVisible = ref(false)
+const editRecord = ref<Record<string, any> | null>(null)
+
+const detailVisible = ref(false)
+const detailData = ref<Record<string, any> | null>(null)
+
+const printVisible = ref(false)
+const printData = ref<Record<string, any> | null>(null)
+const printPatientName = ref("")
+
+async function viewHistory(row: any) {
+  historyRow.value = row
+  historyPatientName.value = row.name
+  const { data } = await getSupervisionListApi(row.id)
+  historyList.value = data || []
+  historyVisible.value = true
+}
+
+async function refreshHistoryList() {
+  if (!historyRow.value) return
+  const { data } = await getSupervisionListApi(historyRow.value.id)
+  historyList.value = data || []
+}
+
+function openEdit(record: Record<string, any>) {
+  supervisionRow.value = historyRow.value
+  editRecord.value = record
+  editDialogVisible.value = true
+}
+
+async function onEditSaved() {
+  editRecord.value = null
+  await refreshHistoryList()
+  fetchData()
+}
+
+function viewDetail(row: Record<string, any>) {
+  detailData.value = row
+  detailVisible.value = true
+}
+
+function openPrint(row: Record<string, any>) {
+  printData.value = row
+  printPatientName.value = historyPatientName.value
+  printVisible.value = true
 }
 </script>
 
@@ -154,7 +207,7 @@ function openSupervision(row: any) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">
             <el-button
               v-permission="'latentManagement:supervision'"
@@ -164,7 +217,10 @@ function openSupervision(row: any) {
               :disabled="row.archived === 1"
               @click="openSupervision(row)"
             >
-              {{ row.supervisionStatus >= 1 ? "查看/编辑督导表" : "填写督导表" }}
+              填写督导表
+            </el-button>
+            <el-button type="info" link size="small" @click="viewHistory(row)">
+              查看记录
             </el-button>
           </template>
         </el-table-column>
@@ -183,9 +239,72 @@ function openSupervision(row: any) {
     </el-card>
 
     <SupervisionFormDialog
+      v-if="supervisionRow && !editRecord"
       v-model="supervisionDialogVisible"
       :latent-row="supervisionRow"
       @success="fetchData"
+    />
+
+    <SupervisionFormDialog
+      v-if="supervisionRow && editRecord"
+      v-model="editDialogVisible"
+      :latent-row="supervisionRow"
+      :initial-data="editRecord"
+      @success="onEditSaved"
+    />
+
+    <el-dialog
+      v-model="historyVisible"
+      :title="historyDialogTitle"
+      width="900px"
+      append-to-body
+    >
+      <el-table :data="historyList" border stripe>
+        <el-table-column prop="formSeq" label="第几次" width="80" />
+        <el-table-column prop="treatmentStartDate" label="开始治疗时间" />
+        <el-table-column prop="treatmentPlan" label="治疗方案" show-overflow-tooltip />
+        <el-table-column prop="managerName" label="管理人员" show-overflow-tooltip />
+        <el-table-column prop="createTime" label="提交时间" />
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            {{ getSupervisionStatusLabel(row.status) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" fixed="right" width="200">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="viewDetail(row)">
+              查看详情
+            </el-button>
+            <el-button
+              v-if="canEditSupervisionForm(userStore.userRole, row)"
+              v-permission="'latentManagement:supervision'"
+              type="warning"
+              link
+              size="small"
+              @click="openEdit(row)"
+            >
+              修改
+            </el-button>
+            <el-button type="info" link size="small" @click="openPrint(row)">
+              打印
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="!historyList.length" description="暂无督导表记录" />
+    </el-dialog>
+
+    <SupervisionFormDetailDialog
+      v-model:visible="detailVisible"
+      :form-data="detailData"
+      :patient-name="historyPatientName"
+    />
+
+    <PrintSupervision
+      v-if="printData"
+      :visible="printVisible"
+      :data="printData"
+      @update:visible="printVisible = $event"
     />
   </div>
 </template>

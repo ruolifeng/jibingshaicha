@@ -165,10 +165,41 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         List<LatentInfection> records = result.getRecords();
         if (records == null || records.isEmpty()) return result;
 
+        fillScreeningDiagnosisDraft(records);
         records.forEach(this::fillNoticeAutoFields);
         fillNoticeAndSupervisionStatus(records, populationType);
 
         return result;
+    }
+
+    /** 待诊断阶段：从关联筛查表读取已导入、尚未确认的首次诊断，供列表展示与弹窗预填 */
+    private void fillScreeningDiagnosisDraft(List<LatentInfection> records) {
+        if (records == null || records.isEmpty()) return;
+        for (LatentInfection record : records) {
+            if (record.getScreeningId() == null || StrUtil.isNotBlank(record.getDiagnosisFirst())) continue;
+            String draft = loadScreeningDiagnosisFirst(record);
+            if (StrUtil.isNotBlank(draft)) {
+                record.setScreeningDiagnosisFirst(draft);
+            }
+        }
+    }
+
+    private String loadScreeningDiagnosisFirst(LatentInfection entity) {
+        if (entity.getScreeningId() == null) return null;
+        String popType = entity.getPopulationType();
+        if ("school".equals(popType)) {
+            ScreeningSchool s = screeningSchoolMapper.selectById(entity.getScreeningId());
+            return s != null ? s.getDiagnosisFirst() : null;
+        }
+        if ("keyPopulation".equals(popType) || "regular".equals(popType)) {
+            ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(entity.getScreeningId());
+            return k != null ? k.getDiagnosisFirst() : null;
+        }
+        if ("closeContact".equals(popType)) {
+            ScreeningCloseContact c = screeningCloseContactMapper.selectById(entity.getScreeningId());
+            return c != null ? c.getFinalScreeningResult() : null;
+        }
+        return null;
     }
 
     /** 补充通知单发送状态与督导表状态（列表/详情共用） */
@@ -220,11 +251,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 new LambdaQueryWrapper<SupervisionForm>()
                         .in(SupervisionForm::getLatentInfectionId, latentIds)
                         .orderByDesc(SupervisionForm::getCreateTime)
-        ).stream().collect(java.util.stream.Collectors.toMap(
+        ).stream().collect(java.util.stream.Collectors.groupingBy(
                 SupervisionForm::getLatentInfectionId,
-                SupervisionForm::getStatus,
-                (a, b) -> a,
-                java.util.LinkedHashMap::new
+                java.util.stream.Collectors.collectingAndThen(
+                        java.util.stream.Collectors.toList(),
+                        forms -> {
+                            if (forms.isEmpty()) return 0;
+                            boolean hasArchived = forms.stream().anyMatch(f -> Integer.valueOf(2).equals(f.getStatus()));
+                            if (hasArchived) return 2;
+                            boolean hasSubmitted = forms.stream().anyMatch(f -> Integer.valueOf(1).equals(f.getStatus()));
+                            if (hasSubmitted) return 1;
+                            return 0;
+                        }
+                )
         ));
         records.forEach(r -> {
             Integer status = supervisionStatusMap.get(r.getId());
@@ -556,28 +595,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             // 至少包含胸片结果或确认诊断才更新（支持仅导入胸片结果）
             if (StrUtil.isBlank(xrayResult) && StrUtil.isBlank(diagnosisFirst)) continue;
 
-            // 写入胸片字段；确认诊断可选，有值时一并写入并驱动转诊
+            // 写入胸片字段；诊断仅回写筛查表，须待诊断页确认后才分流
             var updateWrapper = lambdaUpdate()
                     .eq(LatentInfection::getId, entity.getId())
                     .set(StrUtil.isNotBlank(hasXray), LatentInfection::getHasChestXray, hasXray)
                     .set(xrayDate != null, LatentInfection::getChestXrayDate, xrayDate)
                     .set(StrUtil.isNotBlank(xrayResult), LatentInfection::getChestXrayResult, xrayResult);
-            if (StrUtil.isNotBlank(diagnosisFirst)) {
-                updateWrapper.set(LatentInfection::getDiagnosisFirst, diagnosisFirst);
-            }
             updateWrapper.update();
 
             writeBackXrayToScreening(entity, hasXray, xrayDate, xrayResult,
                     StrUtil.isNotBlank(diagnosisFirst) ? diagnosisFirst : null);
-
-            // 与单条录入保持一致：有确认诊断时自动驱动转诊
-            if (StrUtil.isNotBlank(diagnosisFirst)) {
-                String referralCode = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
-                if (referralCode != null) {
-                    LatentInfection refreshed = getById(entity.getId());
-                    applyReferralOutcome(refreshed, referralCode, null);
-                }
-            }
             updated++;
         }
         log.info("批量导入胸片结果，populationType={}，成功更新 {} 条", populationType, updated);
@@ -854,6 +881,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .trackingStatus(0)
                 .notInPlaceCount(0)
                 .archived(0)
+                .referralResult("latent")
+                .diagnosisResult("潜伏感染者")
                 .departmentId(BaseContext.getCurrentDepartmentId())
                 .build();
         save(latent);
@@ -969,6 +998,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .trackingStatus(0)
                         .notInPlaceCount(0)
                         .archived(0)
+                        .referralResult("latent")
+                        .diagnosisResult("潜伏感染者")
                         .departmentId(BaseContext.getCurrentDepartmentId())
                         .build();
                 save(latent);
