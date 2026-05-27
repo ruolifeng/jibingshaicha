@@ -62,6 +62,16 @@ export function downloadPatientTemplateApi() {
   })
 }
 
+/** 导出历史患者总表 */
+export function exportPatientHistoryApi(params: Record<string, any>) {
+  return request<Blob>({
+    url: "export/all-patients",
+    method: "get",
+    params: { archived: 1, ...params },
+    responseType: "blob"
+  })
+}
+
 /** 历史患者列表 */
 export function getPatientHistoryListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "patient/history", method: "get", params })
@@ -104,6 +114,16 @@ export function getNoticeListByBizApi(bizId: number, noticeType: string) {
 /** 保存/更新首次随访 */
 export function saveFirstVisitApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "patient/first-visit/save", method: "post", data })
+}
+
+/** 录入/更新领药记录 */
+export function saveMedicationPickupApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: "patient/medication-pickup/save", method: "post", data })
+}
+
+/** 查询领药记录列表 */
+export function getMedicationPickupListApi(patientId: number) {
+  return request<ApiResponseData<any[]>>({ url: `patient/medication-pickup/list/${patientId}`, method: "get" })
 }
 
 /** 保存首次随访草稿 */

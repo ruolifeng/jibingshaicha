@@ -1,17 +1,81 @@
 <script lang="ts" setup>
 import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
+import PatientMedicationPickupDetailDialog from "@@/components/PatientMedicationPickupDetailDialog.vue"
+import PatientMedicationPickupDialog from "@@/components/PatientMedicationPickupDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { canEditMedicationPickup, formatMedicationPickupDrugs } from "@@/utils/medicationPickup"
 import { resolveRegistrationNo } from "@@/utils/patient"
+import { useUserStore } from "@/pinia/stores/user"
+import { getMedicationPickupListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
+
+const userStore = useUserStore()
 
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
 const medicationDialogVisible = ref(false)
 const medicationRow = ref<any>(null)
 
+const pickupDialogVisible = ref(false)
+const pickupRow = ref<any>(null)
+const editPickup = ref<Record<string, any> | null>(null)
+
+const historyVisible = ref(false)
+const historyList = ref<any[]>([])
+const historyPatientName = ref("")
+const historyPatient = ref<any>(null)
+const historyDialogTitle = computed(() => `${historyPatientName.value} - 领药记录`)
+
+const detailVisible = ref(false)
+const detailRecord = ref<Record<string, any> | null>(null)
+
 function openMedication(row: any) {
   medicationRow.value = row
   medicationDialogVisible.value = true
+}
+
+function hasPickupData(row: Record<string, any>) {
+  return (row.medicationPickupCount ?? 0) > 0
+}
+
+function canAddPickup(row: Record<string, any>) {
+  return row.archived !== 1
+}
+
+function openPickup(row: any) {
+  pickupRow.value = row
+  editPickup.value = null
+  pickupDialogVisible.value = true
+}
+
+async function viewHistory(row: any) {
+  historyPatient.value = row
+  historyPatientName.value = row.name
+  const { data } = await getMedicationPickupListApi(row.id)
+  historyList.value = data || []
+  historyVisible.value = true
+}
+
+async function refreshHistoryList() {
+  if (!historyPatient.value) return
+  const { data } = await getMedicationPickupListApi(historyPatient.value.id)
+  historyList.value = data || []
+}
+
+function openEdit(record: Record<string, any>) {
+  editPickup.value = record
+  pickupRow.value = historyPatient.value
+  pickupDialogVisible.value = true
+}
+
+async function onPickupSaved() {
+  await refreshHistoryList()
+  fetchData()
+}
+
+function viewDetail(record: Record<string, any>) {
+  detailRecord.value = record
+  detailVisible.value = true
 }
 </script>
 
@@ -55,8 +119,12 @@ function openMedication(row: any) {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -95,14 +163,12 @@ function openMedication(row: any) {
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="取药情况" min-width="200" fixed="right">
+        <el-table-column label="领药情况" min-width="260" fixed="right">
           <template #default="{ row }">
-            <div
-              v-if="row.medicationPickTime || row.medicationChemotherapy || row.medicationDrugForm"
-              class="medication-pickup-cell"
-            >
+            <div v-if="hasPickupData(row)" class="medication-pickup-cell">
+              <div>共 {{ row.medicationPickupCount }} 次</div>
               <div v-if="row.medicationPickTime">
-                时间：{{ row.medicationPickTime }}
+                最近：{{ row.medicationPickTime }}
               </div>
               <div v-if="row.medicationChemotherapy">
                 药品：{{ row.medicationChemotherapy }}
@@ -111,7 +177,28 @@ function openMedication(row: any) {
                 数量：{{ row.medicationDrugForm }}
               </div>
             </div>
-            <span v-else class="text-gray-400">-</span>
+            <span v-else class="text-gray-400">未录入</span>
+            <div class="pickup-actions">
+              <el-button
+                v-if="canAddPickup(row)"
+                v-permission="'patientManagement:medication'"
+                type="primary"
+                link
+                size="small"
+                @click="openPickup(row)"
+              >
+                填写领药
+              </el-button>
+              <el-button
+                v-if="hasPickupData(row)"
+                type="info"
+                link
+                size="small"
+                @click="viewHistory(row)"
+              >
+                查看记录
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -133,6 +220,62 @@ function openMedication(row: any) {
       :patient-row="medicationRow"
       @success="fetchData"
     />
+
+    <PatientMedicationPickupDialog
+      v-if="pickupRow"
+      v-model:visible="pickupDialogVisible"
+      :patient-row="pickupRow"
+      :initial-data="editPickup"
+      @success="onPickupSaved"
+      @update:visible="(v) => { if (!v) editPickup = null }"
+    />
+
+    <el-dialog
+      v-model="historyVisible"
+      :title="historyDialogTitle"
+      width="920px"
+      append-to-body
+    >
+      <el-table :data="historyList" border stripe>
+        <el-table-column prop="pickupSeq" label="第几次" width="80" />
+        <el-table-column prop="pickupTime" label="领取时间" width="120" />
+        <el-table-column label="药品及用量" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ formatMedicationPickupDrugs(row.drugs) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="领取数量" width="100">
+          <template #default="{ row }">
+            {{ row.quantity != null ? `${row.quantity}${row.quantityUnit || ""}` : "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="dispensingUnit" label="发药单位" min-width="120" show-overflow-tooltip />
+        <el-table-column label="操作" fixed="right" width="160">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="viewDetail(row)">
+              查看详情
+            </el-button>
+            <el-button
+              v-if="canEditMedicationPickup(userStore.userRole, row)"
+              v-permission="'patientManagement:medication'"
+              type="warning"
+              link
+              size="small"
+              @click="openEdit(row)"
+            >
+              修改
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="!historyList.length" description="暂无领药记录" />
+    </el-dialog>
+
+    <PatientMedicationPickupDetailDialog
+      v-model:visible="detailVisible"
+      :record="detailRecord"
+      :patient-name="historyPatientName"
+    />
   </div>
 </template>
 
@@ -140,5 +283,10 @@ function openMedication(row: any) {
 .medication-pickup-cell {
   line-height: 1.6;
   font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.pickup-actions {
+  margin-top: 2px;
 }
 </style>

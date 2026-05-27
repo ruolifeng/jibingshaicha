@@ -98,14 +98,14 @@ public class UserController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) Integer role) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("system:users");
         return ResultRes.success(userService.queryPage(page, size, username, role));
     }
 
     @Operation(summary = "创建用户")
     @PostMapping("/create")
     public ResultResponse<Void> create(@RequestBody User user) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("user:create");
         userService.createUser(user);
         return ResultRes.success(null);
     }
@@ -113,7 +113,7 @@ public class UserController {
     @Operation(summary = "更新用户")
     @PutMapping("/update")
     public ResultResponse<Void> update(@RequestBody User user) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("user:edit");
         userService.updateUser(user);
         return ResultRes.success(null);
     }
@@ -121,7 +121,7 @@ public class UserController {
     @Operation(summary = "删除用户")
     @DeleteMapping("/delete/{id}")
     public ResultResponse<Void> delete(@PathVariable Long id) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("user:delete");
         userService.deleteUser(id);
         return ResultRes.success(null);
     }

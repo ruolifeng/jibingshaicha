@@ -11,6 +11,7 @@ import cn.luyou.model.FirstVisit;
 import cn.luyou.model.FollowUpVisit;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.MedicationManagement;
+import cn.luyou.model.MedicationPickup;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
@@ -19,11 +20,15 @@ import cn.luyou.model.ScreeningSchool;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.FollowUpVisitMapper;
 import cn.luyou.mapper.MedicationManagementMapper;
+import cn.luyou.mapper.MedicationPickupMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.PatientMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
@@ -95,6 +100,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final FirstVisitMapper firstVisitMapper;
     private final FollowUpVisitMapper followUpVisitMapper;
     private final MedicationManagementMapper medicationManagementMapper;
+    private final MedicationPickupMapper medicationPickupMapper;
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
@@ -104,11 +110,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                      String name, String idNumber, String phone, String currentAddress,
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
-                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo, null, null);
         wrapper.orderByDesc(Patient::getCreateTime);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
+        fillMedicationPickupSummary(result.getRecords());
         fillScreeningXrayData(result.getRecords(), populationType);
         fillEpidemicExtraFields(result.getRecords());
         return result;
@@ -117,10 +124,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     public List<Patient> listForExport(String populationType, String name, String idNumber,
                                         String phone, String currentAddress, String diagnosisResult,
-                                        Integer archived, String dateFrom, String dateTo) {
+                                        Integer archived, String dateFrom, String dateTo,
+                                        String startTime, String endTime) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
-                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo);
-        wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getCreateTime);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                archived, dateFrom, dateTo, startTime, endTime);
+        if (Integer.valueOf(1).equals(archived)) {
+            wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getArchivedTime);
+        } else {
+            wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getCreateTime);
+        }
         List<Patient> patients = list(wrapper);
         fillEpidemicExtraFields(patients);
         return patients;
@@ -130,7 +143,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                   String idNumber, String phone,
                                                                   String currentAddress, String diagnosisResult,
                                                                   Integer archived,
-                                                                  String dateFrom, String dateTo) {
+                                                                  String dateFrom, String dateTo,
+                                                                  String startTime, String endTime) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
@@ -140,9 +154,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
                 .eq(StrUtil.isNotBlank(diagnosisResult), Patient::getDiagnosisResult, diagnosisResult)
-                .eq(archived != null, Patient::getArchived, archived)
-                .ge(createFrom != null, Patient::getCreateTime, createFrom)
-                .le(createTo != null, Patient::getCreateTime, createTo);
+                .eq(archived != null, Patient::getArchived, archived);
+        if (Integer.valueOf(1).equals(archived)
+                && (StrUtil.isNotBlank(startTime) || StrUtil.isNotBlank(endTime))) {
+            wrapper.ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
+                    .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59");
+        } else {
+            wrapper.ge(createFrom != null, Patient::getCreateTime, createFrom)
+                    .le(createTo != null, Patient::getCreateTime, createTo);
+        }
         applyPatientScopeFilter(wrapper);
         return wrapper;
     }
@@ -172,8 +192,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
         LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
         fw.in(FirstVisit::getPatientId, patientIds)
-                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime,
-                        FirstVisit::getMedicationPickTime, FirstVisit::getChemotherapy, FirstVisit::getDrugForm);
+                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime);
         Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
                 .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
         Integer currentRole = BaseContext.getCurrentRole();
@@ -183,19 +202,63 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setHasFirstVisit(false);
                 p.setFirstVisitStatus(null);
                 p.setFirstVisitEditable(true);
-                p.setMedicationPickTime(null);
-                p.setMedicationChemotherapy(null);
-                p.setMedicationDrugForm(null);
                 return;
             }
             boolean completed = Integer.valueOf(1).equals(visit.getStatus());
             p.setHasFirstVisit(completed);
             p.setFirstVisitStatus(visit.getStatus());
             p.setFirstVisitEditable(isFirstVisitEditable(currentRole, visit));
-            p.setMedicationPickTime(visit.getMedicationPickTime());
-            p.setMedicationChemotherapy(visit.getChemotherapy());
-            p.setMedicationDrugForm(visit.getDrugForm());
         });
+    }
+
+    /** 批量查询领药记录摘要并填充到每条记录 */
+    private void fillMedicationPickupSummary(List<Patient> patients) {
+        if (patients == null || patients.isEmpty()) return;
+        List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
+        LambdaQueryWrapper<MedicationPickup> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(MedicationPickup::getPatientId, patientIds)
+                .orderByAsc(MedicationPickup::getCreateTime);
+        List<MedicationPickup> pickups = medicationPickupMapper.selectList(wrapper);
+        Map<Long, List<MedicationPickup>> grouped = pickups.stream()
+                .collect(Collectors.groupingBy(MedicationPickup::getPatientId));
+        patients.forEach(p -> {
+            List<MedicationPickup> list = grouped.get(p.getId());
+            if (list == null || list.isEmpty()) {
+                p.setMedicationPickupCount(0);
+                p.setMedicationPickTime(null);
+                p.setMedicationChemotherapy(null);
+                p.setMedicationDrugForm(null);
+                return;
+            }
+            p.setMedicationPickupCount(list.size());
+            MedicationPickup latest = list.get(list.size() - 1);
+            p.setMedicationPickTime(latest.getPickupTime() != null ? latest.getPickupTime().toString() : null);
+            p.setMedicationChemotherapy(formatDrugNames(latest.getDrugs()));
+            if (latest.getQuantity() != null && StrUtil.isNotBlank(latest.getQuantityUnit())) {
+                p.setMedicationDrugForm(latest.getQuantity().stripTrailingZeros().toPlainString()
+                        + latest.getQuantityUnit());
+            } else {
+                p.setMedicationDrugForm(null);
+            }
+        });
+    }
+
+    private String formatDrugNames(String drugsJson) {
+        if (StrUtil.isBlank(drugsJson)) return null;
+        try {
+            JSONArray array = JSONUtil.parseArray(drugsJson);
+            return array.stream()
+                    .map(item -> {
+                        if (item instanceof JSONObject obj) {
+                            return obj.getStr("name");
+                        }
+                        return null;
+                    })
+                    .filter(StrUtil::isNotBlank)
+                    .collect(Collectors.joining("、"));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** 五级用户：已完成首次随访创建后 10 天内可改；管理员（非五级）随时可改 */
@@ -486,6 +549,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
+        fillMedicationPickupSummary(result.getRecords());
         fillEpidemicExtraFields(result.getRecords());
         return result;
     }
@@ -679,6 +743,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         // 级联软删：服药管理
         medicationManagementMapper.delete(new LambdaQueryWrapper<MedicationManagement>()
                 .eq(MedicationManagement::getPatientId, id));
+        // 级联软删：领药记录
+        medicationPickupMapper.delete(new LambdaQueryWrapper<MedicationPickup>()
+                .eq(MedicationPickup::getPatientId, id));
         // 级联软删：通知单
         noticeMapper.delete(new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getBizId, id)
@@ -855,6 +922,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
         fillNoticeStatus(List.of(patient), patient.getPopulationType());
         fillFirstVisitStatus(List.of(patient));
+        fillMedicationPickupSummary(List.of(patient));
         fillScreeningXrayData(List.of(patient), patient.getPopulationType());
         fillEpidemicExtraFields(List.of(patient));
         return patient;

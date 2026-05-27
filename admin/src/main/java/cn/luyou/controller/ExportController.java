@@ -425,7 +425,7 @@ public class ExportController {
         log.info("[导出] 患者列表 populationType={} name={} idNumber={}", populationType, name, idNumber);
         try {
             List<Patient> patientList = patientService.listForExport(
-                    populationType, name, idNumber, phone, null, null, 0, dateFrom, dateTo);
+                    populationType, name, idNumber, phone, null, null, 0, dateFrom, dateTo, null, null);
 
             // 批量查询筛查原表
             List<Long> screeningIds = patientList.stream()
@@ -564,10 +564,13 @@ public class ExportController {
             @RequestParam(required = false) Integer archived,
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String startTime,
+            @RequestParam(required = false) String endTime,
             HttpServletResponse response) throws IOException {
 
         List<Patient> patientList = patientService.listForExport(
-                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                archived, dateFrom, dateTo, startTime, endTime);
         List<Long> patientIds = patientList.stream().map(Patient::getId).collect(Collectors.toList());
 
         // 批量查询患者通知单（每患者取最新一条）

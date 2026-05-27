@@ -15,9 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,7 +32,37 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
     @Override
     public List<Permission> getPermissionTree() {
         List<Permission> allPermissions = list(new LambdaQueryWrapper<Permission>().orderByAsc(Permission::getSort));
-        return buildTree(allPermissions, 0L);
+        List<Permission> visiblePermissions = filterDeprecatedPermissions(allPermissions);
+        return buildTree(visiblePermissions, 0L);
+    }
+
+    /** 过滤已废弃权限及其全部子节点（name 以 [废弃] 开头） */
+    private List<Permission> filterDeprecatedPermissions(List<Permission> all) {
+        Set<Long> deprecatedIds = all.stream()
+                .filter(this::isDeprecatedPermission)
+                .map(Permission::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        boolean changed;
+        do {
+            changed = false;
+            for (Permission permission : all) {
+                Long parentId = permission.getParentId();
+                if (parentId != null && parentId > 0
+                        && deprecatedIds.contains(parentId)
+                        && deprecatedIds.add(permission.getId())) {
+                    changed = true;
+                }
+            }
+        } while (changed);
+
+        return all.stream()
+                .filter(p -> !deprecatedIds.contains(p.getId()))
+                .toList();
+    }
+
+    private boolean isDeprecatedPermission(Permission permission) {
+        return permission.getName() != null && permission.getName().startsWith("[废弃]");
     }
 
     @Override

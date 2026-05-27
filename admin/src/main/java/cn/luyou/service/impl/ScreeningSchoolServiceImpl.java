@@ -20,6 +20,7 @@ import cn.luyou.service.LatentCheckService;
 import cn.luyou.service.LatentFollowUpService;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.MedicationManagementService;
+import cn.luyou.service.MedicationPickupService;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
@@ -64,6 +65,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     private final FirstVisitService firstVisitService;
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
+    private final MedicationPickupService medicationPickupService;
     private final EpidemicReportService epidemicReportService;
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
@@ -439,6 +441,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             firstVisitService.lambdaUpdate().eq(cn.luyou.model.FirstVisit::getPatientId, pid).remove();
             followUpVisitService.lambdaUpdate().eq(cn.luyou.model.FollowUpVisit::getPatientId, pid).remove();
             medicationManagementService.lambdaUpdate().eq(cn.luyou.model.MedicationManagement::getPatientId, pid).remove();
+            medicationPickupService.lambdaUpdate().eq(cn.luyou.model.MedicationPickup::getPatientId, pid).remove();
             epidemicReportService.lambdaUpdate().eq(cn.luyou.model.EpidemicReport::getPatientId, pid).remove();
             deleteNoticeAndMessages(pid, "patient");
             deleteReferralsAndMessages(pid);

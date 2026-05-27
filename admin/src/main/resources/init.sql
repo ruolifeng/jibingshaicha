@@ -654,6 +654,27 @@ CREATE TABLE IF NOT EXISTS `medication_management` (
     KEY `idx_patient` (`patient_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服药管理表';
 
+-- ==================== 领药记录表 ====================
+
+CREATE TABLE IF NOT EXISTS `medication_pickup` (
+    `id`                BIGINT       NOT NULL AUTO_INCREMENT,
+    `patient_id`        BIGINT       NOT NULL COMMENT '关联患者ID',
+    `population_type`   VARCHAR(32)  NOT NULL COMMENT '人群类型',
+    `pickup_seq`        INT          DEFAULT NULL COMMENT '第几次领药',
+    `drugs`             JSON         DEFAULT NULL COMMENT '药品及用量 [{name,dosage}]',
+    `quantity`          DECIMAL(10, 2) DEFAULT NULL COMMENT '领取数量',
+    `quantity_unit`     VARCHAR(16)  DEFAULT NULL COMMENT '领取数量单位',
+    `pickup_time`       DATE         DEFAULT NULL COMMENT '领取时间',
+    `dispensing_unit`   VARCHAR(128) DEFAULT NULL COMMENT '发药单位',
+    `remarks`           TEXT         DEFAULT NULL COMMENT '备注',
+    `filled_by`         BIGINT       DEFAULT NULL COMMENT '填写人ID',
+    `create_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`           TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_patient` (`patient_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='领药记录表';
+
 -- ==================== 大疫情导入表 ====================
 
 CREATE TABLE IF NOT EXISTS `epidemic_report` (
@@ -2170,3 +2191,33 @@ SET @ddl = IF(@col_exists = 0,
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+-- ==================== V39：权限树清理废弃项 + 统计分析问卷权限 ====================
+-- 1）统计分析 — 筛查问卷（挂在 statistics=4 下，与 statistics:export 并列）
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(131, 'statistics:questionnaire', '筛查问卷', 2, 4, 2);
+
+UPDATE `permission`
+SET `parent_id` = 4, `sort` = 2, `name` = '筛查问卷', `type` = 2
+WHERE `code` = 'statistics:questionnaire';
+
+-- 2）默认授予超级管理员、一至三级（与 statistics:export 范围一致）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'statistics:questionnaire';
+
+-- 3）清理角色权限表中已废弃权限的关联（含其全部子权限）
+DELETE rp FROM `role_permission` rp
+    INNER JOIN `permission` p ON p.id = rp.permission_id
+WHERE p.`name` LIKE '[废弃]%'
+   OR p.`parent_id` IN (SELECT id FROM (SELECT id FROM `permission` WHERE `name` LIKE '[废弃]%') AS deprecated_parents)
+   OR p.`parent_id` IN (
+       SELECT id FROM (
+           SELECT c.id
+           FROM `permission` c
+                    INNER JOIN `permission` parent ON parent.id = c.parent_id
+           WHERE parent.`name` LIKE '[废弃]%'
+       ) AS deprecated_children
+   );

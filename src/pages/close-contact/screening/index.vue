@@ -123,10 +123,11 @@ async function handleUpload(uploadFile: any) {
     const { data } = await uploadScreeningCloseContactApi(uploadFile.raw)
     importResult.value = data
     importResultVisible.value = true
-    fetchData()
   } catch {
     ElMessage.error("上传失败")
+    return
   }
+  fetchData()
 }
 
 function handleSelectionChange(rows: any[]) {

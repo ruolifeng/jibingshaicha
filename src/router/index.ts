@@ -344,7 +344,7 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         path: "users",
         component: () => import("@/pages/system/users.vue"),
         name: "SystemUsers",
-        meta: { title: "用户管理", roles: ["admin"], permission: "system:users" }
+        meta: { title: "用户管理", permission: "system:users" }
       },
       {
         path: "department",

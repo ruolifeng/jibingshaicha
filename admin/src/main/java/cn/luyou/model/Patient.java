@@ -121,15 +121,19 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private String registrationNo;
 
-    /** 取药时间（非数据库字段，首次随访列表查询时填充） */
+    /** 领药次数（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private Integer medicationPickupCount;
+
+    /** 最近领药时间（非数据库字段，列表查询时填充） */
     @TableField(exist = false)
     private String medicationPickTime;
 
-    /** 取药-化疗方案（非数据库字段，首次随访列表查询时填充） */
+    /** 最近领药-药品摘要（非数据库字段，列表查询时填充） */
     @TableField(exist = false)
     private String medicationChemotherapy;
 
-    /** 取药-药品剂型（非数据库字段，首次随访列表查询时填充） */
+    /** 最近领药-数量摘要（非数据库字段，列表查询时填充） */
     @TableField(exist = false)
     private String medicationDrugForm;
 }

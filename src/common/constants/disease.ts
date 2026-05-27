@@ -361,6 +361,26 @@ export const MEDICATION_USAGE_OPTIONS = ["每日", "间歇"]
 /** 药品剂型 */
 export const DRUG_FORM_OPTIONS = ["固定剂量复合制剂", "散装药", "板式组合药", "注射剂"]
 
+/** 领药记录 — 抗结核药品名称 */
+export const MEDICATION_PICKUP_DRUG_OPTIONS = [
+  "HRZE（固定剂量复合制剂）",
+  "HR（固定剂量复合制剂）",
+  "异烟肼",
+  "利福平",
+  "乙胺丁醇",
+  "吡嗪酰胺",
+  "链霉素",
+  "利福喷汀",
+  "左氧氟沙星",
+  "莫西沙星",
+  "利奈唑胺",
+  "环丝氨酸",
+  "对氨基水杨酸"
+]
+
+/** 领药记录 — 领取数量单位 */
+export const MEDICATION_PICKUP_UNIT_OPTIONS = ["盒", "瓶", "支", "板", "袋", "包"]
+
 /** 首次随访督导人员 */
 export const FIRST_VISIT_SUPERVISOR_OPTIONS = ["医生", "家属", "自服药", "其他"]
 

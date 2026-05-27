@@ -45,6 +45,12 @@ public class ReferralTrackingController {
                 phone, township, dateFrom, dateTo, sourceType));
     }
 
+    @Operation(summary = "查询推介/追踪记录详情")
+    @GetMapping("/{id}")
+    public ResultResponse<ReferralTracking> detail(@PathVariable Long id) {
+        return ResultRes.success(referralTrackingService.getDetail(id));
+    }
+
     @OperationLog(type = "import", module = "referral", action = "大疫情导入追踪记录")
     @Operation(summary = "大疫情表导入（追踪模块）")
     @PostMapping("/import-epidemic")

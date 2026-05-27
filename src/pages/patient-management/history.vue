@@ -2,9 +2,15 @@
 import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { downloadBlob } from "@@/utils/download"
 import { isStopTreatmentArchive } from "@@/utils/followUpVisit"
 import { useUserStore } from "@/pinia/stores/user"
-import { getPatientHistoryListApi, unarchivePatientFromStopTreatmentApi } from "./apis"
+import {
+  batchDeletePatientsApi,
+  exportPatientHistoryApi,
+  getPatientHistoryListApi,
+  unarchivePatientFromStopTreatmentApi
+} from "./apis"
 
 const userStore = useUserStore()
 
@@ -13,6 +19,8 @@ const { paginationData, handleCurrentChange, handleSizeChange } = usePagination(
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+const exporting = ref(false)
+const selectedRows = ref<any[]>([])
 
 const searchForm = reactive({
   name: "",
@@ -23,6 +31,10 @@ const searchForm = reactive({
   startTime: "",
   endTime: ""
 })
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
 
 async function fetchData() {
   loading.value = true
@@ -35,6 +47,8 @@ async function fetchData() {
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
     if (!params.diagnosisResult) delete params.diagnosisResult
+    if (!params.startTime) delete params.startTime
+    if (!params.endTime) delete params.endTime
     const { data } = await getPatientHistoryListApi(params)
     tableData.value = data.records
     total.value = data.total
@@ -54,6 +68,48 @@ function handleReset() {
 
 onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
+
+async function handleExport() {
+  if (total.value === 0) {
+    ElMessage.warning("当前没有历史患者数据，将导出仅含表头的空表")
+  }
+  exporting.value = true
+  try {
+    const blob = await exportPatientHistoryApi({
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      diagnosisResult: searchForm.diagnosisResult || undefined,
+      populationType: searchForm.populationType || undefined,
+      startTime: searchForm.startTime || undefined,
+      endTime: searchForm.endTime || undefined
+    })
+    downloadBlob(blob as unknown as Blob, "历史患者信息总表.xlsx")
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) return
+  const names = selectedRows.value.map(r => r.name).join("、")
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、随访、服药等数据将一并删除，且不可恢复！`,
+      "警告",
+      { type: "warning" }
+    )
+    await batchDeletePatientsApi(selectedRows.value.map(r => r.id))
+    ElMessage.success("删除成功")
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除失败")
+  }
+}
 
 async function handleUnarchive(row: Record<string, any>) {
   try {
@@ -115,7 +171,34 @@ async function handleUnarchive(row: Record<string, any>) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <div class="toolbar flex items-center justify-end gap-2" style="margin-bottom: 12px">
+        <el-button
+          v-permission="'patientManagement:history'"
+          type="danger"
+          :disabled="selectedRows.length === 0"
+          @click="handleBatchDelete"
+        >
+          删除
+        </el-button>
+        <el-button
+          v-permission="'patientManagement:history'"
+          type="success"
+          :loading="exporting"
+          @click="handleExport"
+        >
+          导出
+        </el-button>
+      </div>
+
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
         <el-table-column label="数据来源">
           <template #default="{ row }">

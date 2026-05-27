@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import { getUserListApi } from "@@/apis/users"
 import { ROLE_MAP, ROLE_OPTIONS } from "@@/constants/disease"
 import {
   assignRolePermissionsApi,
   assignUserPermissionsApi,
+  getPermissionAssignUsersApi,
   getPermissionTreeApi,
   getRolePermissionIdsApi,
   getUserPermissionIdsApi
@@ -62,9 +62,11 @@ const userTreeRef = ref<any>(null)
 
 async function loadUserOptions() {
   try {
-    const { data } = await getUserListApi({ page: 1, size: 500 })
-    userList.value = data?.records ?? []
-  } catch { /* handled */ }
+    const { data } = await getPermissionAssignUsersApi()
+    userList.value = data ?? []
+  } catch {
+    userList.value = []
+  }
 }
 
 async function loadUserExtraPermissions() {

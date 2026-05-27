@@ -233,10 +233,22 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     }
 
     private void applyDepartmentFilter(LambdaQueryWrapper<CloseContactCase> wrapper) {
-        if (!BaseContext.isSuperAdmin()) {
-            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            wrapper.in(CloseContactCase::getDepartmentId, deptIds);
+        if (BaseContext.isSuperAdmin()) {
+            return;
         }
+        Long currentDeptId = BaseContext.getCurrentDepartmentId();
+        List<Long> deptIds = departmentService.getDescendantIds(currentDeptId);
+        if (deptIds.isEmpty()) {
+            // 未绑定部门时，仅可见本人录入的数据，避免 IN () 导致 SQL 异常
+            String username = resolveCurrentUsername();
+            if (StrUtil.isBlank(username)) {
+                wrapper.apply("1 = 0");
+            } else {
+                wrapper.eq(CloseContactCase::getCreatorUsername, username);
+            }
+            return;
+        }
+        wrapper.in(CloseContactCase::getDepartmentId, deptIds);
     }
 
     @Override
@@ -250,7 +262,16 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             throw new ServiceException(StatusEnum.PARAM_INVALID, "个案记录不存在");
         }
         if (!BaseContext.isSuperAdmin()) {
-            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+            Long currentDeptId = BaseContext.getCurrentDepartmentId();
+            List<Long> deptIds = departmentService.getDescendantIds(currentDeptId);
+            if (deptIds.isEmpty()) {
+                String username = resolveCurrentUsername();
+                if (StrUtil.isBlank(username)
+                        || !username.equals(existing.getCreatorUsername())) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID, "无权操作该个案记录");
+                }
+                return existing;
+            }
             if (existing.getDepartmentId() == null || !deptIds.contains(existing.getDepartmentId())) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "无权操作该个案记录");
             }

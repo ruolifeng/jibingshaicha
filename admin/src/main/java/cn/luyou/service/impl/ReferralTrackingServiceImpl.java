@@ -92,6 +92,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             if (receiver == null) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
             }
+            if (receiver.getRole() == null || (receiver.getRole() != 4 && receiver.getRole() != 5)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为三级或四级用户");
+            }
             record.setReceiverUserId(receiverUserId);
             record.setReceiverDeptId(receiver.getDepartmentId());
             record.setRecommendStatus(0);
@@ -102,6 +105,23 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
 
         save(record);
+        if ("recommend".equals(bizMode)) {
+            sendRecommend(record.getId());
+            record = getById(record.getId());
+        }
+        return record;
+    }
+
+    @Override
+    public ReferralTracking getDetail(Long id) {
+        ReferralTracking record = getAndCheckExist(id);
+        assertCanAccessRecord(record);
+        if (record.getReceiverUserId() != null) {
+            User receiver = userService.getById(record.getReceiverUserId());
+            if (receiver != null) {
+                record.setReceiverUserName(formatReceiverDisplayName(receiver));
+            }
+        }
         return record;
     }
 
@@ -111,8 +131,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                                               Integer trackingStatus, Integer archived,
                                               String phone, String township,
                                               String dateFrom, String dateTo, String sourceType) {
+        Integer role = BaseContext.getCurrentRole();
+        boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
+
         LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
-                bizMode, name, idNumber, trackingStatus, archived, phone, township, dateFrom, dateTo, sourceType);
+                level5RecommendView ? null : bizMode, name, idNumber, trackingStatus, archived,
+                phone, township, dateFrom, dateTo, sourceType);
+        applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
 
         IPage<ReferralTracking> pageResult = page(new Page<>(page, size), wrapper);
 
@@ -120,7 +145,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             if (r.getReceiverUserId() != null) {
                 User receiver = userService.getById(r.getReceiverUserId());
                 if (receiver != null) {
-                    r.setReceiverUserName(receiver.getRealName());
+                    r.setReceiverUserName(formatReceiverDisplayName(receiver));
                 }
             }
         });
@@ -203,8 +228,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     public void exportTrack(HttpServletResponse response, String bizMode,
                             String name, String idNumber, String phone, String township,
                             String dateFrom, String dateTo, String sourceType) {
+        Integer role = BaseContext.getCurrentRole();
+        boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
         LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
-                bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+                level5RecommendView ? null : bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+        applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
         List<ReferralTracking> records = list(wrapper);
 
         List<List<String>> head = Arrays.asList(
@@ -303,7 +331,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 StrUtil.blankToDefault(record.getName(), "（未知姓名）"),
                 StrUtil.blankToDefault(record.getCrowdCategory(), "-"),
                 reasonPart);
-        sysMessageService.sendMessage(record.getReceiverUserId(), title, content, "referral", id);
+        sysMessageService.sendMessage(record.getReceiverUserId(), title, content, "referral_tracking_receive", id);
         log.info("推介通知单已发送，recordId={}, receiverUserId={}", id, record.getReceiverUserId());
     }
 
@@ -319,18 +347,21 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         checkRecommendReceiver(record);
 
+        String trackReason = StrUtil.blankToDefault(record.getRecommendReason(), "推介追踪");
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
                 .set(ReferralTracking::getRecommendStatus, 2)
                 .set(ReferralTracking::getRecommendConfirmTime, LocalDateTime.now())
+                .set(ReferralTracking::getBizMode, "track")
+                .set(ReferralTracking::getTrackReason, trackReason)
                 .update();
 
         // 通知推介发起人
         if (record.getCreatorId() != null) {
             String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
             sysMessageService.sendMessage(record.getCreatorId(), "推介通知单已确认接收",
-                    String.format("「%s」的推介通知单已被接收方确认，可进入追踪环节。", name),
-                    "referral", id);
+                    String.format("「%s」的推介通知单已被接收方确认，已进入追踪环节。", name),
+                    "referral_tracking_confirmed", id);
         }
         log.info("推介通知单已确认接收，recordId={}", id);
     }
@@ -361,7 +392,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             sysMessageService.sendMessage(record.getCreatorId(), "推介通知单已被拒绝",
                     String.format("「%s」的推介通知单被接收方拒绝，原因：%s",
                             name, StrUtil.blankToDefault(reason, "（未填写）")),
-                    "referral", id);
+                    "referral_tracking_rejected", id);
         }
         log.info("推介通知单已被拒绝，recordId={}, reason={}", id, reason);
     }
@@ -375,10 +406,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             throw new ServiceException(StatusEnum.PARAM_INVALID, "推介通知单尚未被接收方确认，暂不可追踪");
         }
 
-        // 推介模式：仅接收方可进行追踪
-        if ("recommend".equals(record.getBizMode())) {
-            checkRecommendReceiver(record);
-        }
+        checkTrackOperator(record);
 
         // 已归档/已完成流程则不允许再操作
         if (record.getArchived() != null && record.getArchived() == 1) {
@@ -494,7 +522,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!Integer.valueOf(1).equals(record.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后才可录入筛查信息");
         }
-        checkRecommendReceiver(record);
+        checkTrackOperator(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -534,7 +562,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (record.getArchived() != null && record.getArchived() == 1) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法修改诊断结果");
         }
-        checkRecommendReceiver(record);
+        checkTrackOperator(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -595,12 +623,71 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 推介模式：校验当前用户是否为接收人 */
     private void checkRecommendReceiver(ReferralTracking record) {
-        if (!"recommend".equals(record.getBizMode())) {
+        checkTrackOperator(record);
+    }
+
+    /** 指定了接收人时，仅接收人可操作（追踪/筛查/诊断/确认推介） */
+    private void checkTrackOperator(ReferralTracking record) {
+        if (record.getReceiverUserId() == null) {
             return;
         }
         Long currentUserId = BaseContext.getCurrentId();
-        if (record.getReceiverUserId() == null || !record.getReceiverUserId().equals(currentUserId)) {
+        if (!record.getReceiverUserId().equals(currentUserId)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介接收人可进行此操作");
+        }
+    }
+
+    /** 按角色过滤可见范围 */
+    private void applyUserScopeFilter(LambdaQueryWrapper<ReferralTracking> wrapper, String bizMode,
+                                      boolean level5RecommendView) {
+        Integer role = BaseContext.getCurrentRole();
+        Long userId = BaseContext.getCurrentId();
+        if (role == null || userId == null || role <= 3) {
+            return;
+        }
+        if ("recommend".equals(bizMode)) {
+            if (level5RecommendView) {
+                wrapper.eq(ReferralTracking::getCreatorId, userId)
+                        .isNotNull(ReferralTracking::getReceiverUserId);
+                return;
+            }
+            if (role == 4 || role == 5) {
+                wrapper.eq(ReferralTracking::getReceiverUserId, userId)
+                        .eq(ReferralTracking::getBizMode, "recommend")
+                        .eq(ReferralTracking::getRecommendStatus, 1);
+            }
+            return;
+        }
+        if ("track".equals(bizMode)) {
+            if (role == 4 || role == 5) {
+                wrapper.and(w -> w.eq(ReferralTracking::getReceiverUserId, userId)
+                        .or()
+                        .eq(ReferralTracking::getCreatorId, userId));
+            } else if (role == 6) {
+                wrapper.eq(ReferralTracking::getCreatorId, userId);
+            }
+        }
+    }
+
+    /** 详情/操作前校验当前用户是否有权访问该记录 */
+    private void assertCanAccessRecord(ReferralTracking record) {
+        Integer role = BaseContext.getCurrentRole();
+        Long userId = BaseContext.getCurrentId();
+        if (role == null || userId == null || role <= 3) {
+            return;
+        }
+        if (role == 6) {
+            if (!userId.equals(record.getCreatorId())) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "无权查看该记录");
+            }
+            return;
+        }
+        if (role == 4 || role == 5) {
+            boolean isReceiver = userId.equals(record.getReceiverUserId());
+            boolean isCreator = userId.equals(record.getCreatorId());
+            if (!isReceiver && !isCreator) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "无权查看该记录");
+            }
         }
     }
 
@@ -680,6 +767,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (StrUtil.isBlank(getStr(params, "trackReason"))) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写追踪原因");
         }
+    }
+
+    private String formatReceiverDisplayName(User receiver) {
+        String username = StrUtil.blankToDefault(receiver.getUsername(), "-");
+        String orgName = StrUtil.blankToDefault(receiver.getOrgName(), "未填写单位");
+        return username + "（" + orgName + "）";
     }
 
     /** 推介模式必填项校验 */

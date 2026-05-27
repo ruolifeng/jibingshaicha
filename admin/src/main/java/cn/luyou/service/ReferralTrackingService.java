@@ -13,6 +13,9 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 新增推介或追踪记录 */
     ReferralTracking create(Map<String, Object> params);
 
+    /** 查询单条记录详情 */
+    ReferralTracking getDetail(Long id);
+
     /** 分页查询 */
     IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                       String name, String idNumber,

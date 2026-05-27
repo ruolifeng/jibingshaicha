@@ -1,5 +1,13 @@
 import { request } from "@/http/axios"
 
+/** 获取可分配权限的同部门用户列表 */
+export function getPermissionAssignUsersApi() {
+  return request<ApiResponseData<any[]>>({
+    url: "permission/users",
+    method: "get"
+  })
+}
+
 /** 获取权限树 */
 export function getPermissionTreeApi() {
   return request<ApiResponseData<any[]>>({

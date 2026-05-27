@@ -4,6 +4,11 @@ import { NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { usePagination } from "@@/composables/usePagination"
 import { getNoticeDetailApi } from "@/pages/school/latent/apis"
 import {
+  confirmRecommendApi,
+  getReferralTrackingDetailApi,
+  rejectRecommendApi
+} from "@/pages/referral-management/apis"
+import {
   confirmNoticeFromMessageApi,
   confirmReferralFromMessageApi,
   deleteMessageApi,
@@ -15,8 +20,11 @@ import {
   rejectReferralFromMessageApi,
   remindNoticeApi
 } from "./apis"
+import { useRouter } from "vue-router"
 
 defineOptions({ name: "Message" })
+
+const router = useRouter()
 
 // ====== 收到的消息 ======
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -34,7 +42,10 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   visit_timeout: "随访超时",
   referral_receive: "待确认转诊",
   referral_confirmed: "转诊已接收",
-  referral_rejected: "转诊已被拒绝"
+  referral_rejected: "转诊已被拒绝",
+  referral_tracking_receive: "待确认推介",
+  referral_tracking_confirmed: "推介已接收",
+  referral_tracking_rejected: "推介已被拒绝"
 }
 
 function getMessageTypeTagType(type: string) {
@@ -44,6 +55,9 @@ function getMessageTypeTagType(type: string) {
   if (type === "referral_receive") return "warning"
   if (type === "referral_confirmed") return "success"
   if (type === "referral_rejected") return "danger"
+  if (type === "referral_tracking_receive") return "warning"
+  if (type === "referral_tracking_confirmed") return "success"
+  if (type === "referral_tracking_rejected") return "danger"
   return "info"
 }
 
@@ -147,13 +161,53 @@ async function handleRejectReferral() {
   const row = rejectingRow.value
   if (!row?.bizId) return
   try {
-    await rejectReferralFromMessageApi(row.bizId, rejectReason.value || undefined)
+    if (row.type === "referral_tracking_receive") {
+      await rejectRecommendApi(row.bizId, rejectReason.value || undefined)
+      row.type = "referral_tracking_rejected"
+    } else {
+      await rejectReferralFromMessageApi(row.bizId, rejectReason.value || undefined)
+      row.type = "referral_rejected"
+    }
     await markMessageReadApi(row.id)
     row.isRead = 1
-    row.type = "referral_rejected"
     rejectDialogVisible.value = false
-    ElMessage.success("已拒绝转诊")
+    ElMessage.success("已拒绝")
   } catch { /* handled */ }
+}
+
+async function handleConfirmReferralTracking(row: any) {
+  if (!row.bizId) {
+    ElMessage.warning("推介记录编号缺失")
+    return
+  }
+  try {
+    await confirmRecommendApi(row.bizId)
+    await markMessageReadApi(row.id)
+    row.isRead = 1
+    row.type = "referral_tracking_confirmed"
+    ElMessage.success("已确认接收推介，请前往「追踪」页面开展追踪")
+    router.push("/referral-management/track")
+  } catch { /* handled */ }
+}
+
+const referralTrackingDetailVisible = ref(false)
+const referralTrackingDetailData = ref<any>(null)
+const referralTrackingDetailLoading = ref(false)
+
+async function viewReferralTrackingDetail(row: any) {
+  if (!row.bizId) {
+    ElMessage.warning("推介记录编号缺失")
+    return
+  }
+  referralTrackingDetailLoading.value = true
+  referralTrackingDetailVisible.value = true
+  referralTrackingDetailData.value = null
+  try {
+    const { data } = await getReferralTrackingDetailApi(row.bizId)
+    referralTrackingDetailData.value = data
+  } catch { /* handled */ } finally {
+    referralTrackingDetailLoading.value = false
+  }
 }
 
 // ==================== 转诊详情查看 ====================
@@ -341,7 +395,21 @@ const activeTab = ref("received")
                     接收通知单
                   </el-button>
                 </template>
-                <!-- 转诊查看详情 & 确认/拒绝 -->
+                <!-- 推介追踪：查看详情 & 确认/拒绝 -->
+                <template v-if="row.type === 'referral_tracking_receive' || row.type === 'referral_tracking_confirmed' || row.type === 'referral_tracking_rejected'">
+                  <el-button type="info" size="small" link @click="viewReferralTrackingDetail(row)">
+                    查看详情
+                  </el-button>
+                  <template v-if="row.type === 'referral_tracking_receive'">
+                    <el-button type="success" size="small" @click="handleConfirmReferralTracking(row)">
+                      确认接收
+                    </el-button>
+                    <el-button type="danger" size="small" @click="openRejectDialog(row)">
+                      拒绝
+                    </el-button>
+                  </template>
+                </template>
+                <!-- 旧版转诊查看详情 & 确认/拒绝 -->
                 <template v-if="row.type === 'referral_receive' || row.type === 'referral_confirmed' || row.type === 'referral_rejected'">
                   <el-button type="info" size="small" link @click="viewReferralDetail(row)">
                     查看详情
@@ -501,7 +569,7 @@ const activeTab = ref("received")
     </el-card>
 
     <!-- 拒绝转诊弹窗 -->
-    <el-dialog v-model="rejectDialogVisible" title="拒绝转诊" width="400px" append-to-body>
+    <el-dialog v-model="rejectDialogVisible" title="拒绝" width="400px" append-to-body>
       <el-form label-width="80px">
         <el-form-item label="拒绝原因">
           <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因（选填）" />
@@ -574,6 +642,41 @@ const activeTab = ref("received")
         <el-button @click="referralDetailVisible = false">
           关闭
         </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 推介追踪详情弹窗 -->
+    <el-dialog v-model="referralTrackingDetailVisible" title="推介详情" width="680px" append-to-body>
+      <div v-loading="referralTrackingDetailLoading" style="min-height: 80px">
+        <el-descriptions v-if="referralTrackingDetailData" :column="2" border>
+          <el-descriptions-item label="姓名">
+            {{ referralTrackingDetailData.name || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="性别">
+            {{ referralTrackingDetailData.gender || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="证件号">
+            {{ referralTrackingDetailData.idNumber || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="联系电话">
+            {{ referralTrackingDetailData.phone || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="人群分类">
+            {{ referralTrackingDetailData.crowdCategory || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="推介接收人">
+            {{ referralTrackingDetailData.receiverUserName || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="现住址" :span="2">
+            {{ referralTrackingDetailData.currentAddress || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="推介原因" :span="2">
+            {{ referralTrackingDetailData.recommendReason || "-" }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="referralTrackingDetailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 

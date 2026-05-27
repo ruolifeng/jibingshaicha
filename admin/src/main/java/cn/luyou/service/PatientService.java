@@ -48,7 +48,8 @@ public interface PatientService extends IService<Patient> {
     /** 导出用患者列表（与列表查询使用相同的数据范围过滤） */
     List<Patient> listForExport(String populationType, String name, String idNumber,
                                  String phone, String currentAddress, String diagnosisResult,
-                                 Integer archived, String dateFrom, String dateTo);
+                                 Integer archived, String dateFrom, String dateTo,
+                                 String startTime, String endTime);
 
     /** 导入大疫情表并模糊匹配合并 */
     int importEpidemic(MultipartFile file, String populationType);
@@ -85,4 +86,5 @@ public interface PatientService extends IService<Patient> {
 
     /** 更新患者基本信息 */
     void updateBasicInfo(Long id, Map<String, Object> body);
+
 }

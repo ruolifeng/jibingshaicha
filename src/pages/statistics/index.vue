@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { ArrowDown } from "@element-plus/icons-vue"
+import { useUserStore } from "@/pinia/stores/user"
 import {
   exportAllLatentApi,
   exportAllPatientsApi,
@@ -15,6 +16,9 @@ import {
 import QuestionnairePanel from "./components/QuestionnairePanel.vue"
 
 defineOptions({ name: "Statistics" })
+
+const userStore = useUserStore()
+const canQuestionnaire = computed(() => userStore.hasPermission("statistics:questionnaire"))
 
 const activeTab = ref("school")
 
@@ -454,7 +458,7 @@ onMounted(() => {
         </el-tab-pane>
 
         <!-- 筛查问卷 -->
-        <el-tab-pane label="筛查问卷" name="questionnaire">
+        <el-tab-pane v-if="canQuestionnaire" label="筛查问卷" name="questionnaire">
           <QuestionnairePanel />
         </el-tab-pane>
       </el-tabs>

@@ -34,6 +34,7 @@ public class PatientController {
     private final FirstVisitService firstVisitService;
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
+    private final MedicationPickupService medicationPickupService;
 
     @Operation(summary = "手动新增在管患者")
     @PostMapping
@@ -326,6 +327,19 @@ public class PatientController {
         LambdaQueryWrapper<FirstVisit> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(FirstVisit::getPatientId, patientId).last("LIMIT 1");
         return ResultRes.success(firstVisitService.getOne(wrapper));
+    }
+
+    @Operation(summary = "保存领药记录")
+    @PostMapping("/medication-pickup/save")
+    public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
+        medicationPickupService.savePickup(pickup);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "领药记录列表")
+    @GetMapping("/medication-pickup/list/{patientId}")
+    public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long patientId) {
+        return ResultRes.success(medicationPickupService.listByPatientId(patientId));
     }
 
     // ==================== 后续随访 ====================

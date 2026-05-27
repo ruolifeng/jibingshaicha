@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick, computed } from "vue"
+import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
@@ -26,6 +27,11 @@ import {
 } from "../apis/index"
 
 const userStore = useUserStore()
+const router = useRouter()
+
+/** 五级用户发起推介；三/四级用户接收并确认 */
+const isLevel5User = computed(() => userStore.userRole === 6)
+const isLevel34User = computed(() => userStore.userRole === 4 || userStore.userRole === 5)
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -95,6 +101,7 @@ const createForm = reactive({
   receiverUserId: undefined as number | undefined
 })
 const createFormRef = ref()
+const sendingRecommend = ref(false)
 
 const createFormRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
@@ -121,16 +128,26 @@ async function openCreateDialog() {
   nextTick(() => createFormRef.value?.clearValidate())
 }
 
-async function handleCreate() {
+async function handleSendRecommend() {
   try {
     await createFormRef.value?.validate()
   } catch {
     return
   }
-  await createReferralTrackingApi({ ...createForm, bizMode: "recommend" })
-  ElMessage.success("推介记录创建成功")
-  createDialogVisible.value = false
-  fetchList()
+  sendingRecommend.value = true
+  try {
+    await createReferralTrackingApi({ ...createForm, bizMode: "recommend" })
+    ElMessage.success("推介通知单已发送")
+    createDialogVisible.value = false
+    fetchList()
+  } finally {
+    sendingRecommend.value = false
+  }
+}
+
+function formatLevel34UserLabel(u: any) {
+  const unit = u.orgName?.trim() || "未填写单位"
+  return `${u.username}（${unit}）`
 }
 
 // ===== 发送推介通知 =====
@@ -143,10 +160,11 @@ async function handleSend(row: any) {
 
 // ===== 确认/拒绝推介 =====
 async function handleConfirm(row: any) {
-  await ElMessageBox.confirm(`确认接受「${row.name}」的推介通知单？`, "确认接收", { type: "info" })
+  await ElMessageBox.confirm(`确认接受「${row.name}」的推介通知单？确认后将进入追踪流程。`, "确认接收", { type: "info" })
   await confirmRecommendApi(row.id)
-  ElMessage.success("已确认接受推介通知单")
+  ElMessage.success("已确认接受，请前往「追踪」页面开展追踪")
   fetchList()
+  router.push("/referral-management/track")
 }
 
 const rejectDialogVisible = ref(false)
@@ -341,7 +359,14 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 16px">
-      <div class="toolbar-wrapper" style="margin-bottom: 12px">
+      <el-alert
+        v-if="isLevel34User"
+        type="info"
+        :closable="false"
+        class="mb-3"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。确认后将自动进入「追踪」流程。"
+      />
+      <div v-if="isLevel5User" class="toolbar-wrapper" style="margin-bottom: 12px">
         <el-button type="primary" @click="openCreateDialog">新增推介</el-button>
       </div>
 
@@ -393,13 +418,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <!-- 发送推介：未发送且未归档 -->
+            <!-- 五级：补发未发送的推介 -->
             <el-button
-              v-if="row.recommendStatus === 0 && !row.archived"
+              v-if="isLevel5User && row.recommendStatus === 0 && !row.archived"
               type="primary" link size="small"
               @click="handleSend(row)"
             >发送推介</el-button>
-            <!-- 确认/拒绝：已发送，仅接收人可操作 -->
+            <!-- 三/四级接收人：确认/拒绝待接收推介 -->
             <el-button
               v-if="row.recommendStatus === 1 && isReceiver(row)"
               type="success" link size="small"
@@ -410,32 +435,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               type="danger" link size="small"
               @click="openRejectDialog(row)"
             >拒绝</el-button>
-            <!-- 追踪：已接受且未到位/待追踪，仅接收人可操作 -->
+            <!-- 删除：五级可删自己发起的；三/四级可删待接收的 -->
             <el-button
-              v-if="row.recommendStatus === 2 && [0, 2].includes(row.trackingStatus) && !row.archived && isReceiver(row)"
-              type="warning" link size="small"
-              @click="openTrackDialog(row)"
-            >追踪</el-button>
-            <!-- 筛查信息：已到位，仅接收人可操作 -->
-            <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisResult && isReceiver(row)"
-              type="primary" link size="small"
-              @click="openScreeningDialog(row)"
-            >录入筛查</el-button>
-            <!-- 诊断：已到位，仅接收人可操作 -->
-            <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisResult && isReceiver(row)"
-              type="success" link size="small"
-              @click="openDiagnosisDialog(row)"
-            >录入诊断</el-button>
-            <!-- 查看追踪记录 -->
-            <el-button
-              v-if="hasTrackingHistory(row)"
-              type="info" link size="small"
-              @click="openHistoryView(row)"
-            >追踪记录</el-button>
-            <!-- 删除 -->
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+              v-if="isLevel5User || (isReceiver(row) && row.recommendStatus === 1)"
+              type="danger" link size="small"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -522,11 +527,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="推介接收人" prop="receiverUserId">
-              <el-select v-model="createForm.receiverUserId" placeholder="选择三/四级用户" style="width: 100%">
+              <el-select
+                v-model="createForm.receiverUserId"
+                filterable
+                placeholder="选择一个三级或四级用户"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="u in level34Users"
                   :key="u.id"
-                  :label="`${u.realName}（${u.orgName ?? ''}）`"
+                  :label="formatLevel34UserLabel(u)"
                   :value="u.id"
                 />
               </el-select>
@@ -546,7 +556,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">确认创建</el-button>
+        <el-button type="primary" :loading="sendingRecommend" @click="handleSendRecommend">发送推介</el-button>
       </template>
     </el-dialog>
 

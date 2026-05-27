@@ -148,10 +148,55 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    public List<UserInfoVO> listSameDepartmentUsers() {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .orderByAsc(User::getRole)
+                .orderByDesc(User::getCreateTime);
+        if (!BaseContext.isSuperAdmin()) {
+            Long deptId = BaseContext.getCurrentDepartmentId();
+            if (deptId == null) {
+                return List.of();
+            }
+            wrapper.eq(User::getDepartmentId, deptId);
+        }
+        return list(wrapper).stream().map(this::buildUserInfoVO).toList();
+    }
+
+    @Override
+    public void assertSameDepartmentAccess(Long userId) {
+        if (BaseContext.isSuperAdmin() || userId == null) {
+            return;
+        }
+        User target = getById(userId);
+        if (target == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "用户不存在");
+        }
+        Long currentDeptId = BaseContext.getCurrentDepartmentId();
+        if (currentDeptId == null || !currentDeptId.equals(target.getDepartmentId())) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "只能操作同部门用户");
+        }
+    }
+
+    @Override
     public void checkPermission(int requiredMinRole) {
         Long userId = BaseContext.getCurrentId();
         User user = getById(userId);
         if (user == null || user.getRole() > requiredMinRole) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "权限不足");
+        }
+    }
+
+    @Override
+    public void checkPermissionCode(String code) {
+        if (StrUtil.isBlank(code)) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "权限不足");
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role != null && role == 1) {
+            return;
+        }
+        List<String> permissions = permissionService.getEffectivePermissionCodes(role, BaseContext.getCurrentId());
+        if (!permissions.contains(code)) {
             throw new ServiceException(StatusEnum.FORBIDDEN, "权限不足");
         }
     }

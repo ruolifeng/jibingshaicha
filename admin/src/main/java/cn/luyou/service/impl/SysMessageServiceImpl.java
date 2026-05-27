@@ -5,6 +5,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.SysMessageMapper;
 import cn.luyou.service.SysMessageService;
+import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -18,6 +19,7 @@ public class SysMessageServiceImpl extends ServiceImpl<SysMessageMapper, SysMess
     @Override
     public void sendMessage(Long receiverId, String title, String content, String type, Long bizId) {
         SysMessage msg = SysMessage.builder()
+                .senderId(BaseContext.getCurrentId())
                 .receiverId(receiverId)
                 .title(title)
                 .content(content)

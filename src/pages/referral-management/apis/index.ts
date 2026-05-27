@@ -1,5 +1,13 @@
 import { request } from "@/http/axios"
 
+/** 查询推介/追踪记录详情 */
+export function getReferralTrackingDetailApi(id: number) {
+  return request<ApiResponseData<any>>({
+    url: `referral-tracking/${id}`,
+    method: "get"
+  })
+}
+
 /** 分页查询推介/追踪记录 */
 export function getReferralTrackingListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({

@@ -16,6 +16,7 @@ import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.FollowUpVisitService;
 import cn.luyou.service.MedicationManagementService;
+import cn.luyou.service.MedicationPickupService;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
@@ -69,6 +70,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     private final FirstVisitService firstVisitService;
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
+    private final MedicationPickupService medicationPickupService;
     private final EpidemicReportService epidemicReportService;
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
@@ -280,23 +282,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 .ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
-        if (!BaseContext.isSuperAdmin()) {
-            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
-            List<Long> referredIds = referralService.lambdaQuery()
-                    .eq(Referral::getModuleType, "screening")
-                    .eq(Referral::getPopulationType, "close")
-                    .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
-                    .eq(Referral::getStatus, 2)
-                    .list()
-                    .stream().map(Referral::getBizId).toList();
-            if (referredIds.isEmpty()) {
-                wrapper.in(ScreeningCloseContact::getDepartmentId, deptIds);
-            } else {
-                wrapper.and(w -> w.in(ScreeningCloseContact::getDepartmentId, deptIds)
-                        .or().in(ScreeningCloseContact::getId, referredIds));
-            }
-        }
+        applyDepartmentScope(wrapper);
         IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);
 
         // 补充通知单发送状态，用于前端控制"发送通知单"按钮的显示
@@ -418,6 +404,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             firstVisitService.lambdaUpdate().eq(cn.luyou.model.FirstVisit::getPatientId, pid).remove();
             followUpVisitService.lambdaUpdate().eq(cn.luyou.model.FollowUpVisit::getPatientId, pid).remove();
             medicationManagementService.lambdaUpdate().eq(cn.luyou.model.MedicationManagement::getPatientId, pid).remove();
+            medicationPickupService.lambdaUpdate().eq(cn.luyou.model.MedicationPickup::getPatientId, pid).remove();
             epidemicReportService.lambdaUpdate().eq(cn.luyou.model.EpidemicReport::getPatientId, pid).remove();
             deleteNoticeAndMessages(pid, "patient");
             deleteReferralsAndMessages(pid);
@@ -508,15 +495,46 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     @Override
     public Map<String, Long> countByFinalResult() {
-        List<ScreeningCloseContact> all = lambdaQuery()
-                .select(ScreeningCloseContact::getFinalScreeningResult)
-                .isNotNull(ScreeningCloseContact::getFinalScreeningResult)
-                .list();
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
+        wrapper.select(ScreeningCloseContact::getFinalScreeningResult)
+                .isNotNull(ScreeningCloseContact::getFinalScreeningResult);
+        applyDepartmentScope(wrapper);
+        List<ScreeningCloseContact> all = list(wrapper);
         return all.stream()
                 .collect(Collectors.groupingBy(
                         s -> s.getFinalScreeningResult() == null ? "未分类" : s.getFinalScreeningResult(),
                         Collectors.counting()
                 ));
+    }
+
+    /** 非超管按部门隔离；未绑定部门时仅看 department_id 为空的记录，避免 IN () SQL 异常 */
+    private void applyDepartmentScope(LambdaQueryWrapper<ScreeningCloseContact> wrapper) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+        List<Long> referredIds = referralService.lambdaQuery()
+                .eq(Referral::getModuleType, "screening")
+                .eq(Referral::getPopulationType, "close")
+                .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
+                .eq(Referral::getStatus, 2)
+                .list()
+                .stream().map(Referral::getBizId).toList();
+        if (deptIds.isEmpty()) {
+            if (referredIds.isEmpty()) {
+                wrapper.isNull(ScreeningCloseContact::getDepartmentId);
+            } else {
+                wrapper.and(w -> w.isNull(ScreeningCloseContact::getDepartmentId)
+                        .or().in(ScreeningCloseContact::getId, referredIds));
+            }
+            return;
+        }
+        if (referredIds.isEmpty()) {
+            wrapper.in(ScreeningCloseContact::getDepartmentId, deptIds);
+        } else {
+            wrapper.and(w -> w.in(ScreeningCloseContact::getDepartmentId, deptIds)
+                    .or().in(ScreeningCloseContact::getId, referredIds));
+        }
     }
 
     // ==================== 工具方法 ====================
