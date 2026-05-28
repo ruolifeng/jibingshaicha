@@ -78,6 +78,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .householdAddress(getStr(params, "householdAddress"))
                 .currentAddress(getStr(params, "currentAddress"))
                 .crowdCategory(getStr(params, "crowdCategory"))
+                .screenDate(parseDate(params.get("screenDate")))
+                .screenMethod(getStr(params, "screenMethod"))
+                .infectionResult(getStr(params, "infectionResult"))
+                .chestXrayDate(parseDate(params.get("chestXrayDate")))
+                .chestXrayResult(getStr(params, "chestXrayResult"))
                 .trackingStatus(0)
                 .notInPlaceCount(0)
                 .archived(0)
@@ -235,39 +240,175 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
         List<ReferralTracking> records = list(wrapper);
 
-        List<List<String>> head = Arrays.asList(
+        boolean recommendExport = "recommend".equals(bizMode);
+        List<List<String>> head = buildExportHead(recommendExport);
+        List<List<Object>> rows = new ArrayList<>();
+        for (ReferralTracking r : records) {
+            if (r.getReceiverUserId() != null) {
+                User receiver = userService.getById(r.getReceiverUserId());
+                if (receiver != null) {
+                    r.setReceiverUserName(formatReceiverDisplayName(receiver));
+                }
+            }
+            rows.add(buildExportRow(r, recommendExport));
+        }
+
+        String sheetTitle = recommendExport ? "推介记录" : "追踪记录";
+        try {
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding("utf-8");
+            String fileName = URLEncoder.encode(sheetTitle + "导出", StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+            response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
+            EasyExcel.write(response.getOutputStream()).head(head).sheet(sheetTitle).doWrite(rows);
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "导出失败");
+        }
+    }
+
+    private List<List<String>> buildExportHead(boolean recommendExport) {
+        if (recommendExport) {
+            return Arrays.asList(
+                    List.of("姓名"), List.of("性别"), List.of("出生日期"), List.of("年龄"),
+                    List.of("证件类型"), List.of("有效证件号"), List.of("民族"), List.of("联系电话"),
+                    List.of("户籍地址"), List.of("现住详细地址"), List.of("人群分类"),
+                    List.of("感染筛查时间"), List.of("感染筛查方法"), List.of("感染筛查结果"),
+                    List.of("胸片筛查时间"), List.of("胸片筛查结果"), List.of("推介原因"),
+                    List.of("推介接收人"), List.of("推介状态"), List.of("追踪状态"), List.of("未到位次数"),
+                    List.of("诊断结果"), List.of("推介时间"), List.of("到位时间"),
+                    List.of("追踪过程明细"), List.of("未到位原因汇总")
+            );
+        }
+        return Arrays.asList(
                 List.of("数据来源"), List.of("卡片ID"), List.of("患者姓名"), List.of("患儿家长姓名"),
                 List.of("有效证件号"), List.of("性别"), List.of("出生日期"), List.of("年龄"),
                 List.of("患者工作单位"), List.of("联系电话"), List.of("乡镇"), List.of("现住详细地址"),
                 List.of("人群分类"), List.of("病例分类"), List.of("疾病名称"), List.of("报告单位"),
-                List.of("报告卡录入时间"), List.of("备注"), List.of("追踪状态"), List.of("诊断结果"),
-                List.of("创建时间"), List.of("到位时间")
+                List.of("报告卡录入时间"), List.of("备注"), List.of("追踪原因"), List.of("追踪状态"),
+                List.of("未到位次数"), List.of("诊断结果"), List.of("创建时间"), List.of("到位时间"),
+                List.of("追踪过程明细"), List.of("未到位原因汇总")
         );
+    }
 
-        List<List<Object>> rows = new ArrayList<>();
-        for (ReferralTracking r : records) {
-            rows.add(Arrays.asList(
-                    "epidemic".equals(r.getSourceType()) ? "大疫情导入" : "手动录入",
-                    r.getCardId(), r.getName(), r.getParentName(), r.getIdNumber(), r.getGender(),
+    private List<Object> buildExportRow(ReferralTracking r, boolean recommendExport) {
+        String historyDetail = formatTrackingHistoryDetail(r.getTrackingHistoryJson());
+        String failureReasons = formatFailureReasons(r.getTrackingHistoryJson());
+        if (recommendExport) {
+            return Arrays.asList(
+                    r.getName(), r.getGender(),
                     r.getBirthDate() != null ? r.getBirthDate().toString() : "",
-                    r.getAge(), r.getWorkplace(), r.getPhone(), r.getTownship(), r.getCurrentAddress(),
-                    r.getCrowdCategory(), r.getCaseCategory(), r.getDiseaseName(), r.getReportUnit(),
-                    r.getReportCardTime() != null ? r.getReportCardTime().toString() : "",
-                    r.getEpidemicRemark(), trackingStatusLabel(r.getTrackingStatus()),
-                    r.getDiagnosisResult(),
-                    r.getCreateTime() != null ? r.getCreateTime().toString() : "",
-                    r.getArrivalTime() != null ? r.getArrivalTime().toString() : ""
-            ));
+                    r.getAge(), r.getIdType(), r.getIdNumber(), r.getEthnicity(), r.getPhone(),
+                    r.getHouseholdAddress(), r.getCurrentAddress(), r.getCrowdCategory(),
+                    r.getScreenDate() != null ? r.getScreenDate().toString() : "",
+                    r.getScreenMethod(), r.getInfectionResult(),
+                    r.getChestXrayDate() != null ? r.getChestXrayDate().toString() : "",
+                    r.getChestXrayResult(),
+                    r.getRecommendReason(), r.getReceiverUserName(), recommendStatusLabel(r.getRecommendStatus()),
+                    trackingStatusLabel(r.getTrackingStatus()),
+                    r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
+                    r.getDiagnosisResult(), formatRecommendTime(r),
+                    r.getArrivalTime() != null ? r.getArrivalTime().toString() : "",
+                    historyDetail, failureReasons
+            );
         }
+        return Arrays.asList(
+                "epidemic".equals(r.getSourceType()) ? "大疫情导入" : "手动录入",
+                r.getCardId(), r.getName(), r.getParentName(), r.getIdNumber(), r.getGender(),
+                r.getBirthDate() != null ? r.getBirthDate().toString() : "",
+                r.getAge(), r.getWorkplace(), r.getPhone(), r.getTownship(), r.getCurrentAddress(),
+                r.getCrowdCategory(), r.getCaseCategory(), r.getDiseaseName(), r.getReportUnit(),
+                r.getReportCardTime() != null ? r.getReportCardTime().toString() : "",
+                r.getEpidemicRemark(), r.getTrackReason(), trackingStatusLabel(r.getTrackingStatus()),
+                r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
+                r.getDiagnosisResult(),
+                r.getCreateTime() != null ? r.getCreateTime().toString() : "",
+                r.getArrivalTime() != null ? r.getArrivalTime().toString() : "",
+                historyDetail, failureReasons
+        );
+    }
 
+    private String formatRecommendTime(ReferralTracking r) {
+        if (r.getRecommendSentTime() != null) {
+            return r.getRecommendSentTime().toString();
+        }
+        return r.getCreateTime() != null ? r.getCreateTime().toString() : "";
+    }
+
+    private String formatTrackingHistoryDetail(String json) {
+        List<Map<String, Object>> history = parseTrackingHistory(json);
+        if (history.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Map<String, Object> entry : history) {
+            if (!sb.isEmpty()) {
+                sb.append("；");
+            }
+            sb.append("第").append(entry.get("attempt")).append("次 ")
+                    .append(entry.get("trackTime") != null ? entry.get("trackTime") : "")
+                    .append(" ").append(trackingAttemptStatusLabel(toInteger(entry.get("status"))));
+            Object reason = entry.get("reason");
+            if (reason != null && StrUtil.isNotBlank(reason.toString())) {
+                sb.append(" 原因：").append(reason);
+            }
+        }
+        return sb.toString();
+    }
+
+    private String formatFailureReasons(String json) {
+        List<Map<String, Object>> history = parseTrackingHistory(json);
+        StringBuilder sb = new StringBuilder();
+        for (Map<String, Object> entry : history) {
+            if (!Integer.valueOf(2).equals(toInteger(entry.get("status")))) {
+                continue;
+            }
+            Object reason = entry.get("reason");
+            if (reason == null || StrUtil.isBlank(reason.toString())) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append("；");
+            }
+            sb.append("第").append(entry.get("attempt")).append("次：").append(reason);
+        }
+        return sb.toString();
+    }
+
+    private String trackingAttemptStatusLabel(Integer status) {
+        if (status == null) {
+            return "";
+        }
+        return switch (status) {
+            case 1 -> "到位";
+            case 2 -> "未到位";
+            case 3 -> "其他";
+            default -> "";
+        };
+    }
+
+    private String recommendStatusLabel(Integer status) {
+        if (status == null) {
+            return "";
+        }
+        return switch (status) {
+            case 0 -> "未发送";
+            case 1 -> "待接收";
+            case 2 -> "已接受";
+            case 3 -> "已拒绝";
+            default -> "";
+        };
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
         try {
-            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            response.setCharacterEncoding("utf-8");
-            String fileName = URLEncoder.encode("追踪记录导出", StandardCharsets.UTF_8).replaceAll("\\+", "%20");
-            response.setHeader("Content-disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
-            EasyExcel.write(response.getOutputStream()).head(head).sheet("追踪记录").doWrite(rows);
-        } catch (IOException e) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "导出失败");
+            return Integer.parseInt(value.toString());
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
@@ -732,6 +873,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .gender(r.getGender())
                 .age(r.getAge())
                 .phone(r.getPhone())
+                .infectionScreenDate(r.getScreenDate())
                 .infectionResult(r.getInfectionResult())
                 .trackingStatus(1)
                 .notInPlaceCount(0)

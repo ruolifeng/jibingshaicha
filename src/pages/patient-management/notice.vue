@@ -3,7 +3,12 @@ import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.v
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
-import { isNoticeReceiveOverdue, resolveMedicationManagementUnit, resolveNoticeManageTime } from "@@/utils/patient"
+import {
+  isNoticeReceiveOverdue,
+  resolveMedicationManagementUnit,
+  resolveNoticeConfirmedDisplayTime,
+  resolveNoticeSentDisplayTime
+} from "@@/utils/patient"
 import { deletePatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
@@ -108,11 +113,16 @@ function getNoticeRowClass({ row }: { row: any }) {
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="病原学结果" />
-        <el-table-column label="接收时间" min-width="160" show-overflow-tooltip>
+        <el-table-column label="发送时间" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span :class="{ 'notice-overdue-text': isNoticeReceiveOverdue(row) }">
-              {{ resolveNoticeManageTime(row) || "-" }}
+              {{ resolveNoticeSentDisplayTime(row) || "-" }}
             </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="接收时间" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolveNoticeConfirmedDisplayTime(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>

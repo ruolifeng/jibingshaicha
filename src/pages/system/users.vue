@@ -1,55 +1,107 @@
 <script lang="ts" setup>
 import type { Department } from "@@/apis/department"
+import type { UserRecord, UserTreeRow } from "@@/utils/userDepartmentTree"
 import { getDepartmentListApi } from "@@/apis/department"
 import { createUserApi, deleteUserApi, getUserListApi, updateUserApi } from "@@/apis/users"
-import { usePagination } from "@@/composables/usePagination"
 import { ROLE_MAP, ROLE_OPTIONS } from "@@/constants/disease"
+import { flattenDepartmentOptions } from "@@/utils/departmentTree"
+import { buildUserDepartmentTree, walkUserTreeRows } from "@@/utils/userDepartmentTree"
 
-const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const DEPT_LEVEL_MAP: Record<number, string> = {
+  1: "市级",
+  2: "区县",
+  3: "社区/街道/乡镇"
+}
+
+const DEPT_LEVEL_TAG: Record<number, "primary" | "success" | "warning"> = {
+  1: "primary",
+  2: "success",
+  3: "warning"
+}
+
+/** 树形展示一次拉取的用户上限 */
+const USER_FETCH_SIZE = 5000
 
 const loading = ref(false)
-const tableData = ref<any[]>([])
-const total = ref(0)
+const allUsers = ref<UserRecord[]>([])
 const departmentList = ref<Department[]>([])
+const tableRef = ref()
+const isExpandAll = ref(false)
 
 const searchForm = reactive({ username: "", role: undefined as number | undefined })
+
+const treeData = computed(() =>
+  buildUserDepartmentTree(departmentList.value, allUsers.value, {
+    username: searchForm.username,
+    role: searchForm.role
+  })
+)
+
+const totalUserCount = computed(() => {
+  let count = 0
+  walkUserTreeRows(treeData.value, (row) => {
+    if (row.nodeType === "user") count++
+  })
+  return count
+})
+
+const departmentSelectOptions = computed(() => flattenDepartmentOptions(departmentList.value))
 
 async function fetchData() {
   loading.value = true
   try {
-    const { data } = await getUserListApi({
-      page: paginationData.currentPage,
-      size: paginationData.pageSize,
-      ...searchForm
-    })
-    tableData.value = data.records
-    total.value = data.total
+    const [{ data: userData }, { data: deptData }] = await Promise.all([
+      getUserListApi({ page: 1, size: USER_FETCH_SIZE }),
+      getDepartmentListApi()
+    ])
+    allUsers.value = userData.records ?? []
+    departmentList.value = deptData
+    const total = userData.total ?? allUsers.value.length
+    if (total > USER_FETCH_SIZE) {
+      ElMessage.warning(`用户共 ${total} 人，仅加载前 ${USER_FETCH_SIZE} 人，请用搜索缩小范围`)
+    }
   } finally {
     loading.value = false
   }
 }
 
-async function fetchDepartments() {
-  try {
-    const { data } = await getDepartmentListApi()
-    departmentList.value = data
-  } catch { /* ignore */ }
-}
-
-function getDeptName(departmentId: number | null | undefined) {
-  if (!departmentId) return "-"
-  return departmentList.value.find(d => d.id === departmentId)?.name || "-"
-}
-
 function handleSearch() {
-  paginationData.currentPage = 1
-  fetchData()
+  handleSearchExpand()
 }
 
 function handleReset() {
   searchForm.username = ""
   searchForm.role = undefined
-  handleSearch()
+  isExpandAll.value = false
+  nextTick(() => setTreeExpanded(false))
+}
+
+function setTreeExpanded(expanded: boolean) {
+  const walk = (rows: UserTreeRow[]) => {
+    rows.forEach((row) => {
+      tableRef.value?.toggleRowExpansion(row, expanded)
+      if (row.children?.length) {
+        walk(row.children)
+      }
+    })
+  }
+  walk(treeData.value)
+}
+
+function toggleExpandAll() {
+  isExpandAll.value = !isExpandAll.value
+  setTreeExpanded(isExpandAll.value)
+}
+
+function handleSearchExpand() {
+  isExpandAll.value = true
+  nextTick(() => setTreeExpanded(true))
+}
+
+function roleTagType(role?: number) {
+  if (role === 1) return "danger"
+  if (role != null && role <= 4) return "warning"
+  return "primary"
 }
 
 // ==================== 新增/编辑弹窗 ====================
@@ -79,14 +131,15 @@ function openCreateDialog() {
   dialogVisible.value = true
 }
 
-function openEditDialog(row: any) {
+function openEditDialog(row: UserTreeRow) {
+  if (row.nodeType !== "user" || row.id == null) return
   isEdit.value = true
   dialogTitle.value = "编辑用户"
   formData.id = row.id
-  formData.username = row.username
+  formData.username = row.username ?? ""
   formData.password = ""
   formData.realName = row.realName || ""
-  formData.role = row.role
+  formData.role = row.role ?? 6
   formData.orgName = row.orgName || ""
   formData.departmentId = row.departmentId || undefined
   dialogVisible.value = true
@@ -120,7 +173,8 @@ async function handleSubmit() {
 }
 
 // ==================== 删除 ====================
-async function handleDelete(row: any) {
+async function handleDelete(row: UserTreeRow) {
+  if (row.nodeType !== "user" || row.id == null) return
   try {
     await ElMessageBox.confirm(`确认删除用户 "${row.username}" 吗？`, "提示", { type: "warning" })
     await deleteUserApi(row.id)
@@ -129,13 +183,7 @@ async function handleDelete(row: any) {
   } catch { /* cancelled or handled */ }
 }
 
-watch(
-  () => [paginationData.currentPage, paginationData.pageSize],
-  fetchData,
-  { immediate: true }
-)
-
-fetchDepartments()
+fetchData()
 </script>
 
 <template>
@@ -143,7 +191,7 @@ fetchDepartments()
     <el-card shadow="never" class="mb-4">
       <el-form :model="searchForm" inline>
         <el-form-item label="用户名">
-          <el-input v-model="searchForm.username" placeholder="请输入用户名" clearable />
+          <el-input v-model="searchForm.username" placeholder="用户名或真实姓名" clearable />
         </el-form-item>
         <el-form-item label="角色">
           <el-select v-model="searchForm.role" placeholder="全部" clearable style="width: 120px">
@@ -164,54 +212,104 @@ fetchDepartments()
     <el-card shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span class="text-lg font-bold">用户管理</span>
-          <el-button v-permission="'user:create'" type="primary" @click="openCreateDialog">
-            新增用户
-          </el-button>
+          <span class="text-lg font-bold">
+            用户管理
+            <span class="user-total">（共 {{ totalUserCount }} 人）</span>
+          </span>
+          <div class="toolbar-actions">
+            <el-button @click="toggleExpandAll">
+              {{ isExpandAll ? "折叠全部" : "展开全部" }}
+            </el-button>
+            <el-button v-permission="'user:create'" type="primary" @click="openCreateDialog">
+              新增用户
+            </el-button>
+          </div>
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="id" label="ID" />
-        <el-table-column prop="username" label="用户名" />
-        <el-table-column prop="realName" label="真实姓名" />
-        <el-table-column label="角色">
+      <el-alert
+        type="info"
+        :closable="false"
+        class="mb-3"
+        title="按部门树形展示：点击部门行可折叠/展开其下用户；五级等基层用户较多时，可先折叠上级再逐级展开查找。"
+      />
+
+      <el-table
+        ref="tableRef"
+        v-loading="loading"
+        :data="treeData"
+        row-key="rowKey"
+        border
+        stripe
+        :tree-props="{ children: 'children' }"
+      >
+        <el-table-column label="部门 / 用户" min-width="280" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-tag :type="row.role === 1 ? 'danger' : row.role <= 4 ? 'warning' : 'primary'" size="small">
+            <template v-if="row.nodeType === 'dept'">
+              <span class="dept-name">{{ row.name }}</span>
+              <el-tag v-if="row.userCount" size="small" type="info" class="ml-2">
+                {{ row.userCount }} 人
+              </el-tag>
+            </template>
+            <template v-else>
+              <span class="user-name">{{ row.realName || row.username }}</span>
+              <span v-if="row.realName" class="user-sub">（{{ row.username }}）</span>
+            </template>
+          </template>
+        </el-table-column>
+        <el-table-column label="层级 / 角色" width="140" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.nodeType === 'dept'" :type="DEPT_LEVEL_TAG[row.level ?? 1]" size="small">
+              {{ DEPT_LEVEL_MAP[row.level ?? 1] || "—" }}
+            </el-tag>
+            <el-tag v-else :type="roleTagType(row.role)" size="small">
               {{ ROLE_MAP[row.role] || "未知" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="orgName" label="所属机构" show-overflow-tooltip />
-        <el-table-column label="所属部门">
+        <el-table-column label="ID" width="80" align="center">
           <template #default="{ row }">
-            {{ getDeptName(row.departmentId) }}
+            <span v-if="row.nodeType === 'user'">{{ row.id }}</span>
+            <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="真实姓名" width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">
-              编辑
-            </el-button>
-            <el-button v-permission="'user:delete'" type="danger" size="small" :disabled="row.role === 1" @click="handleDelete(row)">
-              删除
-            </el-button>
+            <span v-if="row.nodeType === 'user'">{{ row.realName || "—" }}</span>
+            <span v-else class="text-muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="所属机构" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.nodeType === 'user'">{{ row.orgName || "—" }}</span>
+            <span v-else class="text-muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="创建时间" width="180">
+          <template #default="{ row }">
+            <span v-if="row.nodeType === 'user'">{{ row.createTime || "—" }}</span>
+            <span v-else class="text-muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <template v-if="row.nodeType === 'user'">
+              <el-button v-permission="'user:edit'" type="primary" size="small" @click="openEditDialog(row)">
+                编辑
+              </el-button>
+              <el-button
+                v-permission="'user:delete'"
+                type="danger"
+                size="small"
+                :disabled="row.role === 1"
+                @click="handleDelete(row)"
+              >
+                删除
+              </el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
-
-      <div class="mt-4 flex justify-end">
-        <el-pagination
-          v-model:current-page="paginationData.currentPage"
-          v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange"
-          @size-change="handleSizeChange"
-        />
-      </div>
     </el-card>
 
     <!-- 新增/编辑弹窗 -->
@@ -236,14 +334,15 @@ fetchDepartments()
             v-model="formData.departmentId"
             placeholder="请选择部门（超级管理员无需选择）"
             clearable
+            filterable
             style="width: 100%"
             :disabled="formData.role === 1"
           >
             <el-option
-              v-for="dept in departmentList"
-              :key="dept.id"
-              :label="dept.name"
-              :value="(dept.id as number)"
+              v-for="dept in departmentSelectOptions"
+              :key="dept.value"
+              :label="dept.label"
+              :value="dept.value"
             />
           </el-select>
         </el-form-item>
@@ -267,7 +366,41 @@ fetchDepartments()
 .mb-4 {
   margin-bottom: 16px;
 }
-.mt-4 {
-  margin-top: 16px;
+
+.mb-3 {
+  margin-bottom: 12px;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.user-total {
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--el-text-color-secondary);
+}
+
+.dept-name {
+  font-weight: 600;
+}
+
+.user-name {
+  font-weight: 500;
+}
+
+.user-sub {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.text-muted {
+  color: var(--el-text-color-placeholder);
+}
+
+.ml-2 {
+  margin-left: 8px;
 }
 </style>

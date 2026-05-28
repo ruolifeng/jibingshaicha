@@ -10,7 +10,7 @@ import {
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
+import { getAttachmentLabel, getFileUploadAction, parseAttachmentUrls, parseUploadApiResponse } from "@@/utils/attachment"
 import { getToken } from "@@/utils/cache/cookies"
 import { canEditSupervisionForm } from "@@/utils/supervisionForm"
 import { Upload } from "@element-plus/icons-vue"
@@ -89,8 +89,8 @@ const rules: FormRules = {
   treatmentPlan: [{ required: true, message: "请选择治疗方案", trigger: "change" }]
 }
 
-const attachmentFileList = ref<{ name: string, url: string }[]>([])
-const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
+const attachmentFileList = ref<{ name: string, url: string, uid?: number }[]>([])
+const uploadAction = getFileUploadAction()
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 const formDisabled = computed(() => props.readonly || formLocked.value)
 
@@ -107,16 +107,18 @@ function getAttachmentDisplayLabel(url: string, index: number | string): string 
 function parseAttachmentUrlsField(urls?: string) {
   attachmentFileList.value = parseAttachmentUrls(urls).map((url, index) => ({
     name: getAttachmentDisplayLabel(url, index),
-    url
+    url,
+    uid: Date.now() + index
   }))
 }
 
-function syncAttachmentFileList(uploadFiles: { name: string, url?: string, status?: string, uid?: number }[]) {
+function refreshAttachmentDisplay(uploadFiles: { name: string, url?: string, status?: string, uid?: number }[]) {
   attachmentFileList.value = uploadFiles
-    .filter(file => file.status === "success" && file.url)
+    .filter(file => file.status !== "fail")
     .map((file, index) => ({
-      name: file.name || getAttachmentDisplayLabel(file.url!, index),
-      url: file.url!
+      name: file.name || getAttachmentDisplayLabel(file.url || "", index),
+      url: file.url || "",
+      uid: file.uid ?? Date.now() + index
     }))
 }
 
@@ -239,23 +241,24 @@ function beforeAttachmentUpload(file: File) {
 }
 
 function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
-  if (response?.code === 200 && response?.data) {
-    uploadFile.url = resolveFileUrl(response.data)
+  const result = parseUploadApiResponse(response)
+  if (result.ok && result.url) {
+    uploadFile.url = result.url
     uploadFile.status = "success"
-    syncAttachmentFileList(uploadFiles)
-  } else {
-    uploadFile.status = "fail"
-    ElMessage.error(response?.msg || "附件上传失败")
+    refreshAttachmentDisplay(uploadFiles)
+    return
   }
+  uploadFile.status = "fail"
+  ElMessage.error(result.msg || "附件上传失败")
 }
 
 function handleAttachmentChange(_uploadFile: any, uploadFiles: any[]) {
-  syncAttachmentFileList(uploadFiles)
+  refreshAttachmentDisplay(uploadFiles)
 }
 
 function handleAttachmentRemove(uploadFile: { name: string, url?: string, uid?: number }) {
   attachmentFileList.value = attachmentFileList.value.filter(
-    f => f.url !== uploadFile.url && f.name !== uploadFile.name
+    f => f.uid !== uploadFile.uid && f.url !== uploadFile.url && f.name !== uploadFile.name
   )
 }
 
@@ -276,7 +279,7 @@ function resolveTreatmentPlan() {
 }
 
 function buildPayload(status: number) {
-  const attachmentUrls = attachmentFileList.value.map(f => f.url).join(",")
+  const attachmentUrls = attachmentFileList.value.map(f => f.url).filter(Boolean).join(",")
   return {
     id: draftId.value ?? props.initialData?.id ?? undefined,
     latentInfectionId: props.latentRow!.id,
@@ -602,6 +605,7 @@ async function handleArchive() {
           :action="uploadAction"
           :headers="uploadHeaders"
           :file-list="attachmentFileList"
+          name="file"
           :before-upload="beforeAttachmentUpload"
           :on-success="handleAttachmentSuccess"
           :on-change="handleAttachmentChange"

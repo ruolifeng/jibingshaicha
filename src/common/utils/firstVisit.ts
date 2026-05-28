@@ -45,3 +45,10 @@ export function canEditFirstVisit(
   deadline.setDate(deadline.getDate() + FIRST_VISIT_EDIT_DAYS_LEVEL5)
   return Date.now() <= deadline.getTime()
 }
+
+/** 首次随访方式展示（含「其他」手工录入） */
+export function formatFirstVisitMethod(method?: string | null, other?: string | null): string {
+  if (!method) return "-"
+  if (method === "其他" && other?.trim()) return `其他（${other.trim()}）`
+  return method
+}

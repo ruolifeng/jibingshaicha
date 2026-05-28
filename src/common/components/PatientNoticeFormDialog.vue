@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
 import {
+  applyPatientNoticeTreatmentPlan,
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
   PATHOGEN_RESULT_OPTIONS,
@@ -8,7 +9,14 @@ import {
   PATIENT_TYPE_OPTIONS,
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
-import { resolveMedicationManagementUnit, resolvePatientCrowdCategory, resolvePatientCurrentUnit } from "@@/utils/patient"
+import {
+  resolveFirstTreatmentPlan,
+  resolveMedicationManagementUnit,
+  resolveNoticePatientType,
+  resolvePatientCrowdCategory,
+  resolvePatientCurrentUnit,
+  resolvePatientEthnicity
+} from "@@/utils/patient"
 import { idCardRule } from "@@/utils/validate"
 import { getNoticeListByBizApi } from "@/pages/patient-management/apis"
 import { saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
@@ -70,7 +78,7 @@ function resetFormFromRow(row: Record<string, any>) {
     gender: row.gender || "",
     birthDate: row.birthDate || "",
     age: row.age ?? null,
-    ethnicity: row.ethnicity || "",
+    ethnicity: resolvePatientEthnicity(row),
     phone: row.phone || "",
     crowdCategory: resolvePatientCrowdCategory(row, CROWD_CATEGORY_OPTIONS),
     currentAddress: row.currentAddress || "",
@@ -79,7 +87,7 @@ function resetFormFromRow(row: Record<string, any>) {
     chestXrayResult: row.chestXrayResult || "",
     treatmentInstitution: resolvePatientCurrentUnit(row),
     issuedTime: new Date().toISOString().slice(0, 10),
-    patientType: "",
+    patientType: resolveNoticePatientType(row),
     managementMethod: "",
     treatmentPlan: "",
     customPlanDetail: "",
@@ -90,8 +98,9 @@ function resetFormFromRow(row: Record<string, any>) {
     otherNotes: "",
     medicationManagementUnit: resolveMedicationManagementUnit(row),
     remark: "",
-    receiverOrgId: undefined
+    receiverOrgId: userStore.userRole === 6 ? userStore.userId : undefined
   })
+  applyPatientNoticeTreatmentPlan(noticeForm, resolveFirstTreatmentPlan(row))
 }
 
 function assignFormFromNotice(notice: Record<string, any>, row: Record<string, any>) {
@@ -100,7 +109,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     gender: notice.gender || "",
     birthDate: notice.birthDate || "",
     age: notice.age ?? null,
-    ethnicity: notice.ethnicity || "",
+    ethnicity: notice.ethnicity || resolvePatientEthnicity(row),
     phone: notice.phone || "",
     crowdCategory: notice.crowdCategory || resolvePatientCrowdCategory(row, CROWD_CATEGORY_OPTIONS),
     currentAddress: notice.currentAddress || "",
@@ -109,7 +118,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     chestXrayResult: notice.chestXrayResult || "",
     treatmentInstitution: notice.treatmentInstitution || resolvePatientCurrentUnit(row),
     issuedTime: notice.issuedTime || new Date().toISOString().slice(0, 10),
-    patientType: notice.patientType || "",
+    patientType: notice.patientType || resolveNoticePatientType(row),
     managementMethod: notice.managementMethod || "",
     sputumSmear: notice.sputumSmear || "",
     sputumCulture: notice.sputumCulture || "",
@@ -120,13 +129,10 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     remark: notice.remark || "",
     receiverOrgId: notice.receiverOrgId || undefined
   })
-  const tp = notice.treatmentPlan || ""
-  if (tp && !TREATMENT_PLAN_OPTIONS.includes(tp)) {
-    noticeForm.treatmentPlan = "个体化方案"
-    noticeForm.customPlanDetail = notice.customPlanDetail || tp
-  } else {
-    noticeForm.treatmentPlan = tp
-    noticeForm.customPlanDetail = notice.customPlanDetail || ""
+  const plan = notice.treatmentPlan || resolveFirstTreatmentPlan(row)
+  applyPatientNoticeTreatmentPlan(noticeForm, plan)
+  if (noticeForm.treatmentPlan === "个体化方案" && notice.customPlanDetail) {
+    noticeForm.customPlanDetail = notice.customPlanDetail
   }
 }
 

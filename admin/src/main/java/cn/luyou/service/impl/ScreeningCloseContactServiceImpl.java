@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
  *
  * 分类规则（AE列 = final_screening_result）：
  *  - 活动性肺结核  → ccStatus=1，标红结案（不进入患者管理）
+ *  - 疑似肺结核    → ccStatus=9，标黄结案
  *  - 潜伏感染者    → ccStatus=2，进入密接潜伏感染专属流程
  *  - 未做          → ccStatus=4，进入6/12/24月随访监测
  *  - 未发现异常    → ccStatus=6，进入3月复查流程
@@ -77,6 +78,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     /** 活动性肺结核的最终筛查结果标识（模板中的文字） */
     private static final String RESULT_ACTIVE_TB = "活动性肺结核";
+    /** 疑似肺结核 */
+    private static final String RESULT_SUSPECTED_TB = "疑似肺结核";
     /** 潜伏感染者 */
     private static final String RESULT_LATENT = "潜伏感染者";
     /** 未做 */
@@ -121,6 +124,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             }).sheet().headRowNumber(2).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("密接筛查 Excel 解析失败", e);
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel解析失败，请确认使用系统模板（前两行为表头）: " + e.getMessage());
         }
 
         if (dataList.isEmpty()) {
@@ -178,6 +184,10 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         // 基本信息始终以最新为准
         if (StrUtil.isNotBlank(incoming.getName())) existing.setName(incoming.getName());
         if (StrUtil.isNotBlank(incoming.getPhone())) existing.setPhone(incoming.getPhone());
+        if (StrUtil.isNotBlank(incoming.getPhoneContactRelation())) existing.setPhoneContactRelation(incoming.getPhoneContactRelation());
+        if (StrUtil.isNotBlank(incoming.getContactType())) existing.setContactType(incoming.getContactType());
+        if (StrUtil.isNotBlank(incoming.getContactPlace())) existing.setContactPlace(incoming.getContactPlace());
+        if (StrUtil.isNotBlank(incoming.getContactPlaceOther())) existing.setContactPlaceOther(incoming.getContactPlaceOther());
         if (StrUtil.isNotBlank(incoming.getCurrentAddress())) existing.setCurrentAddress(incoming.getCurrentAddress());
 
         // 初次筛查（若已有则保留，以防覆盖旧数据）
@@ -230,11 +240,18 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
      * 注意：若当前 ccStatus 已经处于 "进行中/已归档" 等高级状态，则不降级（仅对初始状态赋值）
      */
     private void determineStatus(ScreeningCloseContact data) {
-        if (data.getCcStatus() != null && data.getCcStatus() > 0) return; // 已有业务状态不覆盖
         String result = data.getFinalScreeningResult();
+        // 活动性/疑似肺结核：始终结案（标红/标黄），允许从待处理状态升级
         if (RESULT_ACTIVE_TB.equals(result)) {
-            data.setCcStatus(1); // 活动性肺结核
-        } else if (RESULT_LATENT.equals(result)) {
+            data.setCcStatus(1);
+            return;
+        }
+        if (RESULT_SUSPECTED_TB.equals(result)) {
+            data.setCcStatus(9);
+            return;
+        }
+        if (data.getCcStatus() != null && data.getCcStatus() > 0) return; // 已有业务状态不覆盖
+        if (RESULT_LATENT.equals(result)) {
             data.setCcStatus(2); // 潜伏感染者-管理中
         } else if (RESULT_NOT_DONE.equals(result)) {
             data.setCcStatus(4); // 随访监测中
@@ -292,13 +309,16 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     .map(ScreeningCloseContact::getId)
                     .filter(java.util.Objects::nonNull)
                     .toList();
-            Set<Long> sentBizIds = new HashSet<>(noticeService.lambdaQuery()
-                    .in(Notice::getBizId, ids)
-                    .eq(Notice::getNoticeType, "latent")
-                    .eq(Notice::getPopulationType, "closeContact")
-                    .ge(Notice::getStatus, 1)
-                    .list()
-                    .stream().map(Notice::getBizId).toList());
+            Set<Long> sentBizIds = new HashSet<>();
+            if (!ids.isEmpty()) {
+                sentBizIds.addAll(noticeService.lambdaQuery()
+                        .in(Notice::getBizId, ids)
+                        .eq(Notice::getNoticeType, "latent")
+                        .eq(Notice::getPopulationType, "closeContact")
+                        .ge(Notice::getStatus, 1)
+                        .list()
+                        .stream().map(Notice::getBizId).toList());
+            }
             records.forEach(r -> r.setNoticeSent(sentBizIds.contains(r.getId())));
             // 补全随访到期日（含潜伏感染者未完成治疗转入随访监测的记录）
             List<ScreeningCloseContact> dueDateUpdates = new ArrayList<>();
@@ -360,6 +380,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createScreening(ScreeningCloseContact data) {
+        validateContactBasicInfo(data);
+        validateFirstScreenInfo(data);
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
@@ -375,11 +397,14 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }
+        validateContactBasicInfo(data);
+        validateFirstScreenInfo(data);
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         } else if (existing.getRegistrationDate() != null) {
             data.setRegistrationDate(existing.getRegistrationDate());
         }
+        determineStatus(data);
         Integer effectiveCcStatus = data.getCcStatus() != null ? data.getCcStatus() : existing.getCcStatus();
         if (Integer.valueOf(4).equals(effectiveCcStatus)) {
             ensureFollowupDueDates(data);
@@ -513,13 +538,19 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             return;
         }
         List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-        List<Long> referredIds = referralService.lambdaQuery()
-                .eq(Referral::getModuleType, "screening")
-                .eq(Referral::getPopulationType, "close")
-                .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
-                .eq(Referral::getStatus, 2)
-                .list()
-                .stream().map(Referral::getBizId).toList();
+        Long currentUserId = BaseContext.getCurrentId();
+        final List<Long> referredIds;
+        if (currentUserId != null) {
+            referredIds = referralService.lambdaQuery()
+                    .eq(Referral::getModuleType, "screening")
+                    .eq(Referral::getPopulationType, "close")
+                    .eq(Referral::getReceiverOrgId, currentUserId)
+                    .eq(Referral::getStatus, 2)
+                    .list()
+                    .stream().map(Referral::getBizId).toList();
+        } else {
+            referredIds = List.of();
+        }
         if (deptIds.isEmpty()) {
             if (referredIds.isEmpty()) {
                 wrapper.isNull(ScreeningCloseContact::getDepartmentId);
@@ -538,6 +569,40 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     }
 
     // ==================== 工具方法 ====================
+
+    private static final String CONTACT_PLACE_OTHER = "其他（需手工录入）";
+    private static final String SCREENING_FIELD_OTHER = "其他（需手工录入）";
+
+    /** 接触者基本信息必填校验（手动新增/编辑） */
+    private void validateContactBasicInfo(ScreeningCloseContact data) {
+        if (StrUtil.isBlank(data.getName())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "接触者姓名不能为空");
+        }
+        if (StrUtil.isBlank(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号不能为空");
+        }
+        if (StrUtil.isBlank(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "联系电话不能为空");
+        }
+        if (CONTACT_PLACE_OTHER.equals(data.getContactPlace()) && StrUtil.isBlank(data.getContactPlaceOther())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "接触场所选择「其他」时请填写具体内容");
+        }
+    }
+
+    /** 初次筛查「其他」手工录入校验 */
+    private void validateFirstScreenInfo(ScreeningCloseContact data) {
+        requireOtherText(data.getImagingMethod(), data.getImagingMethodOther(), "影像方法");
+        requireOtherText(data.getImagingResult(), data.getImagingResultOther(), "影像结果");
+        requireOtherText(data.getSputumCheckMethod(), data.getSputumCheckMethodOther(), "痰检方法");
+        requireOtherText(data.getSputumCheckResult(), data.getSputumCheckResultOther(), "痰检结果");
+        requireOtherText(data.getFinalScreeningResult(), data.getFinalScreeningResultOther(), "最终筛查结果");
+    }
+
+    private void requireOtherText(String main, String other, String label) {
+        if (SCREENING_FIELD_OTHER.equals(main) && StrUtil.isBlank(other)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, label + "选择「其他」时请填写具体内容");
+        }
+    }
 
     private boolean isValidIdCard(String id) {
         // 仅校验格式（18位 + 字符规则）。Excel 以数值型存储身份证号时会丢失浮点精度，导致校验码错误，故不做校验码验证。

@@ -26,7 +26,7 @@ const display = computed(() => {
     visitSeq: d.visitSeq ?? "-",
     visitDate: d.visitDate ?? "-",
     treatmentMonth: d.treatmentMonth ?? "-",
-    visitMethod: followUpFormatters.visitMethod(d.visitMethod),
+    visitMethod: followUpFormatters.visitMethod(d.visitMethod, d.visitMethodOther),
     supervisor: formatFollowUpSupervisor(d.supervisor, d.supervisorOther),
     symptoms: formatFollowUpSymptoms(d.symptoms),
     symptomsOther: d.symptomsOther || "-",

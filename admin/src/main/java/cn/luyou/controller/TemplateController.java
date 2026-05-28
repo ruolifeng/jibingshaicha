@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.constant.CloseContactCaseExcelHeaders;
 import cn.luyou.constant.LatentImportHeaders;
 import cn.luyou.constant.PatientManualImportHeaders;
 import com.alibaba.excel.EasyExcel;
@@ -67,7 +68,7 @@ public class TemplateController {
             List.of("是否规范完成预防性治疗"), List.of("其他情况说明（备注）")
     );
 
-    @Operation(summary = "下载数据导入模板（type: school/keyPopulation/regular/latent/patient）")
+    @Operation(summary = "下载数据导入模板（type: school/keyPopulation/regular/latent/patient/closeContactCase）")
     @GetMapping("/download")
     public void download(
             @RequestParam String type,
@@ -97,6 +98,10 @@ public class TemplateController {
                 fileName = "在管患者导入模板";
                 headers = PatientManualImportHeaders.FIELDS.stream().map(List::of).toList();
             }
+            case "closeContactCase" -> {
+                fileName = "密接个案表";
+                headers = CloseContactCaseExcelHeaders.asEasyExcelHead();
+            }
             default -> {
                 response.sendError(400, "未知模板类型：" + type);
                 return;
@@ -108,10 +113,11 @@ public class TemplateController {
         String encodedName = URLEncoder.encode(fileName + ".xlsx", StandardCharsets.UTF_8).replace("+", "%20");
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
 
+        String sheetName = "closeContactCase".equals(type) ? "密接个案表" : "数据";
         EasyExcel.write(response.getOutputStream())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
                 .head(headers)
-                .sheet("数据")
+                .sheet(sheetName)
                 .doWrite(new ArrayList<>());
 
         log.info("[模板下载] type={} fileName={}", type, fileName);

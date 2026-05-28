@@ -12,6 +12,7 @@ import cn.luyou.model.User;
 import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.CloseContactCaseExcelSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,8 +39,6 @@ import java.util.regex.Pattern;
 public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMapper, CloseContactCase>
         implements CloseContactCaseService {
 
-    private static final Pattern ID_CARD_PATTERN = Pattern.compile(
-            "^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^1[3-9]\\d{9}$");
 
     private final DepartmentService departmentService;
@@ -51,13 +51,28 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         String creatorUsername = resolveCurrentUsername();
         List<CloseContactCase> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
-        AtomicInteger rowNum = new AtomicInteger(3);
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+        }
+        int headRowNumber;
+        try {
+            headRowNumber = CloseContactCaseExcelSupport.resolveHeadRowNumber(fileBytes);
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+        }
+        AtomicInteger rowNum = new AtomicInteger(headRowNumber + 1);
 
         try {
-            EasyExcel.read(file.getInputStream(), CloseContactCase.class, new ReadListener<CloseContactCase>() {
+            EasyExcel.read(new ByteArrayInputStream(fileBytes), CloseContactCase.class, new ReadListener<CloseContactCase>() {
                 @Override
                 public void invoke(CloseContactCase data, AnalysisContext context) {
                     int row = rowNum.getAndIncrement();
+                    if (isBlankDataRow(data)) {
+                        return;
+                    }
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "接触者身份证号格式不正确");
                     }
@@ -77,9 +92,11 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("密接个案表数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(2).doRead();
-        } catch (IOException e) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+            }).sheet().headRowNumber(headRowNumber).doRead();
+        } catch (Exception e) {
+            log.error("密接个案表 Excel 解析失败", e);
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "Excel解析失败，请使用系统导出的模板或标准密接表（含表头）: " + e.getMessage());
         }
 
         if (dataList.isEmpty()) {
@@ -287,10 +304,20 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     }
 
     private boolean isValidIdCard(String id) {
-        return ID_CARD_PATTERN.matcher(id.trim()).matches();
+        // 与密接筛查导入一致：仅校验 18 位格式，避免 Excel 数值型身份证号导致校验码误判
+        String trimmed = id == null ? "" : id.trim();
+        return trimmed.length() == 18 && trimmed.matches("\\d{17}[\\dXx]");
     }
 
     private boolean isValidPhone(String phone) {
-        return PHONE_PATTERN.matcher(phone.trim()).matches();
+        return phone != null && PHONE_PATTERN.matcher(phone.trim()).matches();
+    }
+
+    private boolean isBlankDataRow(CloseContactCase data) {
+        return data == null
+                || (StrUtil.isBlank(data.getName())
+                && StrUtil.isBlank(data.getIdNumber())
+                && StrUtil.isBlank(data.getCity())
+                && StrUtil.isBlank(data.getDistrict()));
     }
 }

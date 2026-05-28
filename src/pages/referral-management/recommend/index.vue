@@ -3,6 +3,12 @@ import { ref, reactive, onMounted, nextTick, computed } from "vue"
 import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import {
+  REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
+  REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
+  REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
+  referralSelectOptionsWithLegacy
+} from "@@/constants/referral-tracking"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { formatDateTime } from "@@/utils/datetime"
 import {
@@ -12,6 +18,7 @@ import {
   getRecommendTime
 } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
+import { downloadBlob } from "@@/utils/download"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   getReferralTrackingListApi,
@@ -23,7 +30,8 @@ import {
   saveScreeningInfoApi,
   saveDiagnosisApi,
   deleteReferralTrackingApi,
-  getLevel34UsersApi
+  getLevel34UsersApi,
+  exportReferralTrackApi
 } from "../apis/index"
 
 const userStore = useUserStore()
@@ -35,6 +43,7 @@ const isLevel34User = computed(() => userStore.userRole === 4 || userStore.userR
 
 // ===== 列表 =====
 const loading = ref(false)
+const exporting = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 const searchForm = reactive({
@@ -82,6 +91,26 @@ function handleReset() {
   handleSearch()
 }
 
+async function handleExport() {
+  exporting.value = true
+  try {
+    const blob = await exportReferralTrackApi({
+      bizMode: "recommend",
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined,
+      phone: searchForm.phone || undefined,
+      township: searchForm.township || undefined,
+      ...extractDateRangeParams(searchForm.dateRange)
+    })
+    downloadBlob(blob as unknown as Blob, "推介记录导出.xlsx")
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
+
 // ===== 新增推介 =====
 const createDialogVisible = ref(false)
 const level34Users = ref<any[]>([])
@@ -97,6 +126,11 @@ const createForm = reactive({
   householdAddress: "",
   currentAddress: "",
   crowdCategory: "",
+  screenDate: "",
+  screenMethod: "",
+  infectionResult: "",
+  chestXrayDate: "",
+  chestXrayResult: "",
   recommendReason: "",
   receiverUserId: undefined as number | undefined
 })
@@ -119,10 +153,24 @@ async function openCreateDialog() {
     level34Users.value = res.data ?? []
   }
   Object.assign(createForm, {
-    name: "", gender: "", birthDate: "", age: undefined, idType: "居民身份证",
-    idNumber: "", ethnicity: "", phone: "",
-    householdAddress: "", currentAddress: "", crowdCategory: "",
-    recommendReason: "", receiverUserId: undefined
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: undefined,
+    idType: "居民身份证",
+    idNumber: "",
+    ethnicity: "",
+    phone: "",
+    householdAddress: "",
+    currentAddress: "",
+    crowdCategory: "",
+    screenDate: "",
+    screenMethod: "",
+    infectionResult: "",
+    chestXrayDate: "",
+    chestXrayResult: "",
+    recommendReason: "",
+    receiverUserId: undefined
   })
   createDialogVisible.value = true
   nextTick(() => createFormRef.value?.clearValidate())
@@ -252,6 +300,9 @@ function isReceiver(row: any) {
 // ===== 筛查信息 =====
 const screeningDialogVisible = ref(false)
 const screeningRow = ref<any>(null)
+const chestXrayResultSelectOptions = computed(() =>
+  referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, screeningForm.chestXrayResult))
+
 const screeningForm = reactive({
   hasInfectionScreen: "",
   screenDate: "",
@@ -366,8 +417,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         class="mb-3"
         title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。确认后将自动进入「追踪」流程。"
       />
-      <div v-if="isLevel5User" class="toolbar-wrapper" style="margin-bottom: 12px">
-        <el-button type="primary" @click="openCreateDialog">新增推介</el-button>
+      <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
+        <el-button v-if="isLevel5User" type="primary" @click="openCreateDialog">新增推介</el-button>
+        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe>
@@ -409,6 +461,22 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         <el-table-column label="到位时间" min-width="160">
           <template #default="{ row }">
             {{ row.arrivalTime ? formatDateTime(row.arrivalTime) : "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="追踪过程" min-width="240" show-overflow-tooltip>
+          <template #default="{ row }">
+            <template v-if="parseTrackingHistory(row.trackingHistoryJson).length">
+              <span
+                v-for="(item, idx) in parseTrackingHistory(row.trackingHistoryJson)"
+                :key="item.attempt"
+              >
+                <template v-if="idx">；</template>
+                第{{ item.attempt }}次 {{ formatDateTime(item.trackTime) }}
+                {{ TRACK_STATUS_LABEL[item.status] }}
+                <template v-if="item.reason">（{{ item.reason }}）</template>
+              </span>
+            </template>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="追踪次数" width="100">
@@ -457,7 +525,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
     </el-card>
 
     <!-- 新增推介弹窗 -->
-    <el-dialog v-model="createDialogVisible" title="新增推介记录" width="660px">
+    <el-dialog v-model="createDialogVisible" title="新增推介记录" width="720px">
       <el-form ref="createFormRef" :model="createForm" :rules="createFormRules" label-width="100px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -538,6 +606,69 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
                   :key="u.id"
                   :label="formatLevel34UserLabel(u)"
                   :value="u.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-divider content-position="left">
+              筛查信息（选填）
+            </el-divider>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染筛查时间">
+              <el-date-picker
+                v-model="createForm.screenDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="请选择"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染筛查方法">
+              <el-select v-model="createForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染筛查结果">
+              <el-select v-model="createForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片筛查时间">
+              <el-date-picker
+                v-model="createForm.chestXrayDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="请选择"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片筛查结果">
+              <el-select v-model="createForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_CHEST_XRAY_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
                 />
               </el-select>
             </el-form-item>
@@ -657,7 +788,14 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="筛查方法">
-              <el-input v-model="screeningForm.screenMethod" />
+              <el-select v-model="screeningForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -667,13 +805,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染筛查结果">
-              <el-select v-model="screeningForm.infectionResult" style="width: 100%">
-                <el-option label="阴性" value="阴性" />
-                <el-option label="PPD+" value="PPD+" />
-                <el-option label="PPD++" value="PPD++" />
-                <el-option label="PPD+++" value="PPD+++" />
-                <el-option label="EC阳性" value="EC阳性" />
-                <el-option label="IGRA阳性" value="IGRA阳性" />
+              <el-select v-model="screeningForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -692,10 +830,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片检查结果">
-              <el-select v-model="screeningForm.chestXrayResult" style="width: 100%">
-                <el-option label="正常" value="正常" />
-                <el-option label="异常" value="异常" />
-                <el-option label="未查" value="未查" />
+              <el-select v-model="screeningForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in chestXrayResultSelectOptions"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
               </el-select>
             </el-form-item>
           </el-col>

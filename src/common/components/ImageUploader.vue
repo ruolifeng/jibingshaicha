@@ -15,7 +15,7 @@
 import type { UploadFile, UploadFiles, UploadProps } from "element-plus"
 import { Plus, ZoomIn } from "@element-plus/icons-vue"
 import { getToken } from "@@/utils/cache/cookies"
-import { parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
+import { getFileUploadAction, parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl } from "@@/utils/attachment"
 
 interface Props {
   /** v-model 绑定值：可以是 JSON 字符串或 string[] */
@@ -42,7 +42,7 @@ const emit = defineEmits<{
   (e: "update:modelValue", v: string): void
 }>()
 
-const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
+const uploadAction = getFileUploadAction()
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
 type LocalFile = { name: string, url: string, uid: number }
@@ -78,17 +78,19 @@ watch(
   { immediate: true }
 )
 
-/** fileList → v-model（统一以 JSON 字符串发出） */
-function emitChange() {
+/** fileList → v-model（统一以 JSON 字符串发出；上传中暂不回写，避免清空列表） */
+function emitChange(force = false) {
   const urls = fileList.value.map(f => f.url).filter(Boolean)
+  const hasPending = fileList.value.some(f => !f.url)
+  if (!force && hasPending) return
   emit("update:modelValue", urls.length ? JSON.stringify(urls) : "")
 }
 
-function syncFromUploadFiles(uploadFiles: UploadFiles) {
+/** 刷新展示列表：保留上传中/成功的文件，仅排除失败项 */
+function refreshDisplayFiles(uploadFiles: UploadFiles) {
   fileList.value = uploadFiles
-    .filter(file => file.status === "success" && file.url)
+    .filter(file => file.status !== "fail")
     .map(toLocalFile)
-  emitChange()
 }
 
 // ==================== 上传 hooks ====================
@@ -109,18 +111,21 @@ const beforeUpload: UploadProps["beforeUpload"] = (file) => {
   return true
 }
 
-const onSuccess: UploadProps["onSuccess"] = (response, uploadFile) => {
-  if (response?.code === 200 && response?.data) {
-    uploadFile.url = resolveFileUrl(response.data)
+const onSuccess: UploadProps["onSuccess"] = (response, uploadFile, uploadFiles) => {
+  const result = parseUploadApiResponse(response)
+  if (result.ok && result.url) {
+    uploadFile.url = result.url
     uploadFile.status = "success"
+    refreshDisplayFiles(uploadFiles)
+    emitChange(true)
     return
   }
   uploadFile.status = "fail"
-  ElMessage.error(response?.msg || "上传失败")
+  ElMessage.error(result.msg || "上传失败")
 }
 
 const onChange: UploadProps["onChange"] = (_uploadFile, uploadFiles) => {
-  syncFromUploadFiles(uploadFiles)
+  refreshDisplayFiles(uploadFiles)
 }
 
 const onError: UploadProps["onError"] = () => {
@@ -129,7 +134,7 @@ const onError: UploadProps["onError"] = () => {
 
 function handleRemove(uploadFile: UploadFile) {
   fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid && f.url !== uploadFile.url)
-  emitChange()
+  emitChange(true)
 }
 
 // ==================== 预览 ====================
@@ -151,8 +156,10 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
       :action="uploadAction"
       :headers="uploadHeaders"
       :file-list="fileList"
+      :limit="max"
       list-type="picture-card"
       accept="image/*"
+      name="file"
       :before-upload="beforeUpload"
       :on-success="onSuccess"
       :on-change="onChange"
@@ -166,8 +173,11 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
       </template>
       <template #file="{ file }">
         <div class="upload-thumb">
-          <img class="upload-thumb__img" :src="file.url" :alt="file.name">
-          <div class="upload-thumb__mask">
+          <img v-if="file.url" class="upload-thumb__img" :src="file.url" :alt="file.name">
+          <div v-else class="upload-thumb__placeholder">
+            上传中...
+          </div>
+          <div v-if="file.url" class="upload-thumb__mask">
             <el-icon class="upload-thumb__icon" @click.stop="handlePreview(file)">
               <ZoomIn />
             </el-icon>
@@ -181,7 +191,7 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
 
     <div class="image-uploader__tip">
       <span>请上传 {{ min || 2 }}~{{ max }} 张图片</span>
-      <span class="image-uploader__count">已上传 {{ fileList.length }} / {{ max }}</span>
+      <span class="image-uploader__count">已上传 {{ fileList.filter(f => f.url).length }} / {{ max }}</span>
     </div>
 
     <el-dialog v-model="previewVisible" title="" width="60vw" append-to-body align-center>
@@ -216,6 +226,18 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 6px;
+  }
+
+  &__placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    background: var(--el-fill-color-light);
     border-radius: 6px;
   }
 

@@ -4,6 +4,7 @@ import {
   FOLLOW_UP_SUPERVISOR_OPTIONS,
   FOLLOW_UP_SYMPTOM_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OPTIONS,
+  FOLLOW_UP_VISIT_METHOD_OTHER,
   STOP_TREATMENT_REASON_OPTIONS,
   YES_NO_OPTIONS
 } from "@@/constants/disease"
@@ -41,8 +42,16 @@ export function formatStopTreatmentReason(reason?: string | null, other?: string
   return optionLabel(STOP_TREATMENT_REASON_OPTIONS, reason)
 }
 
+export function formatFollowUpVisitMethod(value?: string | null, other?: string | null) {
+  if (!value) return "-"
+  if (value === FOLLOW_UP_VISIT_METHOD_OTHER && other?.trim()) {
+    return `其他（${other.trim()}）`
+  }
+  return optionLabel(FOLLOW_UP_VISIT_METHOD_OPTIONS, value)
+}
+
 export const followUpFormatters = {
-  visitMethod: (v?: string | null) => optionLabel(FOLLOW_UP_VISIT_METHOD_OPTIONS, v),
+  visitMethod: (v?: string | null, other?: string | null) => formatFollowUpVisitMethod(v, other),
   medicationUsage: (v?: string | null) => optionLabel(FOLLOW_UP_MEDICATION_USAGE_OPTIONS, v),
   drugForm: (v?: string | null) => optionLabel(FOLLOW_UP_DRUG_FORM_OPTIONS, v),
   stopTreatmentReason: (v?: string | null, other?: string | null) => formatStopTreatmentReason(v, other)

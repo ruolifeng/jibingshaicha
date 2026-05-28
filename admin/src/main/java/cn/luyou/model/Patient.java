@@ -44,6 +44,8 @@ public class Patient extends BaseEntity {
     private String epidemicData;
     /** 所属部门ID */
     private Long departmentId;
+    /** 录入人用户ID（手动新增/导入时写入，五级数据权限） */
+    private Long creatorId;
 
     /** 患者通知单状态（非数据库字段，查询时填充）：0草稿 1已发送 2已确认 null无通知单 */
     @TableField(exist = false)

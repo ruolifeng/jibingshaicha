@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import cn.luyou.utils.FlexibleIntegerConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
@@ -56,7 +57,7 @@ public class CloseContactCase extends BaseEntity {
     @ExcelProperty(index = 12)
     private String idNumber;
 
-    @ExcelProperty(index = 13)
+    @ExcelProperty(index = 13, converter = FlexibleIntegerConverter.class)
     private Integer age;
 
     @ExcelProperty(index = 15)

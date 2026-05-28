@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `close_contact_case` (
 
 -- 菜单与按钮权限
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(35, 'closeContact:case',           '密接个案表',   1, 3, 2),
+(35, 'closeContact:case',           '密接个案表',   1, 3, 1),
 (350, 'closeContact:case:upload',    '导入个案',     2, 35, 1),
 (351, 'closeContact:case:create',    '新增个案',     2, 35, 2),
 (352, 'closeContact:case:export',    '导出个案',     2, 35, 3),

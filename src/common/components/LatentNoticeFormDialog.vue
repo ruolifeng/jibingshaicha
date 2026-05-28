@@ -84,7 +84,7 @@ function resetFormFromRow(row: Record<string, any>) {
     customPlanDetail: "",
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
-    receiverOrgId: undefined
+    receiverOrgId: userStore.userRole === 6 ? userStore.userId : undefined
   })
 }
 

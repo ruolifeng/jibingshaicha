@@ -21,6 +21,7 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
@@ -68,6 +69,7 @@ public class ExportController {
     private final FirstVisitMapper firstVisitMapper;
     private final FollowUpVisitMapper followUpVisitMapper;
     private final MedicationManagementMapper medicationManagementMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -89,6 +91,16 @@ public class ExportController {
             "序号", "数据来源", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
             "民族", "联系电话", "户籍地址", "现住址", "最终诊断结果", "通知单状态",
             "首次随访", "后续随访次数", "服药管理", "是否归档", "归档备注", "归档时间", "创建时间"
+    );
+
+    /** 潜伏感染者信息总表导出列（无数据时也输出表头） */
+    private static final List<String> ALL_LATENT_EXPORT_HEADERS = List.of(
+            "序号", "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "联系电话与联系人关系",
+            "户籍地址", "现住地址", "感染筛查日期", "感染筛查结果", "追踪状态", "未到位次数",
+            "首次诊断结果", "最终诊断结果", "是否胸片检查", "胸片检查日期", "胸片检查结果",
+            "追踪情况", "备注", "通知单状态", "督导表状态", "预防性治疗方案",
+            "预防性治疗开始时间", "预防性治疗完成时间", "预防性治疗结果", "治疗阶段",
+            "是否归档", "创建时间"
     );
 
     /** 大汇总表：三类人群筛查数据合并导出 */
@@ -268,6 +280,7 @@ public class ExportController {
                     .le(createTo != null, LatentInfection::getCreateTime, createTo)
                     .eq(archived != null, LatentInfection::getArchived, archived)
                     .orderByDesc(LatentInfection::getCreateTime);
+            dataScopeHelper.applyLatentScope(wrapper);
 
             List<LatentInfection> latentList = latentInfectionService.list(wrapper);
 
@@ -667,16 +680,31 @@ public class ExportController {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
-                .eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
-                .ne(StrUtil.isBlank(populationType), LatentInfection::getPopulationType, "closeContact")
                 .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
-                .ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
-                .le(createTo != null, LatentInfection::getCreateTime, createTo)
-                .eq(archived != null, LatentInfection::getArchived, archived)
-                .orderByAsc(LatentInfection::getPopulationType)
-                .orderByDesc(LatentInfection::getCreateTime);
+                .eq(archived != null, LatentInfection::getArchived, archived);
+        if (StrUtil.isNotBlank(populationType)) {
+            wrapper.eq(LatentInfection::getPopulationType, populationType);
+        } else {
+            wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                    .or()
+                    .isNull(LatentInfection::getScreeningId));
+        }
+        if (Integer.valueOf(1).equals(archived) && (StrUtil.isNotBlank(dateFrom) || StrUtil.isNotBlank(dateTo))) {
+            wrapper.ge(StrUtil.isNotBlank(dateFrom), LatentInfection::getArchivedTime, dateFrom)
+                    .le(StrUtil.isNotBlank(dateTo), LatentInfection::getArchivedTime, dateTo + " 23:59:59");
+        } else {
+            wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
+                    .le(createTo != null, LatentInfection::getCreateTime, createTo);
+        }
+        wrapper.orderByAsc(LatentInfection::getPopulationType);
+        if (Integer.valueOf(1).equals(archived)) {
+            wrapper.orderByDesc(LatentInfection::getArchivedTime);
+        } else {
+            wrapper.orderByDesc(LatentInfection::getCreateTime);
+        }
+        dataScopeHelper.applyLatentScope(wrapper);
 
         List<LatentInfection> latentList = latentInfectionService.list(wrapper);
         List<Long> latentIds = latentList.stream().map(LatentInfection::getId).collect(Collectors.toList());
@@ -737,11 +765,20 @@ public class ExportController {
             row.put("年龄", r.getAge());
             row.put("证件号", r.getIdNumber());
             row.put("联系电话", r.getPhone());
+            row.put("联系电话与联系人关系", r.getPhoneContactRelation());
+            row.put("户籍地址", r.getHouseholdAddress());
+            row.put("现住地址", r.getCurrentAddress());
+            row.put("感染筛查日期", formatDate(r.getInfectionScreenDate()));
             row.put("感染筛查结果", r.getInfectionResult());
             row.put("追踪状态", trackingLabel);
             row.put("未到位次数", r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0);
             row.put("首次诊断结果", r.getDiagnosisFirst());
             row.put("最终诊断结果", r.getDiagnosisResult());
+            row.put("是否胸片检查", r.getHasChestXray());
+            row.put("胸片检查日期", formatDate(r.getChestXrayDate()));
+            row.put("胸片检查结果", r.getChestXrayResult());
+            row.put("追踪情况", r.getTrackingRemark());
+            row.put("备注", r.getRemark());
             row.put("通知单状态", noticeStatusLabel);
             row.put("督导表状态", supervisionLabel);
             row.put("预防性治疗方案", sv != null ? sv.getTreatmentPlan() : "");
@@ -755,7 +792,7 @@ public class ExportController {
         }
 
         log.info("[导出] 潜伏感染者信息总表 {} 条", rows.size());
-        writeExcel(response, "潜伏感染者信息总表", rows);
+        writeExcel(response, "潜伏感染者信息总表", rows, ALL_LATENT_EXPORT_HEADERS);
     }
 
     private String formatDate(LocalDate date) {

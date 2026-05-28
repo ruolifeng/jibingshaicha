@@ -3,6 +3,7 @@ import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 /** 首次入户随访记录 — 查看详情弹窗（学校人群 & 重点人群共用） */
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
+import { formatFirstVisitMethod } from "@@/utils/firstVisit"
 
 const props = defineProps<{
   visible: boolean
@@ -69,7 +70,7 @@ const printVisible = ref(false)
           {{ visitData.visitDate || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="随访方式">
-          {{ visitData.visitMethod || "-" }}
+          {{ formatFirstVisitMethod(visitData.visitMethod, visitData.visitMethodOther) }}
         </el-descriptions-item>
         <el-descriptions-item label="患者类型">
           {{ visitData.patientType || "-" }}

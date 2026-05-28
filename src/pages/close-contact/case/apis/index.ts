@@ -1,5 +1,15 @@
 import { request } from "@/http/axios"
 
+/** 下载密接个案表导入模板（73 列表头） */
+export function downloadCloseContactCaseTemplateApi() {
+  return request<Blob>({
+    url: "template/download",
+    method: "get",
+    params: { type: "closeContactCase" },
+    responseType: "blob"
+  })
+}
+
 /** 上传密接个案表 Excel（73列模板） */
 export function uploadCloseContactCaseApi(file: File) {
   const formData = new FormData()

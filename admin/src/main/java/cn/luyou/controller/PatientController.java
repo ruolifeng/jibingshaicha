@@ -263,6 +263,12 @@ public class PatientController {
         if (StrUtil.isBlank(fv.getVisitMethod())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择随访方式");
         }
+        if ("其他".equals(fv.getVisitMethod()) && StrUtil.isBlank(fv.getVisitMethodOther())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访方式");
+        }
+        if (!"其他".equals(fv.getVisitMethod())) {
+            fv.setVisitMethodOther(null);
+        }
         if (StrUtil.isBlank(fv.getPatientType())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择患者类型");
         }
@@ -422,6 +428,7 @@ public class PatientController {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访时间");
         }
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
+        validateFollowUpVisitMethod(followUpVisit);
         validateStopTreatmentOnSave(followUpVisit);
         if (followUpVisit.getId() != null) {
             FollowUpVisit existing = followUpVisitService.getById(followUpVisit.getId());
@@ -457,6 +464,16 @@ public class PatientController {
         Patient patient = patientService.getById(followUpVisit.getPatientId());
         if (patient != null && Integer.valueOf(1).equals(patient.getArchived())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者已归档，无法填写后续随访");
+        }
+    }
+
+    private void validateFollowUpVisitMethod(FollowUpVisit followUpVisit) {
+        if ("4".equals(followUpVisit.getVisitMethod())
+                && StrUtil.isBlank(followUpVisit.getVisitMethodOther())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访方式");
+        }
+        if (!"4".equals(followUpVisit.getVisitMethod())) {
+            followUpVisit.setVisitMethodOther(null);
         }
     }
 

@@ -151,11 +151,19 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 15)
     private String phone;
 
+    /** 联系电话与接触者关系（手动录入，Excel 模板无此列） */
+    @ExcelIgnore
+    private String phoneContactRelation;
+
     @ExcelProperty(index = 16)
     private String contactType;
 
     @ExcelProperty(index = 17)
     private String contactPlace;
+
+    /** 接触场所选「其他（需手工录入）」时的补充说明 */
+    @ExcelIgnore
+    private String contactPlaceOther;
 
     // ===== 初次筛查信息（S-AE，index 18-30）=====
     @ExcelProperty(index = 18, converter = FlexibleLocalDateConverter.class)
@@ -182,8 +190,14 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 25)
     private String imagingMethod;
 
+    @ExcelIgnore
+    private String imagingMethodOther;
+
     @ExcelProperty(index = 26)
     private String imagingResult;
+
+    @ExcelIgnore
+    private String imagingResultOther;
 
     @ExcelProperty(index = 27, converter = FlexibleLocalDateConverter.class)
     private LocalDate sputumCheckDate;
@@ -191,12 +205,21 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 28)
     private String sputumCheckMethod;
 
+    @ExcelIgnore
+    private String sputumCheckMethodOther;
+
     @ExcelProperty(index = 29)
     private String sputumCheckResult;
+
+    @ExcelIgnore
+    private String sputumCheckResultOther;
 
     /** 最终筛查结果（AE列，核心分类字段）：活动性肺结核/潜伏感染者/未做/未发现异常 */
     @ExcelProperty(index = 30)
     private String finalScreeningResult;
+
+    @ExcelIgnore
+    private String finalScreeningResultOther;
 
     // ===== 预防性治疗信息（AF-AM，index 31-38）=====
     @ExcelProperty(index = 31)
@@ -344,6 +367,7 @@ public class ScreeningCloseContact extends BaseEntity {
      *   6 - 未发现异常（待3月复查）
      *   7 - 未发现异常（3月复查阴性，结束）
      *   8 - 未发现异常（3月复查阳性，转②流程）
+     *   9 - 疑似肺结核（结案）
      */
     @ExcelIgnore
     private Integer ccStatus;

@@ -10,7 +10,8 @@ import {
   SPUTUM_STATUS_OPTIONS,
   SYMPTOM_OPTIONS,
   VENTILATION_OPTIONS,
-  VISIT_METHOD_OPTIONS
+  VISIT_METHOD_OPTIONS,
+  VISIT_METHOD_OTHER
 } from "@@/constants/disease"
 import { applyFirstVisitChemotherapyDefault, canEditFirstVisit, FIRST_VISIT_EDIT_DAYS_LEVEL5, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
@@ -36,6 +37,7 @@ function createEmptyForm() {
     formNo: "",
     visitDate: "",
     visitMethod: "",
+    visitMethodOther: "",
     patientType: "",
     sputumStatus: "",
     drugResistance: "",
@@ -76,6 +78,16 @@ const rules: FormRules = {
   formNo: FIRST_VISIT_FORM_NO_RULES,
   visitDate: [{ required: true, message: "请选择随访时间", trigger: "change" }],
   visitMethod: [{ required: true, message: "请选择随访方式", trigger: "change" }],
+  visitMethodOther: [{
+    validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+      if (firstVisitForm.visitMethod === VISIT_METHOD_OTHER && !value?.trim()) {
+        callback(new Error("请填写随访方式"))
+      } else {
+        callback()
+      }
+    },
+    trigger: "blur"
+  }],
   patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
   sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
   drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
@@ -159,6 +171,15 @@ async function loadExisting() {
 }
 
 watch(
+  () => firstVisitForm.visitMethod,
+  (val) => {
+    if (val !== VISIT_METHOD_OTHER) {
+      firstVisitForm.visitMethodOther = ""
+    }
+  }
+)
+
+watch(
   () => props.visible,
   async (val) => {
     if (val) {
@@ -177,6 +198,9 @@ function buildPayload() {
     patientId: props.patientRow!.id,
     populationType: props.patientRow!.populationType,
     ...firstVisitForm,
+    visitMethodOther: firstVisitForm.visitMethod === VISIT_METHOD_OTHER
+      ? firstVisitForm.visitMethodOther.trim()
+      : null,
     symptoms: firstVisitForm.symptoms.join(","),
     drugForm: firstVisitForm.drugForm.join(","),
     educationItems: JSON.stringify(firstVisitForm.educationItems)
@@ -263,6 +287,11 @@ async function handleSave() {
                 {{ item }}
               </el-radio>
             </el-radio-group>
+          </el-form-item>
+        </el-col>
+        <el-col v-if="firstVisitForm.visitMethod === VISIT_METHOD_OTHER" :span="8">
+          <el-form-item label="随访方式-其他" prop="visitMethodOther">
+            <el-input v-model="firstVisitForm.visitMethodOther" placeholder="请填写" />
           </el-form-item>
         </el-col>
         <el-col :span="8">

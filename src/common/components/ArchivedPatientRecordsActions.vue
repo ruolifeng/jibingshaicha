@@ -120,7 +120,7 @@ function viewNotice() {
         <el-table-column prop="treatmentMonth" label="治疗月序" />
         <el-table-column label="随访方式">
           <template #default="{ row: record }">
-            {{ followUpFormatters.visitMethod(record.visitMethod) }}
+            {{ followUpFormatters.visitMethod(record.visitMethod, record.visitMethodOther) }}
           </template>
         </el-table-column>
         <el-table-column prop="missedDoses" label="漏服次数" />

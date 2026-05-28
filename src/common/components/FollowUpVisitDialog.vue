@@ -20,6 +20,7 @@ import {
   FOLLOW_UP_SUPERVISOR_OPTIONS,
   FOLLOW_UP_SYMPTOM_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OPTIONS,
+  FOLLOW_UP_VISIT_METHOD_OTHER,
   STOP_TREATMENT_REASON_OPTIONS,
   STOP_TREATMENT_YES_NO_OPTIONS,
   YES_NO_OPTIONS
@@ -88,6 +89,7 @@ interface FollowUpForm {
   supervisor: string
   supervisorOther: string
   visitMethod: string
+  visitMethodOther: string
   symptoms: string[]
   symptomsOther: string
   smokingAmount: string
@@ -129,6 +131,7 @@ function createEmptyForm(): FollowUpForm {
     supervisor: "",
     supervisorOther: "",
     visitMethod: "",
+    visitMethodOther: "",
     symptoms: [],
     symptomsOther: "",
     smokingAmount: "",
@@ -186,6 +189,15 @@ watch(
   (val) => {
     if (val !== "是") {
       clearStopTreatmentFields()
+    }
+  }
+)
+
+watch(
+  () => form.visitMethod,
+  (val) => {
+    if (val !== FOLLOW_UP_VISIT_METHOD_OTHER) {
+      form.visitMethodOther = ""
     }
   }
 )
@@ -249,6 +261,9 @@ function buildPayload() {
   } else if (form.stopTreatmentReason !== "其它") {
     payload.stopTreatmentReasonOther = null
   }
+  if (form.visitMethod !== FOLLOW_UP_VISIT_METHOD_OTHER) {
+    payload.visitMethodOther = null
+  }
   return payload
 }
 
@@ -286,6 +301,10 @@ async function handleSave() {
   if (!props.patientId) return
   if (!form.visitDate) {
     ElMessage.warning("请填写随访时间")
+    return
+  }
+  if (form.visitMethod === FOLLOW_UP_VISIT_METHOD_OTHER && !form.visitMethodOther.trim()) {
+    ElMessage.warning("请填写随访方式")
     return
   }
   if (!validateStopTreatment()) return
@@ -358,6 +377,11 @@ async function handleSave() {
             <el-select v-model="form.visitMethod" placeholder="请选择" style="width: 100%">
               <el-option v-for="o in FOLLOW_UP_VISIT_METHOD_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col v-if="form.visitMethod === FOLLOW_UP_VISIT_METHOD_OTHER" :span="8">
+          <el-form-item label="随访方式-其他">
+            <el-input v-model="form.visitMethodOther" placeholder="请填写" />
           </el-form-item>
         </el-col>
         <el-col :span="8">

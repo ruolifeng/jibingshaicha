@@ -23,8 +23,10 @@ public class FirstVisit extends BaseEntity {
     private String formNo;
     /** 随访时间 */
     private LocalDate visitDate;
-    /** 随访方式：门诊/家庭 */
+    /** 随访方式：门诊/家庭/其他 */
     private String visitMethod;
+    /** 随访方式-其他（手工录入） */
+    private String visitMethodOther;
     /** 患者类型：初治/复治 */
     private String patientType;
     /** 痰菌情况：阳性/阴性/未查痰 */

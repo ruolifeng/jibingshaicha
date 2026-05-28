@@ -29,10 +29,10 @@ import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -93,7 +93,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             new String[]{"drugSensitivityH", "药敏结果：异烟肼（H）"}
     );
 
-    private final DepartmentService departmentService;
+    private final DataScopeHelper dataScopeHelper;
     private final EpidemicReportService epidemicReportService;
     private final ObjectMapper objectMapper;
     private final NoticeMapper noticeMapper;
@@ -169,18 +169,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     /** 与列表查询保持一致的数据权限过滤 */
     private void applyPatientScopeFilter(LambdaQueryWrapper<Patient> wrapper) {
-        if (!BaseContext.isSuperAdmin()) {
-            Integer currentRole = BaseContext.getCurrentRole();
-            if (currentRole != null && currentRole == 6) {
-                Long userId = BaseContext.getCurrentId();
-                wrapper.inSql(Patient::getId,
-                        "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
-                                + " AND notice_type = 'patient' AND deleted = 0");
-            } else {
-                List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-                wrapper.in(Patient::getDepartmentId, deptIds);
-            }
-        }
+        dataScopeHelper.applyPatientScope(wrapper);
     }
 
     /** 五级用户已完成首次随访的可编辑天数 */
@@ -534,18 +523,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
-        if (!BaseContext.isSuperAdmin()) {
-            Integer currentRole = BaseContext.getCurrentRole();
-            if (currentRole != null && currentRole == 6) {
-                Long userId = BaseContext.getCurrentId();
-                wrapper.inSql(Patient::getId,
-                        "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
-                                + " AND notice_type = 'patient' AND deleted = 0");
-            } else {
-                List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-                wrapper.in(Patient::getDepartmentId, deptIds);
-            }
-        }
+        dataScopeHelper.applyPatientScope(wrapper);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
@@ -730,6 +708,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePatient(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
         Patient patient = getById(id);
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
@@ -916,6 +895,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public Patient getDetail(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
         Patient patient = getById(id);
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
@@ -931,6 +911,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateBasicInfo(Long id, Map<String, Object> body) {
+        dataScopeHelper.assertPatientAccessible(id);
         Patient patient = getById(id);
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
@@ -1114,6 +1095,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .source("manual")
                 .archived(0)
                 .departmentId(BaseContext.getCurrentDepartmentId())
+                .creatorId(BaseContext.getCurrentId())
                 .build();
 
         String birthDate = body.getOrDefault("birthDate", "").toString().trim();
@@ -1242,6 +1224,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .source("manual")
                         .archived(0)
                         .departmentId(BaseContext.getCurrentDepartmentId())
+                        .creatorId(BaseContext.getCurrentId())
                         .build();
 
                 String birthDate = getImportField(row, headerIndex, "出生日期");

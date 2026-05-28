@@ -311,6 +311,26 @@ export function formatLatentSupervisionTreatmentPlan(treatmentPlan: string, cust
 /** 患者类型（患者通知单） */
 export const PATIENT_TYPE_OPTIONS = ["初治", "复治"]
 
+/** 患者通知单：将治疗方案字符串回填到表单（含个体化方案） */
+export function applyPatientNoticeTreatmentPlan(
+  form: { treatmentPlan: string, customPlanDetail: string },
+  plan?: string
+) {
+  const tp = (plan || "").trim()
+  if (!tp) {
+    form.treatmentPlan = ""
+    form.customPlanDetail = ""
+    return
+  }
+  if (!TREATMENT_PLAN_OPTIONS.includes(tp)) {
+    form.treatmentPlan = "个体化方案"
+    form.customPlanDetail = tp
+  } else {
+    form.treatmentPlan = tp
+    form.customPlanDetail = ""
+  }
+}
+
 /** 患者通知单管理方式 */
 export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导", "全程管理", "未管理"]
 
@@ -329,11 +349,13 @@ export const ACTIVE_ROUND_MAP: Record<number, string> = {
 
 // ==================== 患者随访相关 ====================
 
-/** 随访方式（首次入户随访，必须上门） */
-export const VISIT_METHOD_OPTIONS = ["门诊", "家庭"]
+/** 随访方式（首次入户随访） */
+export const VISIT_METHOD_OTHER = "其他"
+
+export const VISIT_METHOD_OPTIONS = ["门诊", "家庭", VISIT_METHOD_OTHER]
 
 /** 后续随访方式（可电话随访） */
-export const FOLLOW_UP_METHOD_OPTIONS = ["门诊", "家庭", "电话"]
+export const FOLLOW_UP_METHOD_OPTIONS = ["门诊", "家庭", "电话", VISIT_METHOD_OTHER]
 
 /** 痰菌情况 */
 export const SPUTUM_STATUS_OPTIONS = ["阳性", "阴性", "未查痰"]
@@ -462,11 +484,14 @@ export const FOLLOW_UP_SUPERVISOR_OPTIONS = [
   { value: "4", label: "其他" }
 ]
 
-/** 随访方式（V15，对齐模板的 1门诊/2家庭/3电话；改用编号） */
+/** 随访方式（V15，对齐模板的 1门诊/2家庭/3电话/4其他） */
+export const FOLLOW_UP_VISIT_METHOD_OTHER = "4"
+
 export const FOLLOW_UP_VISIT_METHOD_OPTIONS = [
   { value: "1", label: "门诊" },
   { value: "2", label: "家庭" },
-  { value: "3", label: "电话" }
+  { value: "3", label: "电话" },
+  { value: FOLLOW_UP_VISIT_METHOD_OTHER, label: "其他" }
 ]
 
 /** 后续随访 — 症状及体征（多选，0-11） */

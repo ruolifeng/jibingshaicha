@@ -170,6 +170,7 @@ async function handleImport(uploadFile: any) {
             <el-option label="疫情筛查" value="regular" />
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
+            <el-option label="密接" value="closeContact" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -326,7 +327,7 @@ async function handleImport(uploadFile: any) {
           模板包含字段：{{ LATENT_IMPORT_FIELDS.join("、") }}
         </p>
         <p class="text-sm text-gray-500">
-          数据来源可填写：学生筛查、重点人群、疫情筛查、大疫情、推介
+          数据来源可填写：学生筛查、重点人群、疫情筛查、大疫情、推介、密接
         </p>
         <p class="text-sm text-gray-500 mt-2">
           证件号、联系电话列建议设为「文本」格式，避免 Excel 自动转换导致校验失败

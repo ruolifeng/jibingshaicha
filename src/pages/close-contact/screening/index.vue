@@ -1,8 +1,28 @@
 <script lang="ts" setup>
+import type { FormInstance, FormRules } from "element-plus"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { useRouter } from "vue-router"
+import {
+  CC_FINAL_RESULT_STAT_OPTIONS,
+  CC_FINAL_SCREENING_RESULT_OPTIONS,
+  CC_IMAGING_METHOD_OPTIONS,
+  CC_IMAGING_RESULT_OPTIONS,
+  CC_INFECTION_CHECK_METHOD_OPTIONS,
+  CC_SPUTUM_METHOD_OPTIONS,
+  CC_SPUTUM_RESULT_OPTIONS,
+  CC_SYMPTOM1_OPTIONS,
+  CONTACT_PLACE_OPTIONS,
+  CONTACT_PLACE_OTHER,
+  CONTACT_TYPE_OPTIONS,
+  formatContactPlace,
+  formatFieldWithOther,
+  getFinalScreeningResultTagType,
+  sanitizeScreeningOtherFields,
+  SCREENING_FIELD_OTHER,
+  selectOptionsWithLegacy
+} from "@@/constants/screening-close-contact"
 import { extractDateRangeParams } from "@@/utils/searchParams"
+import { useRouter } from "vue-router"
 import {
   batchDeleteScreeningCloseContactApi,
   countByResultApi,
@@ -42,18 +62,11 @@ function tagType(t: string): TagType {
   return (allowed.includes(t) ? t : "info") as TagType
 }
 
-/** 最终筛查结果选项 */
-const FINAL_RESULT_OPTIONS: { label: string, value: string, type: TagType }[] = [
-  { label: "活动性肺结核", value: "活动性肺结核", type: "danger" },
-  { label: "潜伏感染者", value: "潜伏感染者", type: "warning" },
-  { label: "未做", value: "未做", type: "info" },
-  { label: "未发现异常", value: "未发现异常", type: "success" }
-]
-
 /** 流程状态映射 */
 const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
   0: { label: "待处理", type: "info" },
-  1: { label: "活动性肺结核", type: "danger" },
+  1: { label: "活动性肺结核-结案", type: "danger" },
+  9: { label: "疑似肺结核-结案", type: "warning" },
   2: { label: "潜伏感染-管理中", type: "warning" },
   3: { label: "潜伏感染-已归档", type: "info" },
   4: { label: "随访监测中", type: "warning" },
@@ -63,30 +76,56 @@ const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
   8: { label: "3月阳性-转潜伏流程", type: "danger" }
 }
 
-function getFinalResultTag(result: string): string {
-  const opt = FINAL_RESULT_OPTIONS.find(o => o.value === result)
-  return opt?.type || "info"
+function getFinalResultTag(result?: string, _other?: string): TagType {
+  if (!result || result === SCREENING_FIELD_OTHER) return "info"
+  return getFinalScreeningResultTagType(result) as TagType
 }
+
+function formatFinalScreeningDisplay(result?: string, other?: string): string {
+  return formatFieldWithOther(result, other) || ""
+}
+
+/** 下拉兼容历史数据 */
+const imagingMethodSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CC_IMAGING_METHOD_OPTIONS, editForm.value.imagingMethod))
+const imagingResultSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CC_IMAGING_RESULT_OPTIONS, editForm.value.imagingResult))
+const sputumMethodSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CC_SPUTUM_METHOD_OPTIONS, editForm.value.sputumCheckMethod))
+const sputumResultSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CC_SPUTUM_RESULT_OPTIONS, editForm.value.sputumCheckResult))
+const finalResultSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CC_FINAL_SCREENING_RESULT_OPTIONS, editForm.value.finalScreeningResult))
+
+const OTHER_FIELD_WATCH_PAIRS = [
+  ["imagingMethod", "imagingMethodOther"],
+  ["imagingResult", "imagingResultOther"],
+  ["sputumCheckMethod", "sputumCheckMethodOther"],
+  ["sputumCheckResult", "sputumCheckResultOther"],
+  ["finalScreeningResult", "finalScreeningResultOther"]
+] as const
 
 async function fetchData() {
   loading.value = true
   try {
-    const [listRes, statsRes] = await Promise.all([
-      getScreeningCloseContactListApi({
-        page: paginationData.currentPage,
-        size: paginationData.pageSize,
-        name: searchForm.name || undefined,
-        idNumber: searchForm.idNumber || undefined,
-        district: searchForm.district || undefined,
-        phone: searchForm.phone || undefined,
-        finalScreeningResult: searchForm.finalScreeningResult || undefined,
-        ...extractDateRangeParams(searchForm.dateRange)
-      }),
-      countByResultApi()
-    ])
+    const listRes = await getScreeningCloseContactListApi({
+      page: paginationData.currentPage,
+      size: paginationData.pageSize,
+      name: searchForm.name || undefined,
+      idNumber: searchForm.idNumber || undefined,
+      district: searchForm.district || undefined,
+      phone: searchForm.phone || undefined,
+      finalScreeningResult: searchForm.finalScreeningResult || undefined,
+      ...extractDateRangeParams(searchForm.dateRange)
+    })
     tableData.value = listRes.data.records
     total.value = listRes.data.total
-    resultStats.value = statsRes.data || {}
+    try {
+      const statsRes = await countByResultApi()
+      resultStats.value = statsRes.data || {}
+    } catch {
+      resultStats.value = {}
+    }
   } finally {
     loading.value = false
   }
@@ -123,8 +162,8 @@ async function handleUpload(uploadFile: any) {
     const { data } = await uploadScreeningCloseContactApi(uploadFile.raw)
     importResult.value = data
     importResultVisible.value = true
-  } catch {
-    ElMessage.error("上传失败")
+  } catch (err: any) {
+    ElMessage.error(err?.message || "上传失败")
     return
   }
   fetchData()
@@ -173,7 +212,33 @@ function goToLatent() {
 const editVisible = ref(false)
 const editSaving = ref(false)
 const editForm = ref<Record<string, any>>({})
+const editFormRef = ref<FormInstance>()
 const editMode = ref<"create" | "edit">("edit")
+
+/** 编辑时兼容历史自由文本的接触场所 */
+const contactPlaceSelectOptions = computed(() => {
+  const current = editForm.value.contactPlace
+  if (current && !(CONTACT_PLACE_OPTIONS as readonly string[]).includes(current)) {
+    return [current, ...CONTACT_PLACE_OPTIONS]
+  }
+  return [...CONTACT_PLACE_OPTIONS]
+})
+
+const editContactRules: FormRules = {
+  name: [{ required: true, message: "请输入接触者姓名", trigger: "blur" }],
+  idNumber: [{ required: true, message: "请输入身份证号", trigger: "blur" }],
+  phone: [{ required: true, message: "请输入联系电话", trigger: "blur" }],
+  contactPlaceOther: [{
+    validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+      if (editForm.value.contactPlace === CONTACT_PLACE_OTHER && !String(value || "").trim()) {
+        callback(new Error("请填写接触场所具体内容"))
+      } else {
+        callback()
+      }
+    },
+    trigger: "blur"
+  }]
+}
 
 function getEmptyEditForm() {
   return {
@@ -187,10 +252,12 @@ function getEmptyEditForm() {
     idNumber: "",
     age: undefined,
     phone: "",
+    phoneContactRelation: "",
     gender: "",
     ethnicity: "",
     contactType: "",
     contactPlace: "",
+    contactPlaceOther: "",
     registrationDate: "",
     firstScreenDate: "",
     symptom1: "",
@@ -200,11 +267,16 @@ function getEmptyEditForm() {
     infectionCheckResult: "",
     imagingDate: "",
     imagingMethod: "",
+    imagingMethodOther: "",
     imagingResult: "",
+    imagingResultOther: "",
     sputumCheckDate: "",
     sputumCheckMethod: "",
+    sputumCheckMethodOther: "",
     sputumCheckResult: "",
+    sputumCheckResultOther: "",
     finalScreeningResult: "",
+    finalScreeningResultOther: "",
     hasPreventiveTreatment: "",
     preventivePlan: "",
     treatmentCompleted: "",
@@ -216,22 +288,76 @@ function handleCreate() {
   editMode.value = "create"
   editForm.value = getEmptyEditForm()
   editVisible.value = true
+  nextTick(() => editFormRef.value?.clearValidate())
 }
 
 function handleEdit(row: any) {
   editMode.value = "edit"
   editForm.value = { ...row }
   editVisible.value = true
+  nextTick(() => editFormRef.value?.clearValidate())
+}
+
+function validateContactBasicManual(): boolean {
+  if (!editForm.value.name?.trim()) {
+    ElMessage.warning("请输入接触者姓名")
+    return false
+  }
+  if (!editForm.value.idNumber?.trim()) {
+    ElMessage.warning("请输入身份证号")
+    return false
+  }
+  if (!editForm.value.phone?.trim()) {
+    ElMessage.warning("请输入联系电话")
+    return false
+  }
+  if (editForm.value.contactPlace === CONTACT_PLACE_OTHER && !String(editForm.value.contactPlaceOther || "").trim()) {
+    ElMessage.warning("接触场所选择「其他」时请填写具体内容")
+    return false
+  }
+  return true
+}
+
+function validateFirstScreenManual(): boolean {
+  const checks: { field: string, other: string, label: string }[] = [
+    { field: "imagingMethod", other: "imagingMethodOther", label: "影像方法" },
+    { field: "imagingResult", other: "imagingResultOther", label: "影像结果" },
+    { field: "sputumCheckMethod", other: "sputumCheckMethodOther", label: "痰检方法" },
+    { field: "sputumCheckResult", other: "sputumCheckResultOther", label: "痰检结果" },
+    { field: "finalScreeningResult", other: "finalScreeningResultOther", label: "最终筛查结果" }
+  ]
+  for (const c of checks) {
+    if (editForm.value[c.field] === SCREENING_FIELD_OTHER && !String(editForm.value[c.other] || "").trim()) {
+      ElMessage.warning(`${c.label}选择「其他」时请填写具体内容`)
+      return false
+    }
+  }
+  return true
 }
 
 async function handleSave() {
+  const form = editFormRef.value
+  if (form) {
+    try {
+      await form.validate()
+    } catch {
+      ElMessage.warning("请完善接触者基本信息中的必填项")
+      return
+    }
+  } else if (!validateContactBasicManual()) {
+    return
+  }
+  if (!validateFirstScreenManual()) {
+    return
+  }
+  const payload = sanitizeScreeningOtherFields(editForm.value)
   editSaving.value = true
   try {
     if (editMode.value === "create") {
-      await createScreeningCloseContactApi(editForm.value)
+      await createScreeningCloseContactApi(payload)
       ElMessage.success("新增成功")
     } else {
-      await updateScreeningCloseContactApi(editForm.value.id, editForm.value)
+      await updateScreeningCloseContactApi(payload.id, payload)
       ElMessage.success("保存成功")
     }
     editVisible.value = false
@@ -241,6 +367,20 @@ async function handleSave() {
   } finally {
     editSaving.value = false
   }
+}
+
+watch(() => editForm.value.contactPlace, (place: string) => {
+  if (place !== CONTACT_PLACE_OTHER) {
+    editForm.value.contactPlaceOther = ""
+  }
+})
+
+for (const [main, other] of OTHER_FIELD_WATCH_PAIRS) {
+  watch(() => editForm.value[main], (val: string) => {
+    if (val !== SCREENING_FIELD_OTHER) {
+      editForm.value[other] = ""
+    }
+  })
 }
 
 async function handleDelete(row: any) {
@@ -297,6 +437,7 @@ function hasFollowupData(row: any, month: number): boolean {
 function getFollowupTag(result: string): string {
   if (!result) return "info"
   if (result.includes("活动性肺结核")) return "danger"
+  if (result.includes("疑似肺结核")) return "warning"
   if (result.includes("潜伏感染者")) return "warning"
   if (result.includes("未发现异常")) return "success"
   return "info"
@@ -348,7 +489,7 @@ async function handleThreeMonthSubmit() {
   <div class="app-container">
     <!-- 统计卡片 -->
     <el-row :gutter="12" class="mb-4">
-      <el-col :span="6" v-for="opt in FINAL_RESULT_OPTIONS" :key="opt.value">
+      <el-col :xs="12" :sm="8" :md="6" :lg="4" v-for="opt in CC_FINAL_RESULT_STAT_OPTIONS" :key="opt.value">
         <el-card shadow="hover" class="stat-card" @click="searchForm.finalScreeningResult = opt.value; handleSearch()">
           <div class="flex items-center justify-between">
             <span class="text-sm text-gray-500">{{ opt.label }}</span>
@@ -397,7 +538,7 @@ async function handleThreeMonthSubmit() {
         </el-form-item>
         <el-form-item label="最终筛查结果">
           <el-select v-model="searchForm.finalScreeningResult" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="opt in FINAL_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+            <el-option v-for="opt in CC_FINAL_RESULT_STAT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -448,6 +589,11 @@ async function handleThreeMonthSubmit() {
           <el-table-column prop="city" label="市/州" min-width="100" show-overflow-tooltip />
           <el-table-column prop="district" label="区/县" min-width="100" show-overflow-tooltip />
           <el-table-column prop="contactType" label="接触类型" min-width="100" show-overflow-tooltip />
+          <el-table-column label="接触场所" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatContactPlace(row.contactPlace, row.contactPlaceOther) || '—' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="sourcePatientName" label="原患者姓名" min-width="110" show-overflow-tooltip />
           <el-table-column prop="registrationDate" label="登记日期" min-width="110" />
           <el-table-column prop="infectionCheckMethod" label="感染检测方法" min-width="120" show-overflow-tooltip />
@@ -480,8 +626,12 @@ async function handleThreeMonthSubmit() {
           </el-table-column>
           <el-table-column label="最终筛查结果" min-width="130" fixed="right">
             <template #default="{ row }">
-              <el-tag v-if="row.finalScreeningResult" :type="tagType(getFinalResultTag(row.finalScreeningResult))" size="small">
-                {{ row.finalScreeningResult }}
+              <el-tag
+                v-if="formatFinalScreeningDisplay(row.finalScreeningResult, row.finalScreeningResultOther)"
+                :type="tagType(getFinalResultTag(row.finalScreeningResult, row.finalScreeningResultOther))"
+                size="small"
+              >
+                {{ formatFinalScreeningDisplay(row.finalScreeningResult, row.finalScreeningResultOther) }}
               </el-tag>
               <span v-else class="text-gray-400">—</span>
             </template>
@@ -574,16 +724,16 @@ async function handleThreeMonthSubmit() {
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="接触者基本信息">
-          <el-form :model="editForm" label-width="130px">
+          <el-form ref="editFormRef" :model="editForm" :rules="editContactRules" label-width="160px">
             <el-row :gutter="16">
               <el-col :span="8">
-                <el-form-item label="接触者姓名">
-                  <el-input v-model="editForm.name" />
+                <el-form-item label="接触者姓名" prop="name" required>
+                  <el-input v-model="editForm.name" placeholder="请输入" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="身份证号">
-                  <el-input v-model="editForm.idNumber" />
+                <el-form-item label="身份证号" prop="idNumber" required>
+                  <el-input v-model="editForm.idNumber" placeholder="请输入" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -592,13 +742,18 @@ async function handleThreeMonthSubmit() {
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="联系电话">
-                  <el-input v-model="editForm.phone" />
+                <el-form-item label="联系电话" prop="phone" required>
+                  <el-input v-model="editForm.phone" placeholder="请输入" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="联系电话与接触者关系">
+                  <el-input v-model="editForm.phoneContactRelation" placeholder="如本人、父母等" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="性别">
-                  <el-select v-model="editForm.gender" style="width:100%">
+                  <el-select v-model="editForm.gender" style="width:100%" clearable>
                     <el-option label="男" value="男" /><el-option label="女" value="女" />
                   </el-select>
                 </el-form-item>
@@ -610,12 +765,21 @@ async function handleThreeMonthSubmit() {
               </el-col>
               <el-col :span="8">
                 <el-form-item label="接触类型">
-                  <el-input v-model="editForm.contactType" />
+                  <el-select v-model="editForm.contactType" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in CONTACT_TYPE_OPTIONS" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="接触场所">
-                  <el-input v-model="editForm.contactPlace" />
+                  <el-select v-model="editForm.contactPlace" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in contactPlaceSelectOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="editForm.contactPlace === CONTACT_PLACE_OTHER" :span="8">
+                <el-form-item label="接触场所-其他" prop="contactPlaceOther" required>
+                  <el-input v-model="editForm.contactPlaceOther" placeholder="请手工录入" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -636,7 +800,9 @@ async function handleThreeMonthSubmit() {
               </el-col>
               <el-col :span="8">
                 <el-form-item label="结核症状1">
-                  <el-input v-model="editForm.symptom1" />
+                  <el-select v-model="editForm.symptom1" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in CC_SYMPTOM1_OPTIONS" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -651,7 +817,9 @@ async function handleThreeMonthSubmit() {
               </el-col>
               <el-col :span="8">
                 <el-form-item label="感染检测方法">
-                  <el-input v-model="editForm.infectionCheckMethod" />
+                  <el-select v-model="editForm.infectionCheckMethod" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in CC_INFECTION_CHECK_METHOD_OPTIONS" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -666,29 +834,80 @@ async function handleThreeMonthSubmit() {
               </el-col>
               <el-col :span="8">
                 <el-form-item label="影像方法">
-                  <el-input v-model="editForm.imagingMethod" />
+                  <el-select v-model="editForm.imagingMethod" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in imagingMethodSelectOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="editForm.imagingMethod === SCREENING_FIELD_OTHER" :span="8">
+                <el-form-item label="影像方法-其他" required>
+                  <el-input v-model="editForm.imagingMethodOther" placeholder="请手工录入" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="影像结果">
-                  <el-input v-model="editForm.imagingResult" />
+                  <el-select v-model="editForm.imagingResult" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in imagingResultSelectOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="editForm.imagingResult === SCREENING_FIELD_OTHER" :span="8">
+                <el-form-item label="影像结果-其他" required>
+                  <el-input v-model="editForm.imagingResultOther" placeholder="请手工录入" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="痰检日期">
+                  <el-date-picker v-model="editForm.sputumCheckDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="痰检方法">
-                  <el-input v-model="editForm.sputumCheckMethod" />
+                  <el-select v-model="editForm.sputumCheckMethod" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in sputumMethodSelectOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="editForm.sputumCheckMethod === SCREENING_FIELD_OTHER" :span="8">
+                <el-form-item label="痰检方法-其他" required>
+                  <el-input v-model="editForm.sputumCheckMethodOther" placeholder="请手工录入" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="痰检结果">
-                  <el-input v-model="editForm.sputumCheckResult" />
+                  <el-select v-model="editForm.sputumCheckResult" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in sputumResultSelectOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="editForm.sputumCheckResult === SCREENING_FIELD_OTHER" :span="8">
+                <el-form-item label="痰检结果-其他" required>
+                  <el-input v-model="editForm.sputumCheckResultOther" placeholder="请手工录入" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="最终筛查结果">
-                  <el-select v-model="editForm.finalScreeningResult" style="width:100%" clearable>
-                    <el-option v-for="opt in FINAL_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                  <el-select v-model="editForm.finalScreeningResult" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in finalResultSelectOptions" :key="opt" :label="opt" :value="opt">
+                      <span
+                        :class="{
+                          'text-red-600 font-medium': opt === '活动性肺结核',
+                          'text-yellow-600 font-medium': opt === '疑似肺结核',
+                        }"
+                      >{{ opt }}</span>
+                    </el-option>
                   </el-select>
+                  <div v-if="editForm.finalScreeningResult === '活动性肺结核'" class="text-xs text-red-500 mt-1">
+                    结案流程
+                  </div>
+                  <div v-else-if="editForm.finalScreeningResult === '疑似肺结核'" class="text-xs text-yellow-600 mt-1">
+                    结案流程
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="editForm.finalScreeningResult === SCREENING_FIELD_OTHER" :span="8">
+                <el-form-item label="最终筛查结果-其他" required>
+                  <el-input v-model="editForm.finalScreeningResultOther" placeholder="请手工录入" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -748,11 +967,14 @@ async function handleThreeMonthSubmit() {
             <el-descriptions-item label="联系电话">
               {{ detailRow.phone }}
             </el-descriptions-item>
+            <el-descriptions-item label="联系电话与接触者关系">
+              {{ detailRow.phoneContactRelation || '—' }}
+            </el-descriptions-item>
             <el-descriptions-item label="接触类型">
-              {{ detailRow.contactType }}
+              {{ detailRow.contactType || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="接触场所">
-              {{ detailRow.contactPlace }}
+              {{ formatContactPlace(detailRow.contactPlace, detailRow.contactPlaceOther) || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="原患者姓名">
               {{ detailRow.sourcePatientName }}
@@ -764,8 +986,8 @@ async function handleThreeMonthSubmit() {
               {{ detailRow.registrationDate }}
             </el-descriptions-item>
             <el-descriptions-item label="最终筛查结果" :span="2">
-              <el-tag :type="tagType(getFinalResultTag(detailRow.finalScreeningResult))">
-                {{ detailRow.finalScreeningResult || '—' }}
+              <el-tag :type="tagType(getFinalResultTag(detailRow.finalScreeningResult, detailRow.finalScreeningResultOther))">
+                {{ formatFinalScreeningDisplay(detailRow.finalScreeningResult, detailRow.finalScreeningResultOther) || '—' }}
               </el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="流程状态">
@@ -778,25 +1000,33 @@ async function handleThreeMonthSubmit() {
         <el-tab-pane label="初次筛查">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="首次筛查日期">
-              {{ detailRow.firstScreenDate }}
+              {{ detailRow.firstScreenDate || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="结核症状1">
+              {{ detailRow.symptom1 || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="感染检测方法">
-              {{ detailRow.infectionCheckMethod }}
+              {{ detailRow.infectionCheckMethod || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="感染检测结果">
-              {{ detailRow.infectionCheckResult }}
+              {{ detailRow.infectionCheckResult || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="影像方法">
-              {{ detailRow.imagingMethod }}
+              {{ formatFieldWithOther(detailRow.imagingMethod, detailRow.imagingMethodOther) || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="影像结果">
-              {{ detailRow.imagingResult }}
+              {{ formatFieldWithOther(detailRow.imagingResult, detailRow.imagingResultOther) || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="痰检方法">
-              {{ detailRow.sputumCheckMethod }}
+              {{ formatFieldWithOther(detailRow.sputumCheckMethod, detailRow.sputumCheckMethodOther) || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="痰检结果">
-              {{ detailRow.sputumCheckResult }}
+              {{ formatFieldWithOther(detailRow.sputumCheckResult, detailRow.sputumCheckResultOther) || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="最终筛查结果" :span="2">
+              <el-tag :type="tagType(getFinalResultTag(detailRow.finalScreeningResult, detailRow.finalScreeningResultOther))">
+                {{ formatFinalScreeningDisplay(detailRow.finalScreeningResult, detailRow.finalScreeningResultOther) || '—' }}
+              </el-tag>
             </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>

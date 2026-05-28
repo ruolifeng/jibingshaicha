@@ -23,12 +23,17 @@ const form = reactive({
   age: null as number | null,
   idNumber: "",
   phone: "",
+  phoneContactRelation: "",
+  householdAddress: "",
+  currentAddress: "",
+  infectionScreenDate: "",
   infectionResult: "",
   diagnosisFirst: "",
   hasChestXray: "",
   chestXrayDate: "",
   chestXrayResult: "",
-  trackingRemark: ""
+  trackingRemark: "",
+  remark: ""
 })
 
 const rules = computed(() => ({
@@ -48,12 +53,17 @@ function resetForm() {
     age: null,
     idNumber: "",
     phone: "",
+    phoneContactRelation: "",
+    householdAddress: "",
+    currentAddress: "",
+    infectionScreenDate: "",
     infectionResult: "",
     diagnosisFirst: "",
     hasChestXray: "",
     chestXrayDate: "",
     chestXrayResult: "",
-    trackingRemark: ""
+    trackingRemark: "",
+    remark: ""
   })
 }
 
@@ -68,12 +78,17 @@ async function loadDetail() {
     age: data.age ?? null,
     idNumber: data.idNumber || "",
     phone: data.phone || "",
+    phoneContactRelation: data.phoneContactRelation || "",
+    householdAddress: data.householdAddress || "",
+    currentAddress: data.currentAddress || "",
+    infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
     infectionResult: data.infectionResult || "",
     diagnosisFirst: data.diagnosisFirst || "",
     hasChestXray: data.hasChestXray || "",
     chestXrayDate: data.chestXrayDate || "",
     chestXrayResult: data.chestXrayResult || "",
-    trackingRemark: data.trackingRemark || ""
+    trackingRemark: data.trackingRemark || "",
+    remark: data.remark || ""
   })
 }
 
@@ -119,11 +134,11 @@ async function handleSubmit() {
   <el-dialog
     :model-value="visible"
     :title="isCreate ? '新增潜伏感染者' : '修改潜伏感染者信息'"
-    width="660px"
+    width="720px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="130px">
       <el-row :gutter="16">
         <el-col v-if="isCreate" :span="12">
           <el-form-item label="数据来源" prop="populationType">
@@ -133,6 +148,7 @@ async function handleSubmit() {
               <el-option label="疫情筛查" value="regular" />
               <el-option label="大疫情" value="epidemic" />
               <el-option label="推介" value="referral" />
+              <el-option label="密接" value="closeContact" />
             </el-select>
           </el-form-item>
         </el-col>
@@ -165,6 +181,32 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
+          <el-form-item label="与联系人关系">
+            <el-input v-model="form.phoneContactRelation" placeholder="如：本人、母亲" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="户籍地址">
+            <el-input v-model="form.householdAddress" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="居住地址">
+            <el-input v-model="form.currentAddress" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="感染筛查时间">
+            <el-date-picker
+              v-model="form.infectionScreenDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="选择日期"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
           <el-form-item label="感染筛查结果">
             <el-input v-model="form.infectionResult" />
           </el-form-item>
@@ -193,8 +235,13 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="追踪备注">
+          <el-form-item label="追踪情况">
             <el-input v-model="form.trackingRemark" type="textarea" :rows="2" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="备注">
+            <el-input v-model="form.remark" type="textarea" :rows="2" />
           </el-form-item>
         </el-col>
       </el-row>

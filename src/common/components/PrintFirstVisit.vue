@@ -2,6 +2,7 @@
 /** 肺结核患者第一次入户随访记录表打印组件 */
 import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
 import { SYMPTOM_OPTIONS } from "@@/constants/disease"
+import { formatFirstVisitMethod } from "@@/utils/firstVisit"
 import { printElement } from "@@/utils/print"
 
 const props = defineProps<{
@@ -88,7 +89,7 @@ function handlePrint() {
             <th>随访时间</th>
             <td>{{ visitData?.visitDate }}</td>
             <th>随访方式</th>
-            <td>{{ visitData?.visitMethod }}</td>
+            <td>{{ formatFirstVisitMethod(visitData?.visitMethod, visitData?.visitMethodOther) }}</td>
           </tr>
           <tr>
             <th>患者类型</th>

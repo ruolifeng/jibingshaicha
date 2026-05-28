@@ -10,6 +10,7 @@ import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.DataScopeHelper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -30,9 +31,11 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
 
     private final SysMessageService sysMessageService;
     private final UserMapper userMapper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Override
     public void saveAsDraft(Notice notice) {
+        assertBizAccessible(notice);
         Notice existing = lambdaQuery()
                 .eq(Notice::getBizId, notice.getBizId())
                 .eq(Notice::getNoticeType, notice.getNoticeType())
@@ -53,6 +56,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
 
     @Override
     public void send(Notice notice) {
+        assertBizAccessible(notice);
         Notice existing = lambdaQuery()
                 .eq(Notice::getBizId, notice.getBizId())
                 .eq(Notice::getNoticeType, notice.getNoticeType())
@@ -134,6 +138,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
 
     @Override
     public List<Notice> listByBizWithUsers(Long bizId, String noticeType) {
+        assertBizAccessible(bizId, noticeType);
         List<Notice> notices = lambdaQuery()
                 .eq(Notice::getBizId, bizId)
                 .eq(Notice::getNoticeType, noticeType)
@@ -235,6 +240,21 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             String title = noticeTypeText + "已接收";
             String content = String.format("【%s】%s，接收方已确认接收。", noticeTypeText, notice.getPatientName());
             sysMessageService.sendMessage(notice.getSenderId(), title, content, "notice_confirmed", notice.getId());
+        }
+    }
+
+    private void assertBizAccessible(Notice notice) {
+        if (notice == null) {
+            return;
+        }
+        assertBizAccessible(notice.getBizId(), notice.getNoticeType());
+    }
+
+    private void assertBizAccessible(Long bizId, String noticeType) {
+        if ("patient".equals(noticeType)) {
+            dataScopeHelper.assertPatientAccessible(bizId);
+        } else if ("latent".equals(noticeType)) {
+            dataScopeHelper.assertLatentAccessible(bizId);
         }
     }
 }

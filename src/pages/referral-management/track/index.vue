@@ -2,6 +2,12 @@
 import { ref, reactive, onMounted, nextTick, computed } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import {
+  REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
+  REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
+  REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
+  referralSelectOptionsWithLegacy
+} from "@@/constants/referral-tracking"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
@@ -293,6 +299,9 @@ const screeningForm = reactive({
   chestXrayResult: ""
 })
 
+const chestXrayResultSelectOptions = computed(() =>
+  referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, screeningForm.chestXrayResult))
+
 function openScreeningDialog(row: any) {
   screeningRow.value = row
   Object.assign(screeningForm, {
@@ -447,6 +456,22 @@ async function handleDelete(row: any) {
         <el-table-column label="到位时间" min-width="160">
           <template #default="{ row }">
             {{ row.arrivalTime ? formatDateTime(row.arrivalTime) : "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="追踪过程" min-width="240" show-overflow-tooltip>
+          <template #default="{ row }">
+            <template v-if="parseTrackingHistory(row.trackingHistoryJson).length">
+              <span
+                v-for="(item, idx) in parseTrackingHistory(row.trackingHistoryJson)"
+                :key="item.attempt"
+              >
+                <template v-if="idx">；</template>
+                第{{ item.attempt }}次 {{ formatDateTime(item.trackTime) }}
+                {{ TRACK_STATUS_LABEL[item.status] }}
+                <template v-if="item.reason">（{{ item.reason }}）</template>
+              </span>
+            </template>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" width="220">
@@ -731,7 +756,14 @@ async function handleDelete(row: any) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="筛查方法">
-              <el-input v-model="screeningForm.screenMethod" />
+              <el-select v-model="screeningForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -741,13 +773,13 @@ async function handleDelete(row: any) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染筛查结果">
-              <el-select v-model="screeningForm.infectionResult" style="width: 100%">
-                <el-option label="阴性" value="阴性" />
-                <el-option label="PPD+" value="PPD+" />
-                <el-option label="PPD++" value="PPD++" />
-                <el-option label="PPD+++" value="PPD+++" />
-                <el-option label="EC阳性" value="EC阳性" />
-                <el-option label="IGRA阳性" value="IGRA阳性" />
+              <el-select v-model="screeningForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -766,10 +798,13 @@ async function handleDelete(row: any) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片检查结果">
-              <el-select v-model="screeningForm.chestXrayResult" style="width: 100%">
-                <el-option label="正常" value="正常" />
-                <el-option label="异常" value="异常" />
-                <el-option label="未查" value="未查" />
+              <el-select v-model="screeningForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in chestXrayResultSelectOptions"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
               </el-select>
             </el-form-item>
           </el-col>

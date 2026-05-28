@@ -64,14 +64,20 @@ watch(() => props.visible, (val) => {
         <el-descriptions-item label="联系电话">
           {{ detail.phone || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="人群分类">
-          {{ detail.crowdCategory || "-" }}
+        <el-descriptions-item label="与联系人关系">
+          {{ detail.phoneContactRelation || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="户籍地址" :span="2">
           {{ detail.householdAddress || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="现住址" :span="2">
           {{ detail.currentAddress || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="人群分类">
+          {{ detail.crowdCategory || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染筛查时间">
+          {{ detail.infectionScreenDate || detail.screenDate || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="感染筛查结果">
           {{ detail.infectionResult || "-" }}
@@ -91,12 +97,24 @@ watch(() => props.visible, (val) => {
         <el-descriptions-item label="首次诊断">
           {{ detail.diagnosisFirst || "-" }}
         </el-descriptions-item>
+        <el-descriptions-item label="追踪情况">
+          {{ detail.trackingRemark || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="备注" :span="2">
+          {{ detail.remark || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="通知单">
           {{
             detail.noticeStatus === 0
               ? "草稿"
               : (detail.noticeSent ? "已发送" : "未发送")
           }}
+        </el-descriptions-item>
+        <el-descriptions-item v-if="detail.archived === 1" label="归档时间">
+          {{ detail.archivedTime || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item v-if="detail.archived === 1" label="治疗阶段">
+          {{ detail.treatmentPhase === 2 ? "已结案" : (detail.treatmentPhase === 1 ? "预防治疗中" : "未开始") }}
         </el-descriptions-item>
         <el-descriptions-item label="创建时间" :span="2">
           {{ detail.createTime || "-" }}

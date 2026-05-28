@@ -3,7 +3,12 @@ import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PatientMedicationPickupDetailDialog from "@@/components/PatientMedicationPickupDetailDialog.vue"
 import PatientMedicationPickupDialog from "@@/components/PatientMedicationPickupDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
-import { canEditMedicationPickup, formatMedicationPickupDrugs } from "@@/utils/medicationPickup"
+import {
+  canEditMedicationPickup,
+  formatMedicationPickupDrugs,
+  PATIENT_MEDICATION_PAGE_PERMISSIONS,
+  PATIENT_MEDICATION_PICKUP_PERMISSIONS
+} from "@@/utils/medicationPickup"
 import { resolveRegistrationNo } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { getMedicationPickupListApi } from "./apis"
@@ -152,7 +157,7 @@ function viewDetail(record: Record<string, any>) {
         <el-table-column label="操作" fixed="right" width="100">
           <template #default="{ row }">
             <el-button
-              v-permission="'patientManagement:medication'"
+              v-permission="[...PATIENT_MEDICATION_PAGE_PERMISSIONS]"
               type="primary"
               link
               size="small"
@@ -181,7 +186,7 @@ function viewDetail(record: Record<string, any>) {
             <div class="pickup-actions">
               <el-button
                 v-if="canAddPickup(row)"
-                v-permission="'patientManagement:medication'"
+                v-permission="[...PATIENT_MEDICATION_PICKUP_PERMISSIONS]"
                 type="primary"
                 link
                 size="small"
@@ -257,7 +262,7 @@ function viewDetail(record: Record<string, any>) {
             </el-button>
             <el-button
               v-if="canEditMedicationPickup(userStore.userRole, row)"
-              v-permission="'patientManagement:medication'"
+              v-permission="[...PATIENT_MEDICATION_PICKUP_PERMISSIONS]"
               type="warning"
               link
               size="small"

@@ -39,7 +39,7 @@ public class CloseContactReminderTask {
         // ccStatus 排除已确认为患者(1)或潜伏感染者已归档(3)的记录
         List<ScreeningCloseContact> halfYearDue = closeContactService.list(
                 new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .notIn(ScreeningCloseContact::getCcStatus, 1, 2, 3, 5, 7, 8)
+                        .notIn(ScreeningCloseContact::getCcStatus, 1, 2, 3, 5, 7, 8, 9)
                         .isNotNull(ScreeningCloseContact::getFirstScreenDate)
                         .isNull(ScreeningCloseContact::getFollowup6ScreenDate)
                         .le(ScreeningCloseContact::getFirstScreenDate, today.minusDays(165))
@@ -53,7 +53,7 @@ public class CloseContactReminderTask {
         // 12月后复查提醒：6月随访日期距今 ≥350 天，且尚未进行 12月随访
         List<ScreeningCloseContact> oneYearDue = closeContactService.list(
                 new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .notIn(ScreeningCloseContact::getCcStatus, 1, 2, 3, 5, 7, 8)
+                        .notIn(ScreeningCloseContact::getCcStatus, 1, 2, 3, 5, 7, 8, 9)
                         .isNotNull(ScreeningCloseContact::getFollowup6ScreenDate)
                         .isNull(ScreeningCloseContact::getFollowup12ScreenDate)
                         .le(ScreeningCloseContact::getFollowup6ScreenDate, today.minusDays(350))

@@ -30,11 +30,22 @@ public class LatentInfection extends BaseEntity {
     private String gender;
     private Integer age;
     private String phone;
+    /** 户籍地址（手动新增/导入持久化；有筛查关联时由筛查表回填展示） */
+    private String householdAddress;
+    /** 现住地址 */
+    private String currentAddress;
+    /** 联系电话与联系人关系 */
+    private String phoneContactRelation;
+    /** 感染筛查日期（手动新增/导入） */
+    private LocalDate infectionScreenDate;
     private String infectionResult;
     /** 追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束 */
     private Integer trackingStatus;
     private Integer notInPlaceCount;
+    /** 追踪情况 */
     private String trackingRemark;
+    /** 备注 */
+    private String remark;
 
     // ===== V4 新增：追踪到位后录入胸片与诊断 =====
     /** 是否进行胸片检查（是/否） */
@@ -62,6 +73,8 @@ public class LatentInfection extends BaseEntity {
     private LocalDateTime archivedTime;
     /** 所属部门ID */
     private Long departmentId;
+    /** 录入人用户ID（手动新增/导入时写入，五级数据权限） */
+    private Long creatorId;
 
     /** 是否已发送潜伏者通知单（非持久化字段） */
     @TableField(exist = false)
@@ -90,11 +103,7 @@ public class LatentInfection extends BaseEntity {
     private String ethnicity;
     @TableField(exist = false)
     private String crowdCategory;
-    @TableField(exist = false)
-    private String currentAddress;
-    @TableField(exist = false)
-    private String householdAddress;
-    /** 感染检测时间 */
+    /** 感染检测时间（通知单展示，优先筛查表，否则取 infectionScreenDate） */
     @TableField(exist = false)
     private LocalDate screenDate;
     /** 感染检查方法 */

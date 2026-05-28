@@ -5,6 +5,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.service.ScreeningCloseContactService;
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -164,17 +165,18 @@ public class ScreeningCloseContactController {
             row.put("接触者身份证号", s.getIdNumber());
             row.put("年龄", s.getAge());
             row.put("接触者电话", s.getPhone());
+            row.put("联系电话与接触者关系", s.getPhoneContactRelation());
             row.put("接触类型", s.getContactType());
-            row.put("接触场所", s.getContactPlace());
+            row.put("接触场所", formatContactPlace(s.getContactPlace(), s.getContactPlaceOther()));
             row.put("密接登记日期", s.getRegistrationDate());
             row.put("首次筛查日期", s.getFirstScreenDate());
             row.put("感染检测方法", s.getInfectionCheckMethod());
             row.put("感染检测结果", s.getInfectionCheckResult());
-            row.put("影像方法", s.getImagingMethod());
-            row.put("影像结果", s.getImagingResult());
-            row.put("痰检方法", s.getSputumCheckMethod());
-            row.put("痰检结果", s.getSputumCheckResult());
-            row.put("最终筛查结果", s.getFinalScreeningResult());
+            row.put("影像方法", formatFieldWithOther(s.getImagingMethod(), s.getImagingMethodOther()));
+            row.put("影像结果", formatFieldWithOther(s.getImagingResult(), s.getImagingResultOther()));
+            row.put("痰检方法", formatFieldWithOther(s.getSputumCheckMethod(), s.getSputumCheckMethodOther()));
+            row.put("痰检结果", formatFieldWithOther(s.getSputumCheckResult(), s.getSputumCheckResultOther()));
+            row.put("最终筛查结果", formatFieldWithOther(s.getFinalScreeningResult(), s.getFinalScreeningResultOther()));
             row.put("是否开展预防治疗", s.getHasPreventiveTreatment());
             row.put("预防性治疗方案", s.getPreventivePlan());
             row.put("是否完成治疗", s.getTreatmentCompleted());
@@ -196,10 +198,30 @@ public class ScreeningCloseContactController {
         EasyExcel.write(response.getOutputStream()).head(heads).sheet("筛查数据").doWrite(data);
     }
 
+    private static final String CONTACT_PLACE_OTHER = "其他（需手工录入）";
+    private static final String SCREENING_FIELD_OTHER = "其他（需手工录入）";
+
+    private String formatContactPlace(String place, String other) {
+        return formatFieldWithOther(place, other, CONTACT_PLACE_OTHER);
+    }
+
+    private String formatFieldWithOther(String value, String other) {
+        return formatFieldWithOther(value, other, SCREENING_FIELD_OTHER);
+    }
+
+    private String formatFieldWithOther(String value, String other, String otherLabel) {
+        if (StrUtil.isBlank(value)) return "";
+        if (otherLabel.equals(value) && StrUtil.isNotBlank(other)) {
+            return value + "：" + other.trim();
+        }
+        return value;
+    }
+
     private String toCnStatus(Integer status) {
         if (status == null) return "待处理";
         return switch (status) {
             case 1 -> "活动性肺结核-结案";
+            case 9 -> "疑似肺结核-结案";
             case 2 -> "潜伏感染者-管理中";
             case 3 -> "潜伏感染者-已归档";
             case 4 -> "随访监测中";

@@ -2,7 +2,7 @@ import type { RouteRecordRaw } from "vue-router"
 import { createRouter } from "vue-router"
 import { routerConfig } from "@/router/config"
 import { registerNavigationGuard } from "@/router/guard"
-import { resolvePopulationLegacyRedirect, resolveScreeningDefaultPath } from "@/router/screening-redirect"
+import { resolveCloseContactDefaultPath, resolvePopulationLegacyRedirect, resolveScreeningDefaultPath } from "@/router/screening-redirect"
 import { flatMultiLevelRoutes } from "./helper"
 
 const Layouts = () => import("@/layouts/index.vue")
@@ -132,6 +132,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/latent-management/supervision.vue"),
         name: "LatentManagementSupervision",
         meta: { title: "督导表管理", tagTitle: "潜伏-督导表管理", keepAlive: true, permission: "latentManagement:supervision" }
+      },
+      {
+        path: "history",
+        component: () => import("@/pages/latent-management/history.vue"),
+        name: "LatentManagementHistory",
+        meta: { title: "历史患者", tagTitle: "潜伏-历史患者", keepAlive: true, permission: "latentManagement:history" }
       }
     ]
   },
@@ -172,7 +178,18 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "medication",
         component: () => import("@/pages/patient-management/medication.vue"),
         name: "PatientManagementMedication",
-        meta: { title: "服药管理", tagTitle: "患者-服药管理", keepAlive: true, permission: "patientManagement:medication" }
+        meta: {
+          title: "服药管理",
+          tagTitle: "患者-服药管理",
+          keepAlive: true,
+          anyPermission: [
+            "patientManagement:medication",
+            "patientManagement:pickup",
+            "patient:medication",
+            "keyPopulation:patient:medication",
+            "closeContact:patient:medication"
+          ]
+        }
       },
       {
         path: "special-disease",
@@ -216,21 +233,21 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: "/close-contact",
     component: Layouts,
-    redirect: "/close-contact/screening",
+    redirect: () => resolveCloseContactDefaultPath(),
     name: "CloseContact",
     meta: { title: "密接人群管理", elIcon: "Connection", permission: "closeContact" },
     children: [
-      {
-        path: "screening",
-        component: () => import("@/pages/close-contact/screening/index.vue"),
-        name: "CloseContactScreening",
-        meta: { title: "筛查管理", tagTitle: "密接-筛查管理", keepAlive: true, permission: "closeContact:screening" }
-      },
       {
         path: "case",
         component: () => import("@/pages/close-contact/case/index.vue"),
         name: "CloseContactCase",
         meta: { title: "密接个案表", tagTitle: "密接-个案表", keepAlive: true, permission: "closeContact:case" }
+      },
+      {
+        path: "screening",
+        component: () => import("@/pages/close-contact/screening/index.vue"),
+        name: "CloseContactScreening",
+        meta: { title: "筛查管理", tagTitle: "密接-筛查管理", keepAlive: true, permission: "closeContact:screening" }
       },
       {
         path: "latent",

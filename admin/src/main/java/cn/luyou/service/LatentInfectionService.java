@@ -62,6 +62,11 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /** 结案归档（按期检查通过后） */
     void closeCase(Long id);
 
+    /** 历史患者（已归档潜伏感染者）列表 */
+    IPage<LatentInfection> queryHistoryPage(int page, int size, String populationType,
+                                            String name, String idNumber, String phone,
+                                            String startTime, String endTime);
+
     /**
      * 对导入时已包含确诊/疑似肺结核诊断的潜伏感染记录进行自动转诊处理：
      * 创建对应患者记录并将潜伏感染记录标记为已转诊归档，避免数据丢失。

@@ -190,8 +190,10 @@ CREATE TABLE IF NOT EXISTS `screening_close_contact` (
     `id_number`                       VARCHAR(64)  DEFAULT NULL COMMENT '接触者身份证号',
     `age`                             INT          DEFAULT NULL COMMENT '年龄',
     `phone`                           VARCHAR(32)  DEFAULT NULL COMMENT '接触者电话',
+    `phone_contact_relation`          VARCHAR(64)  DEFAULT NULL COMMENT '联系电话与接触者关系',
     `contact_type`                    VARCHAR(32)  DEFAULT NULL COMMENT '接触类型：家庭内/家庭外',
     `contact_place`                   VARCHAR(64)  DEFAULT NULL COMMENT '接触场所',
+    `contact_place_other`             VARCHAR(128) DEFAULT NULL COMMENT '接触场所-其他（手工录入）',
     -- ===== 初次筛查（S-AE）=====
     `first_screen_date`               DATE         DEFAULT NULL COMMENT '首次筛查日期',
     `symptom1`                        VARCHAR(128) DEFAULT NULL COMMENT '结核症状1',
@@ -201,11 +203,16 @@ CREATE TABLE IF NOT EXISTS `screening_close_contact` (
     `infection_check_result`          VARCHAR(64)  DEFAULT NULL COMMENT '结果判定（阴性/阳性）',
     `imaging_date`                    DATE         DEFAULT NULL COMMENT '影像检查日期',
     `imaging_method`                  VARCHAR(64)  DEFAULT NULL COMMENT '影像方法（胸部X光片/胸部CT）',
+    `imaging_method_other`            VARCHAR(128) DEFAULT NULL COMMENT '影像方法-其他（手工录入）',
     `imaging_result`                  VARCHAR(128) DEFAULT NULL COMMENT '影像结果',
+    `imaging_result_other`            VARCHAR(128) DEFAULT NULL COMMENT '影像结果-其他（手工录入）',
     `sputum_check_date`               DATE         DEFAULT NULL COMMENT '痰检留标日期',
     `sputum_check_method`             VARCHAR(64)  DEFAULT NULL COMMENT '痰检方法',
+    `sputum_check_method_other`       VARCHAR(128) DEFAULT NULL COMMENT '痰检方法-其他（手工录入）',
     `sputum_check_result`             VARCHAR(64)  DEFAULT NULL COMMENT '痰检结果',
-    `final_screening_result`          VARCHAR(32)  DEFAULT NULL COMMENT '最终筛查结果：活动性肺结核/潜伏感染者/未做/未发现异常',
+    `sputum_check_result_other`       VARCHAR(128) DEFAULT NULL COMMENT '痰检结果-其他（手工录入）',
+    `final_screening_result`          VARCHAR(32)  DEFAULT NULL COMMENT '最终筛查结果',
+    `final_screening_result_other`    VARCHAR(128) DEFAULT NULL COMMENT '最终筛查结果-其他（手工录入）',
     -- ===== 预防性治疗信息（AF-AM）=====
     `has_contraindication`            VARCHAR(32)  DEFAULT NULL COMMENT '有无禁忌症',
     `no_treatment_reason`             VARCHAR(128) DEFAULT NULL COMMENT '不接受预防治疗的原因',
@@ -1475,6 +1482,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (417, 'latentManagement:referral',      '转出',                 2, 460, 2),
 (418, 'latentManagement:close',         '归档',                 2, 413, 5),
 (419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
+(464, 'latentManagement:history',     '历史患者',             1, 412, 3),
 -- 聚合患者管理（一级菜单）
 (420, 'patientManagement',              '患者管理',             1, 0,   12),
 (462, 'patientManagement:overview',     '在管总览',             1, 420, 0),
@@ -1486,7 +1494,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (425, 'patientManagement:specialDisease','专病网导入',          1, 420, 5),
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
 (427, 'patientManagement:referral',     '转出',                 2, 462, 2),
-(428, 'patientManagement:delete',       '删除患者',             2, 421, 2);
+(428, 'patientManagement:delete',       '删除患者',             2, 421, 2),
+(465, 'patientManagement:pickup',       '填写领药',             2, 424, 1);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -1502,9 +1511,10 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
+    'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
     'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
-    'patientManagement:medication', 'patientManagement:specialDisease', 'patientManagement:history',
+    'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease', 'patientManagement:history',
     'patientManagement:referral', 'patientManagement:delete'
 );
 
@@ -1621,7 +1631,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (438, 'referralManagement:delete',       '删除推介/追踪记录',    2, 431, 7),
 (439, 'referralManagement:track',        '追踪',                 1, 430, 2),
 (440, 'referralManagement:epidemicImport','大疫情导入',          2, 439, 1),
-(441, 'referralManagement:export',       '导出追踪记录',         2, 439, 2),
+(441, 'referralManagement:export',       '导出推介/追踪记录',    2, 439, 2),
 (442, 'referralManagement:edit',           '编辑追踪记录',         2, 439, 3);
 
 -- 兼容：原拥有 epidemic:screening 权限的角色同步获得追踪模块大疫情导入权限
@@ -1984,7 +1994,7 @@ WHERE p.`code` IN (
 
 -- ==================== V33：密接个案表（独立电子表格模块） ====================
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(35, 'closeContact:case',           '密接个案表',   1, 3, 2),
+(35, 'closeContact:case',           '密接个案表',   1, 3, 1),
 (350, 'closeContact:case:upload',    '导入个案',     2, 35, 1),
 (351, 'closeContact:case:create',    '新增个案',     2, 35, 2),
 (352, 'closeContact:case:export',    '导出个案',     2, 35, 3),
@@ -2221,3 +2231,346 @@ WHERE p.`name` LIKE '[废弃]%'
            WHERE parent.`name` LIKE '[废弃]%'
        ) AS deprecated_children
    );
+
+-- ==================== V40：潜伏感染者管理 — 历史患者（归档信息） ====================
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(464, 'latentManagement:history', '历史患者', 1, 412, 3);
+
+UPDATE `permission`
+SET `parent_id` = 412, `sort` = 3, `name` = '历史患者', `type` = 1
+WHERE `code` = 'latentManagement:history';
+
+-- 与 latentManagement 其它子菜单一致：授予已拥有「潜伏感染者管理」父权限的角色
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'latentManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'latentManagement:history';
+
+-- ==================== V41：密接人群 — 菜单顺序（个案表在筛查管理前）+ 补偿建表/字段 ====================
+UPDATE `permission` SET `sort` = 1 WHERE `code` = 'closeContact:case';
+UPDATE `permission` SET `sort` = 2 WHERE `code` = 'closeContact:screening';
+UPDATE `permission` SET `sort` = 3 WHERE `code` = 'closeContact:latent';
+UPDATE `permission` SET `sort` = 4 WHERE `code` = 'closeContact:followUp';
+
+-- 补偿建表：生产库若未执行过含 close_contact_case 的 init 段，此处确保表存在
+CREATE TABLE IF NOT EXISTS `close_contact_case` (
+    `id`                              BIGINT       NOT NULL AUTO_INCREMENT,
+    `city`                            VARCHAR(64)  DEFAULT NULL COMMENT '市/州',
+    `district`                        VARCHAR(64)  DEFAULT NULL COMMENT '区/县',
+    `source_patient_name`             VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
+    `source_patient_case_no`          VARCHAR(64)  DEFAULT NULL COMMENT '原患者病案号',
+    `source_patient_bacteriology_result` VARCHAR(64) DEFAULT NULL COMMENT '原患者病原学结果',
+    `source_patient_phone`            VARCHAR(32)  DEFAULT NULL COMMENT '原患者电话',
+    `source_patient_id_number`        VARCHAR(64)  DEFAULT NULL COMMENT '原患者身份证号',
+    `report_date`                     DATE         DEFAULT NULL COMMENT '填表日期',
+    `registration_date`               DATE         DEFAULT NULL COMMENT '密切接触者登记日期',
+    `name`                            VARCHAR(64)  DEFAULT NULL COMMENT '接触者姓名',
+    `id_number`                       VARCHAR(64)  DEFAULT NULL COMMENT '接触者身份证号',
+    `age`                             INT          DEFAULT NULL COMMENT '年龄',
+    `phone`                           VARCHAR(32)  DEFAULT NULL COMMENT '接触者电话',
+    `contact_type`                    VARCHAR(32)  DEFAULT NULL COMMENT '接触类型',
+    `contact_place`                   VARCHAR(64)  DEFAULT NULL COMMENT '接触场所',
+    `first_screen_date`               DATE         DEFAULT NULL COMMENT '首次筛查日期',
+    `symptom1`                        VARCHAR(128) DEFAULT NULL COMMENT '结核症状1',
+    `symptom2`                        VARCHAR(128) DEFAULT NULL COMMENT '结核症状2',
+    `infection_check_date`            DATE         DEFAULT NULL COMMENT '感染检测日期',
+    `infection_check_method`          VARCHAR(64)  DEFAULT NULL COMMENT '感染检测方法',
+    `infection_check_result`          VARCHAR(64)  DEFAULT NULL COMMENT '结果判定',
+    `imaging_date`                    DATE         DEFAULT NULL COMMENT '影像检查日期',
+    `imaging_method`                  VARCHAR(64)  DEFAULT NULL COMMENT '影像方法',
+    `imaging_result`                  VARCHAR(128) DEFAULT NULL COMMENT '影像结果',
+    `sputum_check_date`               DATE         DEFAULT NULL COMMENT '痰检留标日期',
+    `sputum_check_method`             VARCHAR(64)  DEFAULT NULL COMMENT '痰检方法',
+    `sputum_check_result`             VARCHAR(64)  DEFAULT NULL COMMENT '痰检结果',
+    `final_screening_result`          VARCHAR(32)  DEFAULT NULL COMMENT '诊断结果',
+    `has_contraindication`            VARCHAR(32)  DEFAULT NULL COMMENT '有无禁忌症',
+    `no_treatment_reason`             VARCHAR(128) DEFAULT NULL COMMENT '不接受预防治疗的原因',
+    `contraindication_remark`         VARCHAR(256) DEFAULT NULL COMMENT '禁忌症备注',
+    `has_preventive_treatment`        VARCHAR(10)  DEFAULT NULL COMMENT '是否开展预防性治疗',
+    `preventive_plan`                 VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
+    `preventive_plan_remark`          VARCHAR(256) DEFAULT NULL COMMENT '其他方案备注',
+    `treatment_completed`             VARCHAR(10)  DEFAULT NULL COMMENT '是否完成治疗',
+    `incomplete_reason`               VARCHAR(128) DEFAULT NULL COMMENT '未完成原因',
+    `followup6_due_date`              DATE         DEFAULT NULL COMMENT '6月随访到期日期',
+    `followup6_screen_date`           DATE         DEFAULT NULL COMMENT '6月-症状筛查日期',
+    `followup6_symptom1`              VARCHAR(128) DEFAULT NULL COMMENT '6月-症状1',
+    `followup6_symptom2`              VARCHAR(128) DEFAULT NULL COMMENT '6月-症状2',
+    `followup6_imaging_date`          DATE         DEFAULT NULL COMMENT '6月-影像检查日期',
+    `followup6_imaging_method`        VARCHAR(64)  DEFAULT NULL COMMENT '6月-影像方法',
+    `followup6_imaging_result`        VARCHAR(128) DEFAULT NULL COMMENT '6月-影像结果',
+    `followup6_sputum_date`           DATE         DEFAULT NULL COMMENT '6月-痰检日期',
+    `followup6_sputum_method`         VARCHAR(64)  DEFAULT NULL COMMENT '6月-病原学方法',
+    `followup6_sputum_result`         VARCHAR(64)  DEFAULT NULL COMMENT '6月-病原学结果',
+    `followup6_result`                VARCHAR(32)  DEFAULT NULL COMMENT '6月随访筛查结果',
+    `followup12_due_date`             DATE         DEFAULT NULL COMMENT '12月随访到期日期',
+    `followup12_screen_date`          DATE         DEFAULT NULL COMMENT '12月-症状筛查日期',
+    `followup12_symptom1`             VARCHAR(128) DEFAULT NULL COMMENT '12月-症状1',
+    `followup12_symptom2`             VARCHAR(128) DEFAULT NULL COMMENT '12月-症状2',
+    `followup12_imaging_date`         DATE         DEFAULT NULL COMMENT '12月-影像检查日期',
+    `followup12_imaging_method`       VARCHAR(64)  DEFAULT NULL COMMENT '12月-影像方法',
+    `followup12_imaging_result`       VARCHAR(128) DEFAULT NULL COMMENT '12月-影像结果',
+    `followup12_sputum_date`          DATE         DEFAULT NULL COMMENT '12月-痰检日期',
+    `followup12_sputum_method`        VARCHAR(64)  DEFAULT NULL COMMENT '12月-病原学方法',
+    `followup12_sputum_result`        VARCHAR(64)  DEFAULT NULL COMMENT '12月-病原学结果',
+    `followup12_result`               VARCHAR(32)  DEFAULT NULL COMMENT '12月随访筛查结果',
+    `followup24_due_date`             DATE         DEFAULT NULL COMMENT '24月随访到期日期',
+    `followup24_screen_date`          DATE         DEFAULT NULL COMMENT '24月-症状筛查日期',
+    `followup24_symptom1`             VARCHAR(128) DEFAULT NULL COMMENT '24月-症状1',
+    `followup24_symptom2`             VARCHAR(128) DEFAULT NULL COMMENT '24月-症状2',
+    `followup24_imaging_date`         DATE         DEFAULT NULL COMMENT '24月-影像检查日期',
+    `followup24_imaging_method`       VARCHAR(64)  DEFAULT NULL COMMENT '24月-影像方法',
+    `followup24_imaging_result`       VARCHAR(128) DEFAULT NULL COMMENT '24月-影像结果',
+    `followup24_sputum_date`          DATE         DEFAULT NULL COMMENT '24月-痰检日期',
+    `followup24_sputum_method`        VARCHAR(64)  DEFAULT NULL COMMENT '24月-病原学方法',
+    `followup24_sputum_result`        VARCHAR(64)  DEFAULT NULL COMMENT '24月-病原学结果',
+    `followup24_result`               VARCHAR(32)  DEFAULT NULL COMMENT '24月随访筛查结果',
+    `remark`                          TEXT         DEFAULT NULL COMMENT '备注',
+    `year`                            VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `gender`                          VARCHAR(10)  DEFAULT NULL COMMENT '性别',
+    `ethnicity`                       VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `household_address`               VARCHAR(256) DEFAULT NULL COMMENT '户籍地址',
+    `current_address`                 VARCHAR(256) DEFAULT NULL COMMENT '现住址',
+    `upload_batch`                    VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `department_id`                   BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_username`                VARCHAR(64)  DEFAULT NULL COMMENT '录入用户名',
+    `create_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`                         TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    KEY `idx_id_number` (`id_number`),
+    KEY `idx_district` (`district`),
+    KEY `idx_final_result` (`final_screening_result`),
+    KEY `idx_creator_username` (`creator_username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接个案表（电子表格，73列）';
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'screening_close_contact' AND COLUMN_NAME = 'department_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `screening_close_contact` ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT ''所属部门ID''',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V42：推介追踪 — 大疫情导入/导出授予一至五级 ====================
+UPDATE `permission`
+SET `name` = '导出推介/追踪记录'
+WHERE `code` = 'referralManagement:export';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement',
+    'referralManagement:recommend',
+    'referralManagement:track',
+    'referralManagement:epidemicImport',
+    'referralManagement:export',
+    'referralManagement:edit',
+    'referralManagement:create',
+    'referralManagement:trackOperate'
+);
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement:recommend',
+    'referralManagement:track',
+    'referralManagement:epidemicImport',
+    'referralManagement:export',
+    'referralManagement:edit',
+    'referralManagement:create',
+    'referralManagement:trackOperate'
+);
+
+-- ==================== V43：五级用户 — 患者管理服药/领药权限 ====================
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(465, 'patientManagement:pickup', '填写领药', 2, 424, 1);
+
+UPDATE `permission`
+SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2
+WHERE `code` = 'patientManagement:pickup';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 6, p.id
+FROM `permission` p
+WHERE p.`code` IN (
+    'patientManagement',
+    'patientManagement:medication',
+    'patientManagement:pickup',
+    'patientManagement:firstVisit',
+    'patientManagement:followUp',
+    'patientManagement:notice'
+);
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` = 'patient:medication'
+         CROSS JOIN `permission` p
+WHERE p.`code` IN ('patientManagement', 'patientManagement:medication', 'patientManagement:pickup');
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` = 'patient:firstVisit'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:firstVisit';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` = 'patient:followUp'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:followUp';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` = 'patient:confirmNotice'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:notice';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` IN ('patientManagement:pickup', 'patientManagement:medication');
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2) r
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup';
+
+-- ==================== V44：市/县级用户 — 查看并管理辖区内五级用户工作 ====================
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 3 AS role UNION SELECT 4 UNION SELECT 5) r
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
+    'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
+    'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close',
+    'latentManagement:supervision', 'latentManagement:history',
+    'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
+    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
+    'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease',
+    'patientManagement:history', 'patientManagement:referral', 'patientManagement:delete'
+);
+
+-- ==================== V45：随访方式「其他」手工录入字段 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'first_visit' AND COLUMN_NAME = 'visit_method_other'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `first_visit` ADD COLUMN `visit_method_other` VARCHAR(64) DEFAULT NULL COMMENT ''随访方式-其他（手工录入）'' AFTER `visit_method`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'follow_up_visit' AND COLUMN_NAME = 'visit_method_other'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `follow_up_visit` ADD COLUMN `visit_method_other` VARCHAR(64) DEFAULT NULL COMMENT ''随访方式-其他（手工录入）'' AFTER `visit_method`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- V46：在管总览手动新增/导入潜伏感染者 — screening_id 可空 + 扩展字段
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'household_address'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection`
+        MODIFY COLUMN `screening_id` BIGINT DEFAULT NULL COMMENT ''关联筛查数据ID（手动新增可为空）'',
+        ADD COLUMN `household_address` VARCHAR(256) DEFAULT NULL COMMENT ''户籍地址'' AFTER `phone`,
+        ADD COLUMN `current_address` VARCHAR(256) DEFAULT NULL COMMENT ''现住地址'' AFTER `household_address`,
+        ADD COLUMN `phone_contact_relation` VARCHAR(64) DEFAULT NULL COMMENT ''联系电话与联系人关系'' AFTER `current_address`,
+        ADD COLUMN `infection_screen_date` DATE DEFAULT NULL COMMENT ''感染筛查日期'' AFTER `phone_contact_relation`,
+        ADD COLUMN `remark` TEXT DEFAULT NULL COMMENT ''备注'' AFTER `tracking_remark`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- V47：密接筛查 — 联系电话与接触者关系、接触场所-其他
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'screening_close_contact' AND COLUMN_NAME = 'phone_contact_relation'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `screening_close_contact`
+        ADD COLUMN `phone_contact_relation` VARCHAR(64) DEFAULT NULL COMMENT ''联系电话与接触者关系'' AFTER `phone`,
+        ADD COLUMN `contact_place_other` VARCHAR(128) DEFAULT NULL COMMENT ''接触场所-其他（手工录入）'' AFTER `contact_place`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- V48：密接筛查初次筛查 — 影像/痰检/最终筛查结果「其他」手工录入
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'screening_close_contact' AND COLUMN_NAME = 'imaging_method_other'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `screening_close_contact`
+        ADD COLUMN `imaging_method_other` VARCHAR(128) DEFAULT NULL COMMENT ''影像方法-其他（手工录入）'' AFTER `imaging_method`,
+        ADD COLUMN `imaging_result_other` VARCHAR(128) DEFAULT NULL COMMENT ''影像结果-其他（手工录入）'' AFTER `imaging_result`,
+        ADD COLUMN `sputum_check_method_other` VARCHAR(128) DEFAULT NULL COMMENT ''痰检方法-其他（手工录入）'' AFTER `sputum_check_method`,
+        ADD COLUMN `sputum_check_result_other` VARCHAR(128) DEFAULT NULL COMMENT ''痰检结果-其他（手工录入）'' AFTER `sputum_check_result`,
+        ADD COLUMN `final_screening_result_other` VARCHAR(128) DEFAULT NULL COMMENT ''最终筛查结果-其他（手工录入）'' AFTER `final_screening_result`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- V49：患者/潜伏感染者 — 录入人（五级「谁录入谁可见」）
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'patient' AND COLUMN_NAME = 'creator_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `patient` ADD COLUMN `creator_id` BIGINT DEFAULT NULL COMMENT ''录入人用户ID'' AFTER `department_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'creator_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection` ADD COLUMN `creator_id` BIGINT DEFAULT NULL COMMENT ''录入人用户ID'' AFTER `department_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

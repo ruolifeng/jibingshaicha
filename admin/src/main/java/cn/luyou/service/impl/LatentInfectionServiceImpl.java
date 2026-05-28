@@ -13,6 +13,7 @@ import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.SysMessage;
+import cn.luyou.constant.LatentImportHeaders;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
@@ -20,7 +21,6 @@ import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.mapper.SupervisionFormMapper;
 import cn.luyou.model.SupervisionForm;
-import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.FollowUpVisitService;
@@ -35,6 +35,7 @@ import cn.luyou.service.ReferralService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -68,7 +69,7 @@ import java.util.Set;
 public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMapper, LatentInfection>
         implements LatentInfectionService {
 
-    private final DepartmentService departmentService;
+    private final DataScopeHelper dataScopeHelper;
     private final PatientService patientService;
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
@@ -88,7 +89,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final EpidemicReportService epidemicReportService;
 
     private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
-            "school", "keyPopulation", "regular", "epidemic", "referral"
+            "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact"
     );
 
     /** 导入时含首次诊断且需自动结案归档的诊断（不进入患者管理） */
@@ -119,11 +120,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         if (StrUtil.isNotBlank(populationType)) {
-            // 指定来源时精确匹配（密接模块传 closeContact，其他模块传具体值）
             wrapper.eq(LatentInfection::getPopulationType, populationType);
         } else {
-            // 聚合查询时自动排除密接（密接潜伏感染在密接人群管理菜单中单独管理）
-            wrapper.ne(LatentInfection::getPopulationType, "closeContact");
+            // 聚合查询：排除密接筛查同步数据，保留在管总览手动新增的密接
+            wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                    .or()
+                    .isNull(LatentInfection::getScreeningId));
         }
         wrapper.like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
@@ -148,19 +150,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
                 .le(createTo != null, LatentInfection::getCreateTime, createTo)
                 .orderByDesc(LatentInfection::getCreateTime);
-        if (!BaseContext.isSuperAdmin()) {
-            Integer currentRole = BaseContext.getCurrentRole();
-            if (currentRole != null && currentRole == 6) {
-                // 五级管理员：只能看到发给自己的通知单所关联的潜伏感染记录
-                Long userId = BaseContext.getCurrentId();
-                wrapper.inSql(LatentInfection::getId,
-                        "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
-                                + " AND notice_type = 'latent' AND deleted = 0");
-            } else {
-                List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-                wrapper.in(LatentInfection::getDepartmentId, deptIds);
-            }
-        }
+        dataScopeHelper.applyLatentScope(wrapper);
         IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);
 
         // 补充通知单发送状态：用于前端控制“发送通知单”禁用和督导表启用
@@ -756,6 +746,31 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     @Override
+    public IPage<LatentInfection> queryHistoryPage(int page, int size, String populationType,
+                                                    String name, String idNumber, String phone,
+                                                    String startTime, String endTime) {
+        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(LatentInfection::getArchived, 1)
+                .ne(LatentInfection::getPopulationType, "closeContact")
+                .eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
+                .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
+                .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
+                .ge(StrUtil.isNotBlank(startTime), LatentInfection::getArchivedTime, startTime)
+                .le(StrUtil.isNotBlank(endTime), LatentInfection::getArchivedTime, endTime + " 23:59:59")
+                .orderByDesc(LatentInfection::getArchivedTime);
+        dataScopeHelper.applyLatentScope(wrapper);
+        IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);
+        List<LatentInfection> records = result.getRecords();
+        if (records != null && !records.isEmpty()) {
+            fillScreeningDiagnosisDraft(records);
+            records.forEach(this::fillNoticeAutoFields);
+            fillNoticeAndSupervisionStatus(records, populationType);
+        }
+        return result;
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void autoReferralForDirectDiagnosis(List<LatentInfection> latents) {
         for (LatentInfection entity : latents) {
@@ -808,11 +823,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     public LatentInfection getDetail(Long id) {
+        dataScopeHelper.assertLatentAccessible(id);
         LatentInfection latent = getById(id);
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
         fillNoticeAutoFields(latent);
+        if (latent.getScreeningId() == null && latent.getInfectionScreenDate() != null) {
+            latent.setScreenDate(latent.getInfectionScreenDate());
+        }
         fillNoticeAndSupervisionStatus(List.of(latent), latent.getPopulationType());
         return latent;
     }
@@ -820,6 +839,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateBasicInfo(Long id, Map<String, Object> body) {
+        dataScopeHelper.assertLatentAccessible(id);
         LatentInfection latent = getById(id);
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
@@ -832,6 +852,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         if (body.get("idNumber") != null) latent.setIdNumber(body.get("idNumber").toString());
         if (body.get("phone") != null) latent.setPhone(body.get("phone").toString());
+        if (body.get("phoneContactRelation") != null) {
+            latent.setPhoneContactRelation(body.get("phoneContactRelation").toString());
+        }
+        if (body.get("householdAddress") != null) latent.setHouseholdAddress(body.get("householdAddress").toString());
+        if (body.get("currentAddress") != null) latent.setCurrentAddress(body.get("currentAddress").toString());
+        if (body.get("infectionScreenDate") != null) {
+            latent.setInfectionScreenDate(parseDateCell(body.get("infectionScreenDate")));
+        }
         if (body.get("infectionResult") != null) latent.setInfectionResult(body.get("infectionResult").toString());
         if (body.get("diagnosisFirst") != null) latent.setDiagnosisFirst(body.get("diagnosisFirst").toString());
         if (body.get("hasChestXray") != null) latent.setHasChestXray(body.get("hasChestXray").toString());
@@ -840,6 +868,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         if (body.get("chestXrayResult") != null) latent.setChestXrayResult(body.get("chestXrayResult").toString());
         if (body.get("trackingRemark") != null) latent.setTrackingRemark(body.get("trackingRemark").toString());
+        if (body.get("remark") != null) latent.setRemark(body.get("remark").toString());
         updateById(latent);
     }
 
@@ -872,6 +901,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .name(name)
                 .idNumber(idNumber)
                 .phone(phone)
+                .phoneContactRelation(body.getOrDefault("phoneContactRelation", "").toString())
+                .householdAddress(body.getOrDefault("householdAddress", "").toString())
+                .currentAddress(body.getOrDefault("currentAddress", "").toString())
+                .infectionScreenDate(parseDateCell(body.get("infectionScreenDate")))
                 .gender(body.getOrDefault("gender", "").toString())
                 .age(parseIntegerField(body.get("age")))
                 .infectionResult(body.getOrDefault("infectionResult", "").toString())
@@ -880,12 +913,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .chestXrayDate(parseDateCell(body.get("chestXrayDate")))
                 .chestXrayResult(body.getOrDefault("chestXrayResult", "").toString())
                 .trackingRemark(body.getOrDefault("trackingRemark", "").toString())
+                .remark(body.getOrDefault("remark", "").toString())
                 .trackingStatus(0)
                 .notInPlaceCount(0)
                 .archived(0)
                 .referralResult("latent")
                 .diagnosisResult("潜伏感染者")
                 .departmentId(BaseContext.getCurrentDepartmentId())
+                .creatorId(BaseContext.getCurrentId())
                 .build();
         save(latent);
         log.info("手动新增潜伏感染记录 id={}, populationType={}", latent.getId(), populationType);
@@ -917,12 +952,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
 
         Map<Integer, String> headerRow = allRows.get(0);
-        Map<String, Integer> headerIndex = new HashMap<>();
-        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
-            if (StrUtil.isNotBlank(entry.getValue())) {
-                headerIndex.put(entry.getValue().trim(), entry.getKey());
-            }
-        }
+        Map<String, Integer> headerIndex = buildImportHeaderIndex(headerRow);
 
         if (!headerIndex.containsKey("姓名") || !headerIndex.containsKey("证件号") || !headerIndex.containsKey("数据来源")) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "模板表头不正确，请下载最新模板后重试");
@@ -958,7 +988,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     hasError = true;
                 }
                 if (StrUtil.isBlank(populationType)) {
-                    result.addError(rowNum, name, "数据来源无效（请填写：学生筛查/重点人群/疫情筛查/大疫情/推介）");
+                    result.addError(rowNum, name, "数据来源无效（请填写：学生筛查/重点人群/疫情筛查/大疫情/推介/密接）");
                     hasError = true;
                 }
                 if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
@@ -989,6 +1019,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .name(name)
                         .idNumber(idNumber)
                         .phone(phone)
+                        .phoneContactRelation(getImportField(row, headerIndex, "联系电话与联系人关系"))
+                        .householdAddress(getImportField(row, headerIndex, "户籍地址"))
+                        .currentAddress(getImportField(row, headerIndex, "现住地址"))
+                        .infectionScreenDate(parseDateCell(getImportField(row, headerIndex, "感染筛查日期")))
                         .gender(getImportField(row, headerIndex, "性别"))
                         .age(parseIntegerField(getImportField(row, headerIndex, "年龄")))
                         .infectionResult(getImportField(row, headerIndex, "感染筛查结果"))
@@ -996,13 +1030,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .hasChestXray(getImportField(row, headerIndex, "是否胸片检查"))
                         .chestXrayDate(parseDateCell(getImportField(row, headerIndex, "胸片检查日期")))
                         .chestXrayResult(getImportField(row, headerIndex, "胸片检查结果"))
-                        .trackingRemark(getImportField(row, headerIndex, "追踪备注"))
+                        .trackingRemark(getImportField(row, headerIndex, "追踪情况"))
+                        .remark(getImportField(row, headerIndex, "备注"))
                         .trackingStatus(0)
                         .notInPlaceCount(0)
                         .archived(0)
                         .referralResult("latent")
                         .diagnosisResult("潜伏感染者")
                         .departmentId(BaseContext.getCurrentDepartmentId())
+                        .creatorId(BaseContext.getCurrentId())
                         .build();
                 save(latent);
                 importedKeys.add(dedupeKey);
@@ -1023,6 +1059,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteCascade(Long id) {
+        dataScopeHelper.assertLatentAccessible(id);
         LatentInfection latent = getById(id);
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
@@ -1145,7 +1182,28 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             case "疫情筛查", "常规筛查" -> "regular";
             case "大疫情" -> "epidemic";
             case "推介" -> "referral";
+            case "密接" -> "closeContact";
             default -> "";
         };
+    }
+
+    private Map<String, Integer> buildImportHeaderIndex(Map<Integer, String> headerRow) {
+        Map<String, Integer> headerIndex = new HashMap<>();
+        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
+            if (StrUtil.isBlank(entry.getValue())) continue;
+            String header = entry.getValue().trim();
+            headerIndex.put(header, entry.getKey());
+            String alias = LatentImportHeaders.HEADER_ALIASES.get(header);
+            if (alias != null) {
+                headerIndex.putIfAbsent(alias, entry.getKey());
+            }
+        }
+        for (Map.Entry<String, String> alias : LatentImportHeaders.HEADER_ALIASES.entrySet()) {
+            Integer idx = headerIndex.get(alias.getKey());
+            if (idx != null) {
+                headerIndex.putIfAbsent(alias.getValue(), idx);
+            }
+        }
+        return headerIndex;
     }
 }

@@ -23,10 +23,33 @@ export function resolveFileUrl(path?: string | null): string {
   if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("blob:")) {
     return val
   }
-  const base = import.meta.env.VITE_BASE_URL || ""
+  const base = (import.meta.env.VITE_BASE_URL || "").trim()
   if (val.startsWith("/api/")) return val
   if (val.startsWith("/file/")) return `${base}${val}`
   return `${base}${val.startsWith("/") ? val : `/${val}`}`
+}
+
+/** el-upload 原始响应 → 业务结果（兼容字符串 JSON） */
+export function parseUploadApiResponse(response: unknown): { ok: boolean, url?: string, msg?: string } {
+  let body: Record<string, any> | null = null
+  if (typeof response === "string") {
+    try {
+      body = JSON.parse(response)
+    } catch {
+      body = null
+    }
+  } else if (response && typeof response === "object") {
+    body = response as Record<string, any>
+  }
+  if (body?.code === 200 && body.data) {
+    return { ok: true, url: resolveFileUrl(String(body.data)) }
+  }
+  return { ok: false, msg: body?.msg || "上传失败" }
+}
+
+/** 获取文件上传接口地址 */
+export function getFileUploadAction(): string {
+  return `${(import.meta.env.VITE_BASE_URL || "").trim()}/file/upload`
 }
 
 /** 从 URL 提取展示名称 */

@@ -32,6 +32,21 @@ public class LatentInfectionController {
     private final LatentFollowUpService latentFollowUpService;
     private final LatentCheckService latentCheckService;
 
+    @Operation(summary = "历史患者列表（已归档潜伏感染者）")
+    @GetMapping("/history")
+    public ResultResponse<IPage<LatentInfection>> history(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String startTime,
+            @RequestParam(required = false) String endTime) {
+        return ResultRes.success(latentInfectionService.queryHistoryPage(
+                page, size, populationType, name, idNumber, phone, startTime, endTime));
+    }
+
     @Operation(summary = "潜伏感染详情")
     @GetMapping("/{id}")
     public ResultResponse<LatentInfection> detail(@PathVariable Long id) {

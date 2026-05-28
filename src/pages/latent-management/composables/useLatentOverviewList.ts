@@ -34,11 +34,11 @@ export function useLatentOverviewList() {
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
       const { data } = await getLatentAggregateListApi(params)
-      const filtered = (data.records ?? []).filter((r: any) => r.populationType !== "closeContact")
+      const records = data.records ?? []
       const start = (paginationData.currentPage - 1) * paginationData.pageSize
       const end = start + paginationData.pageSize
-      tableData.value = filtered.slice(start, end)
-      total.value = filtered.length
+      tableData.value = records.slice(start, end)
+      total.value = records.length
     } finally {
       loading.value = false
     }

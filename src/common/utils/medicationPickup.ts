@@ -1,6 +1,21 @@
 /** 五级用户（role=6）领药记录的可编辑天数 */
 export const MEDICATION_PICKUP_EDIT_DAYS_LEVEL5 = 10
 
+/** 填写/修改领药记录（含 V2 聚合权限与旧模块权限码，任一即可） */
+export const PATIENT_MEDICATION_PICKUP_PERMISSIONS = [
+  "patientManagement:pickup",
+  "patientManagement:medication",
+  "patient:medication",
+  "keyPopulation:patient:medication",
+  "closeContact:patient:medication"
+] as const
+
+/** 进入服药管理页 / 服药日历（聚合模块） */
+export const PATIENT_MEDICATION_PAGE_PERMISSIONS = [
+  "patientManagement:medication",
+  ...PATIENT_MEDICATION_PICKUP_PERMISSIONS
+] as const
+
 /** 五级用户：领药记录创建后 10 天内可修改；管理员（role≠6）随时可改 */
 export function canEditMedicationPickup(
   userRole: number,

@@ -30,8 +30,10 @@ public class FollowUpVisit extends BaseEntity {
     private String supervisor;
     /** 督导人员-其他 —— V15 */
     private String supervisorOther;
-    /** 随访方式：1门诊/2家庭/3电话 */
+    /** 随访方式：1门诊/2家庭/3电话/4其他 */
     private String visitMethod;
+    /** 随访方式-其他（手工录入） */
+    private String visitMethodOther;
     /** 症状及体征（多选 0-11 编号，逗号分隔）—— V15 */
     private String symptoms;
     /** 症状-其它 —— V15 */

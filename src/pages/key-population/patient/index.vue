@@ -28,8 +28,10 @@ import {
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
-  VISIT_METHOD_OPTIONS
+  VISIT_METHOD_OPTIONS,
+  VISIT_METHOD_OTHER
 } from "@@/constants/disease"
+import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { applyFirstVisitChemotherapyDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { extractDateRangeParams } from "@@/utils/searchParams"
@@ -347,6 +349,7 @@ const firstVisitForm = reactive({
   formNo: "",
   visitDate: "",
   visitMethod: "",
+  visitMethodOther: "",
   patientType: "",
   sputumStatus: "",
   drugResistance: "",
@@ -378,6 +381,7 @@ function openFirstVisitDialog(row: any) {
     formNo: "",
     visitDate: "",
     visitMethod: "",
+    visitMethodOther: "",
     patientType: "",
     sputumStatus: "",
     drugResistance: "",
@@ -422,11 +426,23 @@ async function loadFirstVisitForm(patientId: number) {
   applyFirstVisitChemotherapyDefault(firstVisitForm, firstVisitRow.value)
 }
 
+watch(
+  () => firstVisitForm.visitMethod,
+  (val) => {
+    if (val !== VISIT_METHOD_OTHER) {
+      firstVisitForm.visitMethodOther = ""
+    }
+  }
+)
+
 function buildFirstVisitPayload() {
   return {
     patientId: firstVisitRow.value.id,
     populationType: "keyPopulation",
     ...firstVisitForm,
+    visitMethodOther: firstVisitForm.visitMethod === VISIT_METHOD_OTHER
+      ? firstVisitForm.visitMethodOther.trim()
+      : null,
     symptoms: firstVisitForm.symptoms.join(","),
     drugForm: firstVisitForm.drugForm.join(","),
     educationItems: JSON.stringify(firstVisitForm.educationItems)
@@ -445,6 +461,10 @@ async function handleSaveFirstVisitDraft() {
 async function handleSaveFirstVisit() {
   if (!isValidFirstVisitFormNo(firstVisitForm.formNo)) {
     ElMessage.warning("请填写8位编号")
+    return
+  }
+  if (firstVisitForm.visitMethod === VISIT_METHOD_OTHER && !firstVisitForm.visitMethodOther.trim()) {
+    ElMessage.warning("请填写随访方式")
     return
   }
   try {
@@ -1206,6 +1226,11 @@ watch(
               </el-radio-group>
             </el-form-item>
           </el-col>
+          <el-col v-if="firstVisitForm.visitMethod === VISIT_METHOD_OTHER" :span="8">
+            <el-form-item label="随访方式-其他">
+              <el-input v-model="firstVisitForm.visitMethodOther" placeholder="请填写" />
+            </el-form-item>
+          </el-col>
           <el-col :span="8">
             <el-form-item label="患者类型">
               <el-radio-group v-model="firstVisitForm.patientType">
@@ -1400,7 +1425,7 @@ watch(
         <el-table-column prop="visitDate" label="随访时间" />
         <el-table-column label="随访方式">
           <template #default="{ row }">
-            {{ ({ "1": "门诊", "2": "家庭", "3": "电话" } as Record<string, string>)[row.visitMethod] ?? row.visitMethod ?? "-" }}
+            {{ followUpFormatters.visitMethod(row.visitMethod, row.visitMethodOther) }}
           </template>
         </el-table-column>
         <el-table-column prop="visitSituation" label="随访情况" show-overflow-tooltip />

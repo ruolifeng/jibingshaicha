@@ -45,7 +45,7 @@ const d = computed(() => props.visitData)
           {{ d.treatmentMonth ?? "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="随访方式">
-          {{ followUpFormatters.visitMethod(d.visitMethod) }}
+          {{ followUpFormatters.visitMethod(d.visitMethod, d.visitMethodOther) }}
         </el-descriptions-item>
         <el-descriptions-item label="督导人员" :span="3">
           {{ formatFollowUpSupervisor(d.supervisor, d.supervisorOther) }}

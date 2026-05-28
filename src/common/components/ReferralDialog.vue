@@ -6,7 +6,7 @@ import {
   resendReferralApi,
   sendReferralApi
 } from "@@/apis/referral"
-import { getLevel5UsersApi } from "@@/apis/users"
+import DepartmentUserSelect from "@@/components/DepartmentUserSelect.vue"
 import { getPopulationTypeLabel } from "@@/constants/disease"
 
 interface Props {
@@ -64,16 +64,6 @@ const actionLabel = "转出"
 const populationLabel = computed(() =>
   LEGACY_POPULATION_LABEL[props.populationType] ?? getPopulationTypeLabel(props.populationType)
 )
-
-// ====== 接收方用户列表 ======
-const receiverUsers = ref<{ id: number, realName: string, username: string, orgName: string }[]>([])
-
-async function loadReceiverUsers() {
-  try {
-    const { data } = await getLevel5UsersApi()
-    receiverUsers.value = data
-  } catch { /* ignored */ }
-}
 
 // ====== 发起推送表单 ======
 const sendForm = reactive({
@@ -136,7 +126,6 @@ async function handleResend(record: ReferralRecord) {
 // 打开弹窗时加载数据
 watch(visible, (val: boolean) => {
   if (val) {
-    loadReceiverUsers()
     loadHistory()
   }
 })
@@ -166,19 +155,11 @@ watch(visible, (val: boolean) => {
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="接收部门" required>
-              <el-select
+              <DepartmentUserSelect
                 v-model="sendForm.receiverOrgId"
-                placeholder="请选择接收部门"
-                filterable
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="u in receiverUsers"
-                  :key="u.id"
-                  :value="u.id"
-                  :label="`${u.orgName}（${u.realName || u.username}）`"
-                />
-              </el-select>
+                :active="visible"
+                placeholder="请选择部门下的接收用户"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">

@@ -6,6 +6,7 @@ import {
   batchDeleteCloseContactCaseApi,
   createCloseContactCaseApi,
   deleteCloseContactCaseApi,
+  downloadCloseContactCaseTemplateApi,
   exportCloseContactCaseApi,
   getCloseContactCaseListApi,
   updateCloseContactCaseApi,
@@ -67,14 +68,28 @@ function handleReset() {
 
 const importResultVisible = ref(false)
 const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const templateDownloading = ref(false)
+
+async function handleDownloadTemplate() {
+  templateDownloading.value = true
+  try {
+    const blob = await downloadCloseContactCaseTemplateApi()
+    downloadBlob(blob as unknown as Blob, "密接个案表.xlsx")
+    ElMessage.success("模板下载成功")
+  } catch {
+    ElMessage.error("模板下载失败")
+  } finally {
+    templateDownloading.value = false
+  }
+}
 
 async function handleUpload(uploadFile: any) {
   try {
     const { data } = await uploadCloseContactCaseApi(uploadFile.raw)
     importResult.value = data
     importResultVisible.value = true
-  } catch {
-    ElMessage.error("上传失败")
+  } catch (err: any) {
+    ElMessage.error(err?.message || "上传失败")
     return
   }
   fetchData()
@@ -312,6 +327,15 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <div class="flex gap-2 flex-wrap">
             <el-button v-permission="'closeContact:case:create'" type="success" @click="handleCreate">
               新增
+            </el-button>
+            <el-button
+              v-permission="'closeContact:case:upload'"
+              type="success"
+              plain
+              :loading="templateDownloading"
+              @click="handleDownloadTemplate"
+            >
+              下载模板
             </el-button>
             <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleUpload">
               <el-button v-permission="'closeContact:case:upload'" type="primary">

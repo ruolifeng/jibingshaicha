@@ -2,11 +2,11 @@
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
-import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
+import { isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { isRetreatmentPatient, resolveTreatmentClass } from "@@/utils/patient"
 import { batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
@@ -252,6 +252,11 @@ async function handleImport(uploadFile: any) {
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
+        <el-table-column label="登记号" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolveRegistrationNo(row) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="姓名">
           <template #default="{ row }">
             <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">

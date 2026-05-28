@@ -1,3 +1,4 @@
+import { PATIENT_TYPE_OPTIONS } from "@@/constants/disease"
 import {
   EPIDEMIC_REPORT_HEADERS,
   PRIORITY_DETAIL_FIELDS,
@@ -35,6 +36,23 @@ export function resolvePatientCurrentUnit(row: Record<string, any> | null | unde
   return row.currentManagementUnit
     || parseEpidemicDataField(row.epidemicData, "现管单位")
     || parseEpidemicDataField(row.epidemicData, "现管理单位")
+}
+
+/** 解析民族（与患者详情一致：主表 + 病案导入） */
+export function resolvePatientEthnicity(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  if (row.ethnicity?.trim()) return String(row.ethnicity).trim()
+  const fields = resolveImportFields(row)
+  return fields["民族"] || parseEpidemicDataField(row.epidemicData, "民族")
+}
+
+/** 解析通知单患者类型（来自详情「治疗分类」，映射为初治/复治） */
+export function resolveNoticePatientType(row: Record<string, any> | null | undefined): string {
+  const tc = resolveTreatmentClass(row)
+  if (!tc) return ""
+  if (tc.includes("复治")) return "复治"
+  if (tc.includes("初治")) return "初治"
+  return (PATIENT_TYPE_OPTIONS as readonly string[]).includes(tc) ? tc : ""
 }
 
 /** 解析治疗分类 */
@@ -190,16 +208,16 @@ export function isNoticeReceiveOverdue(row: Record<string, any> | null | undefin
   return Date.now() - sentAt > NOTICE_RECEIVE_TIMEOUT_MS
 }
 
-/** 通知单管理列表：已接收显示接收时间，已下发未接收显示下发时间 */
-export function resolveNoticeManageTime(row: Record<string, any> | null | undefined): string {
-  if (!row) return ""
-  if (row.noticeStatus === 2) {
-    return formatNoticeSentTime(row.noticeConfirmedTime) || formatNoticeSentTime(row.noticeSentTime)
-  }
-  if (row.noticeStatus === 1) {
-    return formatNoticeSentTime(row.noticeSentTime)
-  }
-  return ""
+/** 通知单管理列表：发送时间（已下发/已确认时显示） */
+export function resolveNoticeSentDisplayTime(row: Record<string, any> | null | undefined): string {
+  if (!row || (row.noticeStatus !== 1 && row.noticeStatus !== 2)) return ""
+  return formatNoticeSentTime(row.noticeSentTime)
+}
+
+/** 通知单管理列表：接收时间（对方确认后显示） */
+export function resolveNoticeConfirmedDisplayTime(row: Record<string, any> | null | undefined): string {
+  if (!row || row.noticeStatus !== 2) return ""
+  return formatNoticeSentTime(row.noticeConfirmedTime)
 }
 
 /** 部分重点字段在 patient 主表也有对应值 */

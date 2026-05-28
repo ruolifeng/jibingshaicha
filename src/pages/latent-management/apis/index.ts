@@ -156,6 +156,21 @@ export function closeCaseApi(id: number) {
   return request<ApiResponseData<null>>({ url: `latent/close-case/${id}`, method: "post" })
 }
 
+/** 历史患者列表（已归档） */
+export function getLatentHistoryListApi(params: Record<string, any>) {
+  return request<ApiResponseData<any>>({ url: "latent/history", method: "get", params })
+}
+
+/** 导出历史潜伏感染者总表 */
+export function exportLatentHistoryApi(params: Record<string, any>) {
+  return request<Blob>({
+    url: "export/all-latent",
+    method: "get",
+    params: { archived: 1, ...params },
+    responseType: "blob"
+  })
+}
+
 /** 录入胸片结果（仅胸片，不含诊断） */
 export function submitXrayOnlyApi(data: {
   id: number

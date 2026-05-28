@@ -199,7 +199,7 @@ function openPrint(row: Record<string, any>) {
         <el-table-column prop="treatmentMonth" label="治疗月序" />
         <el-table-column label="随访方式">
           <template #default="{ row }">
-            {{ followUpFormatters.visitMethod(row.visitMethod) }}
+            {{ followUpFormatters.visitMethod(row.visitMethod, row.visitMethodOther) }}
           </template>
         </el-table-column>
         <el-table-column prop="missedDoses" label="漏服次数" />
