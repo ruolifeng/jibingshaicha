@@ -1495,7 +1495,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
 (427, 'patientManagement:referral',     '转出',                 2, 462, 2),
 (428, 'patientManagement:delete',       '删除患者',             2, 421, 2),
-(465, 'patientManagement:pickup',       '填写领药',             2, 424, 1);
+(468, 'patientManagement:pickup',       '填写领药',             2, 424, 1);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -1631,7 +1631,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (438, 'referralManagement:delete',       '删除推介/追踪记录',    2, 431, 7),
 (439, 'referralManagement:track',        '追踪',                 1, 430, 2),
 (440, 'referralManagement:epidemicImport','大疫情导入',          2, 439, 1),
-(441, 'referralManagement:export',       '导出推介/追踪记录',    2, 439, 2),
+(441, 'referralManagement:export',       '导出推介/追踪记录',    2, 430, 3),
 (442, 'referralManagement:edit',           '编辑追踪记录',         2, 439, 3);
 
 -- 兼容：原拥有 epidemic:screening 权限的角色同步获得追踪模块大疫情导入权限
@@ -2359,7 +2359,7 @@ DEALLOCATE PREPARE stmt;
 
 -- ==================== V42：推介追踪 — 大疫情导入/导出授予一至五级 ====================
 UPDATE `permission`
-SET `name` = '导出推介/追踪记录'
+SET `name` = '导出推介/追踪记录', `parent_id` = 430, `sort` = 3
 WHERE `code` = 'referralManagement:export';
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -2393,8 +2393,8 @@ WHERE p.`code` IN (
 );
 
 -- ==================== V43：五级用户 — 患者管理服药/领药权限 ====================
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(465, 'patientManagement:pickup', '填写领药', 2, 424, 1);
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
+('patientManagement:pickup', '填写领药', 2, 424, 1);
 
 UPDATE `permission`
 SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2
@@ -2574,3 +2574,57 @@ SET @ddl = IF(@col_exists = 0,
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+-- ==================== V50：推介追踪 — 一至五级补全大疫情导入/导出权限 ====================
+UPDATE `permission`
+SET `name` = '导出推介/追踪记录', `parent_id` = 430, `sort` = 3
+WHERE `code` = 'referralManagement:export';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
+         CROSS JOIN `permission` p
+WHERE p.`code` IN ('referralManagement:epidemicImport', 'referralManagement:export');
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` existing ON existing.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE existing.`code` LIKE 'referralManagement%'
+  AND p.`code` IN ('referralManagement:epidemicImport', 'referralManagement:export');
+
+-- ==================== V51：修复 patientManagement:pickup 权限 ID 冲突 ====================
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
+('patientManagement:pickup', '填写领药', 2, 424, 1);
+
+UPDATE `permission`
+SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2
+WHERE `code` = 'patientManagement:pickup';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT 6, p.id FROM `permission` p WHERE p.`code` = 'patientManagement:pickup';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2) r
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` existing ON existing.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE existing.`code` IN (
+    'patient:medication', 'patientManagement:medication',
+    'keyPopulation:patient:medication', 'closeContact:patient:medication'
+)
+  AND p.`code` = 'patientManagement:pickup';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup';

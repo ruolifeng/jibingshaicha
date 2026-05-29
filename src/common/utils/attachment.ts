@@ -1,3 +1,5 @@
+import { request } from "@/http/axios"
+
 /** 解析附件 URL 字段（兼容 JSON 数组、逗号分隔、单 URL） */
 export function parseAttachmentUrls(value?: string | string[] | null): string[] {
   if (!value) return []
@@ -50,6 +52,26 @@ export function parseUploadApiResponse(response: unknown): { ok: boolean, url?: 
 /** 获取文件上传接口地址 */
 export function getFileUploadAction(): string {
   return `${(import.meta.env.VITE_BASE_URL || "").trim()}/file/upload`
+}
+
+/** 通过 axios 上传（与业务接口一致，统一鉴权与错误提示） */
+export async function uploadAttachmentFile(options: {
+  file: File
+  onSuccess?: (response: unknown) => void
+  onError?: (error: Error) => void
+}) {
+  const formData = new FormData()
+  formData.append("file", options.file)
+  try {
+    const res = await request<ApiResponseData<string>>({
+      url: "/file/upload",
+      method: "post",
+      data: formData
+    })
+    options.onSuccess?.(res)
+  } catch (error) {
+    options.onError?.(error instanceof Error ? error : new Error("上传失败"))
+  }
 }
 
 /** 从 URL 提取展示名称 */

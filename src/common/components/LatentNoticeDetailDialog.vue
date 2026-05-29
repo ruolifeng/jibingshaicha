@@ -126,7 +126,7 @@ async function handleConfirmNotice(noticeId: number) {
           {{ NOTICE_STATUS_MAP[noticeDetailData.status] }}
         </el-tag>
       </el-descriptions-item>
-      <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="确认时间">
+      <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="接收时间">
         {{ noticeDetailData.confirmedTime }}
       </el-descriptions-item>
     </el-descriptions>

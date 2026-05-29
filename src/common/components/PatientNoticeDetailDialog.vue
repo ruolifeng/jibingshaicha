@@ -137,7 +137,7 @@ async function handleConfirmNotice(noticeId: number) {
         {{ noticeDetailData.receiverName || "-" }}
         <span v-if="noticeDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.receiverOrgName }}）</span>
       </el-descriptions-item>
-      <el-descriptions-item label="通知管理时间">
+      <el-descriptions-item label="发送时间">
         {{ formatNoticeSentTime(noticeDetailData.sentTime) || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="状态">
@@ -145,8 +145,8 @@ async function handleConfirmNotice(noticeId: number) {
           {{ noticeDetailData.status === 0 ? "草稿" : (NOTICE_STATUS_MAP[noticeDetailData.status] || "-") }}
         </el-tag>
       </el-descriptions-item>
-      <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="确认时间">
-        {{ noticeDetailData.confirmedTime }}
+      <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="接收时间">
+        {{ formatNoticeSentTime(noticeDetailData.confirmedTime) }}
       </el-descriptions-item>
     </el-descriptions>
     <template #footer>

@@ -15,7 +15,6 @@ const { paginationData, handleCurrentChange, handleSizeChange } = usePagination(
 const loading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
-const FETCH_ALL_SIZE = 10000
 
 const searchForm = reactive({
   name: "",
@@ -32,8 +31,8 @@ async function fetchData() {
   try {
     const { dateRange, ...rest } = searchForm
     const params: Record<string, any> = {
-      page: 1,
-      size: FETCH_ALL_SIZE,
+      page: paginationData.currentPage,
+      size: paginationData.pageSize,
       referralResult: "latent",
       ...rest,
       ...extractDateRangeParams(dateRange)
@@ -41,11 +40,8 @@ async function fetchData() {
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
     const { data } = await getLatentAggregateListApi(params)
-    const filtered = (data.records ?? []).filter((r: any) => r.populationType !== "closeContact")
-    const start = (paginationData.currentPage - 1) * paginationData.pageSize
-    const end = start + paginationData.pageSize
-    tableData.value = filtered.slice(start, end)
-    total.value = filtered.length
+    tableData.value = data.records ?? []
+    total.value = data.total ?? 0
   } finally {
     loading.value = false
   }
@@ -137,6 +133,7 @@ async function handleCloseCase(row: any) {
             <el-option label="疫情筛查" value="regular" />
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
+            <el-option label="密接" value="closeContact" />
           </el-select>
         </el-form-item>
         <el-form-item>

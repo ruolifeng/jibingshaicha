@@ -1,9 +1,6 @@
 /**
  * 聚合潜伏感染者管理 — 公共接口
- * 复用现有 latent/* 接口，但 populationType 留空以查询全部来源（不含密接）。
- * 注：后端 getLatentListApi 当 populationType 为空时返回所有记录；
- *     若需排除密接，在后端通过 NOT IN ('closeContact') 过滤；
- *     当前先由前端在搜索参数中控制（不传 populationType 即全部）。
+ * 复用现有 latent/* 接口；populationType 为空时返回全部来源（含在管总览手动/导入的密接，排除密接筛查同步数据）。
  */
 import { request } from "@/http/axios"
 

@@ -10,7 +10,7 @@ import {
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { getAttachmentLabel, getFileUploadAction, parseAttachmentUrls, parseUploadApiResponse } from "@@/utils/attachment"
+import { getAttachmentLabel, parseAttachmentUrls, parseUploadApiResponse, uploadAttachmentFile } from "@@/utils/attachment"
 import { getToken } from "@@/utils/cache/cookies"
 import { canEditSupervisionForm } from "@@/utils/supervisionForm"
 import { Upload } from "@element-plus/icons-vue"
@@ -90,9 +90,12 @@ const rules: FormRules = {
 }
 
 const attachmentFileList = ref<{ name: string, url: string, uid?: number }[]>([])
-const uploadAction = getFileUploadAction()
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 const formDisabled = computed(() => props.readonly || formLocked.value)
+
+async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+  await uploadAttachmentFile(options)
+}
 
 function formatDateValue(value: unknown): string {
   if (!value) return ""
@@ -602,7 +605,7 @@ async function handleArchive() {
       </el-form-item>
       <el-form-item label="附件上传">
         <el-upload
-          :action="uploadAction"
+          :http-request="handleHttpUpload as any"
           :headers="uploadHeaders"
           :file-list="attachmentFileList"
           name="file"

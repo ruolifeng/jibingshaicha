@@ -50,6 +50,10 @@ knife4j:
   setting:
     language: zh_cn
 
+app:
+  upload:
+    dir: ./data/uploads
+
 # Redis 配置（按需启用）
 #  data:
 #    redis:

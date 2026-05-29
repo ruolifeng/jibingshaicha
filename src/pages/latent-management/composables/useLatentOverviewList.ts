@@ -2,7 +2,7 @@ import { usePagination } from "@@/composables/usePagination"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getLatentAggregateListApi } from "../apis"
 
-/** 在管潜伏感染者总览列表（排除密接、未归档） */
+/** 在管潜伏感染者总览列表（含手动/导入密接，排除密接筛查同步数据） */
 export function useLatentOverviewList() {
   const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 

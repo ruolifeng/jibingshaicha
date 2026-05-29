@@ -41,4 +41,7 @@ public interface UserService extends IService<User> {
 
     /** 权限校验：当前用户须拥有指定权限码（超级管理员免检） */
     void checkPermissionCode(String code);
+
+    /** 权限校验：当前用户须拥有任一指定权限码（超级管理员免检） */
+    void checkAnyPermissionCode(String... codes);
 }

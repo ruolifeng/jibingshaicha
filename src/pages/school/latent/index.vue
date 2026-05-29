@@ -25,7 +25,7 @@ import {
   parseLatentNoticeTreatmentPlan
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
-import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
+import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
@@ -437,8 +437,11 @@ const supervisionRow = ref<any>(null)
 
 /** 附件上传列表 */
 const attachmentFileList = ref<{ name: string, url: string }[]>([])
-const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
+
+async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+  await uploadAttachmentFile(options)
+}
 
 function beforeAttachmentUpload(file: File) {
   const maxSize = 20 * 1024 * 1024
@@ -1438,7 +1441,7 @@ watch(
         </el-form-item>
         <el-form-item label="附件上传">
           <el-upload
-            :action="uploadAction"
+            :http-request="handleHttpUpload as any"
             :headers="uploadHeaders"
             :file-list="attachmentFileList"
             :before-upload="beforeAttachmentUpload"

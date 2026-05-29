@@ -7,6 +7,7 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ReferralTracking;
 import cn.luyou.service.ReferralTrackingService;
+import cn.luyou.service.UserService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class ReferralTrackingController {
 
     private final ReferralTrackingService referralTrackingService;
+    private final UserService userService;
 
     @Operation(summary = "分页查询推介/追踪记录")
     @GetMapping("/list")
@@ -55,6 +57,7 @@ public class ReferralTrackingController {
     @Operation(summary = "大疫情表导入（追踪模块）")
     @PostMapping("/import-epidemic")
     public ResultResponse<Map<String, Object>> importEpidemic(@RequestParam("file") MultipartFile file) {
+        userService.checkPermissionCode("referralManagement:epidemicImport");
         return ResultRes.success(referralTrackingService.importEpidemic(file));
     }
 
@@ -71,6 +74,7 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String sourceType) {
+        userService.checkPermissionCode("referralManagement:export");
         referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township, dateFrom, dateTo, sourceType);
     }
 

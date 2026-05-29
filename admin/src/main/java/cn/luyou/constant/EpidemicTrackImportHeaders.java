@@ -28,6 +28,7 @@ public final class EpidemicTrackImportHeaders {
             "疾病名称",
             "报告单位",
             "报告卡录入时间",
+            "报告卡录入日期",
             "备注"
     ));
 }

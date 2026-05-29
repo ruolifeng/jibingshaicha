@@ -212,6 +212,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
     }
 
+    @Override
+    public void checkAnyPermissionCode(String... codes) {
+        if (codes == null || codes.length == 0) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "权限不足");
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role != null && role == 1) {
+            return;
+        }
+        List<String> permissions = permissionService.getEffectivePermissionCodes(role, BaseContext.getCurrentId());
+        for (String code : codes) {
+            if (StrUtil.isNotBlank(code) && permissions.contains(code)) {
+                return;
+            }
+        }
+        throw new ServiceException(StatusEnum.FORBIDDEN, "权限不足");
+    }
+
     private UserInfoVO buildUserInfoVO(User user) {
         String roleName = ROLE_NAME_MAP.getOrDefault(user.getRole(), "未知");
         List<String> roleList = new ArrayList<>();

@@ -265,7 +265,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     private void fillNoticeAutoFields(LatentInfection latent) {
-        if (latent == null || latent.getScreeningId() == null || StrUtil.isBlank(latent.getPopulationType())) return;
+        if (latent == null || StrUtil.isBlank(latent.getPopulationType())) return;
+        if ("closeContact".equals(latent.getPopulationType()) && StrUtil.isBlank(latent.getCrowdCategory())) {
+            latent.setCrowdCategory("密接");
+        }
+        if (latent.getScreeningId() == null) return;
         switch (latent.getPopulationType()) {
             case "school" -> {
                 ScreeningSchool s = screeningSchoolMapper.selectById(latent.getScreeningId());
@@ -751,7 +755,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                                     String startTime, String endTime) {
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(LatentInfection::getArchived, 1)
-                .ne(LatentInfection::getPopulationType, "closeContact")
+                .and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                        .or()
+                        .isNull(LatentInfection::getScreeningId))
                 .eq(StrUtil.isNotBlank(populationType), LatentInfection::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
@@ -1064,8 +1070,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
-        if ("closeContact".equals(latent.getPopulationType())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "密接来源记录请在密接人群管理模块操作");
+        if ("closeContact".equals(latent.getPopulationType()) && latent.getScreeningId() != null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "密接筛查同步记录请在密接人群管理模块操作");
         }
         doDeleteCascade(id);
         log.info("级联删除潜伏感染记录 id={}", id);

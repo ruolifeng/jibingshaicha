@@ -35,6 +35,15 @@ public class PatientController {
     private final FollowUpVisitService followUpVisitService;
     private final MedicationManagementService medicationManagementService;
     private final MedicationPickupService medicationPickupService;
+    private final UserService userService;
+
+    private static final String[] MEDICATION_PICKUP_PERMISSIONS = {
+            "patientManagement:pickup",
+            "patientManagement:medication",
+            "patient:medication",
+            "keyPopulation:patient:medication",
+            "closeContact:patient:medication"
+    };
 
     @Operation(summary = "手动新增在管患者")
     @PostMapping
@@ -338,6 +347,7 @@ public class PatientController {
     @Operation(summary = "保存领药记录")
     @PostMapping("/medication-pickup/save")
     public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
         medicationPickupService.savePickup(pickup);
         return ResultRes.success(null);
     }

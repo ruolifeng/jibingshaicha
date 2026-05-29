@@ -31,7 +31,7 @@ import {
   SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
-import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl } from "@@/utils/attachment"
+import { getAttachmentLabel, parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
 import { idCardRule } from "@@/utils/validate"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
@@ -212,8 +212,11 @@ const supervisionRow = ref<any>(null)
 
 /** 附件上传列表 */
 const attachmentFileList = ref<{ name: string, url: string }[]>([])
-const uploadAction = `${import.meta.env.VITE_BASE_URL}/file/upload`
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
+
+async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+  await uploadAttachmentFile(options)
+}
 
 function beforeAttachmentUpload(file: File) {
   if (file.size > 20 * 1024 * 1024) {
@@ -233,13 +236,14 @@ function syncAttachmentFileList(uploadFiles: { name: string, url?: string, statu
 }
 
 function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
-  if (response?.code === 200 && response?.data) {
-    uploadFile.url = resolveFileUrl(response.data)
+  const result = parseUploadApiResponse(response)
+  if (result.ok && result.url) {
+    uploadFile.url = result.url
     uploadFile.status = "success"
     syncAttachmentFileList(uploadFiles)
   } else {
     uploadFile.status = "fail"
-    ElMessage.error(response?.msg || "附件上传失败")
+    ElMessage.error(result.msg || "附件上传失败")
   }
 }
 
@@ -1013,7 +1017,7 @@ async function handleSaveFollowupInput() {
         </el-form-item>
         <el-form-item label="附件上传">
           <el-upload
-            :action="uploadAction"
+            :http-request="handleHttpUpload as any"
             :headers="uploadHeaders"
             :file-list="attachmentFileList"
             :before-upload="beforeAttachmentUpload"

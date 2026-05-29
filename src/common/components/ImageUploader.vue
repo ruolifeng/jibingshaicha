@@ -15,7 +15,7 @@
 import type { UploadFile, UploadFiles, UploadProps } from "element-plus"
 import { Plus, ZoomIn } from "@element-plus/icons-vue"
 import { getToken } from "@@/utils/cache/cookies"
-import { getFileUploadAction, parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl } from "@@/utils/attachment"
+import { parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
 
 interface Props {
   /** v-model 绑定值：可以是 JSON 字符串或 string[] */
@@ -42,8 +42,11 @@ const emit = defineEmits<{
   (e: "update:modelValue", v: string): void
 }>()
 
-const uploadAction = getFileUploadAction()
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
+
+async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+  await uploadAttachmentFile(options)
+}
 
 type LocalFile = { name: string, url: string, uid: number }
 
@@ -153,7 +156,7 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
 <template>
   <div class="image-uploader">
     <el-upload
-      :action="uploadAction"
+      :http-request="handleHttpUpload as any"
       :headers="uploadHeaders"
       :file-list="fileList"
       :limit="max"

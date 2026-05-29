@@ -1,6 +1,6 @@
 -- V43：五级用户 — 患者管理服药/领药权限
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(465, 'patientManagement:pickup', '填写领药', 2, 424, 1);
+INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
+('patientManagement:pickup', '填写领药', 2, 424, 1);
 
 UPDATE `permission`
 SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2

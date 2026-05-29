@@ -184,7 +184,7 @@ export function resolveFirstTreatmentPlan(row: Record<string, any> | null | unde
   return fields["首次治疗方案"] || parseEpidemicDataField(row.epidemicData, "首次治疗方案")
 }
 
-/** 格式化通知管理时间（下发通知单时间） */
+/** 格式化通知单发送/接收时间 */
 export function formatNoticeSentTime(value: unknown): string {
   if (value == null || value === "") return ""
   const text = typeof value === "string" ? value : String(value)

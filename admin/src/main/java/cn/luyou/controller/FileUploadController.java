@@ -12,13 +12,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Tag(name = "文件上传")
@@ -42,24 +43,29 @@ public class FileUploadController {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "文件大小不能超过 20MB");
         }
 
-        Path dir = Paths.get(uploadDir);
-        if (!Files.exists(dir)) {
-            Files.createDirectories(dir);
-        }
-
-        // 保留原始扩展名，以 UUID 作为唯一文件名防止冲突
+        Path dir = resolveUploadDir();
         String originalFilename = file.getOriginalFilename();
         String ext = (originalFilename != null && originalFilename.contains("."))
                 ? originalFilename.substring(originalFilename.lastIndexOf("."))
                 : "";
         String savedName = UUID.randomUUID().toString().replace("-", "") + ext;
 
-        Path target = dir.resolve(savedName);
-        file.transferTo(target.toFile());
+        Path target = dir.resolve(savedName).normalize();
+        if (!target.startsWith(dir)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "非法文件名");
+        }
+
+        try (InputStream in = file.getInputStream()) {
+            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.error("附件保存失败，dir={}, file={}", dir, savedName, e);
+            throw new ServiceException(StatusEnum.SERVICE_ERROR, "附件保存失败，请检查服务器上传目录权限");
+        }
         log.info("附件上传成功：{} -> {}", originalFilename, savedName);
 
-        // 返回访问路径（前端通过 VITE_BASE_URL 拼接成完整 URL）
-        String encodedName = URLEncoder.encode(originalFilename != null ? originalFilename : savedName, StandardCharsets.UTF_8);
+        String encodedName = URLEncoder.encode(
+                originalFilename != null ? originalFilename : savedName,
+                StandardCharsets.UTF_8);
         return ResultRes.success("/file/serve/" + savedName + "?name=" + encodedName);
     }
 
@@ -69,13 +75,17 @@ public class FileUploadController {
             @PathVariable String filename,
             @RequestParam(required = false) String name,
             HttpServletResponse response) throws IOException {
-        // 防止路径穿越攻击
         if (filename.contains("..") || filename.contains("/")) {
             response.sendError(400, "非法文件名");
             return;
         }
 
-        Path file = Paths.get(uploadDir).resolve(filename);
+        Path dir = resolveUploadDir();
+        Path file = dir.resolve(filename).normalize();
+        if (!file.startsWith(dir)) {
+            response.sendError(400, "非法文件名");
+            return;
+        }
         if (!Files.exists(file)) {
             response.sendError(404, "文件不存在");
             return;
@@ -89,8 +99,17 @@ public class FileUploadController {
         response.setHeader("Content-Disposition", "inline; filename*=UTF-8''" + encodedName);
         response.setContentLengthLong(Files.size(file));
 
-        try (FileInputStream fis = new FileInputStream(file.toFile())) {
-            fis.transferTo(response.getOutputStream());
+        try (InputStream in = Files.newInputStream(file)) {
+            in.transferTo(response.getOutputStream());
         }
+    }
+
+    /** 解析为绝对路径，避免 multipart transferTo 在相对目录下失败 */
+    private Path resolveUploadDir() throws IOException {
+        Path dir = Paths.get(uploadDir).toAbsolutePath().normalize();
+        if (!Files.exists(dir)) {
+            Files.createDirectories(dir);
+        }
+        return dir;
     }
 }

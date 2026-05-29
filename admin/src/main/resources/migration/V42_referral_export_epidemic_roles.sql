@@ -1,6 +1,6 @@
 -- V42：推介追踪 — 大疫情导入/导出授予一至五级；导出含追踪过程
 UPDATE `permission`
-SET `name` = '导出推介/追踪记录'
+SET `name` = '导出推介/追踪记录', `parent_id` = 430, `sort` = 3
 WHERE `code` = 'referralManagement:export';
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)

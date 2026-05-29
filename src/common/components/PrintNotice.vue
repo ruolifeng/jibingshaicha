@@ -125,8 +125,12 @@ function handlePrint() {
           <tr>
             <th>下发时间</th>
             <td>{{ noticeData?.issuedTime }}</td>
-            <th>通知管理时间</th>
+            <th>发送时间</th>
             <td>{{ formatNoticeSentTime(noticeData?.sentTime) }}</td>
+          </tr>
+          <tr v-if="noticeData?.confirmedTime">
+            <th>接收时间</th>
+            <td colspan="3">{{ formatNoticeSentTime(noticeData?.confirmedTime) }}</td>
           </tr>
           <tr v-if="isPatient">
             <th>备注</th>

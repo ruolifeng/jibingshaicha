@@ -17,6 +17,7 @@ import {
   TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
 import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
+import { useUserStore } from "@/pinia/stores/user"
 import {
   getReferralTrackingListApi,
   createReferralTrackingApi,
@@ -28,6 +29,17 @@ import {
   importEpidemicTrackApi,
   exportReferralTrackApi
 } from "../apis/index"
+
+const userStore = useUserStore()
+
+/** 有接收人时仅接收人可操作；无接收人时仅创建人可操作（上级管理者只读） */
+function canOperateTrack(row: any) {
+  if (userStore.userRole === 1) return true
+  if (row.receiverUserId) {
+    return Number(row.receiverUserId) === Number(userStore.userId)
+  }
+  return Number(row.creatorId) === Number(userStore.userId)
+}
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -476,30 +488,40 @@ async function handleDelete(row: any) {
         </el-table-column>
         <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
-            <el-button v-permission="'referralManagement:edit'" type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+            <el-button
+              v-if="canOperateTrack(row)"
+              v-permission="'referralManagement:edit'"
+              type="primary" link size="small"
+              @click="openEditDialog(row)"
+            >编辑</el-button>
             <!-- 追踪：待追踪或未到位 -->
             <el-button
-              v-if="[0, 2].includes(row.trackingStatus) && !row.archived"
+              v-if="canOperateTrack(row) && [0, 2].includes(row.trackingStatus) && !row.archived"
               v-permission="'referralManagement:trackOperate'"
               type="warning" link size="small"
               @click="openTrackDialog(row)"
             >追踪</el-button>
             <!-- 筛查信息：已到位 -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisResult"
+              v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
               v-permission="'referralManagement:xray'"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >录入筛查</el-button>
             <!-- 诊断：已到位 -->
             <el-button
-              v-if="row.trackingStatus === 1 && !row.diagnosisResult"
+              v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
               v-permission="'referralManagement:diagnosis'"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >录入诊断</el-button>
             <!-- 删除 -->
-            <el-button v-permission="'referralManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-if="canOperateTrack(row)"
+              v-permission="'referralManagement:delete'"
+              type="danger" link size="small"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
