@@ -33,8 +33,8 @@ public class FileUploadController {
 
     @Operation(summary = "上传附件（图片/PDF等）")
     @PostMapping("/upload")
-    public ResultResponse<String> upload(@RequestParam("file") MultipartFile file) throws IOException {
-        if (file.isEmpty()) {
+    public ResultResponse<String> upload(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "文件不能为空");
         }
 
@@ -43,30 +43,34 @@ public class FileUploadController {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "文件大小不能超过 20MB");
         }
 
-        Path dir = resolveUploadDir();
-        String originalFilename = file.getOriginalFilename();
-        String ext = (originalFilename != null && originalFilename.contains("."))
-                ? originalFilename.substring(originalFilename.lastIndexOf("."))
-                : "";
-        String savedName = UUID.randomUUID().toString().replace("-", "") + ext;
+        try {
+            Path dir = resolveUploadDir();
+            String originalFilename = file.getOriginalFilename();
+            String ext = (originalFilename != null && originalFilename.contains("."))
+                    ? originalFilename.substring(originalFilename.lastIndexOf("."))
+                    : "";
+            String savedName = UUID.randomUUID().toString().replace("-", "") + ext;
 
-        Path target = dir.resolve(savedName).normalize();
-        if (!target.startsWith(dir)) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "非法文件名");
-        }
+            Path target = dir.resolve(savedName).normalize();
+            if (!target.startsWith(dir)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "非法文件名");
+            }
 
-        try (InputStream in = file.getInputStream()) {
-            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            log.info("附件上传成功：{} -> {}", originalFilename, savedName);
+
+            String encodedName = URLEncoder.encode(
+                    originalFilename != null ? originalFilename : savedName,
+                    StandardCharsets.UTF_8);
+            return ResultRes.success("/file/serve/" + savedName + "?name=" + encodedName);
+        } catch (ServiceException e) {
+            throw e;
         } catch (IOException e) {
-            log.error("附件保存失败，dir={}, file={}", dir, savedName, e);
+            log.error("附件上传失败", e);
             throw new ServiceException(StatusEnum.SERVICE_ERROR, "附件保存失败，请检查服务器上传目录权限");
         }
-        log.info("附件上传成功：{} -> {}", originalFilename, savedName);
-
-        String encodedName = URLEncoder.encode(
-                originalFilename != null ? originalFilename : savedName,
-                StandardCharsets.UTF_8);
-        return ResultRes.success("/file/serve/" + savedName + "?name=" + encodedName);
     }
 
     @Operation(summary = "访问/下载附件")

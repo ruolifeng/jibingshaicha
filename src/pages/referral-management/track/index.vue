@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick, computed } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
-import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import { REFERRAL_CROWD_CATEGORY_OPTIONS, isConfirmedPatientDiagnosis } from "@@/constants/disease"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
@@ -353,7 +353,9 @@ async function handleSaveDiagnosis() {
     return
   }
   await saveDiagnosisApi(diagnosisRow.value.id, diagnosisResult.value)
-  ElMessage.success("诊断结果已保存")
+  ElMessage.success(
+    diagnosisResult.value === "确诊患者" ? "诊断结果已保存，该记录已标红结案" : "诊断结果已保存"
+  )
   diagnosisDialogVisible.value = false
   fetchList()
 }
@@ -367,6 +369,10 @@ async function handleDelete(row: any) {
 }
 
 // ===== 状态标签辅助 =====
+function getRowClass({ row }: { row: any }) {
+  if (row.archived && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
+  return ""
+}
 </script>
 
 <template>
@@ -410,7 +416,7 @@ async function handleDelete(row: any) {
         <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
         <el-table-column label="来源" width="100">
           <template #default="{ row }">
             <el-tag :type="isEpidemicRow(row) ? 'danger' : 'info'" size="small">
@@ -459,7 +465,18 @@ async function handleDelete(row: any) {
             {{ row.notInPlaceCount > 0 ? `${row.notInPlaceCount}次未到位` : "-" }}
           </template>
         </el-table-column>
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column label="诊断结果" width="120">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.diagnosisResult"
+              :type="row.archived && isConfirmedPatientDiagnosis(row) ? 'danger' : 'info'"
+              size="small"
+            >
+              {{ row.diagnosisResult }}{{ row.archived && isConfirmedPatientDiagnosis(row) ? "（结案）" : "" }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
@@ -851,8 +868,8 @@ async function handleDelete(row: any) {
         </el-form-item>
         <el-alert
           v-if="diagnosisResult === '确诊患者'"
-          title="确诊患者将自动进入【患者管理】模块（populationType=referral）"
-          type="info" :closable="false" style="margin-top: 8px"
+          title="确诊患者将标红结案，不进入【患者管理】模块"
+          type="warning" :closable="false" style="margin-top: 8px"
         />
         <el-alert
           v-if="diagnosisResult === '潜伏感染者'"
@@ -899,5 +916,12 @@ async function handleDelete(row: any) {
 .tracking-history-reason {
   width: 100%;
   color: var(--el-text-color-regular);
+}
+</style>
+
+<style lang="scss">
+.el-table .confirmed-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
 }
 </style>

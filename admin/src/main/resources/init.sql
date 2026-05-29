@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS `user` (
     UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
 
--- 初始密码均为 123456，已使用 BCrypt(strength=10) 加密
-INSERT INTO `user` (`username`, `password`, `real_name`, `role`, `org_name`) VALUES
+-- 初始密码均为 123456，已使用 BCrypt(strength=10) 加密（可重复执行，已存在则跳过）
+INSERT IGNORE INTO `user` (`username`, `password`, `real_name`, `role`, `org_name`) VALUES
 ('admin',     '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '超级管理员', 1, '市疾控中心'),
 ('level4user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '四级操作员', 5, '区疾控中心'),
 ('level5user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '五级操作员', 6, '社区卫生服务中心');

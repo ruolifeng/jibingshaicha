@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, nextTick, computed } from "vue"
 import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
-import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import { REFERRAL_CROWD_CATEGORY_OPTIONS, isConfirmedPatientDiagnosis } from "@@/constants/disease"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
@@ -353,7 +353,9 @@ async function handleSaveDiagnosis() {
     return
   }
   await saveDiagnosisApi(diagnosisRow.value.id, diagnosisResult.value)
-  ElMessage.success("诊断结果已保存")
+  ElMessage.success(
+    diagnosisResult.value === "确诊患者" ? "诊断结果已保存，该记录已标红结案" : "诊断结果已保存"
+  )
   diagnosisDialogVisible.value = false
   fetchList()
 }
@@ -367,6 +369,10 @@ async function handleDelete(row: any) {
 }
 
 // ===== 状态标签辅助 =====
+function getRowClass({ row }: { row: any }) {
+  if (row.archived && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
+  return ""
+}
 const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
   0: { label: "未发送", type: "info" },
   1: { label: "已发送", type: "warning" },
@@ -422,7 +428,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="gender" label="性别" />
         <el-table-column prop="age" label="年龄" />
@@ -452,7 +458,18 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column label="诊断结果" width="120">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.diagnosisResult"
+              :type="row.archived && isConfirmedPatientDiagnosis(row) ? 'danger' : 'info'"
+              size="small"
+            >
+              {{ row.diagnosisResult }}{{ row.archived && isConfirmedPatientDiagnosis(row) ? "（结案）" : "" }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="推介时间" min-width="160">
           <template #default="{ row }">
             {{ formatRecommendTime(row) }}
@@ -861,8 +878,8 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-form-item>
         <el-alert
           v-if="diagnosisResult === '确诊患者'"
-          title="确诊患者将自动进入【患者管理】模块（populationType=referral）"
-          type="info" :closable="false" style="margin-top: 8px"
+          title="确诊患者将标红结案，不进入【患者管理】模块"
+          type="warning" :closable="false" style="margin-top: 8px"
         />
         <el-alert
           v-if="diagnosisResult === '潜伏感染者'"
@@ -915,5 +932,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
   padding: 24px 0;
   text-align: center;
   color: var(--el-text-color-secondary);
+}
+</style>
+
+<style lang="scss">
+.el-table .confirmed-row td.el-table__cell {
+  background-color: #fff2f0 !important;
+  color: #f56c6c;
 }
 </style>

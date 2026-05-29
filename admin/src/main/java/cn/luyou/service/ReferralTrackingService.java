@@ -49,7 +49,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 保存到位后的感染筛查+胸片信息 */
     void saveScreening(Long id, Map<String, Object> params);
 
-    /** 保存诊断结果并分流（创建患者/潜伏感染者记录） */
+    /** 保存诊断结果并分流（确诊患者仅标红结案；潜伏感染者进入潜伏感染管理） */
     void saveDiagnosis(Long id, String diagnosisResult);
 
     /** 删除记录（软删） */

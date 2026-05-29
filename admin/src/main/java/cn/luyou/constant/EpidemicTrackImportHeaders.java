@@ -2,7 +2,9 @@ package cn.luyou.constant;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 大疫情报告卡导入（推介追踪-追踪模块）需提取的表头字段。
@@ -31,4 +33,14 @@ public final class EpidemicTrackImportHeaders {
             "报告卡录入日期",
             "备注"
     ));
+
+    /** 表头别名 → 标准字段名（大疫情网导出表头存在多种写法） */
+    public static final Map<String, String> HEADER_ALIASES;
+    static {
+        Map<String, String> aliases = new LinkedHashMap<>();
+        aliases.put("报告卡录入日期", "报告卡录入时间");
+        aliases.put("录卡时间", "报告卡录入时间");
+        aliases.put("报告卡录卡时间", "报告卡录入时间");
+        HEADER_ALIASES = Collections.unmodifiableMap(aliases);
+    }
 }

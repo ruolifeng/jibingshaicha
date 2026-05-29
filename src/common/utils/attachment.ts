@@ -1,3 +1,4 @@
+import type { UploadRequestOptions } from "element-plus"
 import { request } from "@/http/axios"
 
 /** 解析附件 URL 字段（兼容 JSON 数组、逗号分隔、单 URL） */
@@ -55,22 +56,18 @@ export function getFileUploadAction(): string {
 }
 
 /** 通过 axios 上传（与业务接口一致，统一鉴权与错误提示） */
-export async function uploadAttachmentFile(options: {
-  file: File
-  onSuccess?: (response: unknown) => void
-  onError?: (error: Error) => void
-}) {
+export async function uploadAttachmentFile(options: UploadRequestOptions) {
   const formData = new FormData()
-  formData.append("file", options.file)
+  formData.append(options.filename || "file", options.file)
   try {
     const res = await request<ApiResponseData<string>>({
       url: "/file/upload",
       method: "post",
       data: formData
     })
-    options.onSuccess?.(res)
+    options.onSuccess(res)
   } catch (error) {
-    options.onError?.(error instanceof Error ? error : new Error("上传失败"))
+    options.onError(error as Parameters<UploadRequestOptions["onError"]>[0])
   }
 }
 

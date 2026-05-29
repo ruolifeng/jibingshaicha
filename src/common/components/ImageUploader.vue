@@ -12,7 +12,7 @@
  *   - 也兼容直接传入 string[] 数组
  *   - 空值（null/""/[]）均合法
  */
-import type { UploadFile, UploadFiles, UploadProps } from "element-plus"
+import type { UploadFile, UploadFiles, UploadProps, UploadRequestOptions } from "element-plus"
 import { Plus, ZoomIn } from "@element-plus/icons-vue"
 import { getToken } from "@@/utils/cache/cookies"
 import { parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
@@ -44,7 +44,7 @@ const emit = defineEmits<{
 
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
-async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+async function handleHttpUpload(options: UploadRequestOptions) {
   await uploadAttachmentFile(options)
 }
 
@@ -156,7 +156,7 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
 <template>
   <div class="image-uploader">
     <el-upload
-      :http-request="handleHttpUpload as any"
+      :http-request="handleHttpUpload"
       :headers="uploadHeaders"
       :file-list="fileList"
       :limit="max"

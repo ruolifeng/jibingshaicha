@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { FormInstance, FormRules } from "element-plus"
+import type { FormInstance, FormRules, UploadRequestOptions } from "element-plus"
 import {
   formatLatentSupervisionTreatmentPlan,
   INTERRUPT_MEDICATION_OPTIONS,
@@ -93,7 +93,7 @@ const attachmentFileList = ref<{ name: string, url: string, uid?: number }[]>([]
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 const formDisabled = computed(() => props.readonly || formLocked.value)
 
-async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+async function handleHttpUpload(options: UploadRequestOptions) {
   await uploadAttachmentFile(options)
 }
 
@@ -605,7 +605,7 @@ async function handleArchive() {
       </el-form-item>
       <el-form-item label="附件上传">
         <el-upload
-          :http-request="handleHttpUpload as any"
+          :http-request="handleHttpUpload"
           :headers="uploadHeaders"
           :file-list="attachmentFileList"
           name="file"

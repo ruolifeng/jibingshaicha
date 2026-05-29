@@ -143,7 +143,7 @@ public class ReferralTrackingController {
     }
 
     @OperationLog(type = "update", module = "referral", action = "保存诊断结果")
-    @Operation(summary = "保存诊断结果并分流（排除/确诊患者/潜伏感染者/其他）")
+    @Operation(summary = "保存诊断结果并分流（排除/确诊患者/潜伏感染者/其他；确诊患者仅标红结案）")
     @PostMapping("/{id}/diagnosis")
     public ResultResponse<Void> saveDiagnosis(@PathVariable Long id,
                                                @RequestBody Map<String, Object> body) {

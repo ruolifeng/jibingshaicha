@@ -5,15 +5,14 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
+import cn.luyou.constant.EpidemicTrackImportHeaders;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
 import cn.luyou.model.LatentInfection;
-import cn.luyou.model.Patient;
 import cn.luyou.model.ReferralTracking;
 import cn.luyou.model.User;
 import cn.luyou.service.DepartmentService;
-import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralTrackingService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.service.UserService;
@@ -36,6 +35,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +52,6 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     private final UserService userService;
     private final DepartmentService departmentService;
-    private final PatientService patientService;
     private final LatentInfectionMapper latentInfectionMapper;
     private final SysMessageService sysMessageService;
 
@@ -164,17 +163,17 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> importEpidemic(MultipartFile file) {
         String batchNo = IdUtil.fastSimpleUUID();
-        List<Map<Integer, String>> allRows = readExcelRows(file);
+        List<Map<Integer, Object>> allRows = readExcelRows(file);
 
         if (allRows.size() < 2) {
             return Map.of("count", 0, "batchNo", batchNo);
         }
 
-        Map<Integer, String> headerRow = allRows.get(0);
+        Map<Integer, Object> headerRow = allRows.get(0);
         Map<String, Integer> headerIndex = buildHeaderIndex(headerRow);
         int count = 0;
 
-        for (Map<Integer, String> row : allRows.subList(1, allRows.size())) {
+        for (Map<Integer, Object> row : allRows.subList(1, allRows.size())) {
             String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
             String idNumber = getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证");
@@ -195,6 +194,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 township = extractTownship(currentAddress);
             }
 
+            Object reportCardTimeCell = getFieldCellValue(row, headerIndex,
+                    "报告卡录入时间", "报告卡录入日期", "录卡时间", "报告卡录卡时间", "录入时间");
+
             ReferralTracking entity = ReferralTracking.builder()
                     .bizMode("track")
                     .sourceType("epidemic")
@@ -203,7 +205,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     .parentName(getFieldByHeader(row, headerIndex, "患儿家长姓名"))
                     .idNumber(idNumber)
                     .gender(getFieldByHeader(row, headerIndex, "性别"))
-                    .birthDate(parseDate(getFieldByHeader(row, headerIndex, "出生日期")))
+                    .birthDate(parseDateCell(getFieldCellValue(row, headerIndex, "出生日期")))
                     .age(parseInt(getFieldByHeader(row, headerIndex, "年龄")))
                     .workplace(getFieldByHeader(row, headerIndex, "患者工作单位"))
                     .phone(getFieldByHeader(row, headerIndex, "联系电话", "电话"))
@@ -213,8 +215,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     .caseCategory(getFieldByHeader(row, headerIndex, "病例分类"))
                     .diseaseName(getFieldByHeader(row, headerIndex, "疾病名称"))
                     .reportUnit(getFieldByHeader(row, headerIndex, "报告单位"))
-                    .reportCardTime(parseDateTime(getFieldByHeader(row, headerIndex,
-                            "报告卡录入时间", "报告卡录入日期", "录入时间")))
+                    .reportCardTime(parseDateTimeCell(reportCardTimeCell))
                     .epidemicRemark(getFieldByHeader(row, headerIndex, "备注"))
                     .trackReason("大疫情导入")
                     .trackingStatus(0)
@@ -733,20 +734,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         switch (diagnosisResult) {
             case "排除", "其他" -> {
-                lambdaUpdate()
-                        .eq(ReferralTracking::getId, id)
-                        .set(ReferralTracking::getArchived, 1)
-                        .update();
+                archiveTrackingDiagnosis(id);
                 log.info("推介追踪诊断归档（{}），recordId={}", diagnosisResult, id);
             }
             case "确诊患者" -> {
-                Long patientId = createPatientFromTracking(updated);
-                lambdaUpdate()
-                        .eq(ReferralTracking::getId, id)
-                        .set(ReferralTracking::getTargetPatientId, patientId)
-                        .set(ReferralTracking::getArchived, 1)
-                        .update();
-                log.info("推介追踪确诊，已创建患者记录 patientId={}，recordId={}", patientId, id);
+                // 确诊患者仅标红结案，不进入患者管理（患者管理数据仅来自专病信息表导入）
+                archiveTrackingDiagnosis(id);
+                log.info("推介追踪确诊患者结案，recordId={}", id);
             }
             case "潜伏感染者" -> {
                 Long latentId = createLatentFromTracking(updated);
@@ -760,6 +754,14 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID,
                     "无效的诊断结果，有效值：排除/确诊患者/潜伏感染者/其他");
         }
+    }
+
+    /** 诊断归档：标记结案，不再分流至其他模块 */
+    private void archiveTrackingDiagnosis(Long id) {
+        lambdaUpdate()
+                .eq(ReferralTracking::getId, id)
+                .set(ReferralTracking::getArchived, 1)
+                .update();
     }
 
     @Override
@@ -950,36 +952,6 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return false;
     }
 
-    /** 从推介追踪记录创建患者档案（populationType='referral'） */
-    private Long createPatientFromTracking(ReferralTracking r) {
-        // 幂等：若已创建则返回现有患者ID
-        if (r.getTargetPatientId() != null) return r.getTargetPatientId();
-
-        Patient patient = Patient.builder()
-                .screeningId(null)
-                .latentInfectionId(null)
-                .populationType("referral")
-                .name(r.getName())
-                .gender(r.getGender())
-                .birthDate(r.getBirthDate())
-                .age(r.getAge())
-                .idType(r.getIdType())
-                .idNumber(r.getIdNumber())
-                .ethnicity(r.getEthnicity())
-                .phone(r.getPhone())
-                .householdAddress(r.getHouseholdAddress())
-                .currentAddress(r.getCurrentAddress())
-                .diagnosisResult("确诊患者")
-                .source("referral")
-                .archived(0)
-                .departmentId(r.getDepartmentId())
-                .creatorId(resolveTrackingCreatorId(r))
-                .build();
-
-        patientService.save(patient);
-        return patient.getId();
-    }
-
     /** 从推介追踪记录创建潜伏感染记录（populationType='referral'） */
     private Long createLatentFromTracking(ReferralTracking r) {
         if (r.getTargetLatentId() != null) return r.getTargetLatentId();
@@ -1119,28 +1091,16 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (StrUtil.isBlank(text)) return null;
         String val = normalizeExcelCellText(text.trim());
 
-        if (val.matches("^\\d+(\\.\\d+)?$")) {
-            try {
-                double serial = Double.parseDouble(val);
-                if (serial > 59) {
-                    long days = (long) Math.floor(serial);
-                    LocalDate date = LocalDate.of(1899, 12, 30).plusDays(days);
-                    double fraction = serial - days;
-                    if (fraction > 0) {
-                        int seconds = (int) Math.round(fraction * 86400);
-                        return date.atStartOfDay().plusSeconds(seconds);
-                    }
-                    return date.atStartOfDay();
-                }
-            } catch (Exception ignored) {
-            }
+        LocalDateTime fromSerial = parseExcelSerialDateTime(val);
+        if (fromSerial != null) {
+            return fromSerial;
         }
 
         for (String pattern : new String[]{
                 "yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyy.MM.dd HH:mm:ss",
                 "yyyy-MM-dd HH:mm", "yyyy/MM/dd HH:mm", "yyyy.MM.dd HH:mm",
                 "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyyMMdd",
-                "yyyy年MM月dd日 HH:mm:ss", "yyyy年MM月dd日"
+                "yyyy年MM月dd日 HH:mm:ss", "yyyy年MM月dd日 HH:mm", "yyyy年MM月dd日"
         }) {
             try {
                 if (pattern.contains("HH")) {
@@ -1157,6 +1117,76 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return dateOnly.atStartOfDay();
         }
         return null;
+    }
+
+    /** 兼容 Excel 日期/时间单元格（Date、LocalDateTime、数值序列号、字符串等） */
+    private LocalDateTime parseDateTimeCell(Object val) {
+        if (val == null) {
+            return null;
+        }
+        if (val instanceof LocalDateTime ldt) {
+            return ldt;
+        }
+        if (val instanceof LocalDate ld) {
+            return ld.atStartOfDay();
+        }
+        if (val instanceof java.util.Date d) {
+            return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
+        if (val instanceof Number n) {
+            LocalDateTime fromSerial = parseExcelSerialDateTime(n.doubleValue());
+            if (fromSerial != null) {
+                return fromSerial;
+            }
+        }
+        return parseDateTime(cellToText(val));
+    }
+
+    private LocalDate parseDateCell(Object val) {
+        if (val == null) {
+            return null;
+        }
+        if (val instanceof LocalDate ld) {
+            return ld;
+        }
+        if (val instanceof LocalDateTime ldt) {
+            return ldt.toLocalDate();
+        }
+        if (val instanceof java.util.Date d) {
+            return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        }
+        if (val instanceof Number n) {
+            LocalDateTime fromSerial = parseExcelSerialDateTime(n.doubleValue());
+            if (fromSerial != null) {
+                return fromSerial.toLocalDate();
+            }
+        }
+        return parseDate(cellToText(val));
+    }
+
+    private LocalDateTime parseExcelSerialDateTime(double serial) {
+        if (serial <= 59) {
+            return null;
+        }
+        long days = (long) Math.floor(serial);
+        LocalDate date = LocalDate.of(1899, 12, 30).plusDays(days);
+        double fraction = serial - days;
+        if (fraction > 0) {
+            int seconds = (int) Math.round(fraction * 86400);
+            return date.atStartOfDay().plusSeconds(seconds);
+        }
+        return date.atStartOfDay();
+    }
+
+    private LocalDateTime parseExcelSerialDateTime(String val) {
+        if (!val.matches("^\\d+(\\.\\d+)?$")) {
+            return null;
+        }
+        try {
+            return parseExcelSerialDateTime(Double.parseDouble(val));
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     /** 规范化 Excel 单元格文本（科学计数法、整数型小数等） */
@@ -1184,12 +1214,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
     }
 
-    private List<Map<Integer, String>> readExcelRows(MultipartFile file) {
-        List<Map<Integer, String>> allRows = new ArrayList<>();
+    private List<Map<Integer, Object>> readExcelRows(MultipartFile file) {
+        List<Map<Integer, Object>> allRows = new ArrayList<>();
         try {
-            EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
+            EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, Object>>() {
                 @Override
-                public void invoke(Map<Integer, String> data, AnalysisContext context) {
+                public void invoke(Map<Integer, Object> data, AnalysisContext context) {
                     allRows.add(new LinkedHashMap<>(data));
                 }
 
@@ -1204,43 +1234,89 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return allRows;
     }
 
-    private Map<String, Integer> buildHeaderIndex(Map<Integer, String> headerRow) {
+    private Map<String, Integer> buildHeaderIndex(Map<Integer, Object> headerRow) {
         Map<String, Integer> headerIndex = new LinkedHashMap<>();
-        for (Map.Entry<Integer, String> entry : headerRow.entrySet()) {
-            if (StrUtil.isNotBlank(entry.getValue())) {
-                headerIndex.put(entry.getValue().trim(), entry.getKey());
+        for (Map.Entry<Integer, Object> entry : headerRow.entrySet()) {
+            String header = normalizeHeader(cellToText(entry.getValue()));
+            if (StrUtil.isNotBlank(header)) {
+                headerIndex.put(header, entry.getKey());
+            }
+        }
+        for (Map.Entry<String, String> alias : EpidemicTrackImportHeaders.HEADER_ALIASES.entrySet()) {
+            Integer idx = headerIndex.get(normalizeHeader(alias.getKey()));
+            if (idx != null) {
+                headerIndex.putIfAbsent(normalizeHeader(alias.getValue()), idx);
             }
         }
         return headerIndex;
     }
 
-    private String getFieldByHeader(Map<Integer, String> row, Map<String, Integer> headerIndex, String... fieldNames) {
+    private String normalizeHeader(String header) {
+        if (header == null) {
+            return null;
+        }
+        return header.replace('\u00A0', ' ')
+                .replace("\n", "")
+                .replace("\r", "")
+                .replaceAll("\\s+", "")
+                .trim();
+    }
+
+    private String cellToText(Object val) {
+        if (val == null) {
+            return null;
+        }
+        if (val instanceof String s) {
+            return StrUtil.isBlank(s) ? null : normalizeExcelCellText(s.trim());
+        }
+        if (val instanceof java.util.Date d) {
+            return d.toInstant().atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+        if (val instanceof LocalDateTime ldt) {
+            return ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+        if (val instanceof LocalDate ld) {
+            return ld.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        }
+        if (val instanceof Number n) {
+            return normalizeExcelCellText(n.toString());
+        }
+        String text = val.toString().trim();
+        return StrUtil.isBlank(text) ? null : normalizeExcelCellText(text);
+    }
+
+    private Object getFieldCellValue(Map<Integer, Object> row, Map<String, Integer> headerIndex, String... fieldNames) {
         for (String fieldName : fieldNames) {
-            Integer idx = headerIndex.get(fieldName);
+            String normalizedField = normalizeHeader(fieldName);
+            Integer idx = headerIndex.get(normalizedField);
             if (idx != null) {
-                String val = row.get(idx);
-                if (StrUtil.isNotBlank(val)) {
-                    return normalizeExcelCellText(val.trim());
+                Object val = row.get(idx);
+                if (val != null && !(val instanceof String s && StrUtil.isBlank(s))) {
+                    return val;
                 }
             }
             for (Map.Entry<String, Integer> entry : headerIndex.entrySet()) {
-                // 短字段名仅精确匹配，避免「姓名」误匹配「患儿家长姓名」
-                if (fieldName.length() <= 2) {
-                    if (entry.getKey().equals(fieldName)) {
-                        String val = row.get(entry.getValue());
-                        if (StrUtil.isNotBlank(val)) {
-                            return normalizeExcelCellText(val.trim());
+                if (normalizedField.length() <= 2) {
+                    if (entry.getKey().equals(normalizedField)) {
+                        Object val = row.get(entry.getValue());
+                        if (val != null && !(val instanceof String s && StrUtil.isBlank(s))) {
+                            return val;
                         }
                     }
-                } else if (entry.getKey().contains(fieldName)) {
-                    String val = row.get(entry.getValue());
-                    if (StrUtil.isNotBlank(val)) {
-                        return normalizeExcelCellText(val.trim());
+                } else if (entry.getKey().contains(normalizedField)) {
+                    Object val = row.get(entry.getValue());
+                    if (val != null && !(val instanceof String s && StrUtil.isBlank(s))) {
+                        return val;
                     }
                 }
             }
         }
         return null;
+    }
+
+    private String getFieldByHeader(Map<Integer, Object> row, Map<String, Integer> headerIndex, String... fieldNames) {
+        return cellToText(getFieldCellValue(row, headerIndex, fieldNames));
     }
 
     private boolean existsEpidemicRecord(String cardId, String idNumber, String name, String birthDateText, String phone) {

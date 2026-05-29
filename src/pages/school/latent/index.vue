@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { UploadRequestOptions } from "element-plus"
 import { getLevel5UsersApi } from "@@/apis/users"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
@@ -439,7 +440,7 @@ const supervisionRow = ref<any>(null)
 const attachmentFileList = ref<{ name: string, url: string }[]>([])
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
-async function handleHttpUpload(options: Parameters<typeof uploadAttachmentFile>[0]) {
+async function handleHttpUpload(options: UploadRequestOptions) {
   await uploadAttachmentFile(options)
 }
 
@@ -1441,7 +1442,7 @@ watch(
         </el-form-item>
         <el-form-item label="附件上传">
           <el-upload
-            :http-request="handleHttpUpload as any"
+            :http-request="handleHttpUpload"
             :headers="uploadHeaders"
             :file-list="attachmentFileList"
             :before-upload="beforeAttachmentUpload"

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -46,6 +47,13 @@ public class ExceptionAdvice {
                                                                      HttpServletRequest request) {
         log.warn("request {} upload size exceeded \n", request, ex);
         return ResultRes.error(StatusEnum.PARAM_INVALID, "文件大小超过限制，单个文件不能超过 25MB");
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    @ResponseBody
+    public ResultResponse<Void> handleMultipartException(MultipartException ex, HttpServletRequest request) {
+        log.warn("request {} multipart parse failed \n", request, ex);
+        return ResultRes.error(StatusEnum.PARAM_INVALID, "文件上传格式错误，请重新选择图片后重试");
     }
 
     @ExceptionHandler(ServiceException.class)

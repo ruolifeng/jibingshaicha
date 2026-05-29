@@ -16,9 +16,14 @@ function createInstance() {
   const instance = axios.create()
   // 请求拦截器
   instance.interceptors.request.use(
-    // 发送之前
-    config => config,
-    // 发送失败
+    (config) => {
+      // FormData 必须由浏览器自动设置 multipart boundary，不能带 application/json
+      if (config.data instanceof FormData && config.headers) {
+        delete config.headers["Content-Type"]
+        delete config.headers["content-type"]
+      }
+      return config
+    },
     error => Promise.reject(error)
   )
   // 响应拦截器（可根据具体业务作出相应的调整）
@@ -119,26 +124,21 @@ function createInstance() {
 function createRequest(instance: AxiosInstance) {
   return <T>(config: AxiosRequestConfig): Promise<T> => {
     const token = getToken()
-    // 默认配置
+    const isFormData = config.data instanceof FormData
     const defaultConfig: AxiosRequestConfig = {
-      // 接口地址
       baseURL: import.meta.env.VITE_BASE_URL,
-      // 请求头
       headers: {
-        // 携带 Token
-        "Authorization": token ? `Bearer ${token}` : undefined,
-        // FormData 请求（文件上传）不设 Content-Type，让浏览器自动带上 multipart/form-data boundary
-        "Content-Type": config.data instanceof FormData ? undefined : "application/json"
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(!isFormData ? { "Content-Type": "application/json" } : {})
       },
-      // 请求体
-      data: {},
-      // 文件上传（FormData）超时 60s，普通请求 10s
-      timeout: config.data instanceof FormData ? 60000 : 10000,
-      // 跨域请求时是否携带 Cookies
+      timeout: isFormData ? 60000 : 10000,
       withCredentials: false
     }
-    // 将默认配置 defaultConfig 和传入的自定义配置 config 进行合并成为 mergeConfig
-    const mergeConfig = merge(defaultConfig, config)
+    const mergeConfig = merge({}, defaultConfig, config)
+    if (mergeConfig.data instanceof FormData && mergeConfig.headers) {
+      delete mergeConfig.headers["Content-Type"]
+      delete mergeConfig.headers["content-type"]
+    }
     return instance(mergeConfig)
   }
 }
