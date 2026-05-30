@@ -215,8 +215,8 @@ const supervisionRow = ref<any>(null)
 const attachmentFileList = ref<{ name: string, url: string }[]>([])
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
-async function handleHttpUpload(options: UploadRequestOptions) {
-  await uploadAttachmentFile(options)
+function handleHttpUpload(options: UploadRequestOptions) {
+  return uploadAttachmentFile(options)
 }
 
 function beforeAttachmentUpload(file: File) {

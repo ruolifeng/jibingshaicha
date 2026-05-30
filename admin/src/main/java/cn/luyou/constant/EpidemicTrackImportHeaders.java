@@ -41,6 +41,9 @@ public final class EpidemicTrackImportHeaders {
         aliases.put("报告卡录入日期", "报告卡录入时间");
         aliases.put("录卡时间", "报告卡录入时间");
         aliases.put("报告卡录卡时间", "报告卡录入时间");
+        aliases.put("录入时间", "报告卡录入时间");
+        aliases.put("录卡日期", "报告卡录入时间");
+        aliases.put("医生填卡日期", "报告卡录入时间");
         HEADER_ALIASES = Collections.unmodifiableMap(aliases);
     }
 }

@@ -2628,3 +2628,29 @@ FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:pickup';
+
+-- ==================== V53：推介追踪 — 一至五级补全操作按钮权限 ====================
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement:edit',
+    'referralManagement:trackOperate',
+    'referralManagement:xray',
+    'referralManagement:diagnosis',
+    'referralManagement:delete'
+);
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement:edit',
+    'referralManagement:trackOperate',
+    'referralManagement:xray',
+    'referralManagement:diagnosis',
+    'referralManagement:delete'
+);

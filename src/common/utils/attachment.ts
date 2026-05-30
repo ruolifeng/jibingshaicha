@@ -59,16 +59,13 @@ export function getFileUploadAction(): string {
 export async function uploadAttachmentFile(options: UploadRequestOptions) {
   const formData = new FormData()
   formData.append(options.filename || "file", options.file)
-  try {
-    const res = await request<ApiResponseData<string>>({
-      url: "/file/upload",
-      method: "post",
-      data: formData
-    })
-    options.onSuccess(res)
-  } catch (error) {
-    options.onError(error as Parameters<UploadRequestOptions["onError"]>[0])
-  }
+  // 仅 return 结果，由 el-upload http-request 的 Promise.then 触发 onSuccess；
+  // 若在此处再调 options.onSuccess，会被 EP 二次以 undefined 回调导致上传失败
+  return request<ApiResponseData<string>>({
+    url: "/file/upload",
+    method: "post",
+    data: formData
+  })
 }
 
 /** 从 URL 提取展示名称 */

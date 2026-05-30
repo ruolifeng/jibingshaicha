@@ -18,6 +18,8 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.service.UserService;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.enums.CellDataTypeEnum;
+import com.alibaba.excel.metadata.data.ReadCellData;
 import com.alibaba.excel.read.listener.ReadListener;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -166,24 +168,24 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         List<Map<Integer, Object>> allRows = readExcelRows(file);
 
         if (allRows.size() < 2) {
-            return Map.of("count", 0, "batchNo", batchNo);
+            return Map.of("count", 0, "updated", 0, "batchNo", batchNo);
         }
 
-        Map<Integer, Object> headerRow = allRows.get(0);
+        int headerRowIndex = resolveHeaderRowIndex(allRows);
+        Map<Integer, Object> headerRow = allRows.get(headerRowIndex);
         Map<String, Integer> headerIndex = buildHeaderIndex(headerRow);
-        int count = 0;
+        log.info("大疫情表表头解析（第{}行）：{}", headerRowIndex + 1, headerIndex.keySet());
 
-        for (Map<Integer, Object> row : allRows.subList(1, allRows.size())) {
+        Long currentUserId = BaseContext.getCurrentId();
+        Long currentDeptId = BaseContext.getCurrentDepartmentId();
+        int count = 0;
+        int updated = 0;
+
+        for (Map<Integer, Object> row : allRows.subList(headerRowIndex + 1, allRows.size())) {
             String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
             String idNumber = getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证");
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber) && StrUtil.isBlank(cardId)) {
-                continue;
-            }
-
-            if (existsEpidemicRecord(cardId, idNumber, name,
-                    getFieldByHeader(row, headerIndex, "出生日期"),
-                    getFieldByHeader(row, headerIndex, "联系电话", "电话"))) {
                 continue;
             }
 
@@ -194,8 +196,19 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 township = extractTownship(currentAddress);
             }
 
-            Object reportCardTimeCell = getFieldCellValue(row, headerIndex,
-                    "报告卡录入时间", "报告卡录入日期", "录卡时间", "报告卡录卡时间", "录入时间");
+            Object reportCardTimeCell = getReportCardTimeCell(row, headerIndex);
+            LocalDateTime reportCardTime = parseDateTimeCell(reportCardTimeCell);
+
+            ReferralTracking existing = findEpidemicRecord(cardId, idNumber, name,
+                    getFieldByHeader(row, headerIndex, "出生日期"),
+                    getFieldByHeader(row, headerIndex, "联系电话", "电话"));
+            if (existing != null) {
+                if (mergeEpidemicImportFields(existing, reportCardTime, currentUserId, currentDeptId)) {
+                    updateById(existing);
+                    updated++;
+                }
+                continue;
+            }
 
             ReferralTracking entity = ReferralTracking.builder()
                     .bizMode("track")
@@ -215,22 +228,22 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     .caseCategory(getFieldByHeader(row, headerIndex, "病例分类"))
                     .diseaseName(getFieldByHeader(row, headerIndex, "疾病名称"))
                     .reportUnit(getFieldByHeader(row, headerIndex, "报告单位"))
-                    .reportCardTime(parseDateTimeCell(reportCardTimeCell))
+                    .reportCardTime(reportCardTime)
                     .epidemicRemark(getFieldByHeader(row, headerIndex, "备注"))
                     .trackReason("大疫情导入")
                     .trackingStatus(0)
                     .notInPlaceCount(0)
                     .archived(0)
                     .uploadBatch(batchNo)
-                    .departmentId(BaseContext.getCurrentDepartmentId())
-                    .creatorId(BaseContext.getCurrentId())
+                    .departmentId(currentDeptId)
+                    .creatorId(currentUserId)
                     .build();
             save(entity);
             count++;
         }
 
-        log.info("大疫情导入追踪记录完成，count={}, batchNo={}", count, batchNo);
-        return Map.of("count", count, "batchNo", batchNo);
+        log.info("大疫情导入追踪记录完成，created={}, updated={}, batchNo={}", count, updated, batchNo);
+        return Map.of("count", count, "updated", updated, "batchNo", batchNo);
     }
 
     @Override
@@ -788,36 +801,21 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         checkTrackOperatorOrCreator(record);
     }
 
-    /** 有接收人时仅接收人可操作；无接收人（大疫情/手动追踪）时仅创建人可操作 */
+    /** 有接收人时仅接收人可操作；无接收人时创建人或辖区一至五级用户可操作 */
     private void checkTrackOperatorOrCreator(ReferralTracking record) {
-        if (BaseContext.isSuperAdmin()) {
-            return;
-        }
-        Long currentUserId = BaseContext.getCurrentId();
-        if (record.getReceiverUserId() != null) {
-            if (!record.getReceiverUserId().equals(currentUserId)) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介接收人可进行此操作");
-            }
-            return;
-        }
-        if (currentUserId == null || !currentUserId.equals(record.getCreatorId())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅创建人可进行此操作");
+        if (!canOperateRecord(record)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无权进行此操作");
         }
     }
 
-    /** 编辑：仅创建人或接收人（上级管理者只读） */
+    /** 编辑：创建人、接收人或辖区一至五级用户 */
     private void assertCanMutateRecord(ReferralTracking record) {
-        if (BaseContext.isSuperAdmin()) {
-            return;
+        if (!canOperateRecord(record)) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "无权操作该记录");
         }
-        Long userId = BaseContext.getCurrentId();
-        if (userId != null && (userId.equals(record.getCreatorId()) || userId.equals(record.getReceiverUserId()))) {
-            return;
-        }
-        throw new ServiceException(StatusEnum.FORBIDDEN, "无权操作该记录");
     }
 
-    /** 删除：创建人可删；接收人仅可删待接收推介单 */
+    /** 删除：创建人、接收人（待接收推介单）或辖区一至五级用户（追踪/大疫情） */
     private void assertCanDeleteRecord(ReferralTracking record) {
         if (BaseContext.isSuperAdmin()) {
             return;
@@ -832,6 +830,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (userId.equals(record.getReceiverUserId())
                 && "recommend".equals(record.getBizMode())
                 && Integer.valueOf(1).equals(record.getRecommendStatus())) {
+            return;
+        }
+        if ("track".equals(record.getBizMode()) && record.getReceiverUserId() == null && canOperateRecord(record)) {
             return;
         }
         throw new ServiceException(StatusEnum.FORBIDDEN, "无权删除该记录");
@@ -855,9 +856,16 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return;
         }
         if (role == 6) {
-            wrapper.and(w -> w.eq(ReferralTracking::getCreatorId, userId)
-                    .or()
-                    .eq(ReferralTracking::getReceiverUserId, userId));
+            Long deptId = BaseContext.getCurrentDepartmentId();
+            wrapper.and(w -> {
+                w.eq(ReferralTracking::getCreatorId, userId)
+                        .or()
+                        .eq(ReferralTracking::getReceiverUserId, userId);
+                if (deptId != null) {
+                    w.or().nested(w2 -> w2.eq(ReferralTracking::getBizMode, "track")
+                            .eq(ReferralTracking::getDepartmentId, deptId));
+                }
+            });
             return;
         }
         applyManagerScopeFilter(wrapper, userId);
@@ -905,20 +913,50 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (BaseContext.isSuperAdmin()) {
             return;
         }
-        Integer role = BaseContext.getCurrentRole();
         Long userId = BaseContext.getCurrentId();
-        if (role == null || userId == null) {
+        if (userId == null) {
             throw new ServiceException(StatusEnum.FORBIDDEN, "无权查看该记录");
         }
-        if (role == 6) {
-            if (!userId.equals(record.getCreatorId()) && !userId.equals(record.getReceiverUserId())) {
-                throw new ServiceException(StatusEnum.FORBIDDEN, "无权查看该记录");
-            }
+        if (userId.equals(record.getCreatorId()) || userId.equals(record.getReceiverUserId())) {
             return;
         }
-        if (!canAccessViaDepartmentScope(record, userId)) {
-            throw new ServiceException(StatusEnum.FORBIDDEN, "无权查看该记录");
+        Integer role = BaseContext.getCurrentRole();
+        if (role != null && role == 6 && "track".equals(record.getBizMode())) {
+            Long deptId = BaseContext.getCurrentDepartmentId();
+            if (deptId != null && deptId.equals(record.getDepartmentId())) {
+                return;
+            }
         }
+        if (role != null && role >= 2 && role <= 5 && canAccessViaDepartmentScope(record, userId)) {
+            return;
+        }
+        throw new ServiceException(StatusEnum.FORBIDDEN, "无权查看该记录");
+    }
+
+    /** 追踪/大疫情：创建人、接收人或辖区一至五级用户可操作 */
+    private boolean canOperateRecord(ReferralTracking record) {
+        if (BaseContext.isSuperAdmin()) {
+            return true;
+        }
+        Long userId = BaseContext.getCurrentId();
+        if (userId == null) {
+            return false;
+        }
+        if (record.getReceiverUserId() != null) {
+            return userId.equals(record.getReceiverUserId());
+        }
+        if (userId.equals(record.getCreatorId())) {
+            return true;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role < 2 || role > 6) {
+            return false;
+        }
+        if (role == 6 && "track".equals(record.getBizMode())) {
+            Long deptId = BaseContext.getCurrentDepartmentId();
+            return deptId != null && deptId.equals(record.getDepartmentId());
+        }
+        return canAccessViaDepartmentScope(record, userId);
     }
 
     private boolean canAccessViaDepartmentScope(ReferralTracking record, Long userId) {
@@ -1119,8 +1157,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return null;
     }
 
-    /** 兼容 Excel 日期/时间单元格（Date、LocalDateTime、数值序列号、字符串等） */
+    /** 兼容 Excel 日期/时间单元格（Date、LocalDateTime、数值序列号、ReadCellData、字符串等） */
     private LocalDateTime parseDateTimeCell(Object val) {
+        val = unwrapExcelCellValue(val);
         if (val == null) {
             return null;
         }
@@ -1143,6 +1182,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     private LocalDate parseDateCell(Object val) {
+        val = unwrapExcelCellValue(val);
         if (val == null) {
             return null;
         }
@@ -1263,6 +1303,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     private String cellToText(Object val) {
+        val = unwrapExcelCellValue(val);
         if (val == null) {
             return null;
         }
@@ -1291,7 +1332,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             String normalizedField = normalizeHeader(fieldName);
             Integer idx = headerIndex.get(normalizedField);
             if (idx != null) {
-                Object val = row.get(idx);
+                Object val = unwrapExcelCellValue(row.get(idx));
                 if (val != null && !(val instanceof String s && StrUtil.isBlank(s))) {
                     return val;
                 }
@@ -1299,13 +1340,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             for (Map.Entry<String, Integer> entry : headerIndex.entrySet()) {
                 if (normalizedField.length() <= 2) {
                     if (entry.getKey().equals(normalizedField)) {
-                        Object val = row.get(entry.getValue());
+                        Object val = unwrapExcelCellValue(row.get(entry.getValue()));
                         if (val != null && !(val instanceof String s && StrUtil.isBlank(s))) {
                             return val;
                         }
                     }
                 } else if (entry.getKey().contains(normalizedField)) {
-                    Object val = row.get(entry.getValue());
+                    Object val = unwrapExcelCellValue(row.get(entry.getValue()));
                     if (val != null && !(val instanceof String s && StrUtil.isBlank(s))) {
                         return val;
                     }
@@ -1315,17 +1356,38 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return null;
     }
 
+    /** EasyExcel 4.x Map 读取时单元格可能为 ReadCellData，需解包后再解析 */
+    private Object unwrapExcelCellValue(Object val) {
+        if (!(val instanceof ReadCellData<?> cellData)) {
+            return val;
+        }
+        if (cellData.getType() == CellDataTypeEnum.NUMBER && cellData.getNumberValue() != null) {
+            return cellData.getNumberValue().doubleValue();
+        }
+        if (cellData.getType() == CellDataTypeEnum.STRING && StrUtil.isNotBlank(cellData.getStringValue())) {
+            return cellData.getStringValue().trim();
+        }
+        if (cellData.getData() != null) {
+            return cellData.getData();
+        }
+        if (StrUtil.isNotBlank(cellData.getStringValue())) {
+            return cellData.getStringValue().trim();
+        }
+        return null;
+    }
+
     private String getFieldByHeader(Map<Integer, Object> row, Map<String, Integer> headerIndex, String... fieldNames) {
         return cellToText(getFieldCellValue(row, headerIndex, fieldNames));
     }
 
-    private boolean existsEpidemicRecord(String cardId, String idNumber, String name, String birthDateText, String phone) {
+    private ReferralTracking findEpidemicRecord(String cardId, String idNumber, String name, String birthDateText, String phone) {
         if (StrUtil.isNotBlank(cardId)) {
             return lambdaQuery()
                     .eq(ReferralTracking::getBizMode, "track")
                     .eq(ReferralTracking::getSourceType, "epidemic")
                     .eq(ReferralTracking::getCardId, cardId)
-                    .exists();
+                    .last("LIMIT 1")
+                    .one();
         }
         LocalDate birthDate = parseDate(birthDateText);
         return lambdaQuery()
@@ -1340,7 +1402,63 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                                 .eq(StrUtil.isNotBlank(phone), ReferralTracking::getPhone, phone);
                     }
                 })
-                .exists();
+                .last("LIMIT 1")
+                .one();
+    }
+
+    /** 重复导入时补全报告卡录入时间、录入人等信息 */
+    private boolean mergeEpidemicImportFields(ReferralTracking existing, LocalDateTime reportCardTime,
+                                              Long currentUserId, Long currentDeptId) {
+        boolean changed = false;
+        if (reportCardTime != null && existing.getReportCardTime() == null) {
+            existing.setReportCardTime(reportCardTime);
+            changed = true;
+        }
+        if (existing.getCreatorId() == null && currentUserId != null) {
+            existing.setCreatorId(currentUserId);
+            changed = true;
+        }
+        if (existing.getDepartmentId() == null && currentDeptId != null) {
+            existing.setDepartmentId(currentDeptId);
+            changed = true;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        // 五级用户重新导入时认领记录，确保可见且可追踪
+        if (Integer.valueOf(6).equals(role) && currentUserId != null) {
+            if (!currentUserId.equals(existing.getCreatorId())) {
+                existing.setCreatorId(currentUserId);
+                changed = true;
+            }
+            if (currentDeptId != null && !currentDeptId.equals(existing.getDepartmentId())) {
+                existing.setDepartmentId(currentDeptId);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** 定位表头行（兼容大疫情表标题行） */
+    private int resolveHeaderRowIndex(List<Map<Integer, Object>> allRows) {
+        int maxScan = Math.min(allRows.size(), 6);
+        for (int i = 0; i < maxScan; i++) {
+            Map<String, Integer> idx = buildHeaderIndex(allRows.get(i));
+            if (idx.containsKey(normalizeHeader("卡片ID"))
+                    || idx.containsKey(normalizeHeader("患者姓名"))
+                    || idx.containsKey(normalizeHeader("有效证件号"))) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /** 优先精确匹配报告卡录入时间表头，避免误匹配其它「录入时间」列 */
+    private Object getReportCardTimeCell(Map<Integer, Object> row, Map<String, Integer> headerIndex) {
+        Object val = getFieldCellValue(row, headerIndex,
+                "报告卡录入时间", "报告卡录入日期", "录卡时间", "报告卡录卡时间", "录卡日期", "医生填卡日期");
+        if (val != null) {
+            return val;
+        }
+        return getFieldCellValue(row, headerIndex, "录入时间");
     }
 
     private String extractTownship(String address) {

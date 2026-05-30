@@ -99,7 +99,7 @@ export function deleteReferralTrackingApi(id: number) {
 export function importEpidemicTrackApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ count: number, batchNo: string }>>({
+  return request<ApiResponseData<{ count: number, updated?: number, batchNo: string }>>({
     url: "referral-tracking/import-epidemic",
     method: "post",
     data: formData

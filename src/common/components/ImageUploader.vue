@@ -44,8 +44,8 @@ const emit = defineEmits<{
 
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 
-async function handleHttpUpload(options: UploadRequestOptions) {
-  await uploadAttachmentFile(options)
+function handleHttpUpload(options: UploadRequestOptions) {
+  return uploadAttachmentFile(options)
 }
 
 type LocalFile = { name: string, url: string, uid: number }

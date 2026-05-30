@@ -93,8 +93,8 @@ const attachmentFileList = ref<{ name: string, url: string, uid?: number }[]>([]
 const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 const formDisabled = computed(() => props.readonly || formLocked.value)
 
-async function handleHttpUpload(options: UploadRequestOptions) {
-  await uploadAttachmentFile(options)
+function handleHttpUpload(options: UploadRequestOptions) {
+  return uploadAttachmentFile(options)
 }
 
 function formatDateValue(value: unknown): string {

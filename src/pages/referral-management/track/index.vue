@@ -32,13 +32,15 @@ import {
 
 const userStore = useUserStore()
 
-/** 有接收人时仅接收人可操作；无接收人时仅创建人可操作（上级管理者只读） */
+/** 有接收人时仅接收人可操作；无接收人时创建人或辖区一至五级用户可操作 */
 function canOperateTrack(row: any) {
   if (userStore.userRole === 1) return true
   if (row.receiverUserId) {
     return Number(row.receiverUserId) === Number(userStore.userId)
   }
-  return Number(row.creatorId) === Number(userStore.userId)
+  if (Number(row.creatorId) === Number(userStore.userId)) return true
+  // 追踪/大疫情：辖区一至五级用户对可见记录均可操作
+  return userStore.userRole >= 2 && userStore.userRole <= 6
 }
 
 // ===== 列表 =====
@@ -97,7 +99,7 @@ function handleReset() {
 
 // ===== 大疫情导入 =====
 const importDialogVisible = ref(false)
-const importResult = ref<{ count: number, batchNo: string } | null>(null)
+const importResult = ref<{ count: number, updated?: number, batchNo: string } | null>(null)
 
 function openImportDialog() {
   importResult.value = null
@@ -116,7 +118,7 @@ async function handleEpidemicFileChange(uploadFile: any) {
   try {
     const res = await importEpidemicTrackApi(file)
     importResult.value = res.data
-    ElMessage.success(`导入成功，共创建 ${res.data.count} 条追踪记录`)
+    ElMessage.success(`导入成功，新建 ${res.data.count} 条，更新 ${res.data.updated ?? 0} 条追踪记录`)
     importDialogVisible.value = false
     fetchList()
   } catch {
@@ -524,7 +526,7 @@ function getRowClass({ row }: { row: any }) {
               v-permission="'referralManagement:xray'"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
-            >录入筛查</el-button>
+            >录入胸片</el-button>
             <!-- 诊断：已到位 -->
             <el-button
               v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
