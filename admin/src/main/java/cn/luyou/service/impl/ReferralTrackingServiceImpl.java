@@ -18,7 +18,6 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.service.UserService;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
-import com.alibaba.excel.enums.CellDataTypeEnum;
 import com.alibaba.excel.metadata.data.ReadCellData;
 import com.alibaba.excel.read.listener.ReadListener;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -1137,6 +1136,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         for (String pattern : new String[]{
                 "yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyy.MM.dd HH:mm:ss",
                 "yyyy-MM-dd HH:mm", "yyyy/MM/dd HH:mm", "yyyy.MM.dd HH:mm",
+                "yyyy/M/d HH:mm:ss", "yyyy/M/d HH:mm", "M/d/yy H:mm:ss", "M/d/yy H:mm",
                 "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyyMMdd",
                 "yyyy年MM月dd日 HH:mm:ss", "yyyy年MM月dd日 HH:mm", "yyyy年MM月dd日"
         }) {
@@ -1361,14 +1361,15 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!(val instanceof ReadCellData<?> cellData)) {
             return val;
         }
-        if (cellData.getType() == CellDataTypeEnum.NUMBER && cellData.getNumberValue() != null) {
-            return cellData.getNumberValue().doubleValue();
-        }
-        if (cellData.getType() == CellDataTypeEnum.STRING && StrUtil.isNotBlank(cellData.getStringValue())) {
-            return cellData.getStringValue().trim();
-        }
         if (cellData.getData() != null) {
             return cellData.getData();
+        }
+        // DATE / NUMBER 等类型均可能携带 Excel 序列号
+        if (cellData.getNumberValue() != null) {
+            return cellData.getNumberValue().doubleValue();
+        }
+        if (cellData instanceof ReadCellData<?> readCell && readCell.getOriginalNumberValue() != null) {
+            return readCell.getOriginalNumberValue().doubleValue();
         }
         if (StrUtil.isNotBlank(cellData.getStringValue())) {
             return cellData.getStringValue().trim();

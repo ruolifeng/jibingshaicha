@@ -5,7 +5,6 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.vo.QuestionnaireConfigVO;
 import cn.luyou.service.QuestionnaireService;
-import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Map;
 
 @Tag(name = "筛查问卷")
@@ -79,13 +77,10 @@ public class QuestionnaireController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
             HttpServletResponse response) throws IOException {
-        List<ScreeningSchool> data = questionnaireService.listSubmissionsForExport(code, name, idNumber);
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
         String encodedName = URLEncoder.encode("问卷提交记录", StandardCharsets.UTF_8).replaceAll("\\+", "%20");
         response.setHeader("Content-Disposition", "attachment;filename=" + encodedName + ".xlsx");
-        EasyExcel.write(response.getOutputStream(), ScreeningSchool.class)
-                .sheet("问卷提交记录")
-                .doWrite(data);
+        questionnaireService.exportSubmissions(code, name, idNumber, response.getOutputStream());
     }
 }

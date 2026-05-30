@@ -37,12 +37,9 @@ public class PatientController {
     private final MedicationPickupService medicationPickupService;
     private final UserService userService;
 
+    /** 填写领药与服药管理分离：仅 pickup 权限可保存领药记录 */
     private static final String[] MEDICATION_PICKUP_PERMISSIONS = {
-            "patientManagement:pickup",
-            "patientManagement:medication",
-            "patient:medication",
-            "keyPopulation:patient:medication",
-            "closeContact:patient:medication"
+            "patientManagement:pickup"
     };
 
     @Operation(summary = "手动新增在管患者")

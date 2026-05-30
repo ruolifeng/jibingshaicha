@@ -14,6 +14,7 @@ import cn.luyou.model.dto.ShowWhenDTO;
 import cn.luyou.model.vo.QuestionnaireConfigVO;
 import cn.luyou.service.QuestionnaireService;
 import cn.luyou.service.ScreeningSchoolService;
+import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -23,7 +24,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.OutputStream;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +121,80 @@ public class QuestionnaireServiceImpl extends ServiceImpl<QuestionnaireConfigMap
     public List<ScreeningSchool> listSubmissionsForExport(String code, String name, String idNumber) {
         getOrInitConfig(code);
         return screeningSchoolService.list(buildSubmissionWrapper(name, idNumber));
+    }
+
+    @Override
+    public void exportSubmissions(String code, String name, String idNumber, OutputStream outputStream) {
+        List<ScreeningSchool> data = listSubmissionsForExport(code, name, idNumber);
+        List<List<Object>> rows = new ArrayList<>(data.size());
+        for (ScreeningSchool record : data) {
+            rows.add(buildQuestionnaireExportRow(record));
+        }
+        EasyExcel.write(outputStream)
+                .head(buildQuestionnaireExportHead())
+                .sheet("问卷提交记录")
+                .doWrite(rows);
+    }
+
+    /** 问卷导出中文表头（与默认问卷字段 label 一致） */
+    private List<List<String>> buildQuestionnaireExportHead() {
+        return List.of(
+                List.of("年份"), List.of("市（州）"), List.of("县（市、区）"),
+                List.of("姓名"), List.of("性别"), List.of("出生日期"), List.of("年龄"),
+                List.of("证件类型"), List.of("证件号"), List.of("民族"), List.of("联系电话"),
+                List.of("户籍所在地"), List.of("现地址"),
+                List.of("学校类型"), List.of("学校名称"), List.of("班级（院系）"),
+                List.of("既往结核病史"), List.of("密切接触史"), List.of("结核病可疑症状"),
+                List.of("是否进行感染筛查"), List.of("感染筛查日期"),
+                List.of("筛查方法（PPD/EC/IGRA）"), List.of("筛查结果"), List.of("感染筛查结果"),
+                List.of("是否进行胸片检查"), List.of("胸片检查日期"), List.of("胸片结果"),
+                List.of("备注"), List.of("提交时间")
+        );
+    }
+
+    private List<Object> buildQuestionnaireExportRow(ScreeningSchool record) {
+        List<Object> row = new ArrayList<>(29);
+        row.add(record.getYear());
+        row.add(record.getCity());
+        row.add(record.getDistrict());
+        row.add(record.getName());
+        row.add(record.getGender());
+        row.add(formatExportDate(record.getBirthDate()));
+        row.add(record.getAge());
+        row.add(record.getIdType());
+        row.add(record.getIdNumber());
+        row.add(record.getEthnicity());
+        row.add(record.getPhone());
+        row.add(record.getHouseholdAddress());
+        row.add(record.getCurrentAddress());
+        row.add(record.getSchoolType());
+        row.add(record.getSchoolName());
+        row.add(record.getClassName());
+        row.add(record.getTbHistory());
+        row.add(record.getCloseContactHistory());
+        row.add(record.getSuspiciousSymptoms());
+        row.add(record.getHasInfectionScreen());
+        row.add(formatExportDate(record.getScreenDate()));
+        row.add(record.getScreenMethod());
+        row.add(record.getScreenResult());
+        row.add(record.getInfectionResult());
+        row.add(record.getHasChestXray());
+        row.add(formatExportDate(record.getChestXrayDate()));
+        row.add(record.getChestXrayResult());
+        row.add(record.getRemark());
+        row.add(formatExportDateTime(record.getCreateTime()));
+        return row;
+    }
+
+    private String formatExportDate(LocalDate date) {
+        return date != null ? date.toString() : "";
+    }
+
+    private String formatExportDateTime(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return "";
+        }
+        return dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     private LambdaQueryWrapper<ScreeningSchool> buildSubmissionWrapper(String name, String idNumber) {

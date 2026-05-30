@@ -4,6 +4,7 @@ import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.vo.QuestionnaireConfigVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -29,4 +30,7 @@ public interface QuestionnaireService {
 
     /** 导出问卷提交记录 */
     List<ScreeningSchool> listSubmissionsForExport(String code, String name, String idNumber);
+
+    /** 导出问卷提交记录（中文表头） */
+    void exportSubmissions(String code, String name, String idNumber, OutputStream outputStream);
 }

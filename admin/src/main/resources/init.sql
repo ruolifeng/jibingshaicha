@@ -2406,7 +2406,6 @@ FROM `permission` p
 WHERE p.`code` IN (
     'patientManagement',
     'patientManagement:medication',
-    'patientManagement:pickup',
     'patientManagement:firstVisit',
     'patientManagement:followUp',
     'patientManagement:notice'
@@ -2603,9 +2602,6 @@ SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2
 WHERE `code` = 'patientManagement:pickup';
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, p.id FROM `permission` p WHERE p.`code` = 'patientManagement:pickup';
-
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
@@ -2620,14 +2616,22 @@ WHERE existing.`code` IN (
     'patient:medication', 'patientManagement:medication',
     'keyPopulation:patient:medication', 'closeContact:patient:medication'
 )
-  AND p.`code` = 'patientManagement:pickup';
+  AND p.`code` = 'patientManagement:pickup'
+  AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
-WHERE p.`code` = 'patientManagement:pickup';
+WHERE p.`code` = 'patientManagement:pickup'
+  AND rp.`role` != 6;
+
+-- ==================== V54：五级用户 — 服药管理与填写领药分离 ====================
+DELETE rp FROM `role_permission` rp
+         INNER JOIN `permission` p ON p.id = rp.permission_id
+WHERE rp.`role` = 6
+  AND p.`code` = 'patientManagement:pickup';
 
 -- ==================== V53：推介追踪 — 一至五级补全操作按钮权限 ====================
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
