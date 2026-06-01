@@ -16,6 +16,10 @@ import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
 
+const canManagePickup = computed(() =>
+  PATIENT_MEDICATION_PICKUP_PERMISSIONS.some(code => userStore.hasPermission(code))
+)
+
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
 const medicationDialogVisible = ref(false)
@@ -154,7 +158,7 @@ function viewDetail(record: Record<string, any>) {
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="病原学结果" />
-        <el-table-column label="操作" fixed="right" width="100">
+        <el-table-column label="操作" fixed="right" :width="canManagePickup ? 100 : 120">
           <template #default="{ row }">
             <el-button
               v-permission="[...PATIENT_MEDICATION_PAGE_PERMISSIONS]"
@@ -168,7 +172,7 @@ function viewDetail(record: Record<string, any>) {
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="领药情况" min-width="260" fixed="right">
+        <el-table-column v-if="canManagePickup" label="领药情况" min-width="260" fixed="right">
           <template #default="{ row }">
             <div v-if="hasPickupData(row)" class="medication-pickup-cell">
               <div>共 {{ row.medicationPickupCount }} 次</div>

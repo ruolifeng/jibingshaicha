@@ -2392,7 +2392,7 @@ WHERE p.`code` IN (
     'referralManagement:trackOperate'
 );
 
--- ==================== V43：五级用户 — 患者管理服药/领药权限 ====================
+-- ==================== V43：五级用户 — 患者管理服药权限（不含填写领药） ====================
 INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
 ('patientManagement:pickup', '填写领药', 2, 424, 1);
 
@@ -2417,7 +2417,17 @@ FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:medication'
          CROSS JOIN `permission` p
-WHERE p.`code` IN ('patientManagement', 'patientManagement:medication', 'patientManagement:pickup');
+WHERE p.`code` IN ('patientManagement', 'patientManagement:medication')
+  AND rp.`role` != 6;
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` = 'patient:medication'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup'
+  AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
@@ -2448,7 +2458,15 @@ SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
-WHERE p.`code` IN ('patientManagement:pickup', 'patientManagement:medication');
+WHERE p.`code` = 'patientManagement:medication';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup'
+  AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id
@@ -2633,6 +2651,13 @@ DELETE rp FROM `role_permission` rp
 WHERE rp.`role` = 6
   AND p.`code` = 'patientManagement:pickup';
 
+DELETE up FROM `user_permission` up
+         INNER JOIN `permission` p ON p.id = up.permission_id
+         INNER JOIN `user` u ON u.id = up.user_id
+WHERE u.role = 6
+  AND u.deleted = 0
+  AND p.`code` = 'patientManagement:pickup';
+
 -- ==================== V53：推介追踪 — 一至五级补全操作按钮权限 ====================
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id
@@ -2658,3 +2683,17 @@ WHERE p.`code` IN (
     'referralManagement:diagnosis',
     'referralManagement:delete'
 );
+
+-- ==================== V55：专病网导入补全 creator_id，修复五级用户看不到自己导入的患者 ====================
+UPDATE `patient` p
+    INNER JOIN (
+        SELECT u.department_id, MIN(u.id) AS user_id, COUNT(*) AS cnt
+        FROM `user` u
+        WHERE u.role = 6 AND u.deleted = 0 AND u.department_id IS NOT NULL
+        GROUP BY u.department_id
+        HAVING cnt = 1
+    ) solo ON solo.department_id = p.department_id
+SET p.creator_id = solo.user_id
+WHERE p.population_type = 'specialDisease'
+  AND p.creator_id IS NULL
+  AND p.deleted = 0;

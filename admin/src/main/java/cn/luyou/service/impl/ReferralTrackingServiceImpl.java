@@ -1108,7 +1108,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             }
         }
 
-        for (String pattern : new String[]{"yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyyMMdd", "yyyy年MM月dd日"}) {
+        for (String pattern : new String[]{
+                "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyy-M-d", "yyyy/M/d", "yyyyMMdd", "yyyy年MM月dd日"
+        }) {
             try {
                 return LocalDate.parse(text, DateTimeFormatter.ofPattern(pattern));
             } catch (Exception ignored) {
@@ -1136,8 +1138,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         for (String pattern : new String[]{
                 "yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyy.MM.dd HH:mm:ss",
                 "yyyy-MM-dd HH:mm", "yyyy/MM/dd HH:mm", "yyyy.MM.dd HH:mm",
+                "yyyy-M-d HH:mm:ss", "yyyy-M-d HH:mm", "yyyy-M-d H:mm:ss", "yyyy-M-d H:mm",
                 "yyyy/M/d HH:mm:ss", "yyyy/M/d HH:mm", "M/d/yy H:mm:ss", "M/d/yy H:mm",
-                "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyyMMdd",
+                "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyy-M-d", "yyyy/M/d", "yyyyMMdd",
                 "yyyy年MM月dd日 HH:mm:ss", "yyyy年MM月dd日 HH:mm", "yyyy年MM月dd日"
         }) {
             try {
@@ -1368,8 +1371,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (cellData.getNumberValue() != null) {
             return cellData.getNumberValue().doubleValue();
         }
-        if (cellData instanceof ReadCellData<?> readCell && readCell.getOriginalNumberValue() != null) {
-            return readCell.getOriginalNumberValue().doubleValue();
+        if (cellData.getOriginalNumberValue() != null) {
+            return cellData.getOriginalNumberValue().doubleValue();
         }
         if (StrUtil.isNotBlank(cellData.getStringValue())) {
             return cellData.getStringValue().trim();

@@ -1,4 +1,4 @@
--- V43：五级用户 — 患者管理服药/领药权限
+-- V43：五级用户 — 患者管理服药权限（填写领药见 patientManagement:pickup，五级不授予）
 INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
 ('patientManagement:pickup', '填写领药', 2, 424, 1);
 
@@ -12,7 +12,6 @@ FROM `permission` p
 WHERE p.`code` IN (
     'patientManagement',
     'patientManagement:medication',
-    'patientManagement:pickup',
     'patientManagement:firstVisit',
     'patientManagement:followUp',
     'patientManagement:notice'
@@ -24,7 +23,17 @@ FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:medication'
          CROSS JOIN `permission` p
-WHERE p.`code` IN ('patientManagement', 'patientManagement:medication', 'patientManagement:pickup');
+WHERE p.`code` IN ('patientManagement', 'patientManagement:medication')
+  AND rp.`role` != 6;
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
+    AND old_p.`code` = 'patient:medication'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup'
+  AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
@@ -55,7 +64,15 @@ SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
-WHERE p.`code` IN ('patientManagement:pickup', 'patientManagement:medication');
+WHERE p.`code` = 'patientManagement:medication';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:pickup'
+  AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT r.role, p.id

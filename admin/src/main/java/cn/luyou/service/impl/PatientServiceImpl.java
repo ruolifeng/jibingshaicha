@@ -883,6 +883,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     .epidemicData(extraJson)
                     .archived(0)
                     .departmentId(BaseContext.getCurrentDepartmentId())
+                    .creatorId(BaseContext.getCurrentId())
                     .build();
 
             save(patient);
