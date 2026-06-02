@@ -2,7 +2,11 @@
 import type { RouteRecordRaw } from "vue-router"
 import { isExternal } from "@@/utils/validate"
 import path from "path-browserify"
+import { useMessageStore } from "@/pinia/stores/message"
 import Link from "./Link.vue"
+
+const messageStore = useMessageStore()
+const { unreadCount } = storeToRefs(messageStore)
 
 interface Props {
   item: RouteRecordRaw
@@ -33,6 +37,11 @@ const theOnlyOneChild = computed(() => {
   }
 })
 
+/** 菜单项是否展示未读角标 */
+function showUnreadBadge(meta?: RouteRecordRaw["meta"]) {
+  return Boolean(meta?.unreadBadge) && unreadCount.value > 0
+}
+
 /** 解析路径 */
 function resolvePath(routePath: string) {
   switch (true) {
@@ -50,10 +59,29 @@ function resolvePath(routePath: string) {
   <template v-if="!alwaysShowRootMenu && theOnlyOneChild && !theOnlyOneChild.children">
     <Link v-if="theOnlyOneChild.meta" :to="resolvePath(theOnlyOneChild.path)">
       <el-menu-item :index="resolvePath(theOnlyOneChild.path)">
-        <SvgIcon v-if="theOnlyOneChild.meta.svgIcon" :name="theOnlyOneChild.meta.svgIcon" class="svg-icon" />
-        <component v-else-if="theOnlyOneChild.meta.elIcon" :is="theOnlyOneChild.meta.elIcon" class="el-icon" />
+        <el-badge
+          v-if="showUnreadBadge(theOnlyOneChild.meta)"
+          :value="unreadCount"
+          :max="99"
+          class="menu-icon-badge"
+        >
+          <SvgIcon v-if="theOnlyOneChild.meta.svgIcon" :name="theOnlyOneChild.meta.svgIcon" class="svg-icon" />
+          <component v-else-if="theOnlyOneChild.meta.elIcon" :is="theOnlyOneChild.meta.elIcon" class="el-icon" />
+        </el-badge>
+        <template v-else>
+          <SvgIcon v-if="theOnlyOneChild.meta.svgIcon" :name="theOnlyOneChild.meta.svgIcon" class="svg-icon" />
+          <component v-else-if="theOnlyOneChild.meta.elIcon" :is="theOnlyOneChild.meta.elIcon" class="el-icon" />
+        </template>
         <template v-if="theOnlyOneChild.meta.title" #title>
-          <span class="title">{{ theOnlyOneChild.meta.title }}</span>
+          <span class="menu-title-row">
+            <span class="title">{{ theOnlyOneChild.meta.title }}</span>
+            <el-badge
+              v-if="showUnreadBadge(theOnlyOneChild.meta)"
+              :value="unreadCount"
+              :max="99"
+              class="menu-title-badge"
+            />
+          </span>
         </template>
       </el-menu-item>
     </Link>
@@ -92,5 +120,22 @@ function resolvePath(routePath: string) {
 
 .title {
   @extend %ellipsis;
+}
+
+.menu-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding-right: 8px;
+}
+
+.menu-title-badge {
+  flex-shrink: 0;
+}
+
+.menu-icon-badge {
+  display: inline-flex;
+  line-height: 1;
 }
 </style>

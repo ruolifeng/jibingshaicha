@@ -5,6 +5,8 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import {
   isNoticeReceiveOverdue,
+  isPatientTransferLocked,
+  getPatientTransferStatusLabel,
   resolveMedicationManagementUnit,
   resolveNoticeConfirmedDisplayTime,
   resolveNoticeSentDisplayTime
@@ -12,7 +14,7 @@ import {
 import { deletePatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
-const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
+const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { noticeSearch: true })
 
 const noticeDialogVisible = ref(false)
 const noticeDetailVisible = ref(false)
@@ -65,7 +67,7 @@ function getNoticeRowClass({ row }: { row: any }) {
             <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="填写通知单时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -73,6 +75,14 @@ function getNoticeRowClass({ row }: { row: any }) {
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             style="width: 240px"
+          />
+        </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-input
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="请输入"
+            clearable
+            style="width: 160px"
           />
         </el-form-item>
         <el-form-item label="数据来源">
@@ -153,36 +163,41 @@ function getNoticeRowClass({ row }: { row: any }) {
         </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <template v-if="row.noticeStatus == null || row.noticeStatus === 0">
-              <el-button
-                v-permission="'patientManagement:notice'"
-                type="primary"
-                link
-                size="small"
-                :disabled="row.archived === 1"
-                @click="openNotice(row)"
-              >
-                填写通知单
+            <template v-if="!isPatientTransferLocked(row)">
+              <template v-if="row.noticeStatus == null || row.noticeStatus === 0">
+                <el-button
+                  v-permission="'patientManagement:notice'"
+                  type="primary"
+                  link
+                  size="small"
+                  :disabled="row.archived === 1"
+                  @click="openNotice(row)"
+                >
+                  填写通知单
+                </el-button>
+              </template>
+              <template v-else-if="row.noticeStatus === 1 || row.noticeStatus === 2">
+                <el-button
+                  v-permission="'patientManagement:notice'"
+                  type="primary"
+                  link
+                  size="small"
+                  :disabled="row.archived === 1"
+                  @click="openNotice(row)"
+                >
+                  发送通知单
+                </el-button>
+              </template>
+              <el-button v-permission="'patientManagement:referral'" type="info" link size="small" @click="openReferral(row)">
+                转出
+              </el-button>
+              <el-button v-permission="'patientManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">
+                删除
               </el-button>
             </template>
-            <template v-else-if="row.noticeStatus === 1 || row.noticeStatus === 2">
-              <el-button
-                v-permission="'patientManagement:notice'"
-                type="primary"
-                link
-                size="small"
-                :disabled="row.archived === 1"
-                @click="openNotice(row)"
-              >
-                发送通知单
-              </el-button>
-            </template>
-            <el-button v-permission="'patientManagement:referral'" type="info" link size="small" @click="openReferral(row)">
-              转出
-            </el-button>
-            <el-button v-permission="'patientManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">
-              删除
-            </el-button>
+            <el-tag v-else :type="row.archiveRemark === '已转出' ? 'info' : 'warning'" size="small">
+              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+            </el-tag>
           </template>
         </el-table-column>
       </el-table>

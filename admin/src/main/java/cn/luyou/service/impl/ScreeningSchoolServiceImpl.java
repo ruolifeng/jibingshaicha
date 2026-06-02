@@ -256,7 +256,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     @Override
     public IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
-                                             String phone, String dateFrom, String dateTo) {
+                                             String phone, String dateFrom, String dateTo, String entryUnit) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
@@ -268,8 +268,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
                 .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningSchool::getDiagnosisFirst, diagnosisFirst)
                 .ge(screenFrom != null, ScreeningSchool::getScreenDate, screenFrom)
-                .le(screenTo != null, ScreeningSchool::getScreenDate, screenTo)
-                .orderByDesc(ScreeningSchool::getCreateTime);
+                .le(screenTo != null, ScreeningSchool::getScreenDate, screenTo);
+        applyEntryUnitFilter(wrapper, entryUnit);
+        wrapper.orderByDesc(ScreeningSchool::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
             // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
@@ -288,6 +289,19 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             }
         }
         return page(new Page<>(page, size), wrapper);
+    }
+
+    /** 录入单位：按部门名称模糊匹配 department_id */
+    private void applyEntryUnitFilter(LambdaQueryWrapper<ScreeningSchool> wrapper, String entryUnit) {
+        if (StrUtil.isBlank(entryUnit)) {
+            return;
+        }
+        List<Long> deptIds = departmentService.resolveIdsByNameLike(entryUnit);
+        if (deptIds.isEmpty()) {
+            wrapper.eq(ScreeningSchool::getId, -1L);
+        } else {
+            wrapper.in(ScreeningSchool::getDepartmentId, deptIds);
+        }
     }
 
     @Override

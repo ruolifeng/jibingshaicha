@@ -18,6 +18,7 @@ const searchForm = reactive({
   district: "",
   townshipCommunity: "",
   phone: "",
+  entryUnit: "",
   crowdCategory: "",
   screenMethod: "",
   dateRange: [] as string[],
@@ -28,12 +29,13 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, ...rest } = searchForm
+    const { dateRange, entryUnit, ...rest } = searchForm
     const { data } = await getScreeningKeyPopulationListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       ...rest,
-      ...extractDateRangeParams(dateRange)
+      ...extractDateRangeParams(dateRange),
+      ...(entryUnit ? { entryUnit } : {})
     })
     tableData.value = data.records
     total.value = data.total
@@ -53,6 +55,7 @@ function handleReset() {
   searchForm.district = ""
   searchForm.townshipCommunity = ""
   searchForm.phone = ""
+  searchForm.entryUnit = ""
   searchForm.crowdCategory = ""
   searchForm.screenMethod = ""
   searchForm.dateRange = []
@@ -307,7 +310,7 @@ watch(
         <el-form-item label="乡镇/社区">
           <el-input v-model="searchForm.townshipCommunity" placeholder="请输入乡镇/社区" clearable />
         </el-form-item>
-        <el-form-item label="筛查时间">
+        <el-form-item label="感染筛查时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -316,6 +319,9 @@ watch(
             end-placeholder="结束日期"
             style="width: 240px"
           />
+        </el-form-item>
+        <el-form-item label="录入单位">
+          <el-input v-model="searchForm.entryUnit" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
         <el-form-item label="人群分类">
           <el-select v-model="searchForm.crowdCategory" placeholder="全部" clearable style="width: 140px">

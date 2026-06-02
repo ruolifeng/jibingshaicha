@@ -44,6 +44,9 @@ public class Referral implements Serializable {
     /** 接收方用户/部门ID */
     private Long receiverOrgId;
 
+    /** 接收确认后在接收方生成的业务记录ID（如患者复制后的 patient.id） */
+    private Long targetBizId;
+
     /**
      * 状态：1=待确认  2=已接收  3=已拒绝
      */

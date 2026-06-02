@@ -23,7 +23,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                              String phone, String district, String townshipCommunity,
                                              String crowdCategory, String screenMethod, Integer isLatent,
                                              String sourceType, String diagnosisFirst,
-                                             String dateFrom, String dateTo);
+                                             String dateFrom, String dateTo, String entryUnit);
 
     /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
     @Deprecated
@@ -31,7 +31,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
-                crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null);
+                crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null, null);
     }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */

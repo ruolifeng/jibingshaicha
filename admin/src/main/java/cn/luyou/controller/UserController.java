@@ -138,7 +138,7 @@ public class UserController {
         return ResultRes.success(userService.getReferralReceiverUsers());
     }
 
-    @Operation(summary = "获取三/四级用户列表（推介追踪接收人选择）")
+    @Operation(summary = "获取三/四/五级用户列表（推介接收人选择）")
     @GetMapping("/level34-users")
     public ResultResponse<List<UserInfoVO>> getLevel34Users() {
         return ResultRes.success(userService.getLevel34Users());

@@ -438,7 +438,7 @@ public class ExportController {
         log.info("[导出] 患者列表 populationType={} name={} idNumber={}", populationType, name, idNumber);
         try {
             List<Patient> patientList = patientService.listForExport(
-                    populationType, name, idNumber, phone, null, null, 0, dateFrom, dateTo, null, null);
+                    populationType, name, idNumber, phone, null, null, 0, dateFrom, dateTo, null, null, null, null);
 
             // 批量查询筛查原表
             List<Long> screeningIds = patientList.stream()
@@ -579,11 +579,13 @@ public class ExportController {
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String startTime,
             @RequestParam(required = false) String endTime,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit,
             HttpServletResponse response) throws IOException {
 
         List<Patient> patientList = patientService.listForExport(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult,
-                archived, dateFrom, dateTo, startTime, endTime);
+                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit);
         List<Long> patientIds = patientList.stream().map(Patient::getId).collect(Collectors.toList());
 
         // 批量查询患者通知单（每患者取最新一条）
@@ -659,6 +661,350 @@ public class ExportController {
 
         log.info("[导出] 患者信息总表 {} 条", rows.size());
         writeExcel(response, "患者信息总表", rows, ALL_PATIENT_EXPORT_HEADERS);
+    }
+
+    /** 首次入户随访导出列（不含附件） */
+    private static final List<String> FIRST_VISIT_EXPORT_HEADERS = List.of(
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果",
+            "编号", "随访时间", "随访方式", "患者类型", "痰菌情况", "耐药情况", "症状及体征", "其他症状",
+            "化疗方案", "用法", "督导人员", "药品剂型", "单独居室", "通风情况", "吸烟(支/天)", "饮酒(两/天)",
+            "取药地点", "取药时间", "健康教育及培训", "下次随访时间", "评估医生签名", "备注", "状态", "填写时间"
+    );
+
+    /** 后续随访导出列（不含附件；同一患者多条记录各占一行） */
+    private static final List<String> FOLLOW_UP_VISIT_EXPORT_HEADERS = List.of(
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果",
+            "第几次", "随访时间", "治疗月序", "督导人员", "随访方式", "症状及体征", "症状-其它",
+            "吸烟(支/天)", "饮酒(两/天)", "化疗方案", "用法", "药品剂型", "漏服药次数",
+            "药物不良反应", "不良反应详情", "并发症/合并症", "并发症详情",
+            "转诊科别", "转诊原因", "2周内随访结果", "处理意见", "下次随访时间", "随访医生签名",
+            "是否停止治疗", "停止治疗时间", "停止治疗原因", "应访视次数", "实际访视次数",
+            "应服药次数", "实际服药次数", "服药率(%)", "评估医生签名", "备注", "状态", "填写时间"
+    );
+
+    private static final Map<String, String> FIRST_VISIT_SYMPTOM_LABEL = Map.ofEntries(
+            Map.entry("0", "没有症状"), Map.entry("1", "咳嗽咳痰"), Map.entry("2", "低热盗汗"),
+            Map.entry("3", "咯血或血痰"), Map.entry("4", "胸痛消瘦"), Map.entry("5", "恶心纳差"),
+            Map.entry("6", "头痛失眠"), Map.entry("7", "视物模糊"), Map.entry("8", "皮肤瘙痒、皮疹"),
+            Map.entry("9", "耳鸣、听力下降")
+    );
+
+    private static final Map<String, String> FOLLOW_UP_SYMPTOM_LABEL = Map.ofEntries(
+            Map.entry("0", "没有症状"), Map.entry("1", "咳嗽咳痰"), Map.entry("2", "低热盗汗"),
+            Map.entry("3", "咯血或血痰"), Map.entry("4", "胸痛消瘦"), Map.entry("5", "恶心纳差"),
+            Map.entry("6", "关节疼痛"), Map.entry("7", "头痛失眠"), Map.entry("8", "视物模糊"),
+            Map.entry("9", "皮肤瘙痒、皮疹"), Map.entry("10", "耳鸣、听力下降"), Map.entry("11", "其它")
+    );
+
+    private static final Map<String, String> FOLLOW_UP_VISIT_METHOD_LABEL = Map.of(
+            "1", "门诊", "2", "家庭", "3", "电话", "4", "其他"
+    );
+
+    private static final Map<String, String> FOLLOW_UP_SUPERVISOR_LABEL = Map.of(
+            "1", "医生", "2", "家属", "3", "自服药", "4", "其他"
+    );
+
+    private static final Map<String, String> FOLLOW_UP_MEDICATION_USAGE_LABEL = Map.of(
+            "1", "每日", "2", "间歇"
+    );
+
+    private static final Map<String, String> FOLLOW_UP_DRUG_FORM_LABEL = Map.of(
+            "1", "固定剂量复合制剂", "2", "散装药", "3", "板式组合药", "4", "注射剂"
+    );
+
+    private static final Map<String, String> YES_NO_LABEL = Map.of("1", "无", "2", "有");
+
+    @Operation(summary = "导出勾选患者的首次入户随访信息")
+    @GetMapping("/patient-first-visits")
+    public void exportPatientFirstVisits(
+            @RequestParam String ids,
+            HttpServletResponse response) throws IOException {
+        List<Long> patientIds = parseIdList(ids);
+        if (patientIds.isEmpty()) {
+            writeExcel(response, "首次入户随访", List.of(), FIRST_VISIT_EXPORT_HEADERS);
+            return;
+        }
+        patientIds.forEach(dataScopeHelper::assertPatientAccessible);
+
+        LambdaQueryWrapper<Patient> patientWrapper = new LambdaQueryWrapper<>();
+        patientWrapper.in(Patient::getId, patientIds).orderByAsc(Patient::getPopulationType);
+        dataScopeHelper.applyPatientScope(patientWrapper);
+        List<Patient> patients = patientService.list(patientWrapper);
+        Map<Long, Patient> patientMap = patients.stream()
+                .collect(Collectors.toMap(Patient::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+
+        Map<Long, FirstVisit> visitMap = new HashMap<>();
+        if (!patientMap.isEmpty()) {
+            firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
+                            .in(FirstVisit::getPatientId, patientMap.keySet())
+                            .orderByDesc(FirstVisit::getId))
+                    .forEach(v -> visitMap.putIfAbsent(v.getPatientId(), v));
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Long patientId : patientIds) {
+            Patient p = patientMap.get(patientId);
+            if (p == null) {
+                continue;
+            }
+            FirstVisit v = visitMap.get(patientId);
+            Map<String, Object> row = new LinkedHashMap<>();
+            putPatientBasicColumns(row, p);
+            if (v != null) {
+                row.put("编号", nullToEmpty(v.getFormNo()));
+                row.put("随访时间", formatDate(v.getVisitDate()));
+                row.put("随访方式", formatFirstVisitMethod(v.getVisitMethod(), v.getVisitMethodOther()));
+                row.put("患者类型", nullToEmpty(v.getPatientType()));
+                row.put("痰菌情况", nullToEmpty(v.getSputumStatus()));
+                row.put("耐药情况", nullToEmpty(v.getDrugResistance()));
+                row.put("症状及体征", formatSymptomCodes(v.getSymptoms(), FIRST_VISIT_SYMPTOM_LABEL));
+                row.put("其他症状", nullToEmpty(v.getOtherSymptoms()));
+                row.put("化疗方案", nullToEmpty(v.getChemotherapy()));
+                row.put("用法", nullToEmpty(v.getMedicationUsage()));
+                row.put("督导人员", nullToEmpty(v.getSupervisor()));
+                row.put("药品剂型", nullToEmpty(v.getDrugForm()));
+                row.put("单独居室", nullToEmpty(v.getSeparateRoom()));
+                row.put("通风情况", nullToEmpty(v.getVentilation()));
+                row.put("吸烟(支/天)", nullToEmpty(v.getSmokingAmount()));
+                row.put("饮酒(两/天)", nullToEmpty(v.getDrinkingAmount()));
+                row.put("取药地点", nullToEmpty(v.getMedicationLocation()));
+                row.put("取药时间", nullToEmpty(v.getMedicationPickTime()));
+                row.put("健康教育及培训", formatEducationItems(v.getEducationItems()));
+                row.put("下次随访时间", formatDate(v.getNextVisitDate()));
+                row.put("评估医生签名", nullToEmpty(v.getDoctorSignature()));
+                row.put("备注", nullToEmpty(v.getRemarks()));
+                row.put("状态", visitStatusLabel(v.getStatus()));
+                row.put("填写时间", formatDateTime(v.getCreateTime()));
+            } else {
+                FIRST_VISIT_EXPORT_HEADERS.stream()
+                        .filter(h -> !List.of("数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果").contains(h))
+                        .forEach(h -> row.put(h, ""));
+                row.put("状态", "待填写");
+            }
+            rows.add(row);
+        }
+        log.info("[导出] 首次入户随访 {} 条", rows.size());
+        writeExcel(response, "首次入户随访", rows, FIRST_VISIT_EXPORT_HEADERS);
+    }
+
+    @Operation(summary = "导出勾选患者的后续随访信息")
+    @GetMapping("/patient-follow-up-visits")
+    public void exportPatientFollowUpVisits(
+            @RequestParam String ids,
+            HttpServletResponse response) throws IOException {
+        List<Long> patientIds = parseIdList(ids);
+        if (patientIds.isEmpty()) {
+            writeExcel(response, "后续随访", List.of(), FOLLOW_UP_VISIT_EXPORT_HEADERS);
+            return;
+        }
+        patientIds.forEach(dataScopeHelper::assertPatientAccessible);
+
+        LambdaQueryWrapper<Patient> patientWrapper = new LambdaQueryWrapper<>();
+        patientWrapper.in(Patient::getId, patientIds).orderByAsc(Patient::getPopulationType);
+        dataScopeHelper.applyPatientScope(patientWrapper);
+        List<Patient> patients = patientService.list(patientWrapper);
+        Map<Long, Patient> patientMap = patients.stream()
+                .collect(Collectors.toMap(Patient::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+
+        Map<Long, List<FollowUpVisit>> visitMap = new HashMap<>();
+        if (!patientMap.isEmpty()) {
+            followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
+                            .in(FollowUpVisit::getPatientId, patientMap.keySet())
+                            .orderByAsc(FollowUpVisit::getPatientId)
+                            .orderByAsc(FollowUpVisit::getVisitSeq)
+                            .orderByAsc(FollowUpVisit::getId))
+                    .forEach(v -> visitMap.computeIfAbsent(v.getPatientId(), k -> new ArrayList<>()).add(v));
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Long patientId : patientIds) {
+            Patient p = patientMap.get(patientId);
+            if (p == null) {
+                continue;
+            }
+            List<FollowUpVisit> visits = visitMap.getOrDefault(patientId, List.of());
+            if (visits.isEmpty()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                putPatientBasicColumns(row, p);
+                FOLLOW_UP_VISIT_EXPORT_HEADERS.stream()
+                        .filter(h -> !List.of("数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果").contains(h))
+                        .forEach(h -> row.put(h, ""));
+                row.put("状态", "暂无记录");
+                rows.add(row);
+                continue;
+            }
+            for (FollowUpVisit v : visits) {
+                rows.add(buildFollowUpExportRow(p, v));
+            }
+        }
+        log.info("[导出] 后续随访 {} 条", rows.size());
+        writeExcel(response, "后续随访", rows, FOLLOW_UP_VISIT_EXPORT_HEADERS);
+    }
+
+    private List<Long> parseIdList(String ids) {
+        if (StrUtil.isBlank(ids)) {
+            return List.of();
+        }
+        return Arrays.stream(ids.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty() && s.matches("\\d+"))
+                .map(Long::valueOf)
+                .distinct()
+                .toList();
+    }
+
+    private void putPatientBasicColumns(Map<String, Object> row, Patient p) {
+        row.put("数据来源", POP_TYPE_LABEL.getOrDefault(p.getPopulationType(), p.getPopulationType()));
+        row.put("姓名", nullToEmpty(p.getName()));
+        row.put("性别", nullToEmpty(p.getGender()));
+        row.put("证件号", nullToEmpty(p.getIdNumber()));
+        row.put("联系电话", nullToEmpty(p.getPhone()));
+        row.put("病原学结果", nullToEmpty(p.getDiagnosisResult()));
+    }
+
+    private Map<String, Object> buildFollowUpExportRow(Patient p, FollowUpVisit v) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        putPatientBasicColumns(row, p);
+        row.put("第几次", v.getVisitSeq() != null ? v.getVisitSeq() : "");
+        row.put("随访时间", formatDate(v.getVisitDate()));
+        row.put("治疗月序", v.getTreatmentMonth() != null ? v.getTreatmentMonth() : "");
+        row.put("督导人员", formatFollowUpSupervisor(v.getSupervisor(), v.getSupervisorOther()));
+        row.put("随访方式", formatFollowUpVisitMethod(v.getVisitMethod(), v.getVisitMethodOther()));
+        row.put("症状及体征", formatSymptomCodes(v.getSymptoms(), FOLLOW_UP_SYMPTOM_LABEL));
+        row.put("症状-其它", nullToEmpty(v.getSymptomsOther()));
+        row.put("吸烟(支/天)", nullToEmpty(v.getSmokingAmount()));
+        row.put("饮酒(两/天)", nullToEmpty(v.getDrinkingAmount()));
+        row.put("化疗方案", nullToEmpty(v.getChemotherapyPlan()));
+        row.put("用法", FOLLOW_UP_MEDICATION_USAGE_LABEL.getOrDefault(
+                nullToEmpty(v.getMedicationUsage()), nullToEmpty(v.getMedicationUsage())));
+        row.put("药品剂型", FOLLOW_UP_DRUG_FORM_LABEL.getOrDefault(
+                nullToEmpty(v.getDrugForm()), nullToEmpty(v.getDrugForm())));
+        row.put("漏服药次数", v.getMissedDoses() != null ? v.getMissedDoses() : "");
+        row.put("药物不良反应", YES_NO_LABEL.getOrDefault(
+                nullToEmpty(v.getAdverseReaction()), nullToEmpty(v.getAdverseReaction())));
+        row.put("不良反应详情", nullToEmpty(v.getAdverseReactionDetail()));
+        row.put("并发症/合并症", YES_NO_LABEL.getOrDefault(
+                nullToEmpty(v.getComplication()), nullToEmpty(v.getComplication())));
+        row.put("并发症详情", nullToEmpty(v.getComplicationDetail()));
+        row.put("转诊科别", nullToEmpty(v.getReferralDepartment()));
+        row.put("转诊原因", nullToEmpty(v.getReferralReason()));
+        row.put("2周内随访结果", nullToEmpty(v.getReferralTwoWeekResult()));
+        row.put("处理意见", nullToEmpty(v.getHandlingOpinion()));
+        row.put("下次随访时间", formatDate(v.getNextVisitDate()));
+        row.put("随访医生签名", nullToEmpty(v.getDoctorSignature()));
+        row.put("是否停止治疗", resolveStopTreatment(v));
+        row.put("停止治疗时间", formatDate(v.getStopTreatmentDate()));
+        row.put("停止治疗原因", formatStopTreatmentReason(v.getStopTreatmentReason(), v.getStopTreatmentReasonOther()));
+        row.put("应访视次数", v.getShouldVisitCount() != null ? v.getShouldVisitCount() : "");
+        row.put("实际访视次数", v.getActualVisitCount() != null ? v.getActualVisitCount() : "");
+        row.put("应服药次数", v.getShouldDoseCount() != null ? v.getShouldDoseCount() : "");
+        row.put("实际服药次数", v.getActualDoseCount() != null ? v.getActualDoseCount() : "");
+        row.put("服药率(%)", nullToEmpty(v.getMedicationRate()));
+        row.put("评估医生签名", nullToEmpty(v.getEvaluatorSignature()));
+        row.put("备注", nullToEmpty(v.getRemarks()));
+        row.put("状态", visitStatusLabel(v.getStatus()));
+        row.put("填写时间", formatDateTime(v.getCreateTime()));
+        return row;
+    }
+
+    private String nullToEmpty(String value) {
+        return value != null ? value : "";
+    }
+
+    private String visitStatusLabel(Integer status) {
+        if (status == null) {
+            return "待填写";
+        }
+        if (status == 0) {
+            return "草稿";
+        }
+        if (status == 1) {
+            return "已完成";
+        }
+        return String.valueOf(status);
+    }
+
+    private String formatDateTime(LocalDateTime dateTime) {
+        return dateTime != null
+                ? dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                : "";
+    }
+
+    private String formatFirstVisitMethod(String method, String other) {
+        if (StrUtil.isBlank(method)) {
+            return "";
+        }
+        if ("其他".equals(method) && StrUtil.isNotBlank(other)) {
+            return "其他（" + other.trim() + "）";
+        }
+        return method;
+    }
+
+    private String formatFollowUpVisitMethod(String method, String other) {
+        if (StrUtil.isBlank(method)) {
+            return "";
+        }
+        String label = FOLLOW_UP_VISIT_METHOD_LABEL.getOrDefault(method, method);
+        if ("4".equals(method) && StrUtil.isNotBlank(other)) {
+            return label + "（" + other.trim() + "）";
+        }
+        return label;
+    }
+
+    private String formatFollowUpSupervisor(String supervisor, String other) {
+        if (StrUtil.isBlank(supervisor)) {
+            return "";
+        }
+        String label = FOLLOW_UP_SUPERVISOR_LABEL.getOrDefault(supervisor, supervisor);
+        if ("4".equals(supervisor) && StrUtil.isNotBlank(other)) {
+            return label + "（" + other.trim() + "）";
+        }
+        return label;
+    }
+
+    private String formatSymptomCodes(String raw, Map<String, String> labelMap) {
+        if (StrUtil.isBlank(raw)) {
+            return "";
+        }
+        return Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(code -> labelMap.getOrDefault(code, code))
+                .collect(Collectors.joining("、"));
+    }
+
+    private String formatEducationItems(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return "";
+        }
+        try {
+            cn.hutool.json.JSONObject obj = cn.hutool.json.JSONUtil.parseObj(raw);
+            List<String> parts = new ArrayList<>();
+            obj.forEach((key, val) -> parts.add(key + "：" + val));
+            return String.join("；", parts);
+        } catch (Exception e) {
+            return raw;
+        }
+    }
+
+    private String formatStopTreatmentReason(String reason, String other) {
+        if (StrUtil.isBlank(reason)) {
+            return "";
+        }
+        if ("其它".equals(reason) && StrUtil.isNotBlank(other)) {
+            return "其它（" + other.trim() + "）";
+        }
+        return reason;
+    }
+
+    private String resolveStopTreatment(FollowUpVisit v) {
+        if (StrUtil.isNotBlank(v.getStopTreatment())) {
+            return v.getStopTreatment();
+        }
+        if (v.getStopTreatmentDate() != null || StrUtil.isNotBlank(v.getStopTreatmentReason())) {
+            return "是";
+        }
+        return "否";
     }
 
     /**

@@ -1,20 +1,30 @@
 <script lang="ts" setup>
 import type { NotifyItem } from "./type"
 import { Bell } from "@element-plus/icons-vue"
-import { getMessageListApi, getUnreadCountApi, markMessageReadApi } from "@/pages/message/apis"
+import { getMessageListApi, markMessageReadApi } from "@/pages/message/apis"
+import { useMessageStore } from "@/pinia/stores/message"
 import List from "./List.vue"
 
 defineOptions({ name: "Notify" })
 
 const router = useRouter()
+const messageStore = useMessageStore()
+const { unreadCount } = storeToRefs(messageStore)
 
 /** 后端消息类型到展示配置的映射 */
 const TYPE_CONFIG: Record<string, { label: string, status: NotifyItem["status"] }> = {
   notice_receive: { label: "待接收通知单", status: "warning" },
+  notice_confirmed: { label: "通知单已接收", status: "success" },
   notice_timeout: { label: "通知单超时", status: "danger" },
   supervision_timeout: { label: "督导表超时", status: "warning" },
   visit_timeout: { label: "随访超时", status: "warning" },
-  review_reminder: { label: "复查提醒", status: "primary" }
+  review_reminder: { label: "复查提醒", status: "primary" },
+  referral_receive: { label: "待确认转出", status: "warning" },
+  referral_confirmed: { label: "转出已接收", status: "success" },
+  referral_rejected: { label: "转出已被拒绝", status: "danger" },
+  referral_tracking_receive: { label: "待确认推介", status: "warning" },
+  referral_tracking_confirmed: { label: "推介已接收", status: "success" },
+  referral_tracking_rejected: { label: "推介已被拒绝", status: "danger" }
 }
 
 /** 面板宽度 */
@@ -23,9 +33,6 @@ const popoverWidth = 380
 /** 角标最大值 */
 const badgeMax = 99
 
-/** 未读数 */
-const unreadCount = ref(0)
-
 /** 未读消息（最近 10 条） */
 const unreadList = ref<NotifyItem[]>([])
 
@@ -33,82 +40,6 @@ const unreadList = ref<NotifyItem[]>([])
 const rawList = ref<any[]>([])
 
 const loading = ref(false)
-
-/** 已弹窗提醒过的消息 ID 集合，避免同一条通知重复弹窗 */
-const alertedIds = ref<Set<number>>(new Set())
-
-let timer: ReturnType<typeof setInterval> | null = null
-
-/** 是否正在显示提醒弹窗，避免重复弹出 */
-const alertVisible = ref(false)
-
-/** 弹出消息提醒弹窗（通用），串行避免重复弹出 */
-async function showAlert(title: string, msgContent: string) {
-  alertVisible.value = true
-  try {
-    await ElMessageBox.alert(msgContent, title, {
-      type: "warning",
-      dangerouslyUseHTMLString: true,
-      confirmButtonText: "前往消息中心",
-      center: true,
-      closeOnClickModal: false,
-      closeOnPressEscape: false,
-      showClose: false
-    })
-    router.push("/message")
-  } catch {
-    // 用户关闭弹窗（不应出现，因为 showClose: false）
-  } finally {
-    alertVisible.value = false
-  }
-}
-
-/** 检查是否有新的未读消息，有则以居中模态弹窗提醒 */
-async function checkPendingNotice() {
-  if (alertVisible.value) return
-  try {
-    const { data } = await getMessageListApi({ page: 1, size: 50, isRead: 0 })
-    const records: any[] = data?.records || []
-
-    // 1. 待接收通知单（notice_receive）
-    const newPendingReceive = records.filter(
-      item => item.type === "notice_receive" && !alertedIds.value.has(item.id)
-    )
-    if (newPendingReceive.length > 0) {
-      newPendingReceive.forEach(item => alertedIds.value.add(item.id))
-      const count = newPendingReceive.length
-      const msgContent = count === 1
-        ? (newPendingReceive[0].content || "您有 1 条新通知单待接收，请前往消息中心处理。")
-        : `您有 <strong>${count}</strong> 条未处理待收通知单，请前往消息中心逐一处理。`
-      await showAlert("待接收通知单", msgContent)
-      return
-    }
-
-    // 2. 通知单超时提醒（notice_timeout）—— 48h 未确认接收
-    const newTimeout = records.filter(
-      item => item.type === "notice_timeout" && !alertedIds.value.has(item.id)
-    )
-    if (newTimeout.length > 0) {
-      newTimeout.forEach(item => alertedIds.value.add(item.id))
-      const count = newTimeout.length
-      const msgContent = count === 1
-        ? (newTimeout[0].content || "有通知单超过 48 小时未确认接收，请前往消息中心查看。")
-        : `您有 <strong>${count}</strong> 条通知单超时未确认，请前往消息中心处理。`
-      await showAlert("通知单超时提醒", msgContent)
-    }
-  } catch { /* 静默失败 */ }
-}
-
-/** 拉取未读数量，数量 > 0 时顺带检查待接收通知单 */
-async function fetchUnreadCount() {
-  try {
-    const { data } = await getUnreadCountApi()
-    unreadCount.value = data || 0
-    if (unreadCount.value > 0) {
-      checkPendingNotice()
-    }
-  } catch { /* 静默失败，避免打扰用户 */ }
-}
 
 /** 拉取未读消息列表 */
 async function fetchUnreadList() {
@@ -134,7 +65,10 @@ async function fetchUnreadList() {
 
 /** 打开面板时刷新数据 */
 function handleVisibleChange(visible: boolean) {
-  if (visible) fetchUnreadList()
+  if (visible) {
+    messageStore.fetchUnreadCount()
+    fetchUnreadList()
+  }
 }
 
 /** 全部标为已读 */
@@ -143,7 +77,7 @@ async function handleMarkAllRead() {
   try {
     await Promise.all(rawList.value.map((item: any) => markMessageReadApi(item.id)))
     ElMessage.success("全部标为已读")
-    unreadCount.value = 0
+    messageStore.resetUnread()
     unreadList.value = []
     rawList.value = []
   } catch { /* handled by interceptor */ }
@@ -155,13 +89,7 @@ function handleViewAll() {
 }
 
 onMounted(() => {
-  fetchUnreadCount()
-  // 每 60s 轮询一次未读数量
-  timer = setInterval(fetchUnreadCount, 60000)
-})
-
-onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
+  messageStore.fetchUnreadCount()
 })
 </script>
 

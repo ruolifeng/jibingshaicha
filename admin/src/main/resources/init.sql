@@ -1075,6 +1075,7 @@ DROP PROCEDURE IF EXISTS _v5_fix_supervision_content;
 CREATE TABLE IF NOT EXISTS `referral` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT,
     `biz_id`          BIGINT       NOT NULL COMMENT '关联业务记录ID',
+    `target_biz_id`   BIGINT       DEFAULT NULL COMMENT '接收确认后在接收方生成的业务记录ID',
     `biz_type`        VARCHAR(64)  NOT NULL COMMENT '业务类型：screening_school/screening_key/screening_close/suspected_school/suspected_key/suspected_close/latent_school/latent_key/latent_close/patient_school/patient_key/patient_close',
     `population_type` VARCHAR(32)  NOT NULL COMMENT '人群类型：school/key/close',
     `module_type`     VARCHAR(32)  NOT NULL COMMENT '模块类型：screening/suspected/latent/patient',
@@ -1495,7 +1496,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
 (427, 'patientManagement:referral',     '转出',                 2, 462, 2),
 (428, 'patientManagement:delete',       '删除患者',             2, 421, 2),
-(468, 'patientManagement:pickup',       '填写领药',             2, 424, 1);
+(468, 'patientManagement:pickup',       '填写领药',             2, 420, 7);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -2394,10 +2395,10 @@ WHERE p.`code` IN (
 
 -- ==================== V43：五级用户 — 患者管理服药权限（不含填写领药） ====================
 INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
-('patientManagement:pickup', '填写领药', 2, 424, 1);
+('patientManagement:pickup', '填写领药', 2, 420, 7);
 
 UPDATE `permission`
-SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2
+SET `parent_id` = 420, `sort` = 7, `name` = '填写领药', `type` = 2
 WHERE `code` = 'patientManagement:pickup';
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -2613,10 +2614,10 @@ WHERE existing.`code` LIKE 'referralManagement%'
 
 -- ==================== V51：修复 patientManagement:pickup 权限 ID 冲突 ====================
 INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
-('patientManagement:pickup', '填写领药', 2, 424, 1);
+('patientManagement:pickup', '填写领药', 2, 420, 7);
 
 UPDATE `permission`
-SET `parent_id` = 424, `sort` = 1, `name` = '填写领药', `type` = 2
+SET `parent_id` = 420, `sort` = 7, `name` = '填写领药', `type` = 2
 WHERE `code` = 'patientManagement:pickup';
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -2697,3 +2698,82 @@ SET p.creator_id = solo.user_id
 WHERE p.population_type = 'specialDisease'
   AND p.creator_id IS NULL
   AND p.deleted = 0;
+
+-- ==================== V56：填写领药与服药管理权限树分离 ====================
+UPDATE `permission`
+SET `parent_id` = 420, `sort` = 7, `name` = '填写领药', `type` = 2
+WHERE `code` = 'patientManagement:pickup';
+
+DELETE rp FROM `role_permission` rp
+         INNER JOIN `permission` p ON p.id = rp.permission_id
+WHERE rp.`role` = 6
+  AND p.`code` = 'patientManagement:pickup';
+
+DELETE up FROM `user_permission` up
+         INNER JOIN `permission` p ON p.id = up.permission_id
+         INNER JOIN `user` u ON u.id = up.user_id
+WHERE u.role = 6
+  AND u.deleted = 0
+  AND p.`code` = 'patientManagement:pickup';
+
+-- ==================== V57：转出确认后同步复制患者至接收方部门 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral' AND COLUMN_NAME = 'target_biz_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `referral` ADD COLUMN `target_biz_id` BIGINT DEFAULT NULL COMMENT ''接收确认后在接收方生成的业务记录ID'' AFTER `biz_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'patient' AND COLUMN_NAME = 'source_patient_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `patient` ADD COLUMN `source_patient_id` BIGINT DEFAULT NULL COMMENT ''转出复制来源患者ID'' AFTER `creator_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE `patient`
+SET `archived` = 0,
+    `archived_time` = NULL
+WHERE `archive_remark` = '已转出'
+  AND `archived` = 1;
+
+-- ==================== V58：潜伏感染者转出同步（archive_remark、source_latent_id） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'archive_remark'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection` ADD COLUMN `archive_remark` VARCHAR(128) DEFAULT NULL COMMENT ''归档备注（如：已转出）'' AFTER `archived_time`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'source_latent_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection` ADD COLUMN `source_latent_id` BIGINT DEFAULT NULL COMMENT ''转出复制来源潜伏感染ID'' AFTER `creator_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE `latent_infection`
+SET `archived` = 0,
+    `archived_time` = NULL
+WHERE `archive_remark` = '已转出'
+  AND `archived` = 1;

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ReferralDetailVO, SentNoticeVO, SentReferralVO } from "./apis"
-import { NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { usePagination } from "@@/composables/usePagination"
 import { getNoticeDetailApi } from "@/pages/school/latent/apis"
 import {
@@ -21,10 +21,12 @@ import {
   remindNoticeApi
 } from "./apis"
 import { useRouter } from "vue-router"
+import { useMessageStore } from "@/pinia/stores/message"
 
 defineOptions({ name: "Message" })
 
 const router = useRouter()
+const messageStore = useMessageStore()
 
 // ====== 收到的消息 ======
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -40,9 +42,9 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   notice_timeout: "通知单超时",
   supervision_timeout: "督导表超时",
   visit_timeout: "随访超时",
-  referral_receive: "待确认转诊",
-  referral_confirmed: "转诊已接收",
-  referral_rejected: "转诊已被拒绝",
+  referral_receive: "待确认转出",
+  referral_confirmed: "转出已接收",
+  referral_rejected: "转出已被拒绝",
   referral_tracking_receive: "待确认推介",
   referral_tracking_confirmed: "推介已接收",
   referral_tracking_rejected: "推介已被拒绝"
@@ -81,6 +83,7 @@ async function handleMarkRead(row: any) {
     await markMessageReadApi(row.id)
     row.isRead = 1
     ElMessage.success("已标记为已读")
+    await messageStore.fetchUnreadCount()
   } catch { /* handled */ }
 }
 
@@ -108,6 +111,7 @@ async function handleReceiveNotice(row: any) {
     row.isRead = 1
     row.type = "notice_confirmed"
     ElMessage.success("通知单接收成功")
+    await messageStore.fetchUnreadCount()
   } catch { /* handled */ }
 }
 
@@ -132,7 +136,7 @@ async function viewNoticeDetail(row: any) {
   }
 }
 
-// ====== 转诊：消息中确认/拒绝 ======
+// ====== 转出：消息中确认/拒绝 ======
 const rejectDialogVisible = ref(false)
 const rejectingRow = ref<any>(null)
 const rejectReason = ref("")
@@ -145,15 +149,15 @@ function openRejectDialog(row: any) {
 
 async function handleConfirmReferral(row: any) {
   if (!row.bizId) {
-    ElMessage.warning("转诊记录编号缺失")
+    ElMessage.warning("转出记录编号缺失")
     return
   }
   try {
     await confirmReferralFromMessageApi(row.bizId)
     await markMessageReadApi(row.id)
-    row.isRead = 1
-    row.type = "referral_confirmed"
-    ElMessage.success("已确认接收转诊信息")
+    ElMessage.success("已确认接收转出信息")
+    await fetchData()
+    await messageStore.fetchUnreadCount()
   } catch { /* handled */ }
 }
 
@@ -169,9 +173,10 @@ async function handleRejectReferral() {
       row.type = "referral_rejected"
     }
     await markMessageReadApi(row.id)
-    row.isRead = 1
     rejectDialogVisible.value = false
     ElMessage.success("已拒绝")
+    await fetchData()
+    await messageStore.fetchUnreadCount()
   } catch { /* handled */ }
 }
 
@@ -186,6 +191,7 @@ async function handleConfirmReferralTracking(row: any) {
     row.isRead = 1
     row.type = "referral_tracking_confirmed"
     ElMessage.success("已确认接收推介，请前往「追踪」页面开展追踪")
+    await messageStore.fetchUnreadCount()
     router.push("/referral-management/track")
   } catch { /* handled */ }
 }
@@ -210,7 +216,7 @@ async function viewReferralTrackingDetail(row: any) {
   }
 }
 
-// ==================== 转诊详情查看 ====================
+// ==================== 转出详情查看 ====================
 const referralDetailVisible = ref(false)
 const referralDetailData = ref<ReferralDetailVO | null>(null)
 const referralDetailLoading = ref(false)
@@ -227,7 +233,7 @@ function parseSummary(summary: string | null | undefined): Record<string, string
 
 async function viewReferralDetail(row: any) {
   if (!row.bizId) {
-    ElMessage.warning("转诊记录编号缺失")
+    ElMessage.warning("转出记录编号缺失")
     return
   }
   referralDetailLoading.value = true
@@ -236,6 +242,7 @@ async function viewReferralDetail(row: any) {
   try {
     const { data } = await getReferralDetailApi(row.bizId)
     referralDetailData.value = data
+    await fetchData()
   } catch { /* handled */ } finally {
     referralDetailLoading.value = false
   }
@@ -246,6 +253,10 @@ watch(
   fetchData,
   { immediate: true }
 )
+
+onMounted(() => {
+  messageStore.fetchUnreadCount()
+})
 
 // ====== 已发送通知单 ======
 const {
@@ -258,10 +269,16 @@ const sentLoading = ref(false)
 const sentTableData = ref<SentNoticeVO[]>([])
 const sentTotal = ref(0)
 
-const POPULATION_TYPE_MAP: Record<string, string> = {
+const LEGACY_POPULATION_LABEL: Record<string, string> = {
   school: "学校人群",
   key: "重点人群",
-  close: "密接人群"
+  close: "密接人群",
+  keyPopulation: "重点人群",
+  closeContact: "密接人群"
+}
+
+function resolvePopulationTypeLabel(type: string): string {
+  return LEGACY_POPULATION_LABEL[type] ?? getPopulationTypeLabel(type)
 }
 const NOTICE_TYPE_MAP: Record<string, string> = {
   latent: "潜伏者通知单",
@@ -295,7 +312,7 @@ watch(
   { immediate: true }
 )
 
-// ====== 已发送转诊 ======
+// ====== 已发送转出 ======
 const {
   paginationData: referralPagination,
   handleCurrentChange: referralHandleCurrentChange,
@@ -409,12 +426,12 @@ const activeTab = ref("received")
                     </el-button>
                   </template>
                 </template>
-                <!-- 旧版转诊查看详情 & 确认/拒绝 -->
+                <!-- 转出查看详情 & 确认/拒绝 -->
                 <template v-if="row.type === 'referral_receive' || row.type === 'referral_confirmed' || row.type === 'referral_rejected'">
                   <el-button type="info" size="small" link @click="viewReferralDetail(row)">
                     查看详情
                   </el-button>
-                  <template v-if="row.type === 'referral_receive' && !row.isRead">
+                  <template v-if="row.type === 'referral_receive'">
                     <el-button type="success" size="small" @click="handleConfirmReferral(row)">
                       确认接收
                     </el-button>
@@ -461,7 +478,7 @@ const activeTab = ref("received")
             <el-table-column label="内容">
               <template #default="{ row }">
                 {{ NOTICE_TYPE_MAP[row.noticeType] || row.noticeType }} —
-                {{ row.patientName }}（{{ POPULATION_TYPE_MAP[row.populationType] || row.populationType }}）
+                {{ row.patientName }}（{{ resolvePopulationTypeLabel(row.populationType) }}）
               </template>
             </el-table-column>
             <el-table-column label="状态">
@@ -507,18 +524,18 @@ const activeTab = ref("received")
           </div>
         </el-tab-pane>
 
-        <!-- 已发送转诊 -->
-        <el-tab-pane label="已发送转诊" name="referral">
+        <!-- 已发送转出 -->
+        <el-tab-pane label="已发送转出" name="referral">
           <el-table v-loading="referralLoading" :data="referralTableData" border stripe>
             <el-table-column prop="subjectName" label="对象姓名" />
             <el-table-column label="类型">
               <template #default="{ row }">
-                {{ POPULATION_TYPE_MAP[row.populationType] || row.populationType }} —
+                {{ resolvePopulationTypeLabel(row.populationType) }} —
                 {{ MODULE_TYPE_MAP[row.moduleType] || row.moduleType }}
               </template>
             </el-table-column>
             <el-table-column prop="sentTime" label="发送时间" />
-            <el-table-column prop="referralReason" label="转诊原因" show-overflow-tooltip>
+            <el-table-column prop="referralReason" label="转出原因" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ row.referralReason || "—" }}
               </template>
@@ -568,7 +585,7 @@ const activeTab = ref("received")
       </el-tabs>
     </el-card>
 
-    <!-- 拒绝转诊弹窗 -->
+    <!-- 拒绝转出弹窗 -->
     <el-dialog v-model="rejectDialogVisible" title="拒绝" width="400px" append-to-body>
       <el-form label-width="80px">
         <el-form-item label="拒绝原因">
@@ -585,15 +602,15 @@ const activeTab = ref("received")
       </template>
     </el-dialog>
 
-    <!-- 转诊详情弹窗 -->
-    <el-dialog v-model="referralDetailVisible" title="转诊详情" width="680px" append-to-body>
+    <!-- 转出详情弹窗 -->
+    <el-dialog v-model="referralDetailVisible" title="转出详情" width="680px" append-to-body>
       <div v-loading="referralDetailLoading" style="min-height: 80px">
         <el-descriptions v-if="referralDetailData" :column="2" border>
-          <el-descriptions-item label="筛查对象">
+          <el-descriptions-item label="对象姓名">
             {{ referralDetailData.subjectName || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="人群类型">
-            {{ POPULATION_TYPE_MAP[referralDetailData.populationType] || referralDetailData.populationType }}
+            {{ resolvePopulationTypeLabel(referralDetailData.populationType) }}
           </el-descriptions-item>
           <el-descriptions-item label="模块">
             {{ MODULE_TYPE_MAP[referralDetailData.moduleType] || referralDetailData.moduleType }}
@@ -620,7 +637,7 @@ const activeTab = ref("received")
           <el-descriptions-item label="接收时间">
             {{ referralDetailData.confirmedTime || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item v-if="referralDetailData.referralReason" label="转诊原因" :span="2">
+          <el-descriptions-item v-if="referralDetailData.referralReason" label="转出原因" :span="2">
             {{ referralDetailData.referralReason }}
           </el-descriptions-item>
           <el-descriptions-item v-if="referralDetailData.rejectReason" label="拒绝原因" :span="2">

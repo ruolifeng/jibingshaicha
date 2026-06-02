@@ -3,7 +3,7 @@ import PrintSupervision from "@@/components/PrintSupervision.vue"
 import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
 import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { canEditSupervisionForm, getSupervisionStatusLabel } from "@@/utils/supervisionForm"
 import { useUserStore } from "@/pinia/stores/user"
@@ -21,6 +21,7 @@ const searchForm = reactive({
   idNumber: "",
   phone: "",
   dateRange: [] as string[],
+  creatorName: "",
   archived: undefined as number | undefined,
   populationType: ""
 })
@@ -33,11 +34,13 @@ async function fetchData() {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       referralResult: "latent",
+      dateFilterBy: "supervisionFill",
       ...rest,
       ...extractDateRangeParams(dateRange)
     }
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
+    if (!params.creatorName) delete params.creatorName
     const { data } = await getLatentAggregateListApi(params)
     tableData.value = data.records ?? []
     total.value = data.total ?? 0
@@ -56,6 +59,7 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.phone = ""
   searchForm.dateRange = []
+  searchForm.creatorName = ""
   searchForm.archived = undefined
   searchForm.populationType = ""
   handleSearch()
@@ -146,7 +150,7 @@ function openPrint(row: Record<string, any>) {
         <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="填写督导表时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -155,6 +159,9 @@ function openPrint(row: Record<string, any>) {
             end-placeholder="结束日期"
             style="width: 240px"
           />
+        </el-form-item>
+        <el-form-item label="录入者">
+          <el-input v-model="searchForm.creatorName" placeholder="姓名或账号" clearable style="width:140px" />
         </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
@@ -259,7 +266,11 @@ function openPrint(row: Record<string, any>) {
       <el-table :data="historyList" border stripe>
         <el-table-column prop="formSeq" label="第几次" width="80" />
         <el-table-column prop="treatmentStartDate" label="开始治疗时间" />
-        <el-table-column prop="treatmentPlan" label="治疗方案" show-overflow-tooltip />
+        <el-table-column label="治疗方案" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ normalizeLatentTreatmentPlan(row.treatmentPlan) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="managerName" label="管理人员" show-overflow-tooltip />
         <el-table-column prop="createTime" label="提交时间" />
         <el-table-column label="状态" width="90">

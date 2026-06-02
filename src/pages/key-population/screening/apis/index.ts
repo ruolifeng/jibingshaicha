@@ -79,6 +79,7 @@ export function getScreeningKeyPopulationListApi(params: {
   screenMethod?: string
   isLatent?: number
   diagnosisFirst?: string
+  entryUnit?: string
   dateFrom?: string
   dateTo?: string
 }) {

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
+import { normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { getSupervisionRecordStatusLabel } from "@@/utils/supervisionForm"
 
 const props = defineProps<{
@@ -82,7 +83,7 @@ const supervisionRecords = computed(() => {
           {{ d.treatmentEndDate || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗方案" :span="2">
-          {{ d.treatmentPlan || "-" }}
+          {{ normalizeLatentTreatmentPlan(d.treatmentPlan) || "-" }}
         </el-descriptions-item>
       </el-descriptions>
 

@@ -16,6 +16,9 @@ public interface DepartmentService extends IService<Department> {
      */
     List<Long> getDescendantIds(Long deptId);
 
+    /** 按部门名称模糊匹配，返回部门 ID 列表（用于录入单位筛选） */
+    List<Long> resolveIdsByNameLike(String name);
+
     /** 创建部门 */
     void createDepartment(Department department);
 

@@ -68,4 +68,20 @@ public class SysMessageServiceImpl extends ServiceImpl<SysMessageMapper, SysMess
         removeById(id);
     }
 
+    @Override
+    public void updatePendingMessageByBizId(Long bizId, String fromType, String toType,
+                                            String title, String content) {
+        if (bizId == null || fromType == null || toType == null) {
+            return;
+        }
+        lambdaUpdate()
+                .eq(SysMessage::getBizId, bizId)
+                .eq(SysMessage::getType, fromType)
+                .set(SysMessage::getType, toType)
+                .set(title != null, SysMessage::getTitle, title)
+                .set(content != null, SysMessage::getContent, content)
+                .set(SysMessage::getIsRead, 1)
+                .update();
+    }
+
 }

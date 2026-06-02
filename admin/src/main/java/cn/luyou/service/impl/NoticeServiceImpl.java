@@ -7,7 +7,9 @@ import cn.luyou.model.Notice;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.model.User;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.NoticeService;
+import cn.luyou.service.PatientService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
@@ -15,7 +17,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -25,13 +27,27 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         implements NoticeService {
 
     private final SysMessageService sysMessageService;
     private final UserMapper userMapper;
     private final DataScopeHelper dataScopeHelper;
+    private final PatientService patientService;
+    private final LatentInfectionService latentInfectionService;
+
+    public NoticeServiceImpl(
+            SysMessageService sysMessageService,
+            UserMapper userMapper,
+            DataScopeHelper dataScopeHelper,
+            PatientService patientService,
+            @Lazy LatentInfectionService latentInfectionService) {
+        this.sysMessageService = sysMessageService;
+        this.userMapper = userMapper;
+        this.dataScopeHelper = dataScopeHelper;
+        this.patientService = patientService;
+        this.latentInfectionService = latentInfectionService;
+    }
 
     @Override
     public void saveAsDraft(Notice notice) {
@@ -46,6 +62,9 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单已发送，等待接收方确认，无法保存草稿");
             }
             notice.setId(existing.getId());
+        }
+        ensureSenderId(notice);
+        if (existing != null) {
             notice.setStatus(0);
             updateById(notice);
         } else {
@@ -69,6 +88,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             // 草稿(0)或已确认(2)均可更新后重新发送
             notice.setId(existing.getId());
         }
+        ensureSenderId(notice);
         notice.setStatus(1);
         notice.setSentTime(LocalDateTime.now());
         notice.setTimeoutNotified(0);
@@ -243,6 +263,24 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         }
     }
 
+    /** 保存/发送时补全填写人，便于列表按录入者检索（更新草稿时保留原填写人） */
+    private void ensureSenderId(Notice notice) {
+        if (notice == null || notice.getSenderId() != null) {
+            return;
+        }
+        if (notice.getId() != null) {
+            Notice existing = getById(notice.getId());
+            if (existing != null && existing.getSenderId() != null) {
+                notice.setSenderId(existing.getSenderId());
+                return;
+            }
+        }
+        Long currentId = BaseContext.getCurrentId();
+        if (currentId != null) {
+            notice.setSenderId(currentId);
+        }
+    }
+
     private void assertBizAccessible(Notice notice) {
         if (notice == null) {
             return;
@@ -253,8 +291,10 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     private void assertBizAccessible(Long bizId, String noticeType) {
         if ("patient".equals(noticeType)) {
             dataScopeHelper.assertPatientAccessible(bizId);
+            patientService.assertPatientOperable(bizId);
         } else if ("latent".equals(noticeType)) {
             dataScopeHelper.assertLatentAccessible(bizId);
+            latentInfectionService.assertLatentOperable(bizId);
         }
     }
 }

@@ -6,7 +6,23 @@ import { usePagination } from "@@/composables/usePagination"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getPatientListApi } from "../apis"
 
-export function usePatientList(defaultArchived?: number) {
+export interface PatientListOptions {
+  /** 在管总览：时间段按病案登记日期；服药管理单位筛选 */
+  overviewSearch?: boolean
+  /** 通知单管理：时间段按填写通知单时间；服药管理单位筛选 */
+  noticeSearch?: boolean
+  /** 首次入户随访：时间段按填写时间；服药管理单位筛选 */
+  firstVisitSearch?: boolean
+  /** 后续随访：时间段按填写时间；服药管理单位筛选 */
+  followUpSearch?: boolean
+}
+
+function hasMedicationUnitSearch(options?: PatientListOptions) {
+  return !!(options?.overviewSearch || options?.noticeSearch
+    || options?.firstVisitSearch || options?.followUpSearch)
+}
+
+export function usePatientList(defaultArchived?: number, options?: PatientListOptions) {
   const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
   const loading = ref(false)
@@ -21,7 +37,8 @@ export function usePatientList(defaultArchived?: number) {
     diagnosisResult: "",
     populationType: "",
     dateRange: [] as string[],
-    archived: defaultArchived
+    archived: defaultArchived,
+    ...(hasMedicationUnitSearch(options) ? { medicationManagementUnit: "" } : {})
   })
 
   async function fetchData() {
@@ -34,10 +51,20 @@ export function usePatientList(defaultArchived?: number) {
         ...rest,
         ...extractDateRangeParams(dateRange)
       }
+      if (options?.overviewSearch) {
+        params.dateFilterBy = "registrationDate"
+      } else if (options?.noticeSearch) {
+        params.dateFilterBy = "noticeFill"
+      } else if (options?.firstVisitSearch) {
+        params.dateFilterBy = "firstVisitFill"
+      } else if (options?.followUpSearch) {
+        params.dateFilterBy = "followUpFill"
+      }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
       if (!params.currentAddress) delete params.currentAddress
       if (!params.diagnosisResult) delete params.diagnosisResult
+      if (!params.medicationManagementUnit) delete params.medicationManagementUnit
       const { data } = await getPatientListApi(params)
       tableData.value = data.records
       total.value = data.total
@@ -55,6 +82,9 @@ export function usePatientList(defaultArchived?: number) {
     searchForm.diagnosisResult = ""
     searchForm.populationType = ""
     searchForm.dateRange = []
+    if (hasMedicationUnitSearch(options) && "medicationManagementUnit" in searchForm) {
+      searchForm.medicationManagementUnit = ""
+    }
     handleSearch()
   }
 
@@ -64,6 +94,7 @@ export function usePatientList(defaultArchived?: number) {
   return {
     paginationData, handleCurrentChange, handleSizeChange,
     loading, tableData, total,
-    searchForm, fetchData, handleSearch, handleReset
+    searchForm, fetchData, handleSearch, handleReset,
+    overviewSearch: options?.overviewSearch ?? false
   }
 }

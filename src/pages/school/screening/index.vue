@@ -18,6 +18,7 @@ const searchForm = reactive({
   schoolName: "",
   district: "",
   phone: "",
+  entryUnit: "",
   dateRange: [] as string[],
   isLatent: undefined as number | undefined,
   diagnosisFirst: "" as string
@@ -26,12 +27,13 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, ...rest } = searchForm
+    const { dateRange, entryUnit, ...rest } = searchForm
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       ...rest,
-      ...extractDateRangeParams(dateRange)
+      ...extractDateRangeParams(dateRange),
+      ...(entryUnit ? { entryUnit } : {})
     })
     tableData.value = data.records
     total.value = data.total
@@ -51,6 +53,7 @@ function handleReset() {
   searchForm.schoolName = ""
   searchForm.district = ""
   searchForm.phone = ""
+  searchForm.entryUnit = ""
   searchForm.dateRange = []
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
@@ -293,7 +296,7 @@ watch(
         <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
         </el-form-item>
-        <el-form-item label="筛查时间">
+        <el-form-item label="感染筛查时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -302,6 +305,9 @@ watch(
             end-placeholder="结束日期"
             style="width: 240px"
           />
+        </el-form-item>
+        <el-form-item label="录入单位">
+          <el-input v-model="searchForm.entryUnit" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">

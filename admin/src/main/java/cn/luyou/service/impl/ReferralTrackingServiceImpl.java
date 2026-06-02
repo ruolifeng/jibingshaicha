@@ -9,6 +9,7 @@ import cn.luyou.constant.EpidemicTrackImportHeaders;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
+import cn.luyou.model.Department;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.ReferralTracking;
 import cn.luyou.model.User;
@@ -93,14 +94,18 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .build();
 
         if ("recommend".equals(bizMode)) {
+            Integer role = currentUser != null ? currentUser.getRole() : null;
+            if (role == null || role < 4 || role > 6) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "仅三/四/五级用户可发起推介");
+            }
             validateRecommendRequired(params);
             Long receiverUserId = getLong(params, "receiverUserId");
             User receiver = userService.getById(receiverUserId);
             if (receiver == null) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
             }
-            if (receiver.getRole() == null || (receiver.getRole() != 4 && receiver.getRole() != 5)) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为三级或四级用户");
+            if (receiver.getRole() == null || (receiver.getRole() != 4 && receiver.getRole() != 5 && receiver.getRole() != 6)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为三级、四级或五级用户");
             }
             record.setReceiverUserId(receiverUserId);
             record.setReceiverDeptId(receiver.getDepartmentId());
@@ -123,12 +128,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     public ReferralTracking getDetail(Long id) {
         ReferralTracking record = getAndCheckExist(id);
         assertCanAccessRecord(record);
-        if (record.getReceiverUserId() != null) {
-            User receiver = userService.getById(record.getReceiverUserId());
-            if (receiver != null) {
-                record.setReceiverUserName(formatReceiverDisplayName(receiver));
-            }
-        }
+        fillDisplayNames(record);
         return record;
     }
 
@@ -137,25 +137,20 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                                               String name, String idNumber,
                                               Integer trackingStatus, Integer archived,
                                               String phone, String township,
-                                              String dateFrom, String dateTo, String sourceType) {
+                                              String dateFrom, String dateTo, String sourceType,
+                                              String creatorOrEntryUnit) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
 
         LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
-                level5RecommendView ? null : bizMode, name, idNumber, trackingStatus, archived,
+                bizMode, name, idNumber, trackingStatus, archived,
                 phone, township, dateFrom, dateTo, sourceType);
+        applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
 
         IPage<ReferralTracking> pageResult = page(new Page<>(page, size), wrapper);
 
-        pageResult.getRecords().forEach(r -> {
-            if (r.getReceiverUserId() != null) {
-                User receiver = userService.getById(r.getReceiverUserId());
-                if (receiver != null) {
-                    r.setReceiverUserName(formatReceiverDisplayName(receiver));
-                }
-            }
-        });
+        pageResult.getRecords().forEach(this::fillDisplayNames);
 
         return pageResult;
     }
@@ -248,11 +243,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Override
     public void exportTrack(HttpServletResponse response, String bizMode,
                             String name, String idNumber, String phone, String township,
-                            String dateFrom, String dateTo, String sourceType) {
+                            String dateFrom, String dateTo, String sourceType,
+                            String creatorOrEntryUnit) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
         LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
-                level5RecommendView ? null : bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+                bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+        applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
         List<ReferralTracking> records = list(wrapper);
 
@@ -260,12 +257,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         List<List<String>> head = buildExportHead(recommendExport);
         List<List<Object>> rows = new ArrayList<>();
         for (ReferralTracking r : records) {
-            if (r.getReceiverUserId() != null) {
-                User receiver = userService.getById(r.getReceiverUserId());
-                if (receiver != null) {
-                    r.setReceiverUserName(formatReceiverDisplayName(receiver));
-                }
-            }
+            fillDisplayNames(r);
             rows.add(buildExportRow(r, recommendExport));
         }
 
@@ -472,6 +464,45 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             record.setReportCardTime(parseDateTime(params.get("reportCardTime").toString()));
         }
         if (getStr(params, "epidemicRemark") != null) record.setEpidemicRemark(getStr(params, "epidemicRemark"));
+        if ("recommend".equals(record.getBizMode())) {
+            if (Integer.valueOf(1).equals(record.getArchived())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可编辑");
+            }
+            if (record.getRecommendStatus() != null && record.getRecommendStatus() >= 2) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介已接受或已拒绝，不可编辑");
+            }
+            if (getStr(params, "recommendReason") != null) {
+                record.setRecommendReason(getStr(params, "recommendReason"));
+            }
+            if (params.containsKey("screenDate")) {
+                record.setScreenDate(parseDate(params.get("screenDate")));
+            }
+            if (getStr(params, "screenMethod") != null) {
+                record.setScreenMethod(getStr(params, "screenMethod"));
+            }
+            if (getStr(params, "infectionResult") != null) {
+                record.setInfectionResult(getStr(params, "infectionResult"));
+            }
+            if (params.containsKey("chestXrayDate")) {
+                record.setChestXrayDate(parseDate(params.get("chestXrayDate")));
+            }
+            if (getStr(params, "chestXrayResult") != null) {
+                record.setChestXrayResult(getStr(params, "chestXrayResult"));
+            }
+            Long newReceiverId = getLong(params, "receiverUserId");
+            if (newReceiverId != null && Integer.valueOf(0).equals(record.getRecommendStatus())) {
+                User receiver = userService.getById(newReceiverId);
+                if (receiver == null) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
+                }
+                if (receiver.getRole() == null
+                        || (receiver.getRole() != 4 && receiver.getRole() != 5 && receiver.getRole() != 6)) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为三级、四级或五级用户");
+                }
+                record.setReceiverUserId(newReceiverId);
+                record.setReceiverDeptId(receiver.getDepartmentId());
+            }
+        }
         updateById(record);
     }
 
@@ -479,6 +510,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public void sendRecommend(Long id) {
         ReferralTracking record = getAndCheckExist(id);
+        assertCanMutateRecord(record);
         if (!"recommend".equals(record.getBizMode())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介模式可发送推介通知");
         }
@@ -941,10 +973,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (userId == null) {
             return false;
         }
-        if (record.getReceiverUserId() != null) {
-            return userId.equals(record.getReceiverUserId());
-        }
         if (userId.equals(record.getCreatorId())) {
+            return true;
+        }
+        if (record.getReceiverUserId() != null && userId.equals(record.getReceiverUserId())) {
             return true;
         }
         Integer role = BaseContext.getCurrentRole();
@@ -1052,6 +1084,68 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         String username = StrUtil.blankToDefault(receiver.getUsername(), "-");
         String orgName = StrUtil.blankToDefault(receiver.getOrgName(), "未填写单位");
         return username + "（" + orgName + "）";
+    }
+
+    /** 填充接收人、录入者、录入单位等展示字段 */
+    private void fillDisplayNames(ReferralTracking record) {
+        if (record.getReceiverUserId() != null) {
+            User receiver = userService.getById(record.getReceiverUserId());
+            if (receiver != null) {
+                record.setReceiverUserName(formatReceiverDisplayName(receiver));
+            }
+        }
+        if (record.getCreatorId() != null) {
+            User creator = userService.getById(record.getCreatorId());
+            if (creator != null) {
+                record.setCreatorUserName(StrUtil.blankToDefault(creator.getRealName(), creator.getUsername()));
+            }
+        }
+        if (record.getDepartmentId() != null) {
+            Department dept = departmentService.getById(record.getDepartmentId());
+            if (dept != null) {
+                record.setEntryUnitName(dept.getName());
+            }
+        }
+        if (StrUtil.isBlank(record.getEntryUnitName()) && record.getCreatorId() != null) {
+            User creator = userService.getById(record.getCreatorId());
+            if (creator != null) {
+                record.setEntryUnitName(creator.getOrgName());
+            }
+        }
+    }
+
+    /** 录入者或录入单位：匹配创建人姓名/用户名、用户所属单位名称，或录入部门名称 */
+    private void applyCreatorOrEntryUnitFilter(LambdaQueryWrapper<ReferralTracking> wrapper, String keyword) {
+        if (StrUtil.isBlank(keyword)) {
+            return;
+        }
+        List<Long> creatorUserIds = userService.lambdaQuery()
+                .and(w -> w.like(User::getRealName, keyword)
+                        .or().like(User::getUsername, keyword)
+                        .or().like(User::getOrgName, keyword))
+                .list()
+                .stream()
+                .map(User::getId)
+                .distinct()
+                .toList();
+        List<Long> deptIds = departmentService.resolveIdsByNameLike(keyword);
+        if (creatorUserIds.isEmpty() && deptIds.isEmpty()) {
+            wrapper.eq(ReferralTracking::getId, -1L);
+            return;
+        }
+        wrapper.and(w -> {
+            boolean added = false;
+            if (!creatorUserIds.isEmpty()) {
+                w.in(ReferralTracking::getCreatorId, creatorUserIds);
+                added = true;
+            }
+            if (!deptIds.isEmpty()) {
+                if (added) {
+                    w.or();
+                }
+                w.in(ReferralTracking::getDepartmentId, deptIds);
+            }
+        });
     }
 
     /** 推介模式必填项校验 */

@@ -39,6 +39,26 @@ export function exportAllPatientsApi(params: Record<string, any>) {
   })
 }
 
+/** 导出勾选患者的首次入户随访信息 */
+export function exportPatientFirstVisitsApi(ids: number[]) {
+  return request<Blob>({
+    url: "export/patient-first-visits",
+    method: "get",
+    params: { ids: ids.join(",") },
+    responseType: "blob"
+  })
+}
+
+/** 导出勾选患者的后续随访信息 */
+export function exportPatientFollowUpVisitsApi(ids: number[]) {
+  return request<Blob>({
+    url: "export/patient-follow-up-visits",
+    method: "get",
+    params: { ids: ids.join(",") },
+    responseType: "blob"
+  })
+}
+
 /** 批量导入在管患者（字段与新增一致） */
 export function importPatientApi(file: File) {
   const formData = new FormData()

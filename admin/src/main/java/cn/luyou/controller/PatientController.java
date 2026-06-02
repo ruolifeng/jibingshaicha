@@ -79,9 +79,12 @@ public class PatientController {
             @RequestParam(required = false) String currentAddress,
             @RequestParam(required = false) String diagnosisResult,
             @RequestParam(required = false) String dateFrom,
-            @RequestParam(required = false) String dateTo) {
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit) {
         return ResultRes.success(patientService.queryPage(
-                page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0, dateFrom, dateTo));
+                page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
+                dateFrom, dateTo, dateFilterBy, medicationManagementUnit));
     }
 
     @Operation(summary = "历史患者列表")
@@ -200,6 +203,7 @@ public class PatientController {
         if (firstVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
+        patientService.assertPatientOperable(firstVisit.getPatientId());
         mergeExistingFirstVisitId(firstVisit);
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
@@ -219,6 +223,10 @@ public class PatientController {
     @PostMapping("/first-visit/save")
     public ResultResponse<Void> saveFirstVisit(@RequestBody FirstVisit firstVisit) {
         validateFirstVisitRequired(firstVisit);
+        if (firstVisit.getPatientId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
+        }
+        patientService.assertPatientOperable(firstVisit.getPatientId());
         mergeExistingFirstVisitId(firstVisit);
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
@@ -345,6 +353,9 @@ public class PatientController {
     @PostMapping("/medication-pickup/save")
     public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
         userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
+        if (pickup.getPatientId() != null) {
+            patientService.assertPatientOperable(pickup.getPatientId());
+        }
         medicationPickupService.savePickup(pickup);
         return ResultRes.success(null);
     }
@@ -352,6 +363,7 @@ public class PatientController {
     @Operation(summary = "领药记录列表")
     @GetMapping("/medication-pickup/list/{patientId}")
     public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long patientId) {
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
         return ResultRes.success(medicationPickupService.listByPatientId(patientId));
     }
 
@@ -409,6 +421,7 @@ public class PatientController {
         if (followUpVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
+        patientService.assertPatientOperable(followUpVisit.getPatientId());
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
         FollowUpVisit existingDraft = followUpVisitService.lambdaQuery()
                 .eq(FollowUpVisit::getPatientId, followUpVisit.getPatientId())
@@ -434,6 +447,7 @@ public class PatientController {
         if (followUpVisit.getVisitDate() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访时间");
         }
+        patientService.assertPatientOperable(followUpVisit.getPatientId());
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
         validateFollowUpVisitMethod(followUpVisit);
         validateStopTreatmentOnSave(followUpVisit);
@@ -562,6 +576,9 @@ public class PatientController {
     @Operation(summary = "保存服药管理")
     @PostMapping("/medication/save")
     public ResultResponse<Void> saveMedication(@RequestBody MedicationManagement medication) {
+        if (medication.getPatientId() != null) {
+            patientService.assertPatientOperable(medication.getPatientId());
+        }
         medicationManagementService.saveOrUpdate(medication);
         return ResultRes.success(null);
     }
@@ -579,6 +596,9 @@ public class PatientController {
     @Operation(summary = "完成服药管理（归档患者）")
     @PostMapping("/medication/complete")
     public ResultResponse<Void> completeMedication(@RequestBody MedicationManagement medication) {
+        if (medication.getPatientId() != null) {
+            patientService.assertPatientOperable(medication.getPatientId());
+        }
         medicationManagementService.saveOrUpdate(medication);
         if (medication.getStopDate() != null) {
             patientService.archivePatient(medication.getPatientId());

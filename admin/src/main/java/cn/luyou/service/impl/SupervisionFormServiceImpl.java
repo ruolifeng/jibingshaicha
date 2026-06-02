@@ -59,6 +59,7 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveDraft(SupervisionForm form) {
+        latentInfectionService.assertLatentOperable(form.getLatentInfectionId());
         SupervisionForm existingDraft = getDraft(form.getLatentInfectionId());
         if (existingDraft != null) {
             form.setId(existingDraft.getId());
@@ -68,14 +69,17 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
         form.setStatus(0);
         form.setFormSeq(null);
         form.setArchivedTime(null);
+        ensureFilledBy(form);
         saveOrUpdate(form);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveSubmit(SupervisionForm form) {
+        latentInfectionService.assertLatentOperable(form.getLatentInfectionId());
         form.setStatus(1);
         form.setArchivedTime(null);
+        ensureFilledBy(form);
         if (form.getId() != null) {
             SupervisionForm existing = getById(form.getId());
             if (existing != null) {
@@ -97,8 +101,10 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveAndArchive(SupervisionForm form) {
+        latentInfectionService.assertLatentOperable(form.getLatentInfectionId());
         form.setStatus(2);
         form.setArchivedTime(LocalDateTime.now());
+        ensureFilledBy(form);
 
         // V5：根据治疗方案推断是否进行预防性治疗，供筛查表回写
         if (StrUtil.isBlank(form.getHasPreventiveTreatment()) && StrUtil.isNotBlank(form.getTreatmentPlan())) {
@@ -258,6 +264,24 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
                 }
             }
             default -> { /* 未知类型不处理 */ }
+        }
+    }
+
+    /** 保存/提交/归档时补全填写人，便于列表按录入者检索（编辑时保留原填写人） */
+    private void ensureFilledBy(SupervisionForm form) {
+        if (form == null || form.getFilledBy() != null) {
+            return;
+        }
+        if (form.getId() != null) {
+            SupervisionForm existing = getById(form.getId());
+            if (existing != null && existing.getFilledBy() != null) {
+                form.setFilledBy(existing.getFilledBy());
+                return;
+            }
+        }
+        Long currentId = BaseContext.getCurrentId();
+        if (currentId != null) {
+            form.setFilledBy(currentId);
         }
     }
 }

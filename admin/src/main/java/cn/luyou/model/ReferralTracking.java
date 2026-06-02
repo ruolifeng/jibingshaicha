@@ -119,4 +119,8 @@ public class ReferralTracking extends BaseEntity {
     // ===== 非持久化字段（查询时填充）=====
     @TableField(exist = false)
     private String receiverUserName;
+    @TableField(exist = false)
+    private String creatorUserName;
+    @TableField(exist = false)
+    private String entryUnitName;
 }

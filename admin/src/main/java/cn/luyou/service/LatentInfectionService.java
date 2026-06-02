@@ -18,7 +18,8 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                       String name, String idNumber, Integer trackingStatus, Integer archived,
                                       String referralResult, String diagnosisFirst,
-                                      String phone, String dateFrom, String dateTo);
+                                      String phone, String dateFrom, String dateTo,
+                                      String dateFilterBy, String creatorName);
 
     /** 追踪操作 */
     void track(Long id, Integer status, String remark);
@@ -90,4 +91,25 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     /** 批量级联删除潜伏感染记录 */
     void batchDeleteCascade(List<Long> ids);
+
+    String ARCHIVE_REMARK_TRANSFERRED_OUT = "已转出";
+    String ARCHIVE_REMARK_TRANSFER_PENDING = "转出待确认";
+
+    static boolean isTransferLocked(LatentInfection latent) {
+        if (latent == null || latent.getArchiveRemark() == null) {
+            return false;
+        }
+        return ARCHIVE_REMARK_TRANSFER_PENDING.equals(latent.getArchiveRemark())
+                || ARCHIVE_REMARK_TRANSFERRED_OUT.equals(latent.getArchiveRemark());
+    }
+
+    void markTransferPending(Long id);
+
+    void markTransferredOut(Long id);
+
+    void restoreTransferredLatent(Long id);
+
+    Long copyLatentForTransferOut(Long sourceLatentId, Long receiverUserId);
+
+    void assertLatentOperable(Long id);
 }

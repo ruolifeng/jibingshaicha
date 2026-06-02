@@ -77,6 +77,7 @@ export function getScreeningSchoolListApi(params: {
   isLatent?: number
   diagnosisFirst?: string
   phone?: string
+  entryUnit?: string
   dateFrom?: string
   dateTo?: string
 }) {

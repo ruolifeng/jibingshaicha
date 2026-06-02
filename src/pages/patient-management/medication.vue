@@ -9,7 +9,7 @@ import {
   PATIENT_MEDICATION_PAGE_PERMISSIONS,
   PATIENT_MEDICATION_PICKUP_PERMISSIONS
 } from "@@/utils/medicationPickup"
-import { resolveRegistrationNo } from "@@/utils/patient"
+import { resolveRegistrationNo, isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { getMedicationPickupListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
@@ -48,7 +48,7 @@ function hasPickupData(row: Record<string, any>) {
 }
 
 function canAddPickup(row: Record<string, any>) {
-  return row.archived !== 1
+  return row.archived !== 1 && !isPatientTransferLocked(row)
 }
 
 function openPickup(row: any) {
@@ -160,16 +160,25 @@ function viewDetail(record: Record<string, any>) {
         <el-table-column prop="diagnosisResult" label="病原学结果" />
         <el-table-column label="操作" fixed="right" :width="canManagePickup ? 100 : 120">
           <template #default="{ row }">
-            <el-button
-              v-permission="[...PATIENT_MEDICATION_PAGE_PERMISSIONS]"
-              type="primary"
-              link
+            <template v-if="!isPatientTransferLocked(row)">
+              <el-button
+                v-permission="[...PATIENT_MEDICATION_PAGE_PERMISSIONS]"
+                type="primary"
+                link
+                size="small"
+                :disabled="row.archived === 1"
+                @click="openMedication(row)"
+              >
+                服药管理
+              </el-button>
+            </template>
+            <el-tag
+              v-else
+              :type="row.archiveRemark === '已转出' ? 'info' : 'warning'"
               size="small"
-              :disabled="row.archived === 1"
-              @click="openMedication(row)"
             >
-              服药管理
-            </el-button>
+              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column v-if="canManagePickup" label="领药情况" min-width="260" fixed="right">
@@ -265,7 +274,7 @@ function viewDetail(record: Record<string, any>) {
               查看详情
             </el-button>
             <el-button
-              v-if="canEditMedicationPickup(userStore.userRole, row)"
+              v-if="canEditMedicationPickup(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
               v-permission="[...PATIENT_MEDICATION_PICKUP_PERMISSIONS]"
               type="warning"
               link

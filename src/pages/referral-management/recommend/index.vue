@@ -22,7 +22,9 @@ import { downloadBlob } from "@@/utils/download"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   getReferralTrackingListApi,
+  getReferralTrackingDetailApi,
   createReferralTrackingApi,
+  updateReferralTrackingApi,
   sendRecommendApi,
   confirmRecommendApi,
   rejectRecommendApi,
@@ -37,8 +39,8 @@ import {
 const userStore = useUserStore()
 const router = useRouter()
 
-/** 五级用户发起推介；三/四级用户接收并确认 */
-const isLevel5User = computed(() => userStore.userRole === 6)
+/** 三/四/五级用户可发起推介；三/四级用户接收并确认 */
+const canCreateRecommend = computed(() => [4, 5, 6].includes(userStore.userRole))
 const isLevel34User = computed(() => userStore.userRole === 4 || userStore.userRole === 5)
 
 // ===== 列表 =====
@@ -51,6 +53,7 @@ const searchForm = reactive({
   idNumber: "",
   phone: "",
   township: "",
+  creatorOrEntryUnit: "",
   dateRange: [] as string[]
 })
 const paginationData = reactive({ currentPage: 1, pageSize: 20 })
@@ -66,6 +69,7 @@ async function fetchList() {
       idNumber: searchForm.idNumber || undefined,
       phone: searchForm.phone || undefined,
       township: searchForm.township || undefined,
+      creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
       ...extractDateRangeParams(searchForm.dateRange)
     })
     tableData.value = res.data?.records ?? []
@@ -87,6 +91,7 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.phone = ""
   searchForm.township = ""
+  searchForm.creatorOrEntryUnit = ""
   searchForm.dateRange = []
   handleSearch()
 }
@@ -100,6 +105,7 @@ async function handleExport() {
       idNumber: searchForm.idNumber || undefined,
       phone: searchForm.phone || undefined,
       township: searchForm.township || undefined,
+      creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
       ...extractDateRangeParams(searchForm.dateRange)
     })
     downloadBlob(blob as unknown as Blob, "推介记录导出.xlsx")
@@ -198,6 +204,125 @@ function formatLevel34UserLabel(u: any) {
   return `${u.username}（${unit}）`
 }
 
+/** 当前用户是否为推介创建人 */
+function isCreator(row: any) {
+  return Number(row.creatorId) === Number(userStore.userId)
+}
+
+/** 当前用户是否为推介接收人 */
+function isReceiver(row: any) {
+  return Number(row.receiverUserId) === Number(userStore.userId)
+}
+
+function canEditRecommend(row: any) {
+  if (userStore.userRole === 1) return !row.archived && row.recommendStatus !== 2
+  return isCreator(row) && !row.archived && row.recommendStatus !== 2
+}
+
+function canDeleteRecommend(row: any) {
+  if (userStore.userRole === 1) return true
+  return isCreator(row) || (isReceiver(row) && row.recommendStatus === 1)
+}
+
+// ===== 查看详情 =====
+const viewDialogVisible = ref(false)
+const viewLoading = ref(false)
+const viewDetail = ref<any>(null)
+const viewTrackingHistory = computed(() =>
+  parseTrackingHistory(viewDetail.value?.trackingHistoryJson)
+)
+
+async function openViewDialog(row: any) {
+  viewDialogVisible.value = true
+  viewLoading.value = true
+  viewDetail.value = null
+  try {
+    const res = await getReferralTrackingDetailApi(row.id)
+    viewDetail.value = res.data
+  } catch {
+    ElMessage.error("加载详情失败")
+    viewDialogVisible.value = false
+  } finally {
+    viewLoading.value = false
+  }
+}
+
+// ===== 编辑推介 =====
+const editDialogVisible = ref(false)
+const editRow = ref<any>(null)
+const editFormRef = ref()
+const savingEdit = ref(false)
+const editForm = reactive({
+  name: "",
+  gender: "",
+  birthDate: "",
+  age: undefined as number | undefined,
+  idType: "居民身份证",
+  idNumber: "",
+  ethnicity: "",
+  phone: "",
+  householdAddress: "",
+  currentAddress: "",
+  crowdCategory: "",
+  screenDate: "",
+  screenMethod: "",
+  infectionResult: "",
+  chestXrayDate: "",
+  chestXrayResult: "",
+  recommendReason: ""
+})
+
+const editFormRules = {
+  name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
+  idNumber: [idCardRule(true)],
+  phone: [phoneRule(true)],
+  currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
+  crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
+  recommendReason: [{ required: true, message: "请填写推介原因", trigger: "blur" }]
+}
+
+async function openEditDialog(row: any) {
+  editRow.value = row
+  Object.assign(editForm, {
+    name: row.name ?? "",
+    gender: row.gender ?? "",
+    birthDate: row.birthDate ?? "",
+    age: row.age,
+    idType: row.idType ?? "居民身份证",
+    idNumber: row.idNumber ?? "",
+    ethnicity: row.ethnicity ?? "",
+    phone: row.phone ?? "",
+    householdAddress: row.householdAddress ?? "",
+    currentAddress: row.currentAddress ?? "",
+    crowdCategory: row.crowdCategory ?? "",
+    screenDate: row.screenDate ?? "",
+    screenMethod: row.screenMethod ?? "",
+    infectionResult: row.infectionResult ?? "",
+    chestXrayDate: row.chestXrayDate ?? "",
+    chestXrayResult: row.chestXrayResult ?? "",
+    recommendReason: row.recommendReason ?? ""
+  })
+  editDialogVisible.value = true
+  nextTick(() => editFormRef.value?.clearValidate())
+}
+
+async function handleEditSave() {
+  try {
+    await editFormRef.value?.validate()
+  } catch {
+    return
+  }
+  savingEdit.value = true
+  try {
+    await updateReferralTrackingApi(editRow.value.id, { ...editForm })
+    ElMessage.success("保存成功")
+    editDialogVisible.value = false
+    fetchList()
+  } finally {
+    savingEdit.value = false
+  }
+}
+
 // ===== 发送推介通知 =====
 async function handleSend(row: any) {
   await ElMessageBox.confirm(`确认向接收人发送「${row.name}」的推介通知单？`, "发送确认", { type: "warning" })
@@ -290,11 +415,6 @@ function hasTrackingHistory(row: any) {
 function formatRecommendTime(row: any) {
   const time = getRecommendTime(row)
   return time ? formatDateTime(time) : "-"
-}
-
-/** 当前用户是否为推介接收人 */
-function isReceiver(row: any) {
-  return Number(row.receiverUserId) === Number(userStore.userId)
 }
 
 // ===== 筛查信息 =====
@@ -398,7 +518,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         <el-form-item label="乡镇">
           <el-input v-model="searchForm.township" placeholder="请输入乡镇" clearable />
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="录入者/录入单位">
+          <el-input v-model="searchForm.creatorOrEntryUnit" placeholder="请输入" clearable style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="新建推介时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -424,7 +547,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。确认后将自动进入「追踪」流程。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
-        <el-button v-if="isLevel5User" type="primary" @click="openCreateDialog">新增推介</el-button>
+        <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">新增推介</el-button>
         <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
 
@@ -501,11 +624,22 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             {{ row.notInPlaceCount > 0 ? `${row.notInPlaceCount}次未到位` : "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" min-width="200">
           <template #default="{ row }">
-            <!-- 五级：补发未发送的推介 -->
+            <el-button type="primary" link size="small" @click="openViewDialog(row)">查看</el-button>
             <el-button
-              v-if="isLevel5User && row.recommendStatus === 0 && !row.archived"
+              v-if="canEditRecommend(row)"
+              type="primary" link size="small"
+              @click="openEditDialog(row)"
+            >编辑</el-button>
+            <el-button
+              v-if="canDeleteRecommend(row)"
+              type="danger" link size="small"
+              @click="handleDelete(row)"
+            >删除</el-button>
+            <!-- 补发未发送的推介 -->
+            <el-button
+              v-if="isCreator(row) && row.recommendStatus === 0 && !row.archived"
               type="primary" link size="small"
               @click="handleSend(row)"
             >发送推介</el-button>
@@ -520,12 +654,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               type="danger" link size="small"
               @click="openRejectDialog(row)"
             >拒绝</el-button>
-            <!-- 删除：五级可删自己发起的；三/四级可删待接收的 -->
-            <el-button
-              v-if="isLevel5User || (isReceiver(row) && row.recommendStatus === 1)"
-              type="danger" link size="small"
-              @click="handleDelete(row)"
-            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -615,7 +743,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               <el-select
                 v-model="createForm.receiverUserId"
                 filterable
-                placeholder="选择一个三级或四级用户"
+                placeholder="选择三级、四级或五级用户"
                 style="width: 100%"
               >
                 <el-option
@@ -705,6 +833,224 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="sendingRecommend" @click="handleSendRecommend">发送推介</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 查看推介详情 -->
+    <el-dialog v-model="viewDialogVisible" title="推介详情" width="760px">
+      <div v-loading="viewLoading">
+        <template v-if="viewDetail">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="姓名">{{ viewDetail.name || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="性别">{{ viewDetail.gender || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="出生日期">{{ viewDetail.birthDate || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="年龄">{{ viewDetail.age ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="证件类型">{{ viewDetail.idType || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="证件号">{{ viewDetail.idNumber || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="民族">{{ viewDetail.ethnicity || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{ viewDetail.phone || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="户籍地址" :span="2">{{ viewDetail.householdAddress || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="现住址" :span="2">{{ viewDetail.currentAddress || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="人群分类">{{ viewDetail.crowdCategory || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="录入者">{{ viewDetail.creatorUserName || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="录入单位" :span="2">{{ viewDetail.entryUnitName || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="推介原因" :span="2">{{ viewDetail.recommendReason || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="推介接收人">{{ viewDetail.receiverUserName || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="推介状态">
+              <el-tag
+                v-if="viewDetail.recommendStatus !== null && viewDetail.recommendStatus !== undefined"
+                :type="RECOMMEND_STATUS_MAP[viewDetail.recommendStatus]?.type as any"
+                size="small"
+              >
+                {{ RECOMMEND_STATUS_MAP[viewDetail.recommendStatus]?.label }}
+              </el-tag>
+              <span v-else>-</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="推介时间">{{ formatRecommendTime(viewDetail) }}</el-descriptions-item>
+            <el-descriptions-item label="确认/拒绝时间">
+              {{ viewDetail.recommendConfirmTime ? formatDateTime(viewDetail.recommendConfirmTime) : "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="viewDetail.rejectedReason" label="拒绝原因" :span="2">
+              {{ viewDetail.rejectedReason }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染筛查时间">{{ viewDetail.screenDate || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="感染筛查方法">{{ viewDetail.screenMethod || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="感染筛查结果">{{ viewDetail.infectionResult || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="胸片筛查时间">{{ viewDetail.chestXrayDate || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="胸片筛查结果" :span="2">{{ viewDetail.chestXrayResult || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="追踪状态">
+              <el-tag
+                :type="TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.type as any"
+                size="small"
+              >
+                {{ TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.label }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="到位时间">
+              {{ viewDetail.arrivalTime ? formatDateTime(viewDetail.arrivalTime) : "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="诊断结果">
+              <el-tag
+                v-if="viewDetail.diagnosisResult"
+                :type="viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? 'danger' : 'info'"
+                size="small"
+              >
+                {{ viewDetail.diagnosisResult }}{{ viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? "（结案）" : "" }}
+              </el-tag>
+              <span v-else>-</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="未到位次数">
+              {{ viewDetail.notInPlaceCount > 0 ? `${viewDetail.notInPlaceCount}次` : "-" }}
+            </el-descriptions-item>
+          </el-descriptions>
+          <div v-if="viewTrackingHistory.length" class="view-tracking-section">
+            <div class="view-tracking-title">对方追踪过程</div>
+            <div class="tracking-history">
+              <div v-for="item in viewTrackingHistory" :key="item.attempt" class="tracking-history-item">
+                <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
+                <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                  {{ TRACK_STATUS_LABEL[item.status] }}
+                </el-tag>
+                <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+                <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="viewDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑推介弹窗 -->
+    <el-dialog v-model="editDialogVisible" title="编辑推介记录" width="720px">
+      <el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="100px">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="姓名" prop="name">
+              <el-input v-model="editForm.name" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="性别">
+              <el-select v-model="editForm.gender" style="width: 100%">
+                <el-option label="男" value="男" />
+                <el-option label="女" value="女" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="出生日期">
+              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="年龄">
+              <el-input-number v-model="editForm.age" :min="0" :max="150" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="证件类型">
+              <el-input v-model="editForm.idType" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="证件号" prop="idNumber">
+              <el-input v-model="editForm.idNumber" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="民族">
+              <el-input v-model="editForm.ethnicity" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="联系电话" prop="phone">
+              <el-input v-model="editForm.phone" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="户籍地址">
+              <el-input v-model="editForm.householdAddress" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="现住址" prop="currentAddress">
+              <el-input v-model="editForm.currentAddress" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="人群分类" prop="crowdCategory">
+              <el-select v-model="editForm.crowdCategory" placeholder="请选择" style="width: 100%">
+                <el-option
+                  v-for="item in REFERRAL_CROWD_CATEGORY_OPTIONS"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-divider content-position="left">筛查信息（选填）</el-divider>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染筛查时间">
+              <el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染筛查方法">
+              <el-select v-model="editForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染筛查结果">
+              <el-select v-model="editForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片筛查时间">
+              <el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片筛查结果">
+              <el-select v-model="editForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_CHEST_XRAY_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="推介原因" prop="recommendReason">
+              <el-input v-model="editForm.recommendReason" type="textarea" :rows="3" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingEdit" @click="handleEditSave">保存</el-button>
       </template>
     </el-dialog>
 
@@ -932,6 +1278,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
   padding: 24px 0;
   text-align: center;
   color: var(--el-text-color-secondary);
+}
+
+.view-tracking-section {
+  margin-top: 16px;
+}
+
+.view-tracking-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 </style>
 

@@ -1,5 +1,6 @@
 package cn.luyou.utils;
 
+import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.mapper.LatentInfectionMapper;
@@ -73,9 +74,11 @@ public class DataScopeHelper {
         Integer role = BaseContext.getCurrentRole();
         if (role != null && role == 6) {
             Long userId = BaseContext.getCurrentId();
+            String transferBizSql = buildTransferBizSql(noticeType, userId, null);
             wrapper.and(w -> w.inSql(idColumn,
                             "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
                                     + " AND notice_type = '" + noticeType + "' AND deleted = 0")
+                    .or().inSql(StrUtil.isNotBlank(transferBizSql), idColumn, transferBizSql)
                     .or().eq(creatorColumn, userId));
             return;
         }
@@ -88,6 +91,37 @@ public class DataScopeHelper {
         String noticeBizSql = "SELECT n.biz_id FROM notice n INNER JOIN `user` u ON n.receiver_org_id = u.id "
                 + "WHERE n.notice_type = '" + noticeType + "' AND n.deleted = 0 AND u.deleted = 0 AND u.role = 6 "
                 + "AND u.department_id IN (" + deptIdCsv + ")";
-        wrapper.and(w -> w.in(departmentColumn, deptIds).or().inSql(idColumn, noticeBizSql));
+        String transferBizSql = buildTransferBizSql(noticeType, null, deptIdCsv);
+        wrapper.and(w -> w.in(departmentColumn, deptIds)
+                .or().inSql(idColumn, noticeBizSql)
+                .or().inSql(StrUtil.isNotBlank(transferBizSql), idColumn, transferBizSql));
+    }
+
+    /** 经转出确认同步至接收方的业务 ID（referral.target_biz_id，兼容未复制前的 biz_id） */
+    private String buildTransferBizSql(String noticeType, Long receiverUserId, String deptIdCsv) {
+        String moduleType = "patient".equals(noticeType) ? "patient" : "latent".equals(noticeType) ? "latent" : null;
+        if (moduleType == null) {
+            return null;
+        }
+        StringBuilder sql = new StringBuilder(
+                "SELECT r.target_biz_id FROM referral r INNER JOIN `user` u ON r.receiver_org_id = u.id "
+                        + "WHERE r.module_type = '" + moduleType + "' AND r.status = 2 AND r.target_biz_id IS NOT NULL "
+                        + "AND r.deleted = 0 AND u.deleted = 0");
+        if (receiverUserId != null) {
+            sql.append(" AND r.receiver_org_id = ").append(receiverUserId);
+        }
+        if (deptIdCsv != null && !deptIdCsv.isBlank()) {
+            sql.append(" AND u.department_id IN (").append(deptIdCsv).append(")");
+        }
+        sql.append(" UNION SELECT r.biz_id FROM referral r INNER JOIN `user` u ON r.receiver_org_id = u.id "
+                + "WHERE r.module_type = '").append(moduleType).append("' AND r.status = 2 AND r.target_biz_id IS NULL "
+                + "AND r.deleted = 0 AND u.deleted = 0");
+        if (receiverUserId != null) {
+            sql.append(" AND r.receiver_org_id = ").append(receiverUserId);
+        }
+        if (deptIdCsv != null && !deptIdCsv.isBlank()) {
+            sql.append(" AND u.department_id IN (").append(deptIdCsv).append(")");
+        }
+        return sql.toString();
     }
 }

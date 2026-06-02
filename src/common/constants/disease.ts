@@ -221,10 +221,15 @@ export const NOTICE_STATUS_MAP: Record<number, string> = {
 /** 潜伏感染者个体方案选项值 */
 export const LATENT_INDIVIDUAL_PLAN = "个体方案（需手动录入）"
 
+/** 历史错误选项「3HP」→ 正确为「3HR」 */
+const LATENT_TREATMENT_PLAN_LEGACY: Record<string, string> = {
+  "3HP": "3HR"
+}
+
 /** 潜伏感染者治疗方案选项（与患者管理治疗方案不同） */
 export const LATENT_TREATMENT_PLAN_OPTIONS = [
   "6H/9H",
-  "3HP",
+  "3HR",
   "3HR/4R",
   "母牛分枝杆菌",
   LATENT_INDIVIDUAL_PLAN,
@@ -239,12 +244,18 @@ export function isLatentIndividualPlan(plan?: string): boolean {
   return plan === LATENT_INDIVIDUAL_PLAN || plan === "个体化方案"
 }
 
+/** 兼容历史存储的治疗方案文案 */
+export function normalizeLatentTreatmentPlan(plan?: string | null): string {
+  if (!plan) return ""
+  return LATENT_TREATMENT_PLAN_LEGACY[plan] ?? plan
+}
+
 /** 解析潜伏感染者通知单治疗方案（表单回填） */
 export function parseLatentNoticeTreatmentPlan(
   treatmentPlan?: string,
   customPlanDetail?: string
 ): { treatmentPlan: string, customPlanDetail: string } {
-  const tp = treatmentPlan || ""
+  const tp = normalizeLatentTreatmentPlan(treatmentPlan)
   if (tp && !LATENT_TREATMENT_PLAN_OPTIONS.includes(tp)) {
     return {
       treatmentPlan: LATENT_INDIVIDUAL_PLAN,
@@ -274,6 +285,7 @@ export function formatLatentNoticeTreatmentPlan(treatmentPlan: string, customPla
 /** 解析潜伏感染者督导表治疗方案（表单回填） */
 export function parseLatentSupervisionTreatmentPlan(plan?: string): { treatmentPlan: string, customPlanDetail: string } {
   if (!plan) return { treatmentPlan: "", customPlanDetail: "" }
+  plan = normalizeLatentTreatmentPlan(plan)
 
   const legacyPrefix = "个体化方案："
   const newPrefix = `${LATENT_INDIVIDUAL_PLAN}：`

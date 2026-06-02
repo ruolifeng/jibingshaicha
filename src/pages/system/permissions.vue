@@ -106,7 +106,12 @@ watch(activeTab, (t: "role" | "user") => {
   }
 })
 
-/** 只勾选叶子节点 ID（el-tree 要求） */
+function userLabel(row: any) {
+  const rn = ROLE_MAP[row.role] || ""
+  return `${row.username}${rn ? ` · ${rn}` : ""}`
+}
+
+/** 只勾选叶子节点 ID（el-tree 父子联动展示；半选父节点由 halfChecked 保存） */
 function filterLeafIds(tree: any[], allIds: number[]): number[] {
   const leafIds: number[] = []
   function walk(nodes: any[]) {
@@ -120,11 +125,6 @@ function filterLeafIds(tree: any[], allIds: number[]): number[] {
   }
   walk(tree)
   return leafIds
-}
-
-function userLabel(row: any) {
-  const rn = ROLE_MAP[row.role] || ""
-  return `${row.username}${rn ? ` · ${rn}` : ""}`
 }
 
 onMounted(async () => {

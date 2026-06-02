@@ -6,8 +6,11 @@ import cn.luyou.mapper.ReferralMapper;
 import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.Referral;
 import cn.luyou.model.User;
+import cn.luyou.model.LatentInfection;
+import cn.luyou.model.Patient;
 import cn.luyou.model.vo.ReferralDetailVO;
 import cn.luyou.model.vo.SentReferralVO;
+import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.service.SysMessageService;
@@ -16,7 +19,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,13 +30,24 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         implements ReferralService {
 
     private final SysMessageService sysMessageService;
     private final UserMapper userMapper;
     private final PatientService patientService;
+    private final LatentInfectionService latentInfectionService;
+
+    public ReferralServiceImpl(
+            SysMessageService sysMessageService,
+            UserMapper userMapper,
+            PatientService patientService,
+            @Lazy LatentInfectionService latentInfectionService) {
+        this.sysMessageService = sysMessageService;
+        this.userMapper = userMapper;
+        this.patientService = patientService;
+        this.latentInfectionService = latentInfectionService;
+    }
 
     private static final Map<String, String> MODULE_LABEL = Map.of(
             "screening", "筛查管理",
@@ -44,27 +58,31 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
 
     private static final Map<String, String> POPULATION_LABEL = Map.of(
             "school", "学校人群",
-            "key", "重点人群",
-            "close", "密接人群"
+            "close", "密接人群",
+            "closeContact", "密接",
+            "keyPopulation", "重点人群",
+            "epidemic", "大疫情",
+            "specialDisease", "专病网"
     );
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void send(Referral referral) {
+        assertNoPendingReferral(referral.getBizId(), referral.getBizType());
+        markTransferPendingIfNeeded(referral);
         referral.setSenderId(BaseContext.getCurrentId());
         referral.setStatus(1);
         referral.setSentTime(LocalDateTime.now());
         save(referral);
-        archivePatientIfTransferred(referral);
 
         // 向接收方推送消息通知
         if (referral.getReceiverOrgId() != null) {
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
             String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
-            String title = "待确认分级诊疗";
+            String title = "待确认转出";
             String reasonPart = referral.getReferralReason() != null && !referral.getReferralReason().isBlank()
-                    ? "，转诊原因：" + referral.getReferralReason() : "";
-            String content = String.format("【%s - %s】%s，发送方已发起分级诊疗推送%s，请在消息管理中确认接收。",
+                    ? "，转出原因：" + referral.getReferralReason() : "";
+            String content = String.format("【%s - %s】%s，发送方已发起转出推送%s，请在消息管理中确认接收。",
                     popLabel, moduleLabel, referral.getSubjectName(), reasonPart);
             sysMessageService.sendMessage(referral.getReceiverOrgId(), title, content,
                     "referral_receive", referral.getId());
@@ -72,12 +90,15 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void confirm(Long id) {
         Referral referral = getById(id);
         if (referral == null) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "分级诊疗记录不存在");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "转出记录不存在");
         }
         if (referral.getStatus() == 2) {
+            repairTransferIfNeeded(referral);
+            syncReceiverTransferMessage(referral, true);
             throw new ServiceException(StatusEnum.PARAM_INVALID, "已确认接收，请勿重复操作");
         }
         if (referral.getStatus() == 3) {
@@ -88,16 +109,21 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
                 && !referral.getReceiverOrgId().equals(currentUserId)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅接收方可确认");
         }
+
+        Long targetBizId = syncBizOnConfirm(referral);
+        referral.setTargetBizId(targetBizId);
         referral.setStatus(2);
         referral.setConfirmedTime(LocalDateTime.now());
         updateById(referral);
+
+        syncReceiverTransferMessage(referral, true);
 
         // 回执给发送方
         if (referral.getSenderId() != null) {
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
             String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
-            String title = "分级诊疗已接收";
-            String content = String.format("【%s - %s】%s，接收方已确认接收分级诊疗信息。",
+            String title = "转出已接收";
+            String content = String.format("【%s - %s】%s，接收方已确认接收转出信息。",
                     popLabel, moduleLabel, referral.getSubjectName());
             sysMessageService.sendMessage(referral.getSenderId(), title, content,
                     "referral_confirmed", referral.getId());
@@ -109,7 +135,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     public void reject(Long id, String rejectReason) {
         Referral referral = getById(id);
         if (referral == null) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "分级诊疗记录不存在");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "转出记录不存在");
         }
         if (referral.getStatus() == 2) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "已确认接收，无法拒绝");
@@ -117,19 +143,25 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         if (referral.getStatus() == 3) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "已拒绝，无需重复操作");
         }
+        Long currentUserId = BaseContext.getCurrentId();
+        if (referral.getReceiverOrgId() != null && currentUserId != null
+                && !referral.getReceiverOrgId().equals(currentUserId)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅接收方可拒绝");
+        }
         referral.setStatus(3);
         referral.setRejectedTime(LocalDateTime.now());
         referral.setRejectReason(rejectReason);
         updateById(referral);
-        restorePatientIfTransferRejected(referral);
+        restoreBizIfTransferRejected(referral);
+        syncReceiverTransferMessage(referral, false);
 
         // 通知发送方被拒绝
         if (referral.getSenderId() != null) {
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
             String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
-            String title = "分级诊疗已被拒绝";
+            String title = "转出已被拒绝";
             String reason = rejectReason != null && !rejectReason.isBlank() ? "，原因：" + rejectReason : "";
-            String content = String.format("【%s - %s】%s，接收方已拒绝分级诊疗%s，您可重新发起。",
+            String content = String.format("【%s - %s】%s，接收方已拒绝转出%s，您可重新发起。",
                     popLabel, moduleLabel, referral.getSubjectName(), reason);
             sysMessageService.sendMessage(referral.getSenderId(), title, content,
                     "referral_rejected", referral.getId());
@@ -141,25 +173,26 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     public void resend(Long id) {
         Referral referral = getById(id);
         if (referral == null) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "分级诊疗记录不存在");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "转出记录不存在");
         }
         if (referral.getStatus() != 3) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅拒绝状态的分级诊疗可重新发起");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅拒绝状态的转出记录可重新发起");
         }
+        markTransferPendingIfNeeded(referral);
         referral.setStatus(1);
         referral.setSentTime(LocalDateTime.now());
         referral.setRejectedTime(null);
         referral.setRejectReason(null);
+        referral.setTargetBizId(null);
         updateById(referral);
-        archivePatientIfTransferred(referral);
 
         if (referral.getReceiverOrgId() != null) {
             String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
             String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
-            String title = "待确认分级诊疗（重新发起）";
+            String title = "待确认转出（重新发起）";
             String reasonPart = referral.getReferralReason() != null && !referral.getReferralReason().isBlank()
-                    ? "，转诊原因：" + referral.getReferralReason() : "";
-            String content = String.format("【%s - %s】%s，发送方重新发起了分级诊疗推送%s，请在消息管理中确认接收。",
+                    ? "，转出原因：" + referral.getReferralReason() : "";
+            String content = String.format("【%s - %s】%s，发送方重新发起了转出推送%s，请在消息管理中确认接收。",
                     popLabel, moduleLabel, referral.getSubjectName(), reasonPart);
             sysMessageService.sendMessage(referral.getReceiverOrgId(), title, content,
                     "referral_receive", referral.getId());
@@ -167,10 +200,15 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ReferralDetailVO detail(Long id) {
         Referral referral = getById(id);
         if (referral == null) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "分级诊疗记录不存在");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "转出记录不存在");
+        }
+        if (Integer.valueOf(2).equals(referral.getStatus())) {
+            repairTransferIfNeeded(referral);
+            syncReceiverTransferMessage(referral, true);
         }
 
         ReferralDetailVO vo = new ReferralDetailVO();
@@ -272,19 +310,134 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         return result;
     }
 
-    /** 患者管理模块发起/重新发起转出时，移入历史患者并备注「已转出」 */
-    private void archivePatientIfTransferred(Referral referral) {
-        if (!"patient".equals(referral.getModuleType()) || referral.getBizId() == null) {
+    /** 发起/重新发起转出时标记转出待确认 */
+    private void markTransferPendingIfNeeded(Referral referral) {
+        if (referral.getBizId() == null) {
             return;
         }
-        patientService.archivePatient(referral.getBizId(), PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT);
+        if ("patient".equals(referral.getModuleType())) {
+            patientService.markTransferPending(referral.getBizId());
+        } else if ("latent".equals(referral.getModuleType())) {
+            latentInfectionService.markTransferPending(referral.getBizId());
+        }
     }
 
-    /** 转出被拒绝时，恢复为在管患者 */
-    private void restorePatientIfTransferRejected(Referral referral) {
+    /** 接收确认后复制业务记录至接收方，并标记原记录已转出 */
+    private Long syncBizOnConfirm(Referral referral) {
+        if (referral.getBizId() == null || referral.getReceiverOrgId() == null) {
+            if ("patient".equals(referral.getModuleType()) || "latent".equals(referral.getModuleType())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "未指定接收人");
+            }
+            return null;
+        }
+        if ("patient".equals(referral.getModuleType())) {
+            Long newPatientId = patientService.copyPatientForTransferOut(
+                    referral.getBizId(), referral.getReceiverOrgId());
+            patientService.markTransferredOut(referral.getBizId());
+            return newPatientId;
+        }
+        if ("latent".equals(referral.getModuleType())) {
+            Long newLatentId = latentInfectionService.copyLatentForTransferOut(
+                    referral.getBizId(), referral.getReceiverOrgId());
+            latentInfectionService.markTransferredOut(referral.getBizId());
+            return newLatentId;
+        }
+        return null;
+    }
+
+    private void assertNoPendingReferral(Long bizId, String bizType) {
+        if (bizId == null || bizType == null) {
+            return;
+        }
+        long pending = lambdaQuery()
+                .eq(Referral::getBizId, bizId)
+                .eq(Referral::getBizType, bizType)
+                .eq(Referral::getStatus, 1)
+                .count();
+        if (pending > 0) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "已有待确认的转出申请，请勿重复发起");
+        }
+    }
+
+    /** 转出被拒绝时，恢复为在管记录 */
+    private void restoreBizIfTransferRejected(Referral referral) {
+        if (referral.getBizId() == null) {
+            return;
+        }
+        if ("patient".equals(referral.getModuleType())) {
+            patientService.restoreTransferredPatient(referral.getBizId());
+        } else if ("latent".equals(referral.getModuleType())) {
+            latentInfectionService.restoreTransferredLatent(referral.getBizId());
+        }
+    }
+
+    /** 已确认但尚未同步数据的转出记录补同步（兼容历史数据） */
+    private void repairTransferIfNeeded(Referral referral) {
+        if (referral.getBizId() == null || referral.getTargetBizId() != null
+                || referral.getReceiverOrgId() == null) {
+            return;
+        }
+        if ("patient".equals(referral.getModuleType())) {
+            repairPatientTransferIfNeeded(referral);
+        } else if ("latent".equals(referral.getModuleType())) {
+            repairLatentTransferIfNeeded(referral);
+        }
+    }
+    private void repairPatientTransferIfNeeded(Referral referral) {
         if (!"patient".equals(referral.getModuleType()) || referral.getBizId() == null) {
             return;
         }
-        patientService.restoreTransferredPatient(referral.getBizId());
+        if (referral.getTargetBizId() != null || referral.getReceiverOrgId() == null) {
+            return;
+        }
+        Long newPatientId = patientService.copyPatientForTransferOut(
+                referral.getBizId(), referral.getReceiverOrgId());
+        referral.setTargetBizId(newPatientId);
+        updateById(referral);
+        Patient source = patientService.getById(referral.getBizId());
+        if (source != null
+                && !PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(source.getArchiveRemark())) {
+            patientService.markTransferredOut(referral.getBizId());
+        }
+    }
+
+    private void repairLatentTransferIfNeeded(Referral referral) {
+        if (!"latent".equals(referral.getModuleType()) || referral.getBizId() == null) {
+            return;
+        }
+        if (referral.getTargetBizId() != null || referral.getReceiverOrgId() == null) {
+            return;
+        }
+        Long newLatentId = latentInfectionService.copyLatentForTransferOut(
+                referral.getBizId(), referral.getReceiverOrgId());
+        referral.setTargetBizId(newLatentId);
+        updateById(referral);
+        LatentInfection source = latentInfectionService.getById(referral.getBizId());
+        if (source != null
+                && !LatentInfectionService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(source.getArchiveRemark())) {
+            latentInfectionService.markTransferredOut(referral.getBizId());
+        }
+    }
+
+    private void syncReceiverTransferMessage(Referral referral, boolean confirmed) {
+        String moduleLabel = MODULE_LABEL.getOrDefault(referral.getModuleType(), referral.getModuleType());
+        String popLabel = POPULATION_LABEL.getOrDefault(referral.getPopulationType(), referral.getPopulationType());
+        if (confirmed) {
+            sysMessageService.updatePendingMessageByBizId(
+                    referral.getId(),
+                    "referral_receive",
+                    "referral_confirmed",
+                    "转出已接收",
+                    String.format("【%s - %s】%s，您已确认接收转出信息。",
+                            popLabel, moduleLabel, referral.getSubjectName()));
+        } else {
+            sysMessageService.updatePendingMessageByBizId(
+                    referral.getId(),
+                    "referral_receive",
+                    "referral_rejected",
+                    "转出已被拒绝",
+                    String.format("【%s - %s】%s，您已拒绝转出。",
+                            popLabel, moduleLabel, referral.getSubjectName()));
+        }
     }
 }

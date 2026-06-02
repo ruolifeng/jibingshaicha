@@ -66,5 +66,9 @@ declare module "vue-router" {
      * @description 满足任一权限编码即可访问（用于聚合菜单）
      */
     anyPermission?: string[]
+    /**
+     * @description 侧边栏菜单是否展示未读消息角标
+     */
+    unreadBadge?: boolean
   }
 }

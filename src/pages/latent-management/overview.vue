@@ -5,6 +5,7 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
 import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
+import { isLatentTransferLocked, getLatentTransferStatusLabel } from "@@/utils/latent"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteLatentApi, downloadLatentTemplateApi, exportAllLatentApi, importLatentApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
@@ -74,6 +75,10 @@ async function handleExport() {
 
 async function handleBatchDelete() {
   if (!selectedRows.value.length) return
+  if (selectedRows.value.some(r => isLatentTransferLocked(r))) {
+    ElMessage.warning("选中记录包含已转出或转出待确认的数据，不可删除")
+    return
+  }
   const names = selectedRows.value.map(r => r.name).join("、")
   try {
     await ElMessageBox.confirm(
@@ -255,29 +260,43 @@ async function handleImport(uploadFile: any) {
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="转出状态" width="110">
+          <template #default="{ row }">
+            <el-tag
+              v-if="getLatentTransferStatusLabel(row.archiveRemark)"
+              :type="row.archiveRemark === '已转出' ? 'info' : 'warning'"
+              size="small"
+            >
+              {{ getLatentTransferStatusLabel(row.archiveRemark) }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="openDetail(row)">
               查看详情
             </el-button>
-            <el-button
-              v-permission="'latentManagement:edit'"
-              type="warning"
-              link
-              size="small"
-              @click="openEdit(row)"
-            >
-              修改
-            </el-button>
-            <el-button
-              v-permission="'latentManagement:referral'"
-              type="info"
-              link
-              size="small"
-              @click="openReferral(row)"
-            >
-              转出
-            </el-button>
+            <template v-if="!isLatentTransferLocked(row)">
+              <el-button
+                v-permission="'latentManagement:edit'"
+                type="warning"
+                link
+                size="small"
+                @click="openEdit(row)"
+              >
+                修改
+              </el-button>
+              <el-button
+                v-permission="'latentManagement:referral'"
+                type="info"
+                link
+                size="small"
+                @click="openReferral(row)"
+              >
+                转出
+              </el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -313,6 +332,7 @@ async function handleImport(uploadFile: any) {
       module-type="latent"
       :population-type="referralRow.populationType"
       :subject-name="referralRow.name || ''"
+      @success="fetchData"
     />
 
     <el-dialog v-model="importDialogVisible" title="批量导入潜伏感染者" width="560px">

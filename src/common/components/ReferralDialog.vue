@@ -47,7 +47,9 @@ const MODULE_LABEL: Record<string, string> = {
 const LEGACY_POPULATION_LABEL: Record<string, string> = {
   school: "学校人群",
   key: "重点人群",
-  close: "密接人群"
+  close: "密接人群",
+  keyPopulation: "重点人群",
+  closeContact: "密接人群"
 }
 const STATUS_LABEL: Record<number, string> = {
   1: "待确认",
@@ -72,7 +74,14 @@ const sendForm = reactive({
 })
 const sending = ref(false)
 
+const hasPendingReferral = computed(() => historyList.value.some(r => r.status === 1))
+const cannotSend = computed(() => hasPendingReferral.value || sending.value)
+
 async function handleSend() {
+  if (hasPendingReferral.value) {
+    ElMessage.warning("已有待确认的转出申请，请等待接收方处理或拒绝后再发起")
+    return
+  }
   if (!sendForm.receiverOrgId) {
     ElMessage.warning("请选择接收部门")
     return
@@ -174,7 +183,7 @@ watch(visible, (val: boolean) => {
           </el-col>
         </el-row>
         <el-form-item>
-          <el-button type="primary" :loading="sending" @click="handleSend">
+          <el-button type="primary" :loading="sending" :disabled="cannotSend" @click="handleSend">
             发起推送
           </el-button>
         </el-form-item>

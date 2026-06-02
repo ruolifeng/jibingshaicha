@@ -138,4 +138,18 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
             }
         }
     }
+
+    @Override
+    public List<Long> resolveIdsByNameLike(String name) {
+        if (StrUtil.isBlank(name)) {
+            return List.of();
+        }
+        return lambdaQuery()
+                .like(Department::getName, name.trim())
+                .select(Department::getId)
+                .list()
+                .stream()
+                .map(Department::getId)
+                .toList();
+    }
 }

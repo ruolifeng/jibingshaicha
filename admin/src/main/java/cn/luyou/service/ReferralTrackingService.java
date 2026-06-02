@@ -21,7 +21,8 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
                                       String name, String idNumber,
                                       Integer trackingStatus, Integer archived,
                                       String phone, String township,
-                                      String dateFrom, String dateTo, String sourceType);
+                                      String dateFrom, String dateTo, String sourceType,
+                                      String creatorOrEntryUnit);
 
     /** 大疫情表导入（创建 bizMode=track, sourceType=epidemic 记录） */
     Map<String, Object> importEpidemic(MultipartFile file);
@@ -29,7 +30,8 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 导出追踪记录 Excel */
     void exportTrack(HttpServletResponse response, String bizMode,
                      String name, String idNumber, String phone, String township,
-                     String dateFrom, String dateTo, String sourceType);
+                     String dateFrom, String dateTo, String sourceType,
+                     String creatorOrEntryUnit);
 
     /** 更新基本信息 */
     void update(Long id, Map<String, Object> params);

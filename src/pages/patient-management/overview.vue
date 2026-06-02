@@ -5,7 +5,7 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
-import { isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
+import { isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass, isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
@@ -21,7 +21,7 @@ const {
   fetchData,
   handleSearch,
   handleReset
-} = usePatientList(0)
+} = usePatientList(0, { overviewSearch: true })
 
 const detailVisible = ref(false)
 const editVisible = ref(false)
@@ -74,6 +74,8 @@ async function handleExport() {
       currentAddress: searchForm.currentAddress || undefined,
       diagnosisResult: searchForm.diagnosisResult || undefined,
       populationType: searchForm.populationType || undefined,
+      medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
+      dateFilterBy: "registrationDate",
       ...extractDateRangeParams(searchForm.dateRange)
     })
     downloadBlob(blob as unknown as Blob, "在管患者信息总表.xlsx")
@@ -87,6 +89,10 @@ async function handleExport() {
 
 async function handleBatchDelete() {
   if (!selectedRows.value.length) return
+  if (selectedRows.value.some(r => isPatientTransferLocked(r))) {
+    ElMessage.warning("选中记录包含已转出或转出待确认的患者，不可删除")
+    return
+  }
   const names = selectedRows.value.map(r => r.name).join("、")
   try {
     await ElMessageBox.confirm(
@@ -171,7 +177,7 @@ async function handleImport(uploadFile: any) {
             <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="登记日期">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -179,6 +185,14 @@ async function handleImport(uploadFile: any) {
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             style="width: 240px"
+          />
+        </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-input
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="请输入"
+            clearable
+            style="width: 160px"
           />
         </el-form-item>
         <el-form-item label="住址">
@@ -305,12 +319,25 @@ async function handleImport(uploadFile: any) {
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="转出状态" width="110">
+          <template #default="{ row }">
+            <el-tag
+              v-if="getPatientTransferStatusLabel(row.archiveRemark)"
+              :type="row.archiveRemark === '已转出' ? 'info' : 'warning'"
+              size="small"
+            >
+              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="openDetail(row)">
               查看详情
             </el-button>
             <el-button
+              v-if="!isPatientTransferLocked(row)"
               v-permission="'patientManagement:edit'"
               type="warning"
               link
@@ -320,6 +347,7 @@ async function handleImport(uploadFile: any) {
               修改
             </el-button>
             <el-button
+              v-if="!isPatientTransferLocked(row)"
               v-permission="'patientManagement:referral'"
               type="info"
               link

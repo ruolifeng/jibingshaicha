@@ -3,15 +3,47 @@ import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.v
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { downloadBlob } from "@@/utils/download"
 import { canEditFollowUpVisit } from "@@/utils/followUpVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
+import { isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
-import { getFollowUpVisitListApi } from "./apis"
+import { exportPatientFollowUpVisitsApi, getFollowUpVisitListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
 
-const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
+const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { followUpSearch: true })
+
+const selectedRows = ref<any[]>([])
+const exporting = ref(false)
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+async function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的患者")
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确认导出选中的 ${ids.length} 位患者的后续随访信息吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    exporting.value = true
+    const blob = await exportPatientFollowUpVisitsApi(ids)
+    downloadBlob(blob as unknown as Blob, "后续随访.xlsx")
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
 
 const followUpDialogVisible = ref(false)
 const followUpPatient = ref<any>(null)
@@ -91,7 +123,7 @@ function openPrint(row: Record<string, any>) {
             <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="填写时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -99,6 +131,14 @@ function openPrint(row: Record<string, any>) {
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             style="width: 240px"
+          />
+        </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-input
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="请输入"
+            clearable
+            style="width: 160px"
           />
         </el-form-item>
         <el-form-item label="数据来源">
@@ -124,7 +164,24 @@ function openPrint(row: Record<string, any>) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <div style="margin-bottom: 10px">
+        <el-button
+          type="success"
+          :loading="exporting"
+          :disabled="!selectedRows.length"
+          @click="handleExportSelected"
+        >
+          导出
+        </el-button>
+      </div>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
@@ -140,16 +197,26 @@ function openPrint(row: Record<string, any>) {
         <el-table-column prop="diagnosisResult" label="病原学结果" />
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-permission="'patientManagement:followUp'" type="primary" link size="small"
-              :disabled="row.archived === 1"
-              @click="openFollowUp(row)"
-            >
-              填写后续随访
-            </el-button>
+            <template v-if="!isPatientTransferLocked(row)">
+              <el-button
+                v-permission="'patientManagement:followUp'" type="primary" link size="small"
+                :disabled="row.archived === 1"
+                @click="openFollowUp(row)"
+              >
+                填写后续随访
+              </el-button>
+            </template>
             <el-button type="info" link size="small" @click="viewHistory(row)">
               查看记录
             </el-button>
+            <el-tag
+              v-if="isPatientTransferLocked(row)"
+              :type="row.archiveRemark === '已转出' ? 'info' : 'warning'"
+              size="small"
+              class="ml-1"
+            >
+              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+            </el-tag>
           </template>
         </el-table-column>
       </el-table>
@@ -211,7 +278,7 @@ function openPrint(row: Record<string, any>) {
               查看详情
             </el-button>
             <el-button
-              v-if="canEditFollowUpVisit(userStore.userRole, row)"
+              v-if="canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
               v-permission="'patientManagement:followUp'"
               type="warning"
               link

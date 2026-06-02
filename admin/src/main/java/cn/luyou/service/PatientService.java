@@ -13,6 +13,18 @@ public interface PatientService extends IService<Patient> {
 
     String ARCHIVE_REMARK_TRANSFERRED_OUT = "已转出";
 
+    /** 转出待接收方确认 */
+    String ARCHIVE_REMARK_TRANSFER_PENDING = "转出待确认";
+
+    /** 是否处于转出锁定（待确认或已转出，不可编辑/再次转出） */
+    static boolean isTransferLocked(Patient patient) {
+        if (patient == null || patient.getArchiveRemark() == null) {
+            return false;
+        }
+        return ARCHIVE_REMARK_TRANSFER_PENDING.equals(patient.getArchiveRemark())
+                || ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark());
+    }
+
     /** 停止治疗归档备注前缀（后接具体原因） */
     String ARCHIVE_REMARK_STOP_TREATMENT_PREFIX = "停止治疗：";
 
@@ -34,7 +46,8 @@ public interface PatientService extends IService<Patient> {
 
     IPage<Patient> queryPage(int page, int size, String populationType,
                               String name, String idNumber, String phone, String currentAddress,
-                              String diagnosisResult, Integer archived, String dateFrom, String dateTo);
+                              String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                              String dateFilterBy, String medicationManagementUnit);
 
     /** 手动新增在管患者（在管总览） */
     Long createManual(Map<String, Object> body);
@@ -49,7 +62,8 @@ public interface PatientService extends IService<Patient> {
     List<Patient> listForExport(String populationType, String name, String idNumber,
                                  String phone, String currentAddress, String diagnosisResult,
                                  Integer archived, String dateFrom, String dateTo,
-                                 String startTime, String endTime);
+                                 String startTime, String endTime,
+                                 String dateFilterBy, String medicationManagementUnit);
 
     /** 导入大疫情表并模糊匹配合并 */
     int importEpidemic(MultipartFile file, String populationType);
@@ -60,8 +74,20 @@ public interface PatientService extends IService<Patient> {
     /** 归档患者并写入备注 */
     void archivePatient(Long id, String archiveRemark);
 
-    /** 转出被拒绝后恢复为在管（仅 archiveRemark=已转出 时生效） */
+    /** 转出被拒绝后恢复为在管（仅 archiveRemark=转出待确认 时生效） */
     void restoreTransferredPatient(Long id);
+
+    /** 发起转出：标记为转出待确认（保留在在管列表） */
+    void markTransferPending(Long id);
+
+    /** 转出确认后：标记原记录为已转出（保留在在管列表，不可操作） */
+    void markTransferredOut(Long id);
+
+    /**
+     * 接收方确认转出后，复制患者及关联子记录至接收方部门/用户。
+     * @return 新患者 ID
+     */
+    Long copyPatientForTransferOut(Long sourcePatientId, Long receiverUserId);
 
     /** 停止治疗归档解锁（管理员操作，仅停止治疗归档可解锁） */
     void unarchivePatientFromStopTreatment(Long id);
@@ -86,5 +112,8 @@ public interface PatientService extends IService<Patient> {
 
     /** 更新患者基本信息 */
     void updateBasicInfo(Long id, Map<String, Object> body);
+
+    /** 校验患者可编辑（非转出锁定） */
+    void assertPatientOperable(Long id);
 
 }

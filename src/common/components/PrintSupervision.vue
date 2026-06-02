@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
+import { normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { formatNoticeSentTime } from "@@/utils/patient"
 import { printElement } from "@@/utils/print"
 
@@ -88,7 +89,7 @@ function handlePrint() {
             <th>是否开始预防性治疗</th>
             <td>{{ data?.hasPreventiveTreatment || "-" }}</td>
             <th>治疗方案</th>
-            <td>{{ data?.treatmentPlan || "-" }}</td>
+            <td>{{ normalizeLatentTreatmentPlan(data?.treatmentPlan) || "-" }}</td>
           </tr>
           <tr>
             <th>治疗开始时间</th>

@@ -6,6 +6,8 @@ import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentInfection;
+import cn.luyou.model.LatentFollowUp;
+import cn.luyou.model.LatentCheck;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.Referral;
@@ -16,6 +18,8 @@ import cn.luyou.model.SysMessage;
 import cn.luyou.constant.LatentImportHeaders;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.NoticeMapper;
+import cn.luyou.mapper.UserMapper;
+import cn.luyou.model.User;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
@@ -46,6 +50,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -61,7 +66,9 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -75,6 +82,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
     private final NoticeMapper noticeMapper;
+    private final UserMapper userMapper;
     private final SupervisionFormMapper supervisionFormMapper;
     private final LatentFollowUpService latentFollowUpService;
     private final LatentCheckService latentCheckService;
@@ -115,9 +123,40 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     public IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
                                              String referralResult, String diagnosisFirst,
-                                             String phone, String dateFrom, String dateTo) {
+                                             String phone, String dateFrom, String dateTo,
+                                             String dateFilterBy, String creatorName) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
+        boolean noticeFillFilter = "noticeFill".equals(dateFilterBy);
+        boolean supervisionFillFilter = "supervisionFill".equals(dateFilterBy);
+        boolean hasSpecialDateRange = (noticeFillFilter || supervisionFillFilter)
+                && (createFrom != null || createTo != null);
+        boolean hasCreatorFilter = StrUtil.isNotBlank(creatorName);
+        Set<Long> filterBizIds = null;
+        if (hasSpecialDateRange) {
+            filterBizIds = supervisionFillFilter
+                    ? resolveSupervisionDateBizIds(populationType, createFrom, createTo)
+                    : resolveNoticeDateBizIds(populationType, createFrom, createTo);
+            if (filterBizIds.isEmpty()) {
+                return new Page<>(page, size);
+            }
+        }
+        if (hasCreatorFilter) {
+            Set<Long> creatorBizIds = supervisionFillFilter
+                    ? resolveSupervisionCreatorBizIds(populationType, creatorName)
+                    : resolveNoticeCreatorBizIds(populationType, creatorName);
+            if (creatorBizIds.isEmpty()) {
+                return new Page<>(page, size);
+            }
+            if (filterBizIds == null) {
+                filterBizIds = creatorBizIds;
+            } else {
+                filterBizIds.retainAll(creatorBizIds);
+                if (filterBizIds.isEmpty()) {
+                    return new Page<>(page, size);
+                }
+            }
+        }
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         if (StrUtil.isNotBlank(populationType)) {
             wrapper.eq(LatentInfection::getPopulationType, populationType);
@@ -147,9 +186,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             wrapper.eq(LatentInfection::getReferralResult, referralResult);
         }
 
-        wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
-                .le(createTo != null, LatentInfection::getCreateTime, createTo)
-                .orderByDesc(LatentInfection::getCreateTime);
+        if (filterBizIds != null) {
+            wrapper.in(LatentInfection::getId, filterBizIds);
+        } else if (!hasSpecialDateRange) {
+            wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
+                    .le(createTo != null, LatentInfection::getCreateTime, createTo);
+        }
+        wrapper.orderByDesc(LatentInfection::getCreateTime);
         dataScopeHelper.applyLatentScope(wrapper);
         IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);
 
@@ -162,6 +205,109 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         fillNoticeAndSupervisionStatus(records, populationType);
 
         return result;
+    }
+
+    /** 按通知单首次填写时间（notice.create_time）筛选 */
+    private Set<Long> resolveNoticeDateBizIds(String populationType,
+                                              LocalDateTime noticeFrom, LocalDateTime noticeTo) {
+        LambdaQueryWrapper<Notice> noticeWrapper = new LambdaQueryWrapper<>();
+        noticeWrapper.eq(Notice::getNoticeType, "latent")
+                .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType)
+                .ge(noticeFrom != null, Notice::getCreateTime, noticeFrom)
+                .le(noticeTo != null, Notice::getCreateTime, noticeTo);
+        return noticeMapper.selectList(noticeWrapper.select(Notice::getBizId)).stream()
+                .map(Notice::getBizId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** 按督导表填写时间（supervision_form.create_time）筛选 */
+    private Set<Long> resolveSupervisionDateBizIds(String populationType,
+                                                   LocalDateTime supervisionFrom, LocalDateTime supervisionTo) {
+        LambdaQueryWrapper<SupervisionForm> supervisionWrapper = new LambdaQueryWrapper<>();
+        supervisionWrapper.eq(StrUtil.isNotBlank(populationType), SupervisionForm::getPopulationType, populationType)
+                .ge(supervisionFrom != null, SupervisionForm::getCreateTime, supervisionFrom)
+                .le(supervisionTo != null, SupervisionForm::getCreateTime, supervisionTo);
+        return supervisionFormMapper.selectList(supervisionWrapper.select(SupervisionForm::getLatentInfectionId)).stream()
+                .map(SupervisionForm::getLatentInfectionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 督导表录入者：匹配督导表填写人（filled_by）或病例录入人（creator_id）
+     */
+    private Set<Long> resolveSupervisionCreatorBizIds(String populationType, String creatorName) {
+        List<Long> userIds = resolveUserIdsByCreatorName(creatorName);
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> result = new HashSet<>();
+        LambdaQueryWrapper<SupervisionForm> supervisionWrapper = new LambdaQueryWrapper<>();
+        supervisionWrapper.eq(StrUtil.isNotBlank(populationType), SupervisionForm::getPopulationType, populationType)
+                .in(SupervisionForm::getFilledBy, userIds);
+        supervisionFormMapper.selectList(supervisionWrapper.select(SupervisionForm::getLatentInfectionId)).stream()
+                .map(SupervisionForm::getLatentInfectionId)
+                .filter(Objects::nonNull)
+                .forEach(result::add);
+
+        LambdaQueryWrapper<LatentInfection> latentWrapper = applyPopulationScope(new LambdaQueryWrapper<>(), populationType);
+        latentWrapper.in(LatentInfection::getCreatorId, userIds);
+        baseMapper.selectList(latentWrapper.select(LatentInfection::getId)).stream()
+                .map(LatentInfection::getId)
+                .filter(Objects::nonNull)
+                .forEach(result::add);
+        return result;
+    }
+
+    /**
+     * 通知单录入者：匹配病例录入人（latent.creator_id）或通知单填写人（notice.sender_id）
+     */
+    private Set<Long> resolveNoticeCreatorBizIds(String populationType, String creatorName) {
+        List<Long> userIds = resolveUserIdsByCreatorName(creatorName);
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> result = new HashSet<>();
+        LambdaQueryWrapper<Notice> noticeWrapper = new LambdaQueryWrapper<>();
+        noticeWrapper.eq(Notice::getNoticeType, "latent")
+                .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType)
+                .in(Notice::getSenderId, userIds);
+        noticeMapper.selectList(noticeWrapper.select(Notice::getBizId)).stream()
+                .map(Notice::getBizId)
+                .filter(Objects::nonNull)
+                .forEach(result::add);
+
+        LambdaQueryWrapper<LatentInfection> latentWrapper = applyPopulationScope(new LambdaQueryWrapper<>(), populationType);
+        latentWrapper.in(LatentInfection::getCreatorId, userIds);
+        baseMapper.selectList(latentWrapper.select(LatentInfection::getId)).stream()
+                .map(LatentInfection::getId)
+                .filter(Objects::nonNull)
+                .forEach(result::add);
+        return result;
+    }
+
+    private LambdaQueryWrapper<LatentInfection> applyPopulationScope(LambdaQueryWrapper<LatentInfection> wrapper,
+                                                                     String populationType) {
+        if (StrUtil.isNotBlank(populationType)) {
+            wrapper.eq(LatentInfection::getPopulationType, populationType);
+        } else {
+            wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                    .or()
+                    .isNull(LatentInfection::getScreeningId));
+        }
+        return wrapper;
+    }
+
+    private List<Long> resolveUserIdsByCreatorName(String creatorName) {
+        return userMapper.selectList(new LambdaQueryWrapper<User>()
+                        .and(w -> w.like(User::getRealName, creatorName)
+                                .or()
+                                .like(User::getUsername, creatorName))
+                        .select(User::getId))
+                .stream()
+                .map(User::getId)
+                .toList();
     }
 
     /** 待诊断阶段：从关联筛查表读取已导入、尚未确认的首次诊断，供列表展示与弹窗预填 */
@@ -352,6 +498,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
 
         switch (status) {
             case 1 -> entity.setTrackingStatus(1); // 到位
@@ -390,6 +537,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
         if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后可录入胸片与诊断结果");
         }
@@ -414,6 +562,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
         if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后可录入胸片结果");
         }
@@ -430,6 +579,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
         if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后可录入诊断结果");
         }
@@ -614,6 +764,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
         if (!Integer.valueOf(1).equals(entity.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请先完成追踪到位操作后再进行转诊");
         }
@@ -729,6 +880,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
         if (entity.getTreatmentPhase() == null || entity.getTreatmentPhase() != 1) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "当前记录不在预防治疗阶段");
         }
@@ -743,6 +895,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
         }
+        assertLatentNotTransferLocked(entity);
         entity.setTreatmentPhase(2);
         entity.setArchived(1);
         entity.setArchivedTime(LocalDateTime.now());
@@ -850,6 +1003,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
+        assertLatentNotTransferLocked(latent);
         if (body.get("name") != null) latent.setName(body.get("name").toString());
         if (body.get("gender") != null) latent.setGender(body.get("gender").toString());
         if (body.get("age") != null) {
@@ -1063,6 +1217,183 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     @Override
+    public void markTransferPending(Long id) {
+        dataScopeHelper.assertLatentAccessible(id);
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        if (Integer.valueOf(1).equals(latent.getArchived())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可转出");
+        }
+        if (ARCHIVE_REMARK_TRANSFERRED_OUT.equals(latent.getArchiveRemark())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已转出，不可再次发起");
+        }
+        if (ARCHIVE_REMARK_TRANSFER_PENDING.equals(latent.getArchiveRemark())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已有待确认的转出申请");
+        }
+        latent.setArchiveRemark(ARCHIVE_REMARK_TRANSFER_PENDING);
+        latent.setArchived(0);
+        latent.setArchivedTime(null);
+        updateById(latent);
+    }
+
+    @Override
+    public void markTransferredOut(Long id) {
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        latent.setArchiveRemark(ARCHIVE_REMARK_TRANSFERRED_OUT);
+        latent.setArchived(0);
+        latent.setArchivedTime(null);
+        updateById(latent);
+    }
+
+    @Override
+    public void restoreTransferredLatent(Long id) {
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            return;
+        }
+        if (!ARCHIVE_REMARK_TRANSFER_PENDING.equals(latent.getArchiveRemark())) {
+            return;
+        }
+        latent.setArchiveRemark(null);
+        updateById(latent);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long copyLatentForTransferOut(Long sourceLatentId, Long receiverUserId) {
+        LatentInfection source = getById(sourceLatentId);
+        if (source == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "源潜伏感染记录不存在");
+        }
+        User receiver = userMapper.selectById(receiverUserId);
+        if (receiver == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
+        }
+        if (receiver.getDepartmentId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人未关联部门，无法同步");
+        }
+        assertNoDuplicateLatentInReceiverDept(source, receiver.getDepartmentId());
+
+        LatentInfection copy = new LatentInfection();
+        BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                "creatorId", "departmentId", "sourceLatentId", "archiveRemark", "archived", "archivedTime");
+        copy.setSourceLatentId(sourceLatentId);
+        copy.setCreatorId(receiverUserId);
+        copy.setDepartmentId(receiver.getDepartmentId());
+        copy.setArchived(0);
+        copy.setArchiveRemark(null);
+        save(copy);
+        Long newLatentId = copy.getId();
+
+        copyLatentNotices(sourceLatentId, newLatentId, receiverUserId, receiver);
+        copyLatentSupervisionForms(sourceLatentId, newLatentId, receiverUserId);
+        copyLatentFollowUps(sourceLatentId, newLatentId);
+        copyLatentChecks(sourceLatentId, newLatentId);
+
+        log.info("转出同步：已复制潜伏感染 sourceId={} -> newId={}, receiverUserId={}, deptId={}",
+                sourceLatentId, newLatentId, receiverUserId, receiver.getDepartmentId());
+        return newLatentId;
+    }
+
+    private void assertNoDuplicateLatentInReceiverDept(LatentInfection source, Long receiverDeptId) {
+        if (StrUtil.isBlank(source.getIdNumber())) {
+            return;
+        }
+        long count = lambdaQuery()
+                .eq(LatentInfection::getDepartmentId, receiverDeptId)
+                .eq(LatentInfection::getIdNumber, source.getIdNumber())
+                .eq(LatentInfection::getArchived, 0)
+                .ne(LatentInfection::getId, source.getId())
+                .count();
+        if (count > 0) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "接收方部门已存在相同证件号的在管潜伏感染记录，无法转出");
+        }
+    }
+
+    private void copyLatentNotices(Long sourceLatentId, Long newLatentId, Long receiverUserId, User receiver) {
+        List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getBizId, sourceLatentId)
+                .eq(Notice::getNoticeType, "latent"));
+        String receiverName = receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername();
+        for (Notice source : notices) {
+            Notice copy = new Notice();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "bizId",
+                    "senderId", "receiverOrgId", "senderName", "senderOrgName",
+                    "receiverName", "receiverOrgName");
+            copy.setBizId(newLatentId);
+            copy.setSenderId(receiverUserId);
+            copy.setSenderName(receiverName);
+            copy.setSenderOrgName(receiver.getOrgName());
+            copy.setReceiverOrgId(null);
+            copy.setReceiverName(null);
+            copy.setReceiverOrgName(null);
+            if (Integer.valueOf(1).equals(source.getStatus())) {
+                copy.setStatus(2);
+            }
+            noticeMapper.insert(copy);
+        }
+    }
+
+    private void copyLatentSupervisionForms(Long sourceLatentId, Long newLatentId, Long receiverUserId) {
+        List<SupervisionForm> records = supervisionFormMapper.selectList(
+                new LambdaQueryWrapper<SupervisionForm>().eq(SupervisionForm::getLatentInfectionId, sourceLatentId));
+        for (SupervisionForm source : records) {
+            SupervisionForm copy = new SupervisionForm();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                    "latentInfectionId", "filledBy");
+            copy.setLatentInfectionId(newLatentId);
+            copy.setFilledBy(receiverUserId);
+            supervisionFormMapper.insert(copy);
+        }
+    }
+
+    private void copyLatentFollowUps(Long sourceLatentId, Long newLatentId) {
+        List<LatentFollowUp> records = latentFollowUpService.lambdaQuery()
+                .eq(LatentFollowUp::getLatentInfectionId, sourceLatentId).list();
+        for (LatentFollowUp source : records) {
+            LatentFollowUp copy = new LatentFollowUp();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "latentInfectionId");
+            copy.setLatentInfectionId(newLatentId);
+            latentFollowUpService.save(copy);
+        }
+    }
+
+    private void copyLatentChecks(Long sourceLatentId, Long newLatentId) {
+        List<LatentCheck> records = latentCheckService.lambdaQuery()
+                .eq(LatentCheck::getLatentInfectionId, sourceLatentId).list();
+        for (LatentCheck source : records) {
+            LatentCheck copy = new LatentCheck();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "latentInfectionId");
+            copy.setLatentInfectionId(newLatentId);
+            latentCheckService.save(copy);
+        }
+    }
+
+    @Override
+    public void assertLatentOperable(Long id) {
+        LatentInfection latent = getById(id);
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        assertLatentNotTransferLocked(latent);
+    }
+
+    private void assertLatentNotTransferLocked(LatentInfection latent) {
+        if (LatentInfectionService.isTransferLocked(latent)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    ARCHIVE_REMARK_TRANSFERRED_OUT.equals(latent.getArchiveRemark())
+                            ? "该记录已转出，不可操作"
+                            : "该记录转出待确认，不可操作");
+        }
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteCascade(Long id) {
         dataScopeHelper.assertLatentAccessible(id);
@@ -1070,6 +1401,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
+        assertLatentNotTransferLocked(latent);
         if ("closeContact".equals(latent.getPopulationType()) && latent.getScreeningId() != null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "密接筛查同步记录请在密接人群管理模块操作");
         }

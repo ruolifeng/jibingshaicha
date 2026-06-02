@@ -3,6 +3,7 @@ import { useDevice } from "@@/composables/useDevice"
 import { useLayoutMode } from "@@/composables/useLayoutMode"
 import { getCssVar } from "@@/utils/css"
 import { useAppStore } from "@/pinia/stores/app"
+import { useMessageStore } from "@/pinia/stores/message"
 import { usePermissionStore } from "@/pinia/stores/permission"
 import { useSettingsStore } from "@/pinia/stores/settings"
 import { Logo } from "../index"
@@ -45,6 +46,12 @@ const sidebarMenuItemHeight = computed(() => !isTop.value ? "var(--v3-sidebar-me
 const sidebarMenuHoverBgColor = computed(() => !isTop.value ? "var(--v3-sidebar-menu-hover-bg-color)" : "transparent")
 
 const tipLineWidth = computed(() => !isTop.value ? "2px" : "0px")
+
+const messageStore = useMessageStore()
+
+onMounted(() => {
+  messageStore.startPolling()
+})
 </script>
 
 <template>

@@ -14,12 +14,14 @@ import { downloadBlob } from "@@/utils/download"
 import {
   parseTrackingHistory,
   TRACK_STATUS_LABEL,
-  TRACKING_STATUS_MAP
+  TRACKING_STATUS_MAP,
+  getRecommendTime
 } from "@@/utils/referralTracking"
 import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   getReferralTrackingListApi,
+  getReferralTrackingDetailApi,
   createReferralTrackingApi,
   updateReferralTrackingApi,
   trackReferralApi,
@@ -208,6 +210,41 @@ async function handleEditSave() {
 
 function isEpidemicRow(row: any) {
   return row?.sourceType === "epidemic"
+}
+
+/** 由推介确认后转入的追踪记录 */
+function isFromRecommend(row: any) {
+  return Boolean(row?.recommendConfirmTime || row?.recommendSentTime || row?.recommendStatus === 2)
+}
+
+const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
+  0: { label: "未发送", type: "info" },
+  1: { label: "已发送", type: "warning" },
+  2: { label: "已接受", type: "success" },
+  3: { label: "已拒绝", type: "danger" }
+}
+
+// ===== 查看详情 =====
+const viewDialogVisible = ref(false)
+const viewLoading = ref(false)
+const viewDetail = ref<any>(null)
+const viewTrackingHistory = computed(() =>
+  parseTrackingHistory(viewDetail.value?.trackingHistoryJson)
+)
+
+async function openViewDialog(row: any) {
+  viewDialogVisible.value = true
+  viewLoading.value = true
+  viewDetail.value = null
+  try {
+    const res = await getReferralTrackingDetailApi(row.id)
+    viewDetail.value = res.data
+  } catch {
+    ElMessage.error("加载详情失败")
+    viewDialogVisible.value = false
+  } finally {
+    viewLoading.value = false
+  }
 }
 
 // ===== 新增追踪 =====
@@ -505,8 +542,9 @@ function getRowClass({ row }: { row: any }) {
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="220">
+        <el-table-column label="操作" fixed="right" width="280">
           <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="openViewDialog(row)">查看</el-button>
             <el-button
               v-if="canOperateTrack(row)"
               v-permission="'referralManagement:edit'"
@@ -555,6 +593,125 @@ function getRowClass({ row }: { row: any }) {
         @current-change="(val: number) => { paginationData.currentPage = val; fetchList() }"
       />
     </el-card>
+
+    <!-- 查看追踪详情 -->
+    <el-dialog v-model="viewDialogVisible" title="追踪详情" width="800px">
+      <div v-loading="viewLoading">
+        <template v-if="viewDetail">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="数据来源">
+              <el-tag :type="isEpidemicRow(viewDetail) ? 'danger' : 'info'" size="small">
+                {{ isEpidemicRow(viewDetail) ? "大疫情导入" : "手动录入" }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="录入者">{{ viewDetail.creatorUserName || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="录入单位" :span="2">{{ viewDetail.entryUnitName || "-" }}</el-descriptions-item>
+            <template v-if="isFromRecommend(viewDetail)">
+              <el-descriptions-item label="推介来源" :span="2">
+                <el-tag type="success" size="small">推介确认转入</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="推介接收人">{{ viewDetail.receiverUserName || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="推介状态">
+                <el-tag
+                  v-if="viewDetail.recommendStatus !== null && viewDetail.recommendStatus !== undefined"
+                  :type="RECOMMEND_STATUS_MAP[viewDetail.recommendStatus]?.type as any"
+                  size="small"
+                >
+                  {{ RECOMMEND_STATUS_MAP[viewDetail.recommendStatus]?.label }}
+                </el-tag>
+                <span v-else>-</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="推介时间">
+                {{ getRecommendTime(viewDetail) ? formatDateTime(getRecommendTime(viewDetail)!) : "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="推介确认时间">
+                {{ viewDetail.recommendConfirmTime ? formatDateTime(viewDetail.recommendConfirmTime) : "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="viewDetail.recommendReason" label="原推介原因" :span="2">
+                {{ viewDetail.recommendReason }}
+              </el-descriptions-item>
+            </template>
+            <template v-if="isEpidemicRow(viewDetail)">
+              <el-descriptions-item label="卡片ID">{{ viewDetail.cardId || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="患儿家长姓名">{{ viewDetail.parentName || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="工作单位">{{ viewDetail.workplace || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="乡镇">{{ viewDetail.township || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="病例分类">{{ viewDetail.caseCategory || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="疾病名称">{{ viewDetail.diseaseName || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="报告单位">{{ viewDetail.reportUnit || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="报告卡录入时间">
+                {{ viewDetail.reportCardTime ? formatDateTime(viewDetail.reportCardTime) : "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="备注" :span="2">{{ viewDetail.epidemicRemark || "-" }}</el-descriptions-item>
+            </template>
+            <el-descriptions-item label="患者姓名">{{ viewDetail.name || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="性别">{{ viewDetail.gender || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="出生日期">{{ viewDetail.birthDate || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="年龄">{{ viewDetail.age ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="证件类型">{{ viewDetail.idType || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="有效证件号">{{ viewDetail.idNumber || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="民族">{{ viewDetail.ethnicity || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="联系电话">{{ viewDetail.phone || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="户籍地址" :span="2">{{ viewDetail.householdAddress || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="现住详细地址" :span="2">{{ viewDetail.currentAddress || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="人群分类">{{ viewDetail.crowdCategory || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="追踪原因">{{ viewDetail.trackReason || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="追踪状态">
+              <el-tag :type="TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.type as any" size="small">
+                {{ TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.label }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="未到位次数">
+              {{ viewDetail.notInPlaceCount > 0 ? `${viewDetail.notInPlaceCount}次` : "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="创建时间">
+              {{ viewDetail.createTime ? formatDateTime(viewDetail.createTime) : "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="到位时间">
+              {{ viewDetail.arrivalTime ? formatDateTime(viewDetail.arrivalTime) : "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="诊断结果">
+              <el-tag
+                v-if="viewDetail.diagnosisResult"
+                :type="viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? 'danger' : 'info'"
+                size="small"
+              >
+                {{ viewDetail.diagnosisResult }}{{ viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? "（结案）" : "" }}
+              </el-tag>
+              <span v-else>-</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="诊断时间">
+              {{ viewDetail.diagnosisTime ? formatDateTime(viewDetail.diagnosisTime) : "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="是否感染筛查">{{ viewDetail.hasInfectionScreen || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="筛查日期">{{ viewDetail.screenDate || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="筛查方法">{{ viewDetail.screenMethod || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="筛查结果">{{ viewDetail.screenResult || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="感染筛查结果">{{ viewDetail.infectionResult || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="是否胸片检查">{{ viewDetail.hasChestXray || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="胸片检查日期">{{ viewDetail.chestXrayDate || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="胸片检查结果" :span="2">{{ viewDetail.chestXrayResult || "-" }}</el-descriptions-item>
+          </el-descriptions>
+          <div class="view-tracking-section">
+            <div class="view-tracking-title">追踪过程</div>
+            <div v-if="viewTrackingHistory.length === 0" class="tracking-history-empty">暂无追踪记录</div>
+            <div v-else class="tracking-history">
+              <div v-for="item in viewTrackingHistory" :key="item.attempt" class="tracking-history-item">
+                <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
+                <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                  {{ TRACK_STATUS_LABEL[item.status] }}
+                </el-tag>
+                <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+                <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="viewDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 大疫情导入弹窗 -->
     <el-dialog v-model="importDialogVisible" title="大疫情导入" width="680px">
@@ -918,6 +1075,22 @@ function getRowClass({ row }: { row: any }) {
 .tracking-history-reason {
   width: 100%;
   color: var(--el-text-color-regular);
+}
+
+.tracking-history-empty {
+  padding: 16px 0;
+  text-align: center;
+  color: var(--el-text-color-secondary);
+}
+
+.view-tracking-section {
+  margin-top: 16px;
+}
+
+.view-tracking-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 </style>
 

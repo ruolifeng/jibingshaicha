@@ -21,4 +21,9 @@ public interface SysMessageService extends IService<SysMessage> {
 
     /** 删除消息（仅消息归属人可删） */
     void deleteMessage(Long id, Long currentUserId);
+
+    /**
+     * 转出/推介等待确认消息在业务状态变更后同步更新（type/title/content，并标记已读）。
+     */
+    void updatePendingMessageByBizId(Long bizId, String fromType, String toType, String title, String content);
 }

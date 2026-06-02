@@ -273,7 +273,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent,
                                                     String sourceType, String diagnosisFirst,
-                                                    String dateFrom, String dateTo) {
+                                                    String dateFrom, String dateTo, String entryUnit) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
@@ -290,6 +290,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst)
                 .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo);
+        applyEntryUnitFilter(wrapper, entryUnit);
         // 人群分类：按选项匹配对应的独立列
         if (StrUtil.isNotBlank(crowdCategory)) {
             switch (crowdCategory) {
@@ -323,6 +324,19 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             }
         }
         return page(new Page<>(page, size), wrapper);
+    }
+
+    /** 录入单位：按部门名称模糊匹配 department_id */
+    private void applyEntryUnitFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String entryUnit) {
+        if (StrUtil.isBlank(entryUnit)) {
+            return;
+        }
+        List<Long> deptIds = departmentService.resolveIdsByNameLike(entryUnit);
+        if (deptIds.isEmpty()) {
+            wrapper.eq(ScreeningKeyPopulation::getId, -1L);
+        } else {
+            wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
+        }
     }
 
     @Override

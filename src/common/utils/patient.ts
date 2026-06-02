@@ -244,3 +244,22 @@ export function resolveManualEpidemicFormFields(row: Record<string, any> | null 
     drugSensitivityH: fields["药敏结果：异烟肼（H）"] || ""
   }
 }
+
+/** 转出待确认 */
+export const PATIENT_TRANSFER_PENDING = "转出待确认"
+
+/** 已转出 */
+export const PATIENT_TRANSFERRED_OUT = "已转出"
+
+/** 患者是否处于转出锁定（待确认或已转出，不可编辑/转出/删除） */
+export function isPatientTransferLocked(row: Record<string, any> | null | undefined): boolean {
+  const remark = row?.archiveRemark
+  return remark === PATIENT_TRANSFER_PENDING || remark === PATIENT_TRANSFERRED_OUT
+}
+
+/** 转出状态展示文案 */
+export function getPatientTransferStatusLabel(archiveRemark?: string | null): string {
+  if (archiveRemark === PATIENT_TRANSFERRED_OUT) return PATIENT_TRANSFERRED_OUT
+  if (archiveRemark === PATIENT_TRANSFER_PENDING) return PATIENT_TRANSFER_PENDING
+  return ""
+}

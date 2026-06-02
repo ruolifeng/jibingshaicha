@@ -116,7 +116,7 @@ export function exportReferralTrackApi(params: Record<string, any>) {
   })
 }
 
-/** 获取三/四级用户列表（推介追踪接收人选择） */
+/** 获取三/四/五级用户列表（推介接收人选择） */
 export function getLevel34UsersApi() {
   return request<ApiResponseData<any[]>>({
     url: "user/level34-users",

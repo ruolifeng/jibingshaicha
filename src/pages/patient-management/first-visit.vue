@@ -3,10 +3,42 @@ import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import PatientFirstVisitFormDialog from "@@/components/PatientFirstVisitFormDialog.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
-import { getFirstVisitDetailApi } from "./apis"
+import { downloadBlob } from "@@/utils/download"
+import { isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
+import { exportPatientFirstVisitsApi, getFirstVisitDetailApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
-const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
+const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { firstVisitSearch: true })
+
+const selectedRows = ref<any[]>([])
+const exporting = ref(false)
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+async function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的患者")
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确认导出选中的 ${ids.length} 位患者的首次入户随访信息吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    exporting.value = true
+    const blob = await exportPatientFirstVisitsApi(ids)
+    downloadBlob(blob as unknown as Blob, "首次入户随访.xlsx")
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
 
 const firstVisitDialogVisible = ref(false)
 const firstVisitDetailVisible = ref(false)
@@ -65,7 +97,7 @@ async function openPrintFirstVisit(row: any) {
             <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="填写时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -73,6 +105,14 @@ async function openPrintFirstVisit(row: any) {
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             style="width: 240px"
+          />
+        </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-input
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="请输入"
+            clearable
+            style="width: 160px"
           />
         </el-form-item>
         <el-form-item label="数据来源">
@@ -98,7 +138,24 @@ async function openPrintFirstVisit(row: any) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <div style="margin-bottom: 10px">
+        <el-button
+          type="success"
+          :loading="exporting"
+          :disabled="!selectedRows.length"
+          @click="handleExportSelected"
+        >
+          导出
+        </el-button>
+      </div>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
@@ -127,27 +184,37 @@ async function openPrintFirstVisit(row: any) {
         </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-permission="'patientManagement:firstVisit'"
-              type="primary"
-              link
-              size="small"
-              :disabled="row.archived === 1"
-              @click="openFirstVisit(row)"
-            >
-              {{
-                !row.hasFirstVisit
-                  ? "填写首次随访"
-                  : (row.firstVisitEditable === false ? "查看首次随访" : "编辑首次随访")
-              }}
-            </el-button>
-            <template v-if="row.hasFirstVisit">
-              <el-button type="info" link size="small" @click="viewFirstVisit(row)">
+            <template v-if="!isPatientTransferLocked(row)">
+              <el-button
+                v-permission="'patientManagement:firstVisit'"
+                type="primary"
+                link
+                size="small"
+                :disabled="row.archived === 1"
+                @click="openFirstVisit(row)"
+              >
+                {{
+                  !row.hasFirstVisit
+                    ? "填写首次随访"
+                    : (row.firstVisitEditable === false ? "查看首次随访" : "编辑首次随访")
+                }}
+              </el-button>
+              <template v-if="row.hasFirstVisit">
+                <el-button type="info" link size="small" @click="viewFirstVisit(row)">
+                  查看
+                </el-button>
+                <el-button type="warning" link size="small" @click="openPrintFirstVisit(row)">
+                  打印
+                </el-button>
+              </template>
+            </template>
+            <template v-else>
+              <el-button v-if="row.hasFirstVisit" type="info" link size="small" @click="viewFirstVisit(row)">
                 查看
               </el-button>
-              <el-button type="warning" link size="small" @click="openPrintFirstVisit(row)">
-                打印
-              </el-button>
+              <el-tag :type="row.archiveRemark === '已转出' ? 'info' : 'warning'" size="small">
+                {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+              </el-tag>
             </template>
           </template>
         </el-table-column>

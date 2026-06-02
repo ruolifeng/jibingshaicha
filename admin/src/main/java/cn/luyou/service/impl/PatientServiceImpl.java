@@ -26,6 +26,8 @@ import cn.luyou.mapper.PatientMapper;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.luyou.mapper.UserMapper;
+import cn.luyou.model.User;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -44,6 +46,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -58,6 +61,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -75,6 +79,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private static final List<String> CROWD_CATEGORY_PRIORITY = List.of(
             "密接", "学生", "教职工", "老年人", "糖尿病", "双感", "既往结核", "非重点人群"
     );
+
+    private static final String EPIDEMIC_JSON_REGISTRATION_DATE = "$.\"登记日期\"";
+    private static final String EPIDEMIC_JSON_MEDICATION_UNIT = "$.\"服药管理单位\"";
+    /** 取前 10 位以兼容 yyyy-MM-dd 与 yyyy-MM-dd HH:mm:ss */
+    private static final String REGISTRATION_DATE_SQL_EXPR =
+            "STR_TO_DATE(LEFT(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                    + EPIDEMIC_JSON_REGISTRATION_DATE + "')), '/', '-'), 10), '%Y-%m-%d')";
 
     /** 手动新增/导入：前端 camelCase 字段 → epidemicData 中文键 */
     private static final List<String[]> MANUAL_EPIDEMIC_MAPPINGS = List.of(
@@ -104,13 +115,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
+    private final UserMapper userMapper;
 
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
-                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo) {
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                                     String dateFilterBy, String medicationManagementUnit) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
-                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived, dateFrom, dateTo, null, null);
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
+                dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit);
         wrapper.orderByDesc(Patient::getCreateTime);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
@@ -125,10 +139,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     public List<Patient> listForExport(String populationType, String name, String idNumber,
                                         String phone, String currentAddress, String diagnosisResult,
                                         Integer archived, String dateFrom, String dateTo,
-                                        String startTime, String endTime) {
+                                        String startTime, String endTime,
+                                        String dateFilterBy, String medicationManagementUnit) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult,
-                archived, dateFrom, dateTo, startTime, endTime);
+                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit);
         if (Integer.valueOf(1).equals(archived)) {
             wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getArchivedTime);
         } else {
@@ -144,9 +159,23 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                   String currentAddress, String diagnosisResult,
                                                                   Integer archived,
                                                                   String dateFrom, String dateTo,
-                                                                  String startTime, String endTime) {
+                                                                  String startTime, String endTime,
+                                                                  String dateFilterBy,
+                                                                  String medicationManagementUnit) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
+        boolean registrationDateFilter = "registrationDate".equals(dateFilterBy);
+        boolean noticeFillFilter = "noticeFill".equals(dateFilterBy);
+        boolean firstVisitFillFilter = "firstVisitFill".equals(dateFilterBy);
+        boolean followUpFillFilter = "followUpFill".equals(dateFilterBy);
+        boolean hasRegistrationDateRange = registrationDateFilter
+                && (createFrom != null || createTo != null);
+        boolean hasNoticeFillDateRange = noticeFillFilter
+                && (createFrom != null || createTo != null);
+        boolean hasFirstVisitFillDateRange = firstVisitFillFilter
+                && (createFrom != null || createTo != null);
+        boolean hasFollowUpFillDateRange = followUpFillFilter
+                && (createFrom != null || createTo != null);
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
@@ -155,16 +184,116 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
                 .eq(StrUtil.isNotBlank(diagnosisResult), Patient::getDiagnosisResult, diagnosisResult)
                 .eq(archived != null, Patient::getArchived, archived);
-        if (Integer.valueOf(1).equals(archived)
+        if (hasFirstVisitFillDateRange) {
+            applyPatientIdFilter(wrapper,
+                    resolvePatientFirstVisitDateBizIds(populationType, createFrom, createTo));
+        } else if (hasFollowUpFillDateRange) {
+            applyPatientIdFilter(wrapper,
+                    resolvePatientFollowUpDateBizIds(populationType, createFrom, createTo));
+        } else if (hasNoticeFillDateRange) {
+            applyPatientIdFilter(wrapper,
+                    resolvePatientNoticeDateBizIds(populationType, createFrom, createTo));
+        } else if (Integer.valueOf(1).equals(archived)
                 && (StrUtil.isNotBlank(startTime) || StrUtil.isNotBlank(endTime))) {
             wrapper.ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
                     .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59");
-        } else {
+        } else if (hasRegistrationDateRange) {
+            applyRegistrationDateRange(wrapper, createFrom, createTo);
+        } else if (!registrationDateFilter && !noticeFillFilter
+                && !firstVisitFillFilter && !followUpFillFilter) {
             wrapper.ge(createFrom != null, Patient::getCreateTime, createFrom)
                     .le(createTo != null, Patient::getCreateTime, createTo);
         }
+        applyMedicationManagementUnitFilter(wrapper, populationType, medicationManagementUnit);
         applyPatientScopeFilter(wrapper);
         return wrapper;
+    }
+
+    /** 按通知单首次填写时间（notice.create_time）筛选 */
+    private Set<Long> resolvePatientNoticeDateBizIds(String populationType,
+                                                     LocalDateTime noticeFrom, LocalDateTime noticeTo) {
+        LambdaQueryWrapper<Notice> noticeWrapper = new LambdaQueryWrapper<>();
+        noticeWrapper.eq(Notice::getNoticeType, "patient")
+                .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType)
+                .ge(noticeFrom != null, Notice::getCreateTime, noticeFrom)
+                .le(noticeTo != null, Notice::getCreateTime, noticeTo);
+        return noticeMapper.selectList(noticeWrapper.select(Notice::getBizId)).stream()
+                .map(Notice::getBizId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** 按首次随访填写时间（first_visit.create_time）筛选 */
+    private Set<Long> resolvePatientFirstVisitDateBizIds(String populationType,
+                                                         LocalDateTime visitFrom, LocalDateTime visitTo) {
+        LambdaQueryWrapper<FirstVisit> visitWrapper = new LambdaQueryWrapper<>();
+        visitWrapper.eq(StrUtil.isNotBlank(populationType), FirstVisit::getPopulationType, populationType)
+                .ge(visitFrom != null, FirstVisit::getCreateTime, visitFrom)
+                .le(visitTo != null, FirstVisit::getCreateTime, visitTo);
+        return firstVisitMapper.selectList(visitWrapper.select(FirstVisit::getPatientId)).stream()
+                .map(FirstVisit::getPatientId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** 按后续随访填写时间（follow_up_visit.create_time）筛选 */
+    private Set<Long> resolvePatientFollowUpDateBizIds(String populationType,
+                                                       LocalDateTime visitFrom, LocalDateTime visitTo) {
+        LambdaQueryWrapper<FollowUpVisit> visitWrapper = new LambdaQueryWrapper<>();
+        visitWrapper.eq(StrUtil.isNotBlank(populationType), FollowUpVisit::getPopulationType, populationType)
+                .ge(visitFrom != null, FollowUpVisit::getCreateTime, visitFrom)
+                .le(visitTo != null, FollowUpVisit::getCreateTime, visitTo);
+        return followUpVisitMapper.selectList(visitWrapper.select(FollowUpVisit::getPatientId)).stream()
+                .map(FollowUpVisit::getPatientId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private void applyPatientIdFilter(LambdaQueryWrapper<Patient> wrapper, Set<Long> patientIds) {
+        if (patientIds.isEmpty()) {
+            wrapper.eq(Patient::getId, -1L);
+        } else {
+            wrapper.in(Patient::getId, patientIds);
+        }
+    }
+
+    /** 按病案/导入信息中的登记日期（epidemic_data.登记日期）筛选 */
+    private void applyRegistrationDateRange(LambdaQueryWrapper<Patient> wrapper,
+                                          LocalDateTime from, LocalDateTime to) {
+        wrapper.isNotNull(Patient::getEpidemicData)
+                .apply(REGISTRATION_DATE_SQL_EXPR + " IS NOT NULL");
+        if (from != null) {
+            wrapper.apply(REGISTRATION_DATE_SQL_EXPR + " >= {0}", from.toLocalDate());
+        }
+        if (to != null) {
+            wrapper.apply(REGISTRATION_DATE_SQL_EXPR + " <= {0}", to.toLocalDate());
+        }
+    }
+
+    /** 服药管理单位：病案 JSON 或患者通知单 */
+    private void applyMedicationManagementUnitFilter(LambdaQueryWrapper<Patient> wrapper,
+                                                     String populationType,
+                                                     String medicationManagementUnit) {
+        if (StrUtil.isBlank(medicationManagementUnit)) {
+            return;
+        }
+        String like = "%" + medicationManagementUnit.trim() + "%";
+        LambdaQueryWrapper<Notice> noticeWrapper = new LambdaQueryWrapper<>();
+        noticeWrapper.eq(Notice::getNoticeType, "patient")
+                .like(Notice::getMedicationManagementUnit, medicationManagementUnit.trim())
+                .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType)
+                .select(Notice::getBizId);
+        List<Long> noticePatientIds = noticeMapper.selectList(noticeWrapper).stream()
+                .map(Notice::getBizId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        wrapper.and(w -> {
+            w.apply("JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '" + EPIDEMIC_JSON_MEDICATION_UNIT + "')) LIKE {0}", like);
+            if (!noticePatientIds.isEmpty()) {
+                w.or().in(Patient::getId, noticePatientIds);
+            }
+        });
     }
 
     /** 与列表查询保持一致的数据权限过滤 */
@@ -465,6 +594,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
+        assertPatientNotTransferLocked(patient);
+        if (ARCHIVE_REMARK_TRANSFERRED_OUT.equals(archiveRemark)
+                || ARCHIVE_REMARK_TRANSFER_PENDING.equals(archiveRemark)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请使用转出流程标记转出状态");
+        }
         patient.setArchived(1);
         patient.setArchivedTime(LocalDateTime.now());
         if (StrUtil.isNotBlank(archiveRemark)) {
@@ -474,19 +608,191 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     @Override
+    public void markTransferPending(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        if (Integer.valueOf(1).equals(patient.getArchived())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档患者不可转出");
+        }
+        if (ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该患者已转出，不可再次发起");
+        }
+        if (ARCHIVE_REMARK_TRANSFER_PENDING.equals(patient.getArchiveRemark())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该患者已有待确认的转出申请");
+        }
+        patient.setArchiveRemark(ARCHIVE_REMARK_TRANSFER_PENDING);
+        patient.setArchived(0);
+        patient.setArchivedTime(null);
+        updateById(patient);
+    }
+
+    @Override
+    public void markTransferredOut(Long id) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        patient.setArchiveRemark(ARCHIVE_REMARK_TRANSFERRED_OUT);
+        patient.setArchived(0);
+        patient.setArchivedTime(null);
+        updateById(patient);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long copyPatientForTransferOut(Long sourcePatientId, Long receiverUserId) {
+        Patient source = getById(sourcePatientId);
+        if (source == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "源患者不存在");
+        }
+        User receiver = userMapper.selectById(receiverUserId);
+        if (receiver == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
+        }
+        if (receiver.getDepartmentId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人未关联部门，无法同步");
+        }
+        assertNoDuplicateInReceiverDept(source, receiver.getDepartmentId());
+
+        Patient copy = new Patient();
+        BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                "creatorId", "departmentId", "sourcePatientId", "archiveRemark", "archived", "archivedTime");
+        copy.setSourcePatientId(sourcePatientId);
+        copy.setCreatorId(receiverUserId);
+        copy.setDepartmentId(receiver.getDepartmentId());
+        copy.setArchived(0);
+        copy.setArchiveRemark(null);
+        save(copy);
+        Long newPatientId = copy.getId();
+
+        copyPatientNotices(sourcePatientId, newPatientId, receiverUserId, receiver);
+        copyPatientFirstVisits(sourcePatientId, newPatientId);
+        copyPatientFollowUpVisits(sourcePatientId, newPatientId);
+        copyPatientMedicationManagement(sourcePatientId, newPatientId);
+        copyPatientMedicationPickups(sourcePatientId, newPatientId, receiverUserId);
+
+        log.info("转出同步：已复制患者 sourceId={} -> newId={}, receiverUserId={}, deptId={}",
+                sourcePatientId, newPatientId, receiverUserId, receiver.getDepartmentId());
+        return newPatientId;
+    }
+
+    private void assertNoDuplicateInReceiverDept(Patient source, Long receiverDeptId) {
+        if (StrUtil.isBlank(source.getIdNumber())) {
+            return;
+        }
+        long count = lambdaQuery()
+                .eq(Patient::getDepartmentId, receiverDeptId)
+                .eq(Patient::getIdNumber, source.getIdNumber())
+                .eq(Patient::getArchived, 0)
+                .ne(Patient::getId, source.getId())
+                .count();
+        if (count > 0) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "接收方部门已存在相同证件号的在管患者，无法转出");
+        }
+    }
+
+    private void copyPatientNotices(Long sourcePatientId, Long newPatientId,
+                                    Long receiverUserId, User receiver) {
+        List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getBizId, sourcePatientId)
+                .eq(Notice::getNoticeType, "patient"));
+        String receiverName = receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername();
+        for (Notice source : notices) {
+            Notice copy = new Notice();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "bizId",
+                    "senderId", "receiverOrgId", "senderName", "senderOrgName",
+                    "receiverName", "receiverOrgName");
+            copy.setBizId(newPatientId);
+            copy.setSenderId(receiverUserId);
+            copy.setSenderName(receiverName);
+            copy.setSenderOrgName(receiver.getOrgName());
+            copy.setReceiverOrgId(null);
+            copy.setReceiverName(null);
+            copy.setReceiverOrgName(null);
+            // 待确认通知单随转出一并视为已完成，避免接收方重复确认
+            if (Integer.valueOf(1).equals(source.getStatus())) {
+                copy.setStatus(2);
+            }
+            noticeMapper.insert(copy);
+        }
+    }
+
+    private void copyPatientFirstVisits(Long sourcePatientId, Long newPatientId) {
+        List<FirstVisit> records = firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
+                .eq(FirstVisit::getPatientId, sourcePatientId));
+        for (FirstVisit source : records) {
+            FirstVisit copy = new FirstVisit();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "patientId");
+            copy.setPatientId(newPatientId);
+            firstVisitMapper.insert(copy);
+        }
+    }
+
+    private void copyPatientFollowUpVisits(Long sourcePatientId, Long newPatientId) {
+        List<FollowUpVisit> records = followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
+                .eq(FollowUpVisit::getPatientId, sourcePatientId));
+        for (FollowUpVisit source : records) {
+            FollowUpVisit copy = new FollowUpVisit();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "patientId");
+            copy.setPatientId(newPatientId);
+            followUpVisitMapper.insert(copy);
+        }
+    }
+
+    private void copyPatientMedicationManagement(Long sourcePatientId, Long newPatientId) {
+        List<MedicationManagement> records = medicationManagementMapper.selectList(
+                new LambdaQueryWrapper<MedicationManagement>().eq(MedicationManagement::getPatientId, sourcePatientId));
+        for (MedicationManagement source : records) {
+            MedicationManagement copy = new MedicationManagement();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "patientId");
+            copy.setPatientId(newPatientId);
+            medicationManagementMapper.insert(copy);
+        }
+    }
+
+    private void copyPatientMedicationPickups(Long sourcePatientId, Long newPatientId, Long receiverUserId) {
+        List<MedicationPickup> records = medicationPickupMapper.selectList(
+                new LambdaQueryWrapper<MedicationPickup>().eq(MedicationPickup::getPatientId, sourcePatientId));
+        for (MedicationPickup source : records) {
+            MedicationPickup copy = new MedicationPickup();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "patientId", "filledBy");
+            copy.setPatientId(newPatientId);
+            copy.setFilledBy(receiverUserId);
+            medicationPickupMapper.insert(copy);
+        }
+    }
+
+    @Override
+    public void assertPatientOperable(Long id) {
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        assertPatientNotTransferLocked(patient);
+    }
+
+    private void assertPatientNotTransferLocked(Patient patient) {
+        if (PatientService.isTransferLocked(patient)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark())
+                            ? "该患者已转出，不可操作"
+                            : "该患者转出待确认，不可操作");
+        }
+    }
+
+    @Override
     public void restoreTransferredPatient(Long id) {
         Patient patient = getById(id);
         if (patient == null) {
             return;
         }
-        if (!Integer.valueOf(1).equals(patient.getArchived())) {
+        if (!ARCHIVE_REMARK_TRANSFER_PENDING.equals(patient.getArchiveRemark())) {
             return;
         }
-        if (!PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark())) {
-            return;
-        }
-        patient.setArchived(0);
-        patient.setArchivedTime(null);
         patient.setArchiveRemark(null);
         updateById(patient);
     }
@@ -713,6 +1019,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
+        assertPatientNotTransferLocked(patient);
         // 级联软删：首次随访
         firstVisitMapper.delete(new LambdaQueryWrapper<FirstVisit>()
                 .eq(FirstVisit::getPatientId, id));
@@ -917,6 +1224,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
         }
+        assertPatientNotTransferLocked(patient);
         if (body.get("populationType") != null) {
             String populationType = body.get("populationType").toString().trim();
             if (StrUtil.isNotBlank(populationType)) {

@@ -23,6 +23,7 @@ import {
   formatLatentSupervisionTreatmentPlan,
   isLatentIndividualPlan,
   LATENT_TREATMENT_PLAN_OPTIONS,
+  normalizeLatentTreatmentPlan,
   parseLatentNoticeTreatmentPlan
 } from "@@/constants/disease"
 import { getToken } from "@@/utils/cache/cookies"
@@ -1226,7 +1227,7 @@ watch(
           {{ noticeDetailData.chestXrayResult || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗方案" :span="2">
-          {{ noticeDetailData.treatmentPlan || "-" }}
+          {{ normalizeLatentTreatmentPlan(noticeDetailData.treatmentPlan) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗机构">
           {{ noticeDetailData.treatmentInstitution || "-" }}
@@ -1501,7 +1502,7 @@ watch(
           {{ supervisionDetailData.currentAddress || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗方案">
-          {{ supervisionDetailData.treatmentPlan || "-" }}
+          {{ normalizeLatentTreatmentPlan(supervisionDetailData.treatmentPlan) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="开始治疗时间">
           {{ supervisionDetailData.treatmentStartDate || "-" }}
@@ -1788,7 +1789,7 @@ watch(
             {{ aggregateSupervision.currentAddress || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="治疗方案" :span="2">
-            {{ aggregateSupervision.treatmentPlan || "-" }}
+            {{ normalizeLatentTreatmentPlan(aggregateSupervision.treatmentPlan) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="开始日期">
             {{ aggregateSupervision.treatmentStartDate || "-" }}

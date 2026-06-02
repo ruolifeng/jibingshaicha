@@ -2,9 +2,11 @@ package cn.luyou.service.impl;
 
 import cn.luyou.mapper.PermissionMapper;
 import cn.luyou.mapper.RolePermissionMapper;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.mapper.UserPermissionMapper;
 import cn.luyou.model.Permission;
 import cn.luyou.model.RolePermission;
+import cn.luyou.model.User;
 import cn.luyou.model.UserPermission;
 import cn.luyou.service.PermissionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,6 +30,9 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
 
     private final RolePermissionMapper rolePermissionMapper;
     private final UserPermissionMapper userPermissionMapper;
+    private final UserMapper userMapper;
+
+    private static final String PICKUP_PERMISSION_CODE = "patientManagement:pickup";
 
     @Override
     public List<Permission> getPermissionTree() {
@@ -90,8 +95,9 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         rolePermissionMapper.delete(
                 new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRole, role)
         );
-        if (permissionIds != null && !permissionIds.isEmpty()) {
-            List<RolePermission> records = permissionIds.stream()
+        List<Long> sanitizedIds = sanitizeLevel5Pickup(role, permissionIds);
+        if (sanitizedIds != null && !sanitizedIds.isEmpty()) {
+            List<RolePermission> records = sanitizedIds.stream()
                     .map(pid -> RolePermission.builder().role(role).permissionId(pid).build())
                     .toList();
             for (RolePermission rp : records) {
@@ -118,8 +124,11 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         userPermissionMapper.delete(
                 new LambdaQueryWrapper<UserPermission>().eq(UserPermission::getUserId, userId)
         );
-        if (permissionIds != null && !permissionIds.isEmpty()) {
-            for (Long pid : permissionIds) {
+        User user = userId == null ? null : userMapper.selectById(userId);
+        int role = user != null && user.getRole() != null ? user.getRole() : 0;
+        List<Long> sanitizedIds = sanitizeLevel5Pickup(role, permissionIds);
+        if (sanitizedIds != null && !sanitizedIds.isEmpty()) {
+            for (Long pid : sanitizedIds) {
                 userPermissionMapper.insert(UserPermission.builder()
                         .userId(userId)
                         .permissionId(pid)
@@ -167,5 +176,26 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
             child.setChildren(buildChildren(grouped, child.getId()));
         }
         return children;
+    }
+
+    /** 五级用户不允许拥有「填写领药」权限，防止权限树误勾选后写入 */
+    private List<Long> sanitizeLevel5Pickup(int role, List<Long> permissionIds) {
+        if (permissionIds == null || permissionIds.isEmpty() || role != 6) {
+            return permissionIds;
+        }
+        Long pickupId = getPickupPermissionId();
+        if (pickupId == null) {
+            return permissionIds;
+        }
+        return permissionIds.stream()
+                .filter(id -> !pickupId.equals(id))
+                .toList();
+    }
+
+    private Long getPickupPermissionId() {
+        Permission pickup = getOne(new LambdaQueryWrapper<Permission>()
+                .eq(Permission::getCode, PICKUP_PERMISSION_CODE)
+                .last("LIMIT 1"));
+        return pickup == null ? null : pickup.getId();
     }
 }

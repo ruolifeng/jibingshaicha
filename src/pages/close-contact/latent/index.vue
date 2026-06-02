@@ -24,6 +24,7 @@ import {
   INTERRUPT_MEDICATION_OPTIONS,
   isLatentIndividualPlan,
   LATENT_TREATMENT_PLAN_OPTIONS,
+  normalizeLatentTreatmentPlan,
   NOTICE_STATUS_MAP,
   parseLatentNoticeTreatmentPlan,
   parseLatentSupervisionTreatmentPlan,
@@ -1074,7 +1075,7 @@ async function handleSaveFollowupInput() {
           {{ supervisionDetailData.phoneRemark || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗方案">
-          {{ supervisionDetailData.treatmentPlan || "—" }}
+          {{ normalizeLatentTreatmentPlan(supervisionDetailData.treatmentPlan) || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="开始治疗时间">
           {{ supervisionDetailData.treatmentStartDate || "—" }}
@@ -1263,7 +1264,7 @@ async function handleSaveFollowupInput() {
           {{ noticeDetailData.chestXrayResult || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗方案" :span="2">
-          {{ noticeDetailData.treatmentPlan || "—" }}
+          {{ normalizeLatentTreatmentPlan(noticeDetailData.treatmentPlan) || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="治疗机构">
           {{ noticeDetailData.treatmentInstitution || "—" }}

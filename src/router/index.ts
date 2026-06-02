@@ -318,7 +318,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "",
         component: () => import("@/pages/message/index.vue"),
         name: "Message",
-        meta: { title: "系统消息", elIcon: "Bell", permission: "message" }
+        meta: { title: "系统消息", elIcon: "Bell", permission: "message", unreadBadge: true }
       }
     ]
   },

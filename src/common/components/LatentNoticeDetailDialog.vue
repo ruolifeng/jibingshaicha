@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
-import { NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { NOTICE_STATUS_MAP, normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { confirmNoticeApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -102,7 +102,7 @@ async function handleConfirmNotice(noticeId: number) {
         {{ noticeDetailData.chestXrayResult || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="治疗方案" :span="2">
-        {{ noticeDetailData.treatmentPlan || "-" }}
+        {{ normalizeLatentTreatmentPlan(noticeDetailData.treatmentPlan) || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="治疗机构">
         {{ noticeDetailData.treatmentInstitution || "-" }}

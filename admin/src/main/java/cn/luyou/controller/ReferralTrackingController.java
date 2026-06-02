@@ -41,10 +41,11 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String township,
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
-            @RequestParam(required = false) String sourceType) {
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String creatorOrEntryUnit) {
         return ResultRes.success(referralTrackingService.queryPage(
                 page, size, bizMode, name, idNumber, trackingStatus, archived,
-                phone, township, dateFrom, dateTo, sourceType));
+                phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit));
     }
 
     @Operation(summary = "查询推介/追踪记录详情")
@@ -73,9 +74,11 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String township,
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
-            @RequestParam(required = false) String sourceType) {
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String creatorOrEntryUnit) {
         userService.checkPermissionCode("referralManagement:export");
-        referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township, dateFrom, dateTo, sourceType);
+        referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township,
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit);
     }
 
     @OperationLog(type = "create", module = "referral", action = "新增推介/追踪记录")

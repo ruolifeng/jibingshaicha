@@ -21,6 +21,7 @@ const searchForm = reactive({
   idNumber: "",
   phone: "",
   dateRange: [] as string[],
+  creatorName: "",
   trackingStatus: undefined as number | undefined,
   archived: undefined as number | undefined,
   populationType: ""
@@ -34,11 +35,13 @@ async function fetchData() {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       referralResult: "latent",
+      dateFilterBy: "noticeFill",
       ...rest,
       ...extractDateRangeParams(dateRange)
     }
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
+    if (!params.creatorName) delete params.creatorName
     const { data } = await getLatentAggregateListApi(params)
     tableData.value = data.records ?? []
     total.value = data.total ?? 0
@@ -56,6 +59,7 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.phone = ""
   searchForm.dateRange = []
+  searchForm.creatorName = ""
   searchForm.trackingStatus = undefined
   searchForm.archived = undefined
   searchForm.populationType = ""
@@ -111,7 +115,7 @@ async function handleCloseCase(row: any) {
         <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="填写通知单时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -120,6 +124,9 @@ async function handleCloseCase(row: any) {
             end-placeholder="结束日期"
             style="width: 240px"
           />
+        </el-form-item>
+        <el-form-item label="录入者">
+          <el-input v-model="searchForm.creatorName" placeholder="姓名或账号" clearable style="width:140px" />
         </el-form-item>
         <el-form-item label="追踪状态">
           <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width:120px">
