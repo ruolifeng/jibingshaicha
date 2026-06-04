@@ -6,6 +6,7 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.SupervisionForm;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.service.UserService;
 import cn.luyou.utils.BaseContext;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,6 +24,7 @@ import java.util.List;
 public class SupervisionFormController {
 
     private final SupervisionFormService supervisionFormService;
+    private final UserService userService;
 
     @Operation(summary = "查询督导表草稿")
     @GetMapping("/draft/{latentInfectionId}")
@@ -42,6 +44,7 @@ public class SupervisionFormController {
     @PostMapping("/save")
     public ResultResponse<Void> save(@RequestBody SupervisionForm form) {
         validateRequired(form);
+        assertSupervisionEditPermission(form);
         if (Integer.valueOf(2).equals(form.getStatus())) {
             supervisionFormService.saveAndArchive(form);
         } else {
@@ -78,6 +81,17 @@ public class SupervisionFormController {
     private void validateLatentId(SupervisionForm form) {
         if (form.getLatentInfectionId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少关联潜伏感染ID");
+        }
+    }
+
+    /** 修改已提交的督导表记录需具备 latentManagement:supervision:edit 权限 */
+    private void assertSupervisionEditPermission(SupervisionForm form) {
+        if (form.getId() == null) {
+            return;
+        }
+        SupervisionForm existing = supervisionFormService.getById(form.getId());
+        if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
+            userService.checkPermissionCode("latentManagement:supervision:edit");
         }
     }
 

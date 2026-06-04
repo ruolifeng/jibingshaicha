@@ -7,6 +7,10 @@ import { downloadBlob } from "@@/utils/download"
 import { isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
 import { exportPatientFirstVisitsApi, getFirstVisitDetailApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
+import { useUserStore } from "@/pinia/stores/user"
+
+const userStore = useUserStore()
+const canEditFirstVisitPerm = computed(() => userStore.hasPermission("patientManagement:firstVisit:edit"))
 
 const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { firstVisitSearch: true })
 
@@ -186,6 +190,7 @@ async function openPrintFirstVisit(row: any) {
           <template #default="{ row }">
             <template v-if="!isPatientTransferLocked(row)">
               <el-button
+                v-if="!row.hasFirstVisit"
                 v-permission="'patientManagement:firstVisit'"
                 type="primary"
                 link
@@ -193,11 +198,26 @@ async function openPrintFirstVisit(row: any) {
                 :disabled="row.archived === 1"
                 @click="openFirstVisit(row)"
               >
-                {{
-                  !row.hasFirstVisit
-                    ? "填写首次随访"
-                    : (row.firstVisitEditable === false ? "查看首次随访" : "编辑首次随访")
-                }}
+                填写首次随访
+              </el-button>
+              <el-button
+                v-else-if="row.firstVisitEditable !== false && canEditFirstVisitPerm"
+                type="primary"
+                link
+                size="small"
+                :disabled="row.archived === 1"
+                @click="openFirstVisit(row)"
+              >
+                编辑首次随访
+              </el-button>
+              <el-button
+                v-else
+                type="primary"
+                link
+                size="small"
+                @click="viewFirstVisit(row)"
+              >
+                查看首次随访
               </el-button>
               <template v-if="row.hasFirstVisit">
                 <el-button type="info" link size="small" @click="viewFirstVisit(row)">

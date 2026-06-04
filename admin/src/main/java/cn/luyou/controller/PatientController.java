@@ -183,6 +183,7 @@ public class PatientController {
         if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
             return;
         }
+        assertFirstVisitEditPermission(existing);
         Integer role = BaseContext.getCurrentRole();
         if (role == null || role != 6) {
             return;
@@ -194,6 +195,13 @@ public class PatientController {
         if (baseTime.plusDays(FIRST_VISIT_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
                     "首次入户随访已超过10天修改期限，请联系上级管理员");
+        }
+    }
+
+    /** 修改已完成的首次随访需具备 patientManagement:firstVisit:edit 权限 */
+    private void assertFirstVisitEditPermission(FirstVisit existing) {
+        if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
+            userService.checkPermissionCode("patientManagement:firstVisit:edit");
         }
     }
 
@@ -376,6 +384,7 @@ public class PatientController {
         if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
             return;
         }
+        assertFollowUpEditPermission(existing);
         Integer role = BaseContext.getCurrentRole();
         if (role == null || role != 6) {
             return;
@@ -387,6 +396,13 @@ public class PatientController {
         if (baseTime.plusDays(FOLLOW_UP_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
                     "后续随访已超过10天修改期限，请联系上级管理员");
+        }
+    }
+
+    /** 修改已提交的后续随访记录需具备 patientManagement:followUp:edit 权限 */
+    private void assertFollowUpEditPermission(FollowUpVisit existing) {
+        if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
+            userService.checkPermissionCode("patientManagement:followUp:edit");
         }
     }
 

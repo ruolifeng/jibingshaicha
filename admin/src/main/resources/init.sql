@@ -1483,6 +1483,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (417, 'latentManagement:referral',      '转出',                 2, 460, 2),
 (418, 'latentManagement:close',         '归档',                 2, 413, 5),
 (419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
+(469, 'latentManagement:supervision:edit','修改督导表',           2, 419, 1),
 (464, 'latentManagement:history',     '历史患者',             1, 412, 3),
 -- 聚合患者管理（一级菜单）
 (420, 'patientManagement',              '患者管理',             1, 0,   12),
@@ -1490,7 +1491,9 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (463, 'patientManagement:edit',         '修改信息',             2, 462, 1),
 (421, 'patientManagement:notice',       '通知单管理',           1, 420, 1),
 (422, 'patientManagement:firstVisit',   '首次随访',             1, 420, 2),
+(470, 'patientManagement:firstVisit:edit','编辑首次随访',         2, 422, 1),
 (423, 'patientManagement:followUp',     '后续随访',             1, 420, 3),
+(471, 'patientManagement:followUp:edit',  '修改随访记录',         2, 423, 1),
 (424, 'patientManagement:medication',   '服药管理',             1, 420, 4),
 (425, 'patientManagement:specialDisease','专病网导入',          1, 420, 5),
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
@@ -1512,9 +1515,9 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
-    'latentManagement:history',
+    'latentManagement:supervision:edit', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
-    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
+    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:firstVisit:edit', 'patientManagement:followUp', 'patientManagement:followUp:edit',
     'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease', 'patientManagement:history',
     'patientManagement:referral', 'patientManagement:delete'
 );
@@ -2484,9 +2487,9 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close',
-    'latentManagement:supervision', 'latentManagement:history',
+    'latentManagement:supervision', 'latentManagement:supervision:edit', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
-    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:followUp',
+    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:firstVisit:edit', 'patientManagement:followUp', 'patientManagement:followUp:edit',
     'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease',
     'patientManagement:history', 'patientManagement:referral', 'patientManagement:delete'
 );
@@ -2777,3 +2780,48 @@ SET `archived` = 0,
     `archived_time` = NULL
 WHERE `archive_remark` = '已转出'
   AND `archived` = 1;
+
+-- ==================== V59：潜伏感染者管理 — 督导表记录「修改」独立按钮权限 ====================
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(469, 'latentManagement:supervision:edit', '修改督导表', 2, 419, 1);
+
+UPDATE `permission`
+SET `parent_id` = 419, `sort` = 1, `name` = '修改督导表', `type` = 2
+WHERE `code` = 'latentManagement:supervision:edit';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'latentManagement:supervision'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'latentManagement:supervision:edit';
+
+-- ==================== V60：患者管理 — 首次随访「编辑」独立按钮权限 ====================
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(470, 'patientManagement:firstVisit:edit', '编辑首次随访', 2, 422, 1);
+
+UPDATE `permission`
+SET `parent_id` = 422, `sort` = 1, `name` = '编辑首次随访', `type` = 2
+WHERE `code` = 'patientManagement:firstVisit:edit';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement:firstVisit'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:firstVisit:edit';
+
+-- ==================== V61：患者管理 — 后续随访记录「修改」独立按钮权限 ====================
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(471, 'patientManagement:followUp:edit', '修改随访记录', 2, 423, 1);
+
+UPDATE `permission`
+SET `parent_id` = 423, `sort` = 1, `name` = '修改随访记录', `type` = 2
+WHERE `code` = 'patientManagement:followUp:edit';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement:followUp'
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'patientManagement:followUp:edit';

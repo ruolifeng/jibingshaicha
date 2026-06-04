@@ -99,6 +99,14 @@ function handleLogin() {
         </el-form>
       </div>
     </div>
+    <footer class="login-footer">
+      <span>备案号：</span>
+      <a
+        href="https://beian.miit.gov.cn/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >桂ICP备2026008858号-1</a>
+    </footer>
   </div>
 </template>
 
@@ -140,6 +148,19 @@ function handleLogin() {
       .el-button {
         width: 100%;
         margin-top: 10px;
+      }
+    }
+  }
+  .login-footer {
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--el-text-color-placeholder);
+    a {
+      color: inherit;
+      text-decoration: none;
+      &:hover {
+        color: var(--el-color-primary);
+        text-decoration: underline;
       }
     }
   }

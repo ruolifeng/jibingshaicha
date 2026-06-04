@@ -5,6 +5,7 @@ import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.FollowUpVisitMapper;
 import cn.luyou.mapper.MedicationManagementMapper;
 import cn.luyou.mapper.NoticeMapper;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.FirstVisit;
 import cn.luyou.model.FollowUpVisit;
 import cn.luyou.model.LatentInfection;
@@ -15,6 +16,7 @@ import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.SupervisionForm;
+import cn.luyou.model.User;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ScreeningCloseContactService;
@@ -66,6 +68,7 @@ public class ExportController {
     private final PatientService patientService;
     private final SupervisionFormService supervisionFormService;
     private final NoticeMapper noticeMapper;
+    private final UserMapper userMapper;
     private final FirstVisitMapper firstVisitMapper;
     private final FollowUpVisitMapper followUpVisitMapper;
     private final MedicationManagementMapper medicationManagementMapper;
@@ -1020,16 +1023,33 @@ public class ExportController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String creatorName,
             @RequestParam(required = false) Integer archived,
             HttpServletResponse response) throws IOException {
 
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
+        List<Long> creatorUserIds = null;
+        if (StrUtil.isNotBlank(creatorName)) {
+            creatorUserIds = userMapper.selectList(new LambdaQueryWrapper<User>()
+                            .and(w -> w.like(User::getRealName, creatorName)
+                                    .or()
+                                    .like(User::getUsername, creatorName))
+                            .select(User::getId))
+                    .stream()
+                    .map(User::getId)
+                    .toList();
+            if (creatorUserIds.isEmpty()) {
+                writeExcel(response, "潜伏感染者信息总表", List.of(), ALL_LATENT_EXPORT_HEADERS);
+                return;
+            }
+        }
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
                 .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                 .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
-                .eq(archived != null, LatentInfection::getArchived, archived);
+                .eq(archived != null, LatentInfection::getArchived, archived)
+                .in(creatorUserIds != null, LatentInfection::getCreatorId, creatorUserIds);
         if (StrUtil.isNotBlank(populationType)) {
             wrapper.eq(LatentInfection::getPopulationType, populationType);
         } else {

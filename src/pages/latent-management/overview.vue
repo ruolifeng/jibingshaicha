@@ -62,6 +62,7 @@ async function handleExport() {
       idNumber: searchForm.idNumber || undefined,
       phone: searchForm.phone || undefined,
       populationType: searchForm.populationType || undefined,
+      creatorName: searchForm.creatorName || undefined,
       ...extractDateRangeParams(searchForm.dateRange)
     })
     downloadBlob(blob as unknown as Blob, "在管潜伏感染者信息总表.xlsx")
@@ -177,6 +178,9 @@ async function handleImport(uploadFile: any) {
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="录入者">
+          <el-input v-model="searchForm.creatorName" placeholder="姓名或账号" clearable style="width: 140px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">

@@ -16,6 +16,7 @@ export function useLatentOverviewList() {
     idNumber: "",
     phone: "",
     populationType: "",
+    creatorName: "",
     dateRange: [] as string[]
   })
 
@@ -33,6 +34,7 @@ export function useLatentOverviewList() {
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
+      if (!params.creatorName) delete params.creatorName
       const { data } = await getLatentAggregateListApi(params)
       const records = data.records ?? []
       const start = (paginationData.currentPage - 1) * paginationData.pageSize
@@ -54,6 +56,7 @@ export function useLatentOverviewList() {
     searchForm.idNumber = ""
     searchForm.phone = ""
     searchForm.populationType = ""
+    searchForm.creatorName = ""
     searchForm.dateRange = []
     handleSearch()
   }

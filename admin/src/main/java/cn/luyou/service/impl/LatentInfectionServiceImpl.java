@@ -144,7 +144,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (hasCreatorFilter) {
             Set<Long> creatorBizIds = supervisionFillFilter
                     ? resolveSupervisionCreatorBizIds(populationType, creatorName)
-                    : resolveNoticeCreatorBizIds(populationType, creatorName);
+                    : noticeFillFilter
+                            ? resolveNoticeCreatorBizIds(populationType, creatorName)
+                            : resolveOverviewCreatorBizIds(populationType, creatorName);
             if (creatorBizIds.isEmpty()) {
                 return new Page<>(page, size);
             }
@@ -258,6 +260,20 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .filter(Objects::nonNull)
                 .forEach(result::add);
         return result;
+    }
+
+    /** 在管总览录入者：匹配病例录入人（latent.creator_id） */
+    private Set<Long> resolveOverviewCreatorBizIds(String populationType, String creatorName) {
+        List<Long> userIds = resolveUserIdsByCreatorName(creatorName);
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        LambdaQueryWrapper<LatentInfection> latentWrapper = applyPopulationScope(new LambdaQueryWrapper<>(), populationType);
+        latentWrapper.in(LatentInfection::getCreatorId, userIds);
+        return baseMapper.selectList(latentWrapper.select(LatentInfection::getId)).stream()
+                .map(LatentInfection::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     /**

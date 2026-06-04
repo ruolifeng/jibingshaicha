@@ -279,7 +279,7 @@ function openPrint(row: Record<string, any>) {
             </el-button>
             <el-button
               v-if="canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
-              v-permission="'patientManagement:followUp'"
+              v-permission="'patientManagement:followUp:edit'"
               type="warning"
               link
               size="small"

@@ -285,7 +285,7 @@ function openPrint(row: Record<string, any>) {
             </el-button>
             <el-button
               v-if="canEditSupervisionForm(userStore.userRole, row)"
-              v-permission="'latentManagement:supervision'"
+              v-permission="'latentManagement:supervision:edit'"
               type="warning"
               link
               size="small"
