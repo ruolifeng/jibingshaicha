@@ -1,13 +1,16 @@
--- V59：潜伏感染者管理 — 督导表记录「修改」独立按钮权限
+-- V59：潜伏感染者管理 — 督导表记录「修改」独立按钮权限（见 V62 统一修复，此处保持幂等）
 
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(469, 'latentManagement:supervision:edit', '修改督导表', 2, 419, 1);
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'latentManagement:supervision:edit', '修改督导表', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'latentManagement:supervision'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'latentManagement:supervision:edit');
 
-UPDATE `permission`
-SET `parent_id` = 419, `sort` = 1, `name` = '修改督导表', `type` = 2
-WHERE `code` = 'latentManagement:supervision:edit';
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'latentManagement:supervision'
+SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改督导表', child.`type` = 2
+WHERE child.`code` = 'latentManagement:supervision:edit';
 
--- 已拥有「督导表管理」菜单权限的角色，默认同步授予「修改督导表」（保持原有可修改能力）
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp

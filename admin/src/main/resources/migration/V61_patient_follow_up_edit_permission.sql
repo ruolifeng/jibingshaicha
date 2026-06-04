@@ -1,13 +1,16 @@
--- V61：患者管理 — 后续随访记录「修改」独立按钮权限
+-- V61：患者管理 — 后续随访记录「修改」独立按钮权限（见 V62 统一修复，此处保持幂等）
 
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(471, 'patientManagement:followUp:edit', '修改随访记录', 2, 423, 1);
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'patientManagement:followUp:edit', '修改随访记录', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement:followUp'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:followUp:edit');
 
-UPDATE `permission`
-SET `parent_id` = 423, `sort` = 1, `name` = '修改随访记录', `type` = 2
-WHERE `code` = 'patientManagement:followUp:edit';
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:followUp'
+SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改随访记录', child.`type` = 2
+WHERE child.`code` = 'patientManagement:followUp:edit';
 
--- 已拥有「后续随访」菜单权限的角色，默认同步授予「修改随访记录」（保持原有可修改能力）
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp

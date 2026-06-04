@@ -2781,47 +2781,45 @@ SET `archived` = 0,
 WHERE `archive_remark` = '已转出'
   AND `archived` = 1;
 
--- ==================== V59：潜伏感染者管理 — 督导表记录「修改」独立按钮权限 ====================
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(469, 'latentManagement:supervision:edit', '修改督导表', 2, 419, 1);
+-- ==================== V59–V62：填写完成后「修改」独立按钮权限（按 code 写入，避免 id 冲突） ====================
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'latentManagement:supervision:edit', '修改督导表', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'latentManagement:supervision'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'latentManagement:supervision:edit');
 
-UPDATE `permission`
-SET `parent_id` = 419, `sort` = 1, `name` = '修改督导表', `type` = 2
-WHERE `code` = 'latentManagement:supervision:edit';
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'latentManagement:supervision'
+SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改督导表', child.`type` = 2
+WHERE child.`code` = 'latentManagement:supervision:edit';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
-FROM `role_permission` rp
-         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'latentManagement:supervision'
-         CROSS JOIN `permission` p
-WHERE p.`code` = 'latentManagement:supervision:edit';
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'patientManagement:firstVisit:edit', '编辑首次随访', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement:firstVisit'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:firstVisit:edit');
 
--- ==================== V60：患者管理 — 首次随访「编辑」独立按钮权限 ====================
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(470, 'patientManagement:firstVisit:edit', '编辑首次随访', 2, 422, 1);
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:firstVisit'
+SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '编辑首次随访', child.`type` = 2
+WHERE child.`code` = 'patientManagement:firstVisit:edit';
 
-UPDATE `permission`
-SET `parent_id` = 422, `sort` = 1, `name` = '编辑首次随访', `type` = 2
-WHERE `code` = 'patientManagement:firstVisit:edit';
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'patientManagement:followUp:edit', '修改随访记录', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement:followUp'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:followUp:edit');
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
-FROM `role_permission` rp
-         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement:firstVisit'
-         CROSS JOIN `permission` p
-WHERE p.`code` = 'patientManagement:firstVisit:edit';
-
--- ==================== V61：患者管理 — 后续随访记录「修改」独立按钮权限 ====================
-INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(471, 'patientManagement:followUp:edit', '修改随访记录', 2, 423, 1);
-
-UPDATE `permission`
-SET `parent_id` = 423, `sort` = 1, `name` = '修改随访记录', `type` = 2
-WHERE `code` = 'patientManagement:followUp:edit';
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:followUp'
+SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改随访记录', child.`type` = 2
+WHERE child.`code` = 'patientManagement:followUp:edit';
 
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp
-         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement:followUp'
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
-WHERE p.`code` = 'patientManagement:followUp:edit';
+WHERE (parent.`code` = 'latentManagement:supervision' AND p.`code` = 'latentManagement:supervision:edit')
+   OR (parent.`code` = 'patientManagement:firstVisit' AND p.`code` = 'patientManagement:firstVisit:edit')
+   OR (parent.`code` = 'patientManagement:followUp' AND p.`code` = 'patientManagement:followUp:edit');
