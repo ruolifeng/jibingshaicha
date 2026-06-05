@@ -199,7 +199,7 @@ function openPrint(row: Record<string, any>) {
           <template #default="{ row }">
             <template v-if="!isPatientTransferLocked(row)">
               <el-button
-                v-permission="'patientManagement:followUp'" type="primary" link size="small"
+                v-permission="'patientManagement:followUp:fill'" type="primary" link size="small"
                 :disabled="row.archived === 1"
                 @click="openFollowUp(row)"
               >

@@ -1483,7 +1483,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (417, 'latentManagement:referral',      '转出',                 2, 460, 2),
 (418, 'latentManagement:close',         '归档',                 2, 413, 5),
 (419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
-(469, 'latentManagement:supervision:edit','修改督导表',           2, 419, 1),
+(472, 'latentManagement:supervision:fill','填写督导表',           2, 419, 1),
+(469, 'latentManagement:supervision:edit','修改督导表',           2, 419, 2),
 (464, 'latentManagement:history',     '历史患者',             1, 412, 3),
 -- 聚合患者管理（一级菜单）
 (420, 'patientManagement',              '患者管理',             1, 0,   12),
@@ -1491,13 +1492,16 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (463, 'patientManagement:edit',         '修改信息',             2, 462, 1),
 (421, 'patientManagement:notice',       '通知单管理',           1, 420, 1),
 (422, 'patientManagement:firstVisit',   '首次随访',             1, 420, 2),
-(470, 'patientManagement:firstVisit:edit','编辑首次随访',         2, 422, 1),
+(473, 'patientManagement:firstVisit:fill','填写首次随访',         2, 422, 1),
+(470, 'patientManagement:firstVisit:edit','修改首次随访',         2, 422, 2),
 (423, 'patientManagement:followUp',     '后续随访',             1, 420, 3),
-(471, 'patientManagement:followUp:edit',  '修改随访记录',         2, 423, 1),
+(474, 'patientManagement:followUp:fill',  '填写后续随访',         2, 423, 1),
+(471, 'patientManagement:followUp:edit',  '修改随访记录',         2, 423, 2),
 (424, 'patientManagement:medication',   '服药管理',             1, 420, 4),
 (425, 'patientManagement:specialDisease','专病网导入',          1, 420, 5),
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
 (427, 'patientManagement:referral',     '转出',                 2, 462, 2),
+(475, 'patientManagement:notice:fill',  '填写通知单',           2, 421, 1),
 (428, 'patientManagement:delete',       '删除患者',             2, 421, 2),
 (468, 'patientManagement:pickup',       '填写领药',             2, 420, 7);
 
@@ -1515,12 +1519,26 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
-    'latentManagement:supervision:edit', 'latentManagement:history',
+    'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
-    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:firstVisit:edit', 'patientManagement:followUp', 'patientManagement:followUp:edit',
+    'patientManagement:notice', 'patientManagement:notice:fill', 'patientManagement:firstVisit', 'patientManagement:firstVisit:fill', 'patientManagement:firstVisit:edit',
+    'patientManagement:followUp', 'patientManagement:followUp:fill', 'patientManagement:followUp:edit',
     'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease', 'patientManagement:history',
     'patientManagement:referral', 'patientManagement:delete'
 );
+
+-- 学校人群、重点人群归入「筛查管理」权限树
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'screening'
+SET child.`parent_id` = parent.id, child.`sort` = 1
+WHERE child.`code` = 'school';
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'screening'
+SET child.`parent_id` = parent.id, child.`sort` = 2
+WHERE child.`code` = 'keyPopulation';
+UPDATE `permission` SET `sort` = 3 WHERE `code` = 'regular:screening';
+UPDATE `permission` SET `sort` = 4 WHERE `code` = 'regular:suspected';
+UPDATE `permission` SET `sort` = 5 WHERE `code` = 'epidemic:screening';
 
 -- ==================== V17：P5 推介追踪模块 ====================
 
@@ -2487,9 +2505,10 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close',
-    'latentManagement:supervision', 'latentManagement:supervision:edit', 'latentManagement:history',
+    'latentManagement:supervision', 'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
-    'patientManagement:notice', 'patientManagement:firstVisit', 'patientManagement:firstVisit:edit', 'patientManagement:followUp', 'patientManagement:followUp:edit',
+    'patientManagement:notice', 'patientManagement:notice:fill', 'patientManagement:firstVisit', 'patientManagement:firstVisit:fill', 'patientManagement:firstVisit:edit',
+    'patientManagement:followUp', 'patientManagement:followUp:fill', 'patientManagement:followUp:edit',
     'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease',
     'patientManagement:history', 'patientManagement:referral', 'patientManagement:delete'
 );
@@ -2823,3 +2842,160 @@ FROM `role_permission` rp
 WHERE (parent.`code` = 'latentManagement:supervision' AND p.`code` = 'latentManagement:supervision:edit')
    OR (parent.`code` = 'patientManagement:firstVisit' AND p.`code` = 'patientManagement:firstVisit:edit')
    OR (parent.`code` = 'patientManagement:followUp' AND p.`code` = 'patientManagement:followUp:edit');
+
+-- ==================== V63：填写 / 修改 拆分为独立按钮权限（见 migration/V63） ====================
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'latentManagement:supervision:fill', '填写督导表', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'latentManagement:supervision'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'latentManagement:supervision:fill');
+
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'patientManagement:firstVisit:fill', '填写首次随访', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement:firstVisit'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:firstVisit:fill');
+
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'patientManagement:followUp:fill', '填写后续随访', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement:followUp'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:followUp:fill');
+
+UPDATE `permission` SET `sort` = 1, `name` = '填写督导表' WHERE `code` = 'latentManagement:supervision:fill';
+UPDATE `permission` SET `sort` = 2, `name` = '修改督导表' WHERE `code` = 'latentManagement:supervision:edit';
+UPDATE `permission` SET `sort` = 1, `name` = '填写首次随访' WHERE `code` = 'patientManagement:firstVisit:fill';
+UPDATE `permission` SET `sort` = 2, `name` = '修改首次随访' WHERE `code` = 'patientManagement:firstVisit:edit';
+UPDATE `permission` SET `sort` = 1, `name` = '填写后续随访' WHERE `code` = 'patientManagement:followUp:fill';
+UPDATE `permission` SET `sort` = 2, `name` = '修改随访记录' WHERE `code` = 'patientManagement:followUp:edit';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE (parent.`code` = 'latentManagement:supervision'
+       AND p.`code` IN ('latentManagement:supervision:fill', 'latentManagement:supervision:edit'))
+   OR (parent.`code` = 'patientManagement:firstVisit'
+       AND p.`code` IN ('patientManagement:firstVisit:fill', 'patientManagement:firstVisit:edit'))
+   OR (parent.`code` = 'patientManagement:followUp'
+       AND p.`code` IN ('patientManagement:followUp:fill', 'patientManagement:followUp:edit'));
+
+-- ==================== V64：推介确认/拒绝后同步接收方系统消息（见 migration/V64） ====================
+UPDATE `sys_message` sm
+    INNER JOIN `referral_tracking` rt ON sm.biz_id = rt.id AND rt.deleted = 0
+SET sm.type     = 'referral_tracking_confirmed',
+    sm.title    = '推介已接收',
+    sm.content  = CONCAT('「', IFNULL(NULLIF(TRIM(rt.name), ''), '（未知姓名）'),
+                         '」的推介通知单您已确认接收，已进入追踪环节。'),
+    sm.is_read  = 1
+WHERE sm.type = 'referral_tracking_receive'
+  AND sm.deleted = 0
+  AND rt.recommend_status = 2;
+
+UPDATE `sys_message` sm
+    INNER JOIN `referral_tracking` rt ON sm.biz_id = rt.id AND rt.deleted = 0
+SET sm.type     = 'referral_tracking_rejected',
+    sm.title    = '推介已被拒绝',
+    sm.content  = CONCAT('「', IFNULL(NULLIF(TRIM(rt.name), ''), '（未知姓名）'),
+                         '」的推介通知单您已拒绝，原因：',
+                         IFNULL(NULLIF(TRIM(rt.rejected_reason), ''), '（未填写）')),
+    sm.is_read  = 1
+WHERE sm.type = 'referral_tracking_receive'
+  AND sm.deleted = 0
+  AND rt.recommend_status = 3;
+
+-- ==================== V65：已确认推介保留在推介模块（见 migration/V65） ====================
+UPDATE `referral_tracking`
+SET `biz_mode` = 'recommend'
+WHERE `recommend_status` = 2
+  AND `biz_mode` = 'track'
+  AND `recommend_sent_time` IS NOT NULL
+  AND `deleted` = 0;
+
+-- ==================== V66：已确认推介消息与 biz_mode 历史数据修复（见 migration/V66） ====================
+UPDATE `sys_message` sm
+    INNER JOIN `referral_tracking` rt ON sm.biz_id = rt.id AND rt.deleted = 0
+SET sm.type     = 'referral_tracking_confirmed',
+    sm.title    = '推介已接收',
+    sm.content  = CONCAT('「', IFNULL(NULLIF(TRIM(rt.name), ''), '（未知姓名）'),
+                         '」的推介通知单您已确认接收，已进入追踪环节。'),
+    sm.is_read  = 1
+WHERE sm.type = 'referral_tracking_receive'
+  AND sm.deleted = 0
+  AND rt.recommend_status = 2;
+
+UPDATE `sys_message` sm
+    INNER JOIN `referral_tracking` rt ON sm.biz_id = rt.id AND rt.deleted = 0
+SET sm.type     = 'referral_tracking_rejected',
+    sm.title    = '推介已被拒绝',
+    sm.content  = CONCAT('「', IFNULL(NULLIF(TRIM(rt.name), ''), '（未知姓名）'),
+                         '」的推介通知单您已拒绝，原因：',
+                         IFNULL(NULLIF(TRIM(rt.rejected_reason), ''), '（未填写）')),
+    sm.is_read  = 1
+WHERE sm.type = 'referral_tracking_receive'
+  AND sm.deleted = 0
+  AND rt.recommend_status = 3;
+
+UPDATE `referral_tracking`
+SET `biz_mode` = 'recommend'
+WHERE `recommend_sent_time` IS NOT NULL
+  AND `biz_mode` = 'track'
+  AND `recommend_status` IN (1, 2)
+  AND `deleted` = 0;
+
+-- ==================== V67：通知单填写权限 + 筛查管理权限树归并（见 migration/V67） ====================
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 'patientManagement:notice:fill', '填写通知单', 2, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement:notice'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:notice:fill');
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:notice'
+SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 1, child.`name` = '填写通知单'
+WHERE child.`code` = 'patientManagement:notice:fill';
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:notice'
+SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 2, child.`name` = '删除患者'
+WHERE child.`code` = 'patientManagement:delete';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE parent.`code` = 'patientManagement:notice'
+  AND p.`code` = 'patientManagement:notice:fill'
+  AND rp.role != 6;
+
+DELETE rp FROM `role_permission` rp
+         INNER JOIN `permission` p ON p.id = rp.permission_id
+WHERE rp.role = 6 AND p.`code` = 'patientManagement:notice:fill';
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'screening'
+SET child.`parent_id` = parent.id, child.`sort` = 1
+WHERE child.`code` = 'school';
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'screening'
+SET child.`parent_id` = parent.id, child.`sort` = 2
+WHERE child.`code` = 'keyPopulation';
+
+UPDATE `permission` SET `sort` = 3 WHERE `code` = 'regular:screening';
+UPDATE `permission` SET `sort` = 4 WHERE `code` = 'regular:suspected';
+UPDATE `permission` SET `sort` = 5 WHERE `code` = 'epidemic:screening';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` old ON old.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'screening'
+  AND old.`code` IN (
+      'school', 'keyPopulation',
+      'school:screening', 'school:suspected',
+      'keyPopulation:screening', 'keyPopulation:suspected'
+  );

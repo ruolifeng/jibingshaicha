@@ -5,6 +5,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.service.NoticeService;
+import cn.luyou.service.UserService;
 import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,10 +22,24 @@ import java.util.List;
 public class NoticeController {
 
     private final NoticeService noticeService;
+    private final UserService userService;
+
+    private void assertPatientNoticeFill(Notice notice) {
+        if (notice != null && "patient".equals(notice.getNoticeType())) {
+            userService.checkPermissionCode("patientManagement:notice:fill");
+        }
+    }
+
+    private void assertPatientNoticeAccess(Notice notice) {
+        if (notice != null && "patient".equals(notice.getNoticeType())) {
+            userService.checkPermissionCode("patientManagement:notice");
+        }
+    }
 
     @Operation(summary = "发送通知单")
     @PostMapping("/send")
     public ResultResponse<Void> send(@RequestBody Notice notice) {
+        assertPatientNoticeFill(notice);
         noticeService.send(notice);
         return ResultRes.success(null);
     }
@@ -32,6 +47,7 @@ public class NoticeController {
     @Operation(summary = "保存通知单草稿（填写但不发送）")
     @PostMapping("/draft")
     public ResultResponse<Void> saveDraft(@RequestBody Notice notice) {
+        assertPatientNoticeFill(notice);
         noticeService.saveAsDraft(notice);
         return ResultRes.success(null);
     }
@@ -39,6 +55,8 @@ public class NoticeController {
     @Operation(summary = "确认接收通知单")
     @PostMapping("/confirm/{id}")
     public ResultResponse<Void> confirm(@PathVariable Long id) {
+        Notice notice = noticeService.getById(id);
+        assertPatientNoticeAccess(notice);
         noticeService.confirm(id);
         return ResultRes.success(null);
     }
@@ -69,6 +87,7 @@ public class NoticeController {
     @Operation(summary = "催促接收方接收通知单")
     @PostMapping("/remind/{id}")
     public ResultResponse<Void> remind(@PathVariable Long id) {
+        assertPatientNoticeFill(noticeService.getById(id));
         noticeService.remind(id);
         return ResultRes.success(null);
     }

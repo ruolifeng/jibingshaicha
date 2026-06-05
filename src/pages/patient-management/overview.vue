@@ -238,7 +238,7 @@ async function handleImport(uploadFile: any) {
           导入
         </el-button>
         <el-button
-          v-permission="'patientManagement:overview'"
+          v-permission="'patientManagement:delete'"
           type="danger"
           :disabled="selectedRows.length === 0"
           @click="handleBatchDelete"

@@ -132,7 +132,7 @@ public class UserController {
         return ResultRes.success(userService.getLevel5Users());
     }
 
-    @Operation(summary = "获取转出接收方用户列表（四级/五级，部门-用户树）")
+    @Operation(summary = "获取转出接收方用户列表（二/三/四/五级，部门-用户树）")
     @GetMapping("/referral-receiver-users")
     public ResultResponse<List<UserInfoVO>> getReferralReceiverUsers() {
         return ResultRes.success(userService.getReferralReceiverUsers());

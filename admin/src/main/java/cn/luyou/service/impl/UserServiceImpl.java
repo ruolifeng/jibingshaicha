@@ -140,9 +140,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public List<UserInfoVO> getReferralReceiverUsers() {
-        // 转出接收方：四级、五级基层用户，按部门-用户树选择
+        // 转出接收方：二/三/四/五级用户（role 3–6），按部门-用户树选择
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
-                .in(User::getRole, java.util.Arrays.asList(5, 6))
+                .in(User::getRole, java.util.Arrays.asList(3, 4, 5, 6))
                 .orderByAsc(User::getDepartmentId)
                 .orderByAsc(User::getRole)
                 .orderByAsc(User::getUsername);

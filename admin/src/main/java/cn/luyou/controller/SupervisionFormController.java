@@ -36,6 +36,7 @@ public class SupervisionFormController {
     @PostMapping("/draft")
     public ResultResponse<Void> saveDraft(@RequestBody SupervisionForm form) {
         validateLatentId(form);
+        userService.checkPermissionCode("latentManagement:supervision:fill");
         supervisionFormService.saveDraft(form);
         return ResultRes.success(null);
     }
@@ -44,7 +45,7 @@ public class SupervisionFormController {
     @PostMapping("/save")
     public ResultResponse<Void> save(@RequestBody SupervisionForm form) {
         validateRequired(form);
-        assertSupervisionEditPermission(form);
+        assertSupervisionSavePermission(form);
         if (Integer.valueOf(2).equals(form.getStatus())) {
             supervisionFormService.saveAndArchive(form);
         } else {
@@ -84,14 +85,17 @@ public class SupervisionFormController {
         }
     }
 
-    /** 修改已提交的督导表记录需具备 latentManagement:supervision:edit 权限 */
-    private void assertSupervisionEditPermission(SupervisionForm form) {
+    /** 新建/草稿提交用 fill；修改已提交记录用 edit */
+    private void assertSupervisionSavePermission(SupervisionForm form) {
         if (form.getId() == null) {
+            userService.checkPermissionCode("latentManagement:supervision:fill");
             return;
         }
         SupervisionForm existing = supervisionFormService.getById(form.getId());
         if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
             userService.checkPermissionCode("latentManagement:supervision:edit");
+        } else {
+            userService.checkPermissionCode("latentManagement:supervision:fill");
         }
     }
 

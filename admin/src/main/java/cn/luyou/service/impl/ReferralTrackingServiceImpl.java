@@ -438,7 +438,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, Map<String, Object> params) {
         ReferralTracking record = getAndCheckExist(id);
-        assertCanMutateRecord(record);
+        if (isConfirmedReceivedRecommend(record)) {
+            checkConfirmedRecommendReceiverOnly(record);
+        } else {
+            assertCanMutateRecord(record);
+        }
         if (getStr(params, "name") != null) record.setName(getStr(params, "name"));
         if (getStr(params, "gender") != null) record.setGender(getStr(params, "gender"));
         if (params.get("birthDate") != null && StrUtil.isNotBlank(params.get("birthDate").toString())) {
@@ -543,10 +547,16 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public void confirmRecommend(Long id) {
         ReferralTracking record = getAndCheckExist(id);
-        if (!"recommend".equals(record.getBizMode())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介模式可确认推介");
+        if (isConfirmedRecommend(record)) {
+            repairRecommendBizModeIfNeeded(id);
+            syncReceiverRecommendMessage(getById(id), true, null);
+            log.info("推介已确认（幂等），同步消息，recordId={}", id);
+            return;
         }
-        if (!Integer.valueOf(1).equals(record.getRecommendStatus())) {
+        if (isRejectedRecommend(record)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该推介已被拒绝，不可再确认");
+        }
+        if (!isPendingRecommendReceive(record)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "当前状态无法确认（须为已发送状态）");
         }
         checkRecommendReceiver(record);
@@ -556,9 +566,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .eq(ReferralTracking::getId, id)
                 .set(ReferralTracking::getRecommendStatus, 2)
                 .set(ReferralTracking::getRecommendConfirmTime, LocalDateTime.now())
-                .set(ReferralTracking::getBizMode, "track")
                 .set(ReferralTracking::getTrackReason, trackReason)
+                .set(ReferralTracking::getBizMode, "recommend")
                 .update();
+
+        syncReceiverRecommendMessage(getById(id), true, null);
 
         // 通知推介发起人
         if (record.getCreatorId() != null) {
@@ -574,10 +586,16 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public void rejectRecommend(Long id, String reason) {
         ReferralTracking record = getAndCheckExist(id);
-        if (!"recommend".equals(record.getBizMode())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介模式可拒绝推介");
+        if (isRejectedRecommend(record)) {
+            repairRecommendBizModeIfNeeded(id);
+            syncReceiverRecommendMessage(getById(id), false, record.getRejectedReason());
+            log.info("推介已拒绝（幂等），同步消息，recordId={}", id);
+            return;
         }
-        if (!Integer.valueOf(1).equals(record.getRecommendStatus())) {
+        if (isConfirmedRecommend(record)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该推介已确认接收，无法拒绝");
+        }
+        if (!isPendingRecommendReceive(record)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "当前状态无法拒绝（须为已发送状态）");
         }
         checkRecommendReceiver(record);
@@ -588,7 +606,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .set(ReferralTracking::getRejectedReason, reason)
                 .set(ReferralTracking::getRecommendConfirmTime, LocalDateTime.now())
                 .set(ReferralTracking::getArchived, 1)
+                .set(ReferralTracking::getBizMode, "recommend")
                 .update();
+
+        syncReceiverRecommendMessage(getById(id), false, reason);
 
         // 通知推介发起人
         if (record.getCreatorId() != null) {
@@ -605,7 +626,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public void track(Long id, Integer status, String remark) {
         ReferralTracking record = getAndCheckExist(id);
-        if ("recommend".equals(record.getBizMode())
+        if (record.getRecommendSentTime() != null
                 && !Integer.valueOf(2).equals(record.getRecommendStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "推介通知单尚未被接收方确认，暂不可追踪");
         }
@@ -827,16 +848,41 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return record;
     }
 
-    /** 推介模式：校验当前用户是否为接收人 */
+    /** 推介模式：仅接收方可确认/拒绝 */
     private void checkRecommendReceiver(ReferralTracking record) {
-        checkTrackOperatorOrCreator(record);
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Long userId = BaseContext.getCurrentId();
+        if (userId == null || !userId.equals(record.getReceiverUserId())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介接收方可确认或拒绝");
+        }
     }
 
-    /** 有接收人时仅接收人可操作；无接收人时创建人或辖区一至五级用户可操作 */
+    /** 已确认推介：仅接收方可追踪；其余记录按辖区/创建人/接收人规则 */
     private void checkTrackOperatorOrCreator(ReferralTracking record) {
+        if (isConfirmedReceivedRecommend(record)) {
+            checkConfirmedRecommendReceiverOnly(record);
+            return;
+        }
         if (!canOperateRecord(record)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "无权进行此操作");
         }
+    }
+
+    private boolean isConfirmedReceivedRecommend(ReferralTracking record) {
+        return isConfirmedRecommend(record) && record.getRecommendSentTime() != null;
+    }
+
+    private void checkConfirmedRecommendReceiverOnly(ReferralTracking record) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Long userId = BaseContext.getCurrentId();
+        if (userId != null && userId.equals(record.getReceiverUserId())) {
+            return;
+        }
+        throw new ServiceException(StatusEnum.PARAM_INVALID, "该推介已由接收方承接追踪，仅接收方可操作");
     }
 
     /** 编辑：创建人、接收人或辖区一至五级用户 */
@@ -856,6 +902,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             throw new ServiceException(StatusEnum.FORBIDDEN, "无权删除该记录");
         }
         if (userId.equals(record.getCreatorId())) {
+            if ("recommend".equals(record.getBizMode())
+                    && record.getRecommendStatus() != null && record.getRecommendStatus() >= 2) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "推介已办结，发起方不可删除");
+            }
             return;
         }
         if (userId.equals(record.getReceiverUserId())
@@ -1585,8 +1635,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             to = to.plusDays(1).minusSeconds(1);
         }
 
-        return new LambdaQueryWrapper<ReferralTracking>()
-                .eq(StrUtil.isNotBlank(bizMode), ReferralTracking::getBizMode, bizMode)
+        LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
+        applyBizModeFilter(wrapper, bizMode);
+        return wrapper
                 .like(StrUtil.isNotBlank(name), ReferralTracking::getName, name)
                 .like(StrUtil.isNotBlank(idNumber), ReferralTracking::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), ReferralTracking::getPhone, phone)
@@ -1608,5 +1659,96 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             case 4 -> "强制结束";
             default -> "待追踪";
         };
+    }
+
+    /**
+     * 推介列表：biz_mode=recommend（含发起方已办结记录）；已确认接收的推介不出现在接收方推介列表。
+     * 追踪列表：biz_mode=track + 当前用户为接收方的已确认推介。
+     */
+    private void applyBizModeFilter(LambdaQueryWrapper<ReferralTracking> wrapper, String bizMode) {
+        if (StrUtil.isBlank(bizMode)) {
+            return;
+        }
+        Long userId = BaseContext.getCurrentId();
+        if ("track".equals(bizMode)) {
+            wrapper.and(w -> {
+                // 原生追踪；已确认推介误标为 track 时仅接收方可见（兼容 V65 前历史数据）
+                w.nested(n -> n.eq(ReferralTracking::getBizMode, "track")
+                        .and(t -> t.isNull(ReferralTracking::getRecommendSentTime)
+                                .or().ne(ReferralTracking::getRecommendStatus, 2)
+                                .or(userId != null, u -> u.eq(ReferralTracking::getReceiverUserId, userId))));
+                if (userId != null) {
+                    w.or(or -> or.eq(ReferralTracking::getBizMode, "recommend")
+                            .eq(ReferralTracking::getRecommendStatus, 2)
+                            .eq(ReferralTracking::getReceiverUserId, userId));
+                } else if (BaseContext.isSuperAdmin()) {
+                    w.or(or -> or.eq(ReferralTracking::getBizMode, "recommend")
+                            .eq(ReferralTracking::getRecommendStatus, 2));
+                }
+            });
+            return;
+        }
+        if ("recommend".equals(bizMode)) {
+            wrapper.eq(ReferralTracking::getBizMode, "recommend");
+            if (userId != null && !BaseContext.isSuperAdmin()) {
+                wrapper.not(n -> n.eq(ReferralTracking::getReceiverUserId, userId)
+                        .eq(ReferralTracking::getRecommendStatus, 2));
+            }
+            return;
+        }
+        wrapper.eq(ReferralTracking::getBizMode, bizMode);
+    }
+
+    /** 已发送、待接收方确认的推介（与 biz_mode 无关，兼容历史误标为 track） */
+    private boolean isPendingRecommendReceive(ReferralTracking record) {
+        return record.getRecommendSentTime() != null
+                && Integer.valueOf(1).equals(record.getRecommendStatus());
+    }
+
+    private boolean isConfirmedRecommend(ReferralTracking record) {
+        if (Integer.valueOf(2).equals(record.getRecommendStatus())) {
+            return true;
+        }
+        return record.getRecommendConfirmTime() != null
+                && record.getRecommendSentTime() != null
+                && !Integer.valueOf(3).equals(record.getRecommendStatus());
+    }
+
+    private boolean isRejectedRecommend(ReferralTracking record) {
+        return Integer.valueOf(3).equals(record.getRecommendStatus());
+    }
+
+    /** 历史确认逻辑曾将 biz_mode 写成 track，纠正为 recommend */
+    private void repairRecommendBizModeIfNeeded(Long id) {
+        lambdaUpdate()
+                .eq(ReferralTracking::getId, id)
+                .eq(ReferralTracking::getBizMode, "track")
+                .isNotNull(ReferralTracking::getRecommendSentTime)
+                .set(ReferralTracking::getBizMode, "recommend")
+                .update();
+    }
+
+    /** 接收方待确认推介消息在确认/拒绝后同步更新 */
+    private void syncReceiverRecommendMessage(ReferralTracking record, boolean confirmed, String rejectReason) {
+        if (record == null) {
+            return;
+        }
+        String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
+        if (confirmed) {
+            sysMessageService.updatePendingMessageByBizId(
+                    record.getId(),
+                    "referral_tracking_receive",
+                    "referral_tracking_confirmed",
+                    "推介已接收",
+                    String.format("「%s」的推介通知单您已确认接收，已进入追踪环节。", name));
+        } else {
+            sysMessageService.updatePendingMessageByBizId(
+                    record.getId(),
+                    "referral_tracking_receive",
+                    "referral_tracking_rejected",
+                    "推介已被拒绝",
+                    String.format("「%s」的推介通知单您已拒绝，原因：%s",
+                            name, StrUtil.blankToDefault(rejectReason, "（未填写）")));
+        }
     }
 }

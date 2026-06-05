@@ -156,6 +156,7 @@ public class PatientController {
     @Operation(summary = "批量删除患者（级联删除首次随访/后续随访/服药/通知单）")
     @DeleteMapping("/batch-delete")
     public ResultResponse<Void> batchDelete(@RequestBody Map<String, Object> body) {
+        userService.checkPermissionCode("patientManagement:delete");
         @SuppressWarnings("unchecked")
         List<Object> rawIds = (List<Object>) body.get("ids");
         if (rawIds == null || rawIds.isEmpty()) {
@@ -170,6 +171,7 @@ public class PatientController {
     @Operation(summary = "删除患者（级联删除首次随访/后续随访/服药/通知单）")
     @DeleteMapping("/{id}")
     public ResultResponse<Void> deletePatient(@PathVariable Long id) {
+        userService.checkPermissionCode("patientManagement:delete");
         patientService.deletePatient(id);
         return ResultRes.success(null);
     }
@@ -216,12 +218,10 @@ public class PatientController {
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
                 : firstVisitService.lambdaQuery().eq(FirstVisit::getPatientId, firstVisit.getPatientId()).one();
-        if (existing != null) {
-            assertFirstVisitEditable(existing);
-        }
         if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "首次随访已完成，请直接保存正式记录");
         }
+        userService.checkPermissionCode("patientManagement:firstVisit:fill");
         firstVisit.setStatus(0);
         firstVisitService.saveOrUpdate(firstVisit);
         return ResultRes.success(null);
@@ -239,8 +239,10 @@ public class PatientController {
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
                 : firstVisitService.lambdaQuery().eq(FirstVisit::getPatientId, firstVisit.getPatientId()).one();
-        if (existing != null) {
+        if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
             assertFirstVisitEditable(existing);
+        } else {
+            userService.checkPermissionCode("patientManagement:firstVisit:fill");
         }
         firstVisit.setStatus(1);
         firstVisitService.saveOrUpdate(firstVisit);
@@ -438,6 +440,7 @@ public class PatientController {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
         patientService.assertPatientOperable(followUpVisit.getPatientId());
+        userService.checkPermissionCode("patientManagement:followUp:fill");
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
         FollowUpVisit existingDraft = followUpVisitService.lambdaQuery()
                 .eq(FollowUpVisit::getPatientId, followUpVisit.getPatientId())
@@ -470,7 +473,11 @@ public class PatientController {
         if (followUpVisit.getId() != null) {
             FollowUpVisit existing = followUpVisitService.getById(followUpVisit.getId());
             if (existing != null) {
-                assertFollowUpEditable(existing);
+                if (Integer.valueOf(1).equals(existing.getStatus())) {
+                    assertFollowUpEditable(existing);
+                } else {
+                    userService.checkPermissionCode("patientManagement:followUp:fill");
+                }
                 followUpVisit.setStatus(1);
                 if (Integer.valueOf(0).equals(existing.getStatus())) {
                     followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));
@@ -482,6 +489,7 @@ public class PatientController {
                 return ResultRes.success(null);
             }
         }
+        userService.checkPermissionCode("patientManagement:followUp:fill");
         followUpVisit.setId(null);
         followUpVisit.setStatus(1);
         followUpVisit.setVisitSeq(nextFollowUpSeq(followUpVisit.getPatientId()));

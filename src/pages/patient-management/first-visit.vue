@@ -191,7 +191,7 @@ async function openPrintFirstVisit(row: any) {
             <template v-if="!isPatientTransferLocked(row)">
               <el-button
                 v-if="!row.hasFirstVisit"
-                v-permission="'patientManagement:firstVisit'"
+                v-permission="'patientManagement:firstVisit:fill'"
                 type="primary"
                 link
                 size="small"
@@ -208,7 +208,7 @@ async function openPrintFirstVisit(row: any) {
                 :disabled="row.archived === 1"
                 @click="openFirstVisit(row)"
               >
-                编辑首次随访
+                修改首次随访
               </el-button>
               <el-button
                 v-else

@@ -166,7 +166,7 @@ function getNoticeRowClass({ row }: { row: any }) {
             <template v-if="!isPatientTransferLocked(row)">
               <template v-if="row.noticeStatus == null || row.noticeStatus === 0">
                 <el-button
-                  v-permission="'patientManagement:notice'"
+                  v-permission="'patientManagement:notice:fill'"
                   type="primary"
                   link
                   size="small"
@@ -178,7 +178,7 @@ function getNoticeRowClass({ row }: { row: any }) {
               </template>
               <template v-else-if="row.noticeStatus === 1 || row.noticeStatus === 2">
                 <el-button
-                  v-permission="'patientManagement:notice'"
+                  v-permission="'patientManagement:notice:fill'"
                   type="primary"
                   link
                   size="small"

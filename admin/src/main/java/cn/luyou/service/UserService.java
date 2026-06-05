@@ -24,7 +24,7 @@ public interface UserService extends IService<User> {
     /** 获取所有五级机构用户（用于通知单接收单位选择） */
     List<UserInfoVO> getLevel5Users();
 
-    /** 获取转出/转诊接收方用户（四级、五级，按部门-用户展示） */
+    /** 获取转出/转诊接收方用户（二/三/四/五级 role 3–6，按部门-用户展示） */
     List<UserInfoVO> getReferralReceiverUsers();
 
     /** 获取三级和四级用户（role=4/5，用于推介追踪接收人选择） */

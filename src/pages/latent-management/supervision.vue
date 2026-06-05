@@ -214,7 +214,7 @@ function openPrint(row: Record<string, any>) {
         <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">
             <el-button
-              v-permission="'latentManagement:supervision'"
+              v-permission="'latentManagement:supervision:fill'"
               type="primary"
               link
               size="small"

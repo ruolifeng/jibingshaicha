@@ -52,7 +52,7 @@ export function getLevel5UsersApi() {
   })
 }
 
-/** 获取转出接收方用户（四级/五级，部门-用户树） */
+/** 获取转出接收方用户（二/三/四/五级，部门-用户树） */
 export function getReferralReceiverUsersApi() {
   return request<ApiResponseData<Users.UserInfo[]>>({
     url: "user/referral-receiver-users",

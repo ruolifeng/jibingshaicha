@@ -167,7 +167,6 @@ async function handleRejectReferral() {
   try {
     if (row.type === "referral_tracking_receive") {
       await rejectRecommendApi(row.bizId, rejectReason.value || undefined)
-      row.type = "referral_tracking_rejected"
     } else {
       await rejectReferralFromMessageApi(row.bizId, rejectReason.value || undefined)
       row.type = "referral_rejected"
@@ -187,10 +186,8 @@ async function handleConfirmReferralTracking(row: any) {
   }
   try {
     await confirmRecommendApi(row.bizId)
-    await markMessageReadApi(row.id)
-    row.isRead = 1
-    row.type = "referral_tracking_confirmed"
     ElMessage.success("已确认接收推介，请前往「追踪」页面开展追踪")
+    await fetchData()
     await messageStore.fetchUnreadCount()
     router.push("/referral-management/track")
   } catch { /* handled */ }

@@ -20,6 +20,7 @@ import {
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { downloadBlob } from "@@/utils/download"
 import { useUserStore } from "@/pinia/stores/user"
+import { useMessageStore } from "@/pinia/stores/message"
 import {
   getReferralTrackingListApi,
   getReferralTrackingDetailApi,
@@ -38,6 +39,7 @@ import {
 
 const userStore = useUserStore()
 const router = useRouter()
+const messageStore = useMessageStore()
 
 /** 三/四/五级用户可发起推介；三/四级用户接收并确认 */
 const canCreateRecommend = computed(() => [4, 5, 6].includes(userStore.userRole))
@@ -215,13 +217,16 @@ function isReceiver(row: any) {
 }
 
 function canEditRecommend(row: any) {
-  if (userStore.userRole === 1) return !row.archived && row.recommendStatus !== 2
-  return isCreator(row) && !row.archived && row.recommendStatus !== 2
+  if (row.recommendStatus === 2 || row.recommendStatus === 3) return false
+  if (userStore.userRole === 1) return !row.archived
+  return isCreator(row) && !row.archived
 }
 
 function canDeleteRecommend(row: any) {
-  if (userStore.userRole === 1) return true
-  return isCreator(row) || (isReceiver(row) && row.recommendStatus === 1)
+  if (userStore.userRole === 1) return !row.archived
+  if (row.recommendStatus === 2 || row.recommendStatus === 3) return false
+  if (isReceiver(row) && row.recommendStatus === 1) return true
+  return isCreator(row) && !row.archived && row.recommendStatus !== 2
 }
 
 // ===== 查看详情 =====
@@ -336,6 +341,7 @@ async function handleConfirm(row: any) {
   await ElMessageBox.confirm(`确认接受「${row.name}」的推介通知单？确认后将进入追踪流程。`, "确认接收", { type: "info" })
   await confirmRecommendApi(row.id)
   ElMessage.success("已确认接受，请前往「追踪」页面开展追踪")
+  await messageStore.fetchUnreadCount()
   fetchList()
   router.push("/referral-management/track")
 }
@@ -354,6 +360,7 @@ async function handleReject() {
   await rejectRecommendApi(rejectRow.value.id, rejectReason.value)
   ElMessage.success("已拒绝推介通知单")
   rejectDialogVisible.value = false
+  await messageStore.fetchUnreadCount()
   fetchList()
 }
 
@@ -491,6 +498,7 @@ async function handleDelete(row: any) {
 // ===== 状态标签辅助 =====
 function getRowClass({ row }: { row: any }) {
   if (row.archived && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
+  if (isCreator(row) && (row.recommendStatus === 2 || row.recommendStatus === 3)) return "recommend-settled-row"
   return ""
 }
 const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
@@ -544,7 +552,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         type="info"
         :closable="false"
         class="mb-3"
-        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。确认后将自动进入「追踪」流程。"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后进入「追踪」；您发起的推介仍保留在本页（已办结行变灰，仅可查看）。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
         <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">新增推介</el-button>
@@ -1295,5 +1303,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
 .el-table .confirmed-row td.el-table__cell {
   background-color: #fff2f0 !important;
   color: #f56c6c;
+}
+
+.el-table .recommend-settled-row td.el-table__cell {
+  background-color: var(--el-fill-color-light) !important;
+  color: var(--el-text-color-secondary);
 }
 </style>

@@ -37,6 +37,10 @@ const userStore = useUserStore()
 /** 有接收人时仅接收人可操作；无接收人时创建人或辖区一至五级用户可操作 */
 function canOperateTrack(row: any) {
   if (userStore.userRole === 1) return true
+  // 他人推介、本方已接收：仅接收方可操作
+  if (isFromRecommend(row) && row.receiverUserId) {
+    return Number(row.receiverUserId) === Number(userStore.userId)
+  }
   if (row.receiverUserId) {
     return Number(row.receiverUserId) === Number(userStore.userId)
   }
