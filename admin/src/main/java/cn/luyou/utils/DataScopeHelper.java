@@ -74,17 +74,26 @@ public class DataScopeHelper {
         Integer role = BaseContext.getCurrentRole();
         if (role != null && role == 6) {
             Long userId = BaseContext.getCurrentId();
+            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
             String transferBizSql = buildTransferBizSql(noticeType, userId, null);
-            wrapper.and(w -> w.inSql(idColumn,
-                            "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
-                                    + " AND notice_type = '" + noticeType + "' AND deleted = 0")
-                    .or().inSql(StrUtil.isNotBlank(transferBizSql), idColumn, transferBizSql)
-                    .or().eq(creatorColumn, userId));
+            wrapper.and(w -> {
+                w.inSql(idColumn,
+                                "SELECT biz_id FROM notice WHERE receiver_org_id = " + userId
+                                        + " AND notice_type = '" + noticeType + "' AND deleted = 0")
+                        .or().inSql(StrUtil.isNotBlank(transferBizSql), idColumn, transferBizSql)
+                        .or().eq(creatorColumn, userId);
+                // 与筛查模块一致：本部门及下级部门数据也可见（兼容导入时未写 creator_id 的历史记录）
+                if (deptIds == null || deptIds.isEmpty()) {
+                    w.or().isNull(departmentColumn);
+                } else {
+                    w.or().in(departmentColumn, deptIds);
+                }
+            });
             return;
         }
         List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
         if (deptIds == null || deptIds.isEmpty()) {
-            wrapper.apply("1 = 0");
+            wrapper.isNull(departmentColumn);
             return;
         }
         String deptIdCsv = deptIds.stream().map(String::valueOf).collect(Collectors.joining(","));

@@ -4,6 +4,7 @@ import {
   createDepartmentApi,
   deleteDepartmentApi,
   getDepartmentListApi,
+  importDepartmentApi,
   updateDepartmentApi
 } from "@@/apis/department"
 
@@ -31,6 +32,7 @@ const loading = ref(false)
 const tableData = ref<Department[]>([])
 const tableRef = ref()
 const isExpandAll = ref(true)
+const importLoading = ref(false)
 
 function buildDepartmentTree(list: Department[]): DepartmentTree[] {
   const map = new Map<number, DepartmentTree>()
@@ -118,10 +120,10 @@ const parentOptions = computed(() => {
   const selfId = formData.id
   const rows = tableData.value.filter((d: Department): d is Department & { id: number } => d.id != null)
   if (formData.level === 2) {
-    return rows.filter((d: Department & { id: number }) => d.id !== selfId && d.level === 1).map(d => ({ id: d.id, name: d.name }))
+    return rows.filter((d: Department & { id: number }) => d.id !== selfId && d.level === 1).map((d: Department & { id: number }) => ({ id: d.id, name: d.name }))
   }
   if (formData.level === 3) {
-    return rows.filter((d: Department & { id: number }) => d.id !== selfId && d.level === 2).map(d => ({ id: d.id, name: d.name }))
+    return rows.filter((d: Department & { id: number }) => d.id !== selfId && d.level === 2).map((d: Department & { id: number }) => ({ id: d.id, name: d.name }))
   }
   return [] as { id: number, name: string }[]
 })
@@ -214,6 +216,28 @@ async function handleDelete(row: Department) {
   } catch { /* cancelled or handled */ }
 }
 
+async function handleImport(uploadFile: any) {
+  if (!uploadFile?.raw) return
+  importLoading.value = true
+  try {
+    const { data } = await importDepartmentApi(uploadFile.raw)
+    await fetchData()
+    if (data.errors?.length) {
+      const errorText = data.errors.slice(0, 20).join("<br>")
+      const moreText = data.errors.length > 20 ? `<br>其余 ${data.errors.length - 20} 条错误请检查 Excel 后重新导入` : ""
+      ElMessageBox.alert(
+        `成功导入 ${data.successCount} 条。<br>${errorText}${moreText}`,
+        "导入完成",
+        { dangerouslyUseHTMLString: true, type: data.successCount > 0 ? "warning" : "error" }
+      )
+    } else {
+      ElMessage.success(`成功导入 ${data.successCount} 条部门`)
+    }
+  } catch { /* handled */ } finally {
+    importLoading.value = false
+  }
+}
+
 fetchData()
 </script>
 
@@ -227,6 +251,16 @@ fetchData()
             <el-button @click="toggleExpandAll">
               {{ isExpandAll ? "折叠全部" : "展开全部" }}
             </el-button>
+            <el-upload
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".xlsx,.xls"
+              :on-change="handleImport"
+            >
+              <el-button type="success" :loading="importLoading">
+                导入 Excel
+              </el-button>
+            </el-upload>
             <el-button type="primary" @click="openCreateDialog">
               新增部门
             </el-button>
@@ -238,7 +272,7 @@ fetchData()
         type="info"
         :closable="false"
         class="mb-3"
-        title="三级结构：市级 → 区县 → 社区/街道/乡镇。市级可查看全部下属数据；同级区县互不可见。"
+        title="三级结构：市级 → 区县 → 社区/街道/乡镇。导入 Excel 首行需包含：部门名称、层级、上级部门、描述。"
       />
 
       <el-table

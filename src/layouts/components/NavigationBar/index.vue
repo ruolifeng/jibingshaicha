@@ -1,10 +1,11 @@
 <script lang="ts" setup>
+import Notify from "@@/components/Notify/index.vue"
 import Screenfull from "@@/components/Screenfull/index.vue"
 import SearchMenu from "@@/components/SearchMenu/index.vue"
 import ThemeSwitch from "@@/components/ThemeSwitch/index.vue"
-import Notify from "@@/components/Notify/index.vue"
 import { useDevice } from "@@/composables/useDevice"
 import { useLayoutMode } from "@@/composables/useLayoutMode"
+import { resolveFileUrl } from "@@/utils/attachment"
 import { Setting, UserFilled } from "@element-plus/icons-vue"
 import { useAppStore } from "@/pinia/stores/app"
 import { useSettingsStore } from "@/pinia/stores/settings"
@@ -25,9 +26,16 @@ const settingsStore = useSettingsStore()
 
 const { showThemeSwitch, showScreenfull, showSearchMenu, showSettings } = storeToRefs(settingsStore)
 
+const avatarUrl = computed(() => resolveFileUrl(userStore.avatar))
+
 /** 切换侧边栏 */
 function toggleSidebar() {
   appStore.toggleSidebar(false)
+}
+
+/** 进入个人信息 */
+function openProfile() {
+  router.push("/profile")
 }
 
 /** 登出 */
@@ -59,7 +67,7 @@ function logout() {
       </el-tooltip>
       <el-dropdown>
         <div class="right-menu-item user">
-          <el-avatar :icon="UserFilled" :size="30" />
+          <el-avatar :src="avatarUrl" :icon="UserFilled" :size="30" />
           <span>{{ userStore.realName || userStore.username }}</span>
           <el-tag v-if="userStore.roleName" size="small" type="info" class="ml-2">
             {{ userStore.roleName }}
@@ -69,6 +77,9 @@ function logout() {
           <el-dropdown-menu>
             <el-dropdown-item disabled>
               {{ userStore.orgName || "未设置机构" }}
+            </el-dropdown-item>
+            <el-dropdown-item divided @click="openProfile">
+              个人信息
             </el-dropdown-item>
             <el-dropdown-item divided @click="logout">
               退出登录

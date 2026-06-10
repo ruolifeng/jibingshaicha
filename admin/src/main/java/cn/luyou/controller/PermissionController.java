@@ -31,7 +31,7 @@ public class PermissionController {
     @Operation(summary = "获取可分配权限的同部门用户列表")
     @GetMapping("/users")
     public ResultResponse<List<cn.luyou.model.vo.UserInfoVO>> listAssignableUsers() {
-        userService.checkPermissionCode("system:permissions");
+        userService.checkAnyPermissionCode("system:permissions", "permission:assign");
         return ResultRes.success(userService.listSameDepartmentUsers());
     }
 
@@ -56,7 +56,7 @@ public class PermissionController {
     @Operation(summary = "获取用户额外分配的权限ID（不含角色默认权限）")
     @GetMapping("/user/{userId}")
     public ResultResponse<List<Long>> getUserPermissions(@PathVariable Long userId) {
-        userService.checkPermissionCode("system:permissions");
+        userService.checkAnyPermissionCode("system:permissions", "permission:assign");
         userService.assertSameDepartmentAccess(userId);
         return ResultRes.success(permissionService.getUserPermissionIds(userId));
     }
@@ -64,7 +64,7 @@ public class PermissionController {
     @Operation(summary = "分配用户额外权限（全量替换，与角色权限合并生效）")
     @PostMapping("/assign-user")
     public ResultResponse<Void> assignUser(@RequestBody Map<String, Object> params) {
-        userService.checkPermissionCode("permission:assign");
+        userService.checkAnyPermissionCode("system:permissions", "permission:assign");
         long userId = ((Number) params.get("userId")).longValue();
         userService.assertSameDepartmentAccess(userId);
         @SuppressWarnings("unchecked")

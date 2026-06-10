@@ -6,6 +6,7 @@ import cn.luyou.common.customError.ServiceException;
 import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.User;
 import cn.luyou.model.vo.UserInfoVO;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.PermissionService;
 import cn.luyou.service.UserService;
 import cn.luyou.utils.BaseContext;
@@ -28,6 +29,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private final JwtUtil jwtUtil;
     private final PermissionService permissionService;
+    private final DepartmentService departmentService;
     private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
 
     private static final Map<Integer, String> ROLE_NAME_MAP = Map.of(
@@ -73,9 +75,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq(role != null, User::getRole, role)
                 .orderByAsc(User::getRole)
                 .orderByDesc(User::getCreateTime);
-        if (!BaseContext.isSuperAdmin()) {
-            wrapper.eq(User::getDepartmentId, BaseContext.getCurrentDepartmentId());
-        }
+        applyManageableUserScope(wrapper);
         return page(new Page<>(page, size), wrapper);
     }
 
@@ -91,6 +91,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user.getRole() == null) {
             user.setRole(6);
         }
+        assertCreateUserAllowed(user);
         user.setPassword(PASSWORD_ENCODER.encode(user.getPassword()));
         save(user);
     }
@@ -101,11 +102,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "用户不存在");
         }
+        assertUserManageable(existing);
         if (StrUtil.isNotBlank(user.getUsername()) && !user.getUsername().equals(existing.getUsername())) {
             Long count = lambdaQuery().eq(User::getUsername, user.getUsername()).count();
             if (count > 0) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "用户名已存在");
             }
+        }
+        if (!BaseContext.isSuperAdmin() && existing.getId().equals(BaseContext.getCurrentId())) {
+            // 普通用户编辑本人时仅允许修改基础资料/密码，防止通过表单字段调整自身层级和部门。
+            user.setRole(existing.getRole());
+            user.setDepartmentId(existing.getDepartmentId());
+        } else if (!BaseContext.isSuperAdmin()) {
+            assertDepartmentInScope(user.getDepartmentId(), "只能将用户分配到本部门或下级部门");
         }
         // 仅当传入了新密码时才重新加密，否则保持原密码不变
         if (StrUtil.isNotBlank(user.getPassword())) {
@@ -117,10 +126,33 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    public void updateCurrentUser(User user) {
+        Long currentUserId = BaseContext.getCurrentId();
+        User existing = getById(currentUserId);
+        if (existing == null) {
+            throw new ServiceException(StatusEnum.UNAUTHORIZED, "用户不存在");
+        }
+
+        var updater = lambdaUpdate()
+                .eq(User::getId, currentUserId)
+                .set(User::getRealName, user.getRealName())
+                .set(User::getOrgName, user.getOrgName())
+                .set(User::getAvatar, user.getAvatar());
+        if (StrUtil.isNotBlank(user.getPassword())) {
+            updater.set(User::getPassword, PASSWORD_ENCODER.encode(user.getPassword()));
+        }
+        updater.update();
+    }
+
+    @Override
     public void deleteUser(Long id) {
         User user = getById(id);
         if (user == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "用户不存在");
+        }
+        assertUserManageable(user);
+        if (id.equals(BaseContext.getCurrentId())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "不能删除当前登录用户");
         }
         if (user.getRole() == 1) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不能删除超级管理员");
@@ -167,11 +199,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .orderByAsc(User::getRole)
                 .orderByDesc(User::getCreateTime);
         if (!BaseContext.isSuperAdmin()) {
-            Long deptId = BaseContext.getCurrentDepartmentId();
-            if (deptId == null) {
-                return List.of();
-            }
-            wrapper.eq(User::getDepartmentId, deptId);
+            applyManageableUserScope(wrapper);
         }
         return list(wrapper).stream().map(this::buildUserInfoVO).toList();
     }
@@ -185,10 +213,55 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (target == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "用户不存在");
         }
-        Long currentDeptId = BaseContext.getCurrentDepartmentId();
-        if (currentDeptId == null || !currentDeptId.equals(target.getDepartmentId())) {
-            throw new ServiceException(StatusEnum.FORBIDDEN, "只能操作同部门用户");
+        assertUserManageable(target);
+    }
+
+    /** 用户管理范围：本人 + 当前部门及所有下级部门用户。 */
+    private void applyManageableUserScope(LambdaQueryWrapper<User> wrapper) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
         }
+        Long currentUserId = BaseContext.getCurrentId();
+        List<Long> deptIds = resolveScopedDepartmentIds();
+        wrapper.and(w -> {
+            w.eq(User::getId, currentUserId);
+            if (!deptIds.isEmpty()) {
+                w.or().in(User::getDepartmentId, deptIds);
+            }
+        });
+    }
+
+    private void assertUserManageable(User target) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Long currentUserId = BaseContext.getCurrentId();
+        if (currentUserId != null && currentUserId.equals(target.getId())) {
+            return;
+        }
+        assertDepartmentInScope(target.getDepartmentId(), "只能操作本人、本部门或下级部门用户");
+    }
+
+    private void assertCreateUserAllowed(User user) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        assertDepartmentInScope(user.getDepartmentId(), "只能在本部门或下级部门创建用户");
+    }
+
+    private void assertDepartmentInScope(Long departmentId, String message) {
+        if (departmentId == null || !resolveScopedDepartmentIds().contains(departmentId)) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, message);
+        }
+    }
+
+    private List<Long> resolveScopedDepartmentIds() {
+        Long deptId = BaseContext.getCurrentDepartmentId();
+        if (deptId == null) {
+            return List.of();
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(deptId);
+        return deptIds == null ? List.of() : deptIds;
     }
 
     @Override
@@ -248,6 +321,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .role(user.getRole())
                 .roleName(roleName)
                 .orgName(user.getOrgName())
+                .avatar(user.getAvatar())
                 .departmentId(user.getDepartmentId())
                 .roles(roleList)
                 .permissions(permissions)

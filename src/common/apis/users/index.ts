@@ -36,6 +36,15 @@ export function updateUserApi(data: Record<string, any>) {
   })
 }
 
+/** 更新当前登录用户个人信息 */
+export function updateCurrentUserApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({
+    url: "user/profile",
+    method: "put",
+    data
+  })
+}
+
 /** 删除用户 */
 export function deleteUserApi(id: number) {
   return request<ApiResponseData<null>>({

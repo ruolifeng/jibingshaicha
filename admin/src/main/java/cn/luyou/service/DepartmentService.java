@@ -1,7 +1,9 @@
 package cn.luyou.service;
 
 import cn.luyou.model.Department;
+import cn.luyou.model.ImportResult;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -27,4 +29,7 @@ public interface DepartmentService extends IService<Department> {
 
     /** 删除部门（逻辑删除） */
     void deleteDepartment(Long id);
+
+    /** 批量导入部门 */
+    ImportResult importDepartments(MultipartFile file);
 }

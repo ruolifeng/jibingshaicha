@@ -5,6 +5,7 @@ export interface UserInfo {
   role: number
   roleName: string
   orgName: string
+  avatar?: string
   departmentId?: number | null
   roles: string[]
   permissions: string[]

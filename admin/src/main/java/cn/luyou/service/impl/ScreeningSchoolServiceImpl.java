@@ -28,7 +28,6 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
-import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -44,7 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -180,6 +178,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
                             .departmentId(d.getDepartmentId())
+                            .creatorId(BaseContext.getCurrentId())
                             .build())
                 .toList();
         // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建
@@ -205,6 +204,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
                             .departmentId(d.getDepartmentId())
+                            .creatorId(BaseContext.getCurrentId())
                             .build())
                 .toList();
         List<LatentInfection> allLatent = new ArrayList<>(latentList);
@@ -339,6 +339,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
                     .departmentId(data.getDepartmentId())
+                    .creatorId(BaseContext.getCurrentId())
                     .build();
             latentInfectionService.save(latent);
         }
@@ -408,6 +409,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
                     .departmentId(null)
+                    .creatorId(BaseContext.getCurrentId())
                     .build();
             latentInfectionService.save(latent);
         }

@@ -50,6 +50,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/dashboard/index.vue"),
         name: "Dashboard",
         meta: { title: "首页", svgIcon: "dashboard", affix: true }
+      },
+      {
+        path: "profile",
+        component: () => import("@/pages/profile/index.vue"),
+        name: "Profile",
+        meta: { title: "个人信息", hidden: true }
       }
     ]
   },
@@ -353,14 +359,23 @@ export const dynamicRoutes: RouteRecordRaw[] = [
       elIcon: "Setting",
       // roles 限制移至各子路由，父路由仅通过 permission 码控制可见性
       // 一二级用户拥有 system 权限后可见此菜单（仅展示其有权访问的子项）
-      permission: "system"
+      anyPermission: [
+        "system",
+        "system:users",
+        "user:create",
+        "user:edit",
+        "user:delete",
+        "system:department",
+        "system:permissions",
+        "permission:assign"
+      ]
     },
     children: [
       {
         path: "users",
         component: () => import("@/pages/system/users.vue"),
         name: "SystemUsers",
-        meta: { title: "用户管理", permission: "system:users" }
+        meta: { title: "用户管理", anyPermission: ["system:users", "user:create", "user:edit", "user:delete"] }
       },
       {
         path: "department",
@@ -373,7 +388,7 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/system/permissions.vue"),
         name: "SystemPermissions",
         // 不设 roles 限制，由 permission 码控制：一二级用户拥有 system:permissions 权限即可访问
-        meta: { title: "权限管理", permission: "system:permissions" }
+        meta: { title: "权限管理", anyPermission: ["system:permissions", "permission:assign"] }
       },
       {
         path: "backup",

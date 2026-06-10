@@ -85,6 +85,7 @@ public class ReferralTrackingController {
     @Operation(summary = "新增推介或追踪记录（bizMode: recommend/track）")
     @PostMapping
     public ResultResponse<ReferralTracking> create(@RequestBody Map<String, Object> body) {
+        userService.checkPermissionCode("referralManagement:create");
         return ResultRes.success(referralTrackingService.create(body));
     }
 

@@ -21,6 +21,8 @@ export const useUserStore = defineStore("user", () => {
 
   const orgName = ref<string>("")
 
+  const avatar = ref<string>("")
+
   const userId = ref<number>(0)
 
   const permissions = ref<string[]>([])
@@ -43,6 +45,7 @@ export const useUserStore = defineStore("user", () => {
     userRole.value = data.role || 0
     roleName.value = data.roleName || ""
     orgName.value = data.orgName || ""
+    avatar.value = data.avatar || ""
     userId.value = data.id || 0
     permissions.value = data.permissions || []
     roles.value = data.roles?.length > 0 ? data.roles : routerConfig.defaultRoles
@@ -64,6 +67,7 @@ export const useUserStore = defineStore("user", () => {
     roles.value = []
     permissions.value = []
     userRole.value = 0
+    avatar.value = ""
     resetRouter()
     resetTagsView()
   }
@@ -75,6 +79,7 @@ export const useUserStore = defineStore("user", () => {
     roles.value = []
     permissions.value = []
     userRole.value = 0
+    avatar.value = ""
   }
 
   // 重置 Visited Views 和 Cached Views
@@ -91,7 +96,7 @@ export const useUserStore = defineStore("user", () => {
     return permissions.value.includes(code)
   }
 
-  return { token, roles, username, realName, userRole, roleName, orgName, userId, permissions, hasPermission, setToken, getInfo, changeRoles, logout, resetToken }
+  return { token, roles, username, realName, userRole, roleName, orgName, avatar, userId, permissions, hasPermission, setToken, getInfo, changeRoles, logout, resetToken }
 })
 
 /**

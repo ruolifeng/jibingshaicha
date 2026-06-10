@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick, computed } from "vue"
-import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { REFERRAL_CROWD_CATEGORY_OPTIONS, isConfirmedPatientDiagnosis } from "@@/constants/disease"
 import {
@@ -29,6 +28,7 @@ import {
   sendRecommendApi,
   confirmRecommendApi,
   rejectRecommendApi,
+  enableJointTrackingApi,
   trackReferralApi,
   saveScreeningInfoApi,
   saveDiagnosisApi,
@@ -38,12 +38,31 @@ import {
 } from "../apis/index"
 
 const userStore = useUserStore()
-const router = useRouter()
 const messageStore = useMessageStore()
 
-/** 三/四/五级用户可发起推介；三/四级用户接收并确认 */
-const canCreateRecommend = computed(() => [4, 5, 6].includes(userStore.userRole))
-const isLevel34User = computed(() => userStore.userRole === 4 || userStore.userRole === 5)
+/** 推介模块共同追踪：未到位 4 次强制结束 */
+const RECOMMEND_FORCE_END_THRESHOLD = 4
+
+function isJointTrackingEnabled(row: any) {
+  return Number(row?.jointTracking) === 1
+}
+
+/** 已确认推介：接收方可点击追踪（自动开启共同追踪）；共同追踪开启后发起方也可追踪 */
+function canOperateRecommendTrack(row: any) {
+  if (row.archived || row.recommendStatus !== 2) return false
+  if (userStore.userRole === 1) return true
+  const uid = Number(userStore.userId)
+  if (uid === Number(row.receiverUserId)) return true
+  if (isJointTrackingEnabled(row) && uid === Number(row.creatorId)) return true
+  return false
+}
+
+/** 超级管理员或拥有新增权限的三/四/五级用户可发起推介 */
+const canCreateRecommend = computed(() =>
+  userStore.userRole === 1 || ([4, 5, 6].includes(userStore.userRole) && userStore.hasPermission("referralManagement:create"))
+)
+/** 超级管理员和三/四/五级用户展示推介操作指引 */
+const showRecommendGuide = computed(() => userStore.userRole === 1 || [4, 5, 6].includes(userStore.userRole))
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -338,12 +357,11 @@ async function handleSend(row: any) {
 
 // ===== 确认/拒绝推介 =====
 async function handleConfirm(row: any) {
-  await ElMessageBox.confirm(`确认接受「${row.name}」的推介通知单？确认后将进入追踪流程。`, "确认接收", { type: "info" })
+  await ElMessageBox.confirm(`确认接受「${row.name}」的推介通知单？确认后请在本页开展追踪。`, "确认接收", { type: "info" })
   await confirmRecommendApi(row.id)
-  ElMessage.success("已确认接受，请前往「追踪」页面开展追踪")
+  ElMessage.success("已确认接受，请在本页点击「追踪」开展共同追踪")
   await messageStore.fetchUnreadCount()
   fetchList()
-  router.push("/referral-management/track")
 }
 
 const rejectDialogVisible = ref(false)
@@ -381,6 +399,24 @@ function openTrackDialog(row: any) {
   trackDialogVisible.value = true
 }
 
+/** 推介模块：点击「追踪」即开启共同追踪（接收方首次点击时自动开启） */
+async function handleRecommendTrack(row: any) {
+  if (isReceiver(row) && !isJointTrackingEnabled(row)) {
+    await ElMessageBox.confirm(
+      `确认对「${row.name}」开启共同追踪并开展追踪吗？开启后您与推介发起方均可追踪，双方操作次数合并计算（${RECOMMEND_FORCE_END_THRESHOLD} 次未到位自动结束）。`,
+      "追踪确认",
+      { type: "warning", confirmButtonText: "确认", cancelButtonText: "取消" }
+    )
+    await enableJointTrackingApi(row.id)
+    ElMessage.success("已开启共同追踪")
+    await fetchList()
+    const updated = tableData.value.find((r: any) => r.id === row.id) ?? { ...row, jointTracking: 1 }
+    openTrackDialog(updated)
+    return
+  }
+  openTrackDialog(row)
+}
+
 async function handleTrack() {
   if (!trackForm.status) {
     ElMessage.warning("请选择追踪状态")
@@ -390,10 +426,11 @@ async function handleTrack() {
     ElMessage.warning("请填写追踪备注")
     return
   }
-  const willForceEnd = trackForm.status === 2 && (trackRow.value?.notInPlaceCount ?? 0) >= 2
+  const willForceEnd = trackForm.status === 2
+    && (trackRow.value?.notInPlaceCount ?? 0) >= RECOMMEND_FORCE_END_THRESHOLD - 1
   await trackReferralApi(trackRow.value.id, trackForm.status, trackForm.remark)
   if (willForceEnd) {
-    ElMessage.warning("已记录第 3 次未到位，追踪已强制结束")
+    ElMessage.warning(`已记录第 ${RECOMMEND_FORCE_END_THRESHOLD} 次未到位，追踪已强制结束`)
   } else if (trackForm.status === 1) {
     ElMessage.success("已确认到位")
   } else {
@@ -498,7 +535,13 @@ async function handleDelete(row: any) {
 // ===== 状态标签辅助 =====
 function getRowClass({ row }: { row: any }) {
   if (row.archived && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
-  if (isCreator(row) && (row.recommendStatus === 2 || row.recommendStatus === 3)) return "recommend-settled-row"
+  if (isCreator(row) && (row.recommendStatus === 2 || row.recommendStatus === 3)) {
+    if (row.recommendStatus === 2 && isJointTrackingEnabled(row) && !row.archived
+      && row.trackingStatus !== 4 && !row.diagnosisResult) {
+      return ""
+    }
+    return "recommend-settled-row"
+  }
   return ""
 }
 const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
@@ -548,11 +591,11 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
 
     <el-card shadow="never" style="margin-top: 16px">
       <el-alert
-        v-if="isLevel34User"
+        v-if="showRecommendGuide"
         type="info"
         :closable="false"
         class="mb-3"
-        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后请前往「追踪」页面操作；接收方也可在追踪页开启「共同追踪」，开启后双方均可追踪且次数合并计算。您发起的推介仍保留在本页（已办结行变灰，仅可查看）。"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后请在本页点击「追踪」开展共同追踪（双方次数合并计算，4 次未到位自动结束）。您发起的推介仍保留在本页，共同追踪开启后您也可参与追踪。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
         <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">新增推介</el-button>
@@ -662,6 +705,25 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               type="danger" link size="small"
               @click="openRejectDialog(row)"
             >拒绝</el-button>
+            <!-- 已确认推介：追踪（合并共同追踪，仅推介模块） -->
+            <el-button
+              v-if="canOperateRecommendTrack(row) && [0, 2].includes(row.trackingStatus)"
+              v-permission="'referralManagement:trackOperate'"
+              type="warning" link size="small"
+              @click="handleRecommendTrack(row)"
+            >追踪</el-button>
+            <el-button
+              v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
+              v-permission="'referralManagement:xray'"
+              type="primary" link size="small"
+              @click="openScreeningDialog(row)"
+            >录入胸片</el-button>
+            <el-button
+              v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
+              v-permission="'referralManagement:diagnosis'"
+              type="success" link size="small"
+              @click="openDiagnosisDialog(row)"
+            >录入诊断</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -1134,7 +1196,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-form-item>
         <el-alert
           v-if="trackForm.status === 2 && trackRow"
-          :title="`第 ${nextAttemptNo} 次追踪，当前已未到位 ${trackRow.notInPlaceCount ?? 0} 次，3 次未到位将自动结束追踪`"
+          :title="`第 ${nextAttemptNo} 次追踪，当前已未到位 ${trackRow.notInPlaceCount ?? 0} 次，${RECOMMEND_FORCE_END_THRESHOLD} 次未到位将自动结束追踪`"
           type="warning"
           :closable="false"
         />

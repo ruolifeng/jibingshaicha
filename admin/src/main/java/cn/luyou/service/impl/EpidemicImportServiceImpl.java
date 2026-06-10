@@ -326,6 +326,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
                 .referralResult("latent")
                 .archived(0)
                 .departmentId(entity.getDepartmentId())
+                .creatorId(BaseContext.getCurrentId())
                 .build();
         latentInfectionService.save(latent);
         return latent.getId();

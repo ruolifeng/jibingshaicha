@@ -65,9 +65,14 @@ function sameUrlList(a: string[], b: string[]) {
   return a.length === b.length && a.every((url, index) => url === b[index])
 }
 
+/** 是否为已落库的服务端 URL（排除 picture-card 预览用的 blob:） */
+function isPersistedUrl(url?: string) {
+  return Boolean(url) && !url!.startsWith("blob:")
+}
+
 /** 已上传成功的张数 */
 function uploadedCount() {
-  return fileList.value.filter(f => f.url).length
+  return fileList.value.filter(f => isPersistedUrl(f.url)).length
 }
 
 /** 当前占用的上传位（含上传中占位，不含已剔除的失败项） */
@@ -93,8 +98,8 @@ watch(
 
 /** fileList → v-model（统一以 JSON 字符串发出；上传中暂不回写，避免清空列表） */
 function emitChange(force = false) {
-  const urls = fileList.value.map(f => f.url).filter(Boolean)
-  const hasPending = fileList.value.some(f => !f.url)
+  const urls = fileList.value.map(f => f.url).filter(isPersistedUrl)
+  const hasPending = fileList.value.some(f => !isPersistedUrl(f.url))
   if (!force && hasPending) return
   emit("update:modelValue", urls.length ? JSON.stringify(urls) : "")
 }
@@ -117,7 +122,8 @@ const beforeUpload: UploadProps["beforeUpload"] = (file) => {
     ElMessage.error(`图片大小不能超过 ${props.maxSizeMB}MB`)
     return false
   }
-  if (usedSlotCount() >= props.max) {
+  // onStart 会先把当前文件加入列表并生成 blob 预览，仅统计已落库的服务端 URL
+  if (uploadedCount() >= props.max) {
     ElMessage.warning(`最多上传 ${props.max} 张图片`)
     return false
   }

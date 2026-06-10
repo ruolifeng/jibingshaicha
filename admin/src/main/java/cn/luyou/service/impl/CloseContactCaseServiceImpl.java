@@ -226,8 +226,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         LambdaQueryWrapper<CloseContactCase> wrapper;
         if (ids != null && !ids.isEmpty()) {
             wrapper = new LambdaQueryWrapper<>();
-            wrapper.in(CloseContactCase::getId, ids)
-                    .eq(StrUtil.isNotBlank(diagnosisResult), CloseContactCase::getFinalScreeningResult, diagnosisResult);
+            wrapper.in(CloseContactCase::getId, ids);
         } else {
             wrapper = buildQueryWrapper(name, idNumber, district, phone, creatorUsername, diagnosisResult);
         }

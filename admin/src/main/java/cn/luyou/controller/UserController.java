@@ -98,7 +98,7 @@ public class UserController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) Integer role) {
-        userService.checkPermissionCode("system:users");
+        userService.checkAnyPermissionCode("system:users", "user:create", "user:edit", "user:delete");
         return ResultRes.success(userService.queryPage(page, size, username, role));
     }
 
@@ -115,6 +115,13 @@ public class UserController {
     public ResultResponse<Void> update(@RequestBody User user) {
         userService.checkPermissionCode("user:edit");
         userService.updateUser(user);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "更新当前登录用户个人信息")
+    @PutMapping("/profile")
+    public ResultResponse<Void> updateProfile(@RequestBody User user) {
+        userService.updateCurrentUser(user);
         return ResultRes.success(null);
     }
 

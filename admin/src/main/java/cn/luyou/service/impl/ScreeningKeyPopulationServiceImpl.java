@@ -190,6 +190,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
                             .departmentId(d.getDepartmentId())
+                            .creatorId(BaseContext.getCurrentId())
                             .build();
                 })
                 .toList();
@@ -218,6 +219,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
                             .departmentId(d.getDepartmentId())
+                            .creatorId(BaseContext.getCurrentId())
                             .build();
                 })
                 .toList();
@@ -359,6 +361,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
                     .departmentId(data.getDepartmentId())
+                    .creatorId(BaseContext.getCurrentId())
                     .build();
             latentInfectionService.save(latent);
         }

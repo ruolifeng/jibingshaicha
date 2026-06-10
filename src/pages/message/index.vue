@@ -186,10 +186,10 @@ async function handleConfirmReferralTracking(row: any) {
   }
   try {
     await confirmRecommendApi(row.bizId)
-    ElMessage.success("已确认接收推介，请前往「追踪」页面开展追踪")
+    ElMessage.success("已确认接收推介，请前往「推介」页面点击「追踪」开展共同追踪")
     await fetchData()
     await messageStore.fetchUnreadCount()
-    router.push("/referral-management/track")
+    router.push("/referral-management/recommend")
   } catch { /* handled */ }
 }
 

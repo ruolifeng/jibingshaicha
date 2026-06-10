@@ -19,6 +19,8 @@ public interface UserService extends IService<User> {
 
     void updateUser(User user);
 
+    void updateCurrentUser(User user);
+
     void deleteUser(Long id);
 
     /** 获取所有五级机构用户（用于通知单接收单位选择） */

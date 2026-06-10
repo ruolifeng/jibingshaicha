@@ -26,6 +26,19 @@ export function getDepartmentListApi() {
   })
 }
 
+/** 批量导入部门 Excel */
+export function importDepartmentApi(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+    url: "department/import",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000
+  })
+}
+
 /** 创建部门 */
 export function createDepartmentApi(data: DepartmentPayload) {
   return request<ApiResponseData<null>>({

@@ -3,12 +3,14 @@ package cn.luyou.controller;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Department;
+import cn.luyou.model.ImportResult;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -33,6 +35,13 @@ public class DepartmentController {
         userService.checkPermission(1);
         departmentService.createDepartment(department);
         return ResultRes.success(null);
+    }
+
+    @Operation(summary = "批量导入部门")
+    @PostMapping("/import")
+    public ResultResponse<ImportResult> importDepartments(@RequestParam("file") MultipartFile file) {
+        userService.checkPermission(1);
+        return ResultRes.success(departmentService.importDepartments(file));
     }
 
     @Operation(summary = "更新部门")

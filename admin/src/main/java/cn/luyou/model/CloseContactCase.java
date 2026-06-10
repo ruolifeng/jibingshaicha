@@ -4,6 +4,7 @@ import cn.luyou.utils.FlexibleIntegerConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,6 +52,16 @@ public class CloseContactCase extends BaseEntity {
     @ExcelProperty(index = 8, converter = FlexibleLocalDateConverter.class)
     private LocalDate registrationDate;
 
+    /** 报表填报季度（Excel 自动生成列，仅导入/导出占位） */
+    @TableField(exist = false)
+    @ExcelProperty(index = 9)
+    private String reportQuarter;
+
+    /** 登记日期至当前日期间隔提示（Excel 自动生成列，仅导入/导出占位） */
+    @TableField(exist = false)
+    @ExcelProperty(index = 10)
+    private String registrationIntervalHint;
+
     @ExcelProperty(index = 11)
     private String name;
 
@@ -59,6 +70,11 @@ public class CloseContactCase extends BaseEntity {
 
     @ExcelProperty(index = 13, converter = FlexibleIntegerConverter.class)
     private Integer age;
+
+    /** 年龄组（Excel 自动判断列，仅导入/导出占位） */
+    @TableField(exist = false)
+    @ExcelProperty(index = 14)
+    private String ageGroup;
 
     @ExcelProperty(index = 15)
     private String phone;

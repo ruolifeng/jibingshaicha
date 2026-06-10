@@ -95,8 +95,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         if ("recommend".equals(bizMode)) {
             Integer role = currentUser != null ? currentUser.getRole() : null;
-            if (role == null || role < 4 || role > 6) {
-                throw new ServiceException(StatusEnum.FORBIDDEN, "仅三/四/五级用户可发起推介");
+            if (role == null || (role != 1 && (role < 4 || role > 6))) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "仅超级管理员或三/四/五级用户可发起推介");
             }
             validateRecommendRequired(params);
             Long receiverUserId = getLong(params, "receiverUserId");
@@ -576,7 +576,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (record.getCreatorId() != null) {
             String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
             sysMessageService.sendMessage(record.getCreatorId(), "推介通知单已确认接收",
-                    String.format("「%s」的推介通知单已被接收方确认，已进入追踪环节。", name),
+                    String.format("「%s」的推介通知单已被接收方确认，待接收方在推介页点击「追踪」开启共同追踪后，您也可参与追踪。", name),
                     "referral_tracking_confirmed", id);
         }
         log.info("推介通知单已确认接收，recordId={}", id);
@@ -647,7 +647,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (record.getCreatorId() != null) {
             String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
             sysMessageService.sendMessage(record.getCreatorId(), "共同追踪已开启",
-                    String.format("「%s」的推介已由接收方开启共同追踪，您可前往「追踪」页面参与追踪。", name),
+                    String.format("「%s」的推介已由接收方开启共同追踪，您可前往「推介」页面参与追踪。", name),
                     "referral_tracking_joint", id);
         }
         log.info("共同追踪已开启，recordId={}", id);
@@ -707,7 +707,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 log.info("推介追踪到位，recordId={}", id);
             }
             case 2 -> {
-                // 未到位：累计次数，记录追踪时间和原因，第3次强制结束
+                // 未到位：累计次数；已确认推介（共同追踪）4 次强制结束，原生追踪 3 次
+                int forceEndThreshold = isConfirmedReceivedRecommend(record) ? 4 : 3;
                 int newCount = (record.getNotInPlaceCount() == null ? 0 : record.getNotInPlaceCount()) + 1;
 
                 Map<String, Object> entry = new HashMap<>();
@@ -717,7 +718,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 entry.put("reason", remark);
                 history.add(entry);
 
-                if (newCount >= 3) {
+                if (newCount >= forceEndThreshold) {
                     lambdaUpdate()
                             .eq(ReferralTracking::getId, id)
                             .set(ReferralTracking::getTrackingStatus, 4)
@@ -726,7 +727,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                             .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                             .set(ReferralTracking::getArchived, 1)
                             .update();
-                    log.info("推介追踪3次未到位强制结束，recordId={}", id);
+                    log.info("推介追踪{}次未到位强制结束，recordId={}", forceEndThreshold, id);
                 } else {
                     lambdaUpdate()
                             .eq(ReferralTracking::getId, id)
@@ -1697,40 +1698,24 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /**
-     * 推介列表：biz_mode=recommend（含发起方已办结记录）；已确认接收的推介不出现在接收方推介列表。
-     * 追踪列表：biz_mode=track + 当前用户为接收方的已确认推介。
+     * 推介列表：biz_mode=recommend（发起方与接收方确认后均保留在本模块开展共同追踪）。
+     * 追踪列表：仅原生 biz_mode=track（不含已确认推介，推介追踪统一在推介模块完成）。
      */
     private void applyBizModeFilter(LambdaQueryWrapper<ReferralTracking> wrapper, String bizMode) {
         if (StrUtil.isBlank(bizMode)) {
             return;
         }
-        Long userId = BaseContext.getCurrentId();
         if ("track".equals(bizMode)) {
-            wrapper.and(w -> {
-                // 原生追踪；已确认推介误标为 track 时仅接收方可见（兼容 V65 前历史数据）
-                w.nested(n -> n.eq(ReferralTracking::getBizMode, "track")
-                        .and(t -> t.isNull(ReferralTracking::getRecommendSentTime)
-                                .or().ne(ReferralTracking::getRecommendStatus, 2)
-                                .or(userId != null, u -> u.eq(ReferralTracking::getReceiverUserId, userId))));
-                if (userId != null) {
-                    w.or(or -> or.eq(ReferralTracking::getBizMode, "recommend")
-                            .eq(ReferralTracking::getRecommendStatus, 2)
-                            .and(j -> j.eq(ReferralTracking::getReceiverUserId, userId)
-                                    .or(n -> n.eq(ReferralTracking::getJointTracking, 1)
-                                            .eq(ReferralTracking::getCreatorId, userId))));
-                } else if (BaseContext.isSuperAdmin()) {
-                    w.or(or -> or.eq(ReferralTracking::getBizMode, "recommend")
-                            .eq(ReferralTracking::getRecommendStatus, 2));
-                }
-            });
+            wrapper.eq(ReferralTracking::getBizMode, "track")
+                    .and(t -> t.isNull(ReferralTracking::getRecommendSentTime)
+                            .or().ne(ReferralTracking::getRecommendStatus, 2));
             return;
         }
         if ("recommend".equals(bizMode)) {
-            wrapper.eq(ReferralTracking::getBizMode, "recommend");
-            if (userId != null && !BaseContext.isSuperAdmin()) {
-                wrapper.not(n -> n.eq(ReferralTracking::getReceiverUserId, userId)
-                        .eq(ReferralTracking::getRecommendStatus, 2));
-            }
+            wrapper.and(w -> w.eq(ReferralTracking::getBizMode, "recommend")
+                    .or(or -> or.eq(ReferralTracking::getBizMode, "track")
+                            .isNotNull(ReferralTracking::getRecommendSentTime)
+                            .eq(ReferralTracking::getRecommendStatus, 2)));
             return;
         }
         wrapper.eq(ReferralTracking::getBizMode, bizMode);
@@ -1777,7 +1762,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     "referral_tracking_receive",
                     "referral_tracking_confirmed",
                     "推介已接收",
-                    String.format("「%s」的推介通知单您已确认接收，已进入追踪环节。", name));
+                    String.format("「%s」的推介通知单您已确认接收，请在本页开展追踪。", name));
         } else {
             sysMessageService.updatePendingMessageByBizId(
                     record.getId(),

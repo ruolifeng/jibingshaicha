@@ -48,6 +48,8 @@ async function fetchData() {
     total.value = res.data.total
   } finally {
     loading.value = false
+    selectedRows.value = []
+    tableRef.value?.clearCheckboxRow?.()
   }
 }
 
@@ -69,6 +71,15 @@ function handleReset() {
 const importResultVisible = ref(false)
 const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
 const templateDownloading = ref(false)
+const selectedRows = ref<any[]>([])
+
+function syncSelectedRows() {
+  selectedRows.value = tableRef.value?.getCheckboxRecords?.() ?? []
+}
+
+function handleCheckboxChange() {
+  syncSelectedRows()
+}
 
 async function handleDownloadTemplate() {
   templateDownloading.value = true
@@ -96,7 +107,7 @@ async function handleUpload(uploadFile: any) {
 }
 
 function getSelectedRows() {
-  return tableRef.value?.getCheckboxRecords?.() ?? []
+  return selectedRows.value
 }
 
 function buildExportParams(exportType?: "latent" | "confirmed") {
@@ -112,21 +123,25 @@ function buildExportParams(exportType?: "latent" | "confirmed") {
 }
 
 async function handleExport(ids?: number[], exportType?: "latent" | "confirmed") {
+  const isSelectedExport = !!ids?.length
   const label = exportType === "latent"
     ? "潜伏感染者"
     : exportType === "confirmed"
       ? "确诊患者"
-      : "全部"
+      : isSelectedExport
+        ? `选中的 ${ids!.length} 条`
+        : "全部"
   try {
     await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
       confirmButtonText: "确认导出",
       cancelButtonText: "取消",
       type: "warning"
     })
-    const blob = await exportCloseContactCaseApi({
-      ...buildExportParams(exportType),
-      ids
-    })
+    const blob = await exportCloseContactCaseApi(
+      isSelectedExport
+        ? { ids }
+        : { ...buildExportParams(exportType) }
+    )
     const filename = exportType === "latent"
       ? "密接个案表_潜伏感染者.xlsx"
       : exportType === "confirmed"
@@ -135,7 +150,7 @@ async function handleExport(ids?: number[], exportType?: "latent" | "confirmed")
     downloadBlob(blob as unknown as Blob, filename)
     ElMessage.success("导出成功")
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("导出失败")
+    if (err !== "cancel") ElMessage.error(err?.message || "导出失败")
   }
 }
 
@@ -345,7 +360,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-button v-permission="'closeContact:case:export'" @click="() => handleExport()">
               导出全部
             </el-button>
-            <el-button v-permission="'closeContact:case:export'" type="warning" @click="handleExportSelected">
+            <el-button v-permission="'closeContact:case:export'" type="warning" :disabled="!selectedRows.length" @click="handleExportSelected">
               导出勾选
             </el-button>
             <el-button v-permission="'closeContact:case:export'" type="warning" plain @click="() => handleExport(undefined, 'latent')">
@@ -354,7 +369,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-button v-permission="'closeContact:case:export'" type="danger" plain @click="() => handleExport(undefined, 'confirmed')">
               导出确诊患者
             </el-button>
-            <el-button v-permission="'closeContact:case:delete'" type="danger" @click="handleBatchDelete">
+            <el-button v-permission="'closeContact:case:delete'" type="danger" :disabled="!selectedRows.length" @click="handleBatchDelete">
               批量删除
             </el-button>
           </div>
@@ -369,12 +384,14 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           border
           stripe
           height="620"
+          :row-config="{ keyField: 'id' }"
           :column-config="{ resizable: true }"
           :scroll-x="{ enabled: true, gt: 0 }"
           :scroll-y="{ enabled: true, gt: 0 }"
           show-overflow
           show-header-overflow
-          row-id="id"
+          @checkbox-change="handleCheckboxChange"
+          @checkbox-all="handleCheckboxChange"
         >
           <vxe-column type="checkbox" width="48" fixed="left" />
           <vxe-column
