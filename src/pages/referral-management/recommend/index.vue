@@ -386,8 +386,8 @@ async function handleTrack() {
     ElMessage.warning("请选择追踪状态")
     return
   }
-  if (trackForm.status === 2 && !trackForm.remark.trim()) {
-    ElMessage.warning("未到位时必须填写原因")
+  if (!trackForm.remark.trim()) {
+    ElMessage.warning("请填写追踪备注")
     return
   }
   const willForceEnd = trackForm.status === 2 && (trackRow.value?.notInPlaceCount ?? 0) >= 2
@@ -552,7 +552,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         type="info"
         :closable="false"
         class="mb-3"
-        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后进入「追踪」；您发起的推介仍保留在本页（已办结行变灰，仅可查看）。"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后请前往「追踪」页面操作；接收方也可在追踪页开启「共同追踪」，开启后双方均可追踪且次数合并计算。您发起的推介仍保留在本页（已办结行变灰，仅可查看）。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
         <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">新增推介</el-button>
@@ -910,9 +910,17 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             <el-descriptions-item label="未到位次数">
               {{ viewDetail.notInPlaceCount > 0 ? `${viewDetail.notInPlaceCount}次` : "-" }}
             </el-descriptions-item>
+            <el-descriptions-item label="共同追踪">
+              <el-tag :type="viewDetail.jointTracking === 1 ? 'success' : 'info'" size="small">
+                {{ viewDetail.jointTracking === 1 ? "已开启" : "未开启" }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="viewDetail.jointTrackingTime" label="共同追踪时间">
+              {{ formatDateTime(viewDetail.jointTrackingTime) }}
+            </el-descriptions-item>
           </el-descriptions>
           <div v-if="viewTrackingHistory.length" class="view-tracking-section">
-            <div class="view-tracking-title">对方追踪过程</div>
+            <div class="view-tracking-title">{{ viewDetail.jointTracking === 1 ? "共同追踪过程" : "对方追踪过程" }}</div>
             <div class="tracking-history">
               <div v-for="item in viewTrackingHistory" :key="item.attempt" class="tracking-history-item">
                 <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
@@ -920,7 +928,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
                   {{ TRACK_STATUS_LABEL[item.status] }}
                 </el-tag>
                 <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-                <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+                <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
               </div>
             </div>
           </div>
@@ -1085,7 +1093,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             {{ TRACK_STATUS_LABEL[item.status] }}
           </el-tag>
           <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-          <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+          <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
         </div>
       </div>
       <template #footer>
@@ -1105,7 +1113,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
                 {{ TRACK_STATUS_LABEL[item.status] }}
               </el-tag>
               <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-              <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+              <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
             </div>
           </div>
         </el-form-item>
@@ -1116,16 +1124,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             <el-radio :value="3">其他</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="trackForm.status === 2" label="未到位原因" required>
+        <el-form-item label="备注" required>
           <el-input
             v-model="trackForm.remark"
             type="textarea"
             :rows="3"
-            placeholder="请填写未到位原因"
+            placeholder="请填写本次追踪备注"
           />
-        </el-form-item>
-        <el-form-item v-else-if="trackForm.status === 3" label="备注">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
         </el-form-item>
         <el-alert
           v-if="trackForm.status === 2 && trackRow"

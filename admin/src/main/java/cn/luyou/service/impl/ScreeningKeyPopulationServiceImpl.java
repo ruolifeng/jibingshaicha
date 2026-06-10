@@ -29,6 +29,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.exception.ExcelDataConvertException;
@@ -70,6 +71,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private final EpidemicReportService epidemicReportService;
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
             "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
@@ -98,7 +100,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     data.setUploadBatch(batchId);
                     boolean directXray = hasDirectXrayAndDiagnosis(data);
                     data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
-                    data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setSourceType(resolvedSourceType);
                     dataList.add(data);
                 }
@@ -305,24 +307,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 default -> {}
             }
         }
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
         wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
-        if (!BaseContext.isSuperAdmin()) {
-            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
-            List<Long> referredIds = referralService.lambdaQuery()
-                    .eq(Referral::getModuleType, "screening")
-                    .eq(Referral::getPopulationType, "key")
-                    .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
-                    .eq(Referral::getStatus, 2)
-                    .list()
-                    .stream().map(Referral::getBizId).toList();
-            if (referredIds.isEmpty()) {
-                wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
-            } else {
-                wrapper.and(w -> w.in(ScreeningKeyPopulation::getDepartmentId, deptIds)
-                        .or().in(ScreeningKeyPopulation::getId, referredIds));
-            }
-        }
         return page(new Page<>(page, size), wrapper);
     }
 
@@ -351,7 +338,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
         boolean directXray = hasDirectXrayAndDiagnosis(data);
         data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
-        data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+        data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
 
         if (data.getIsLatent() == 1) {

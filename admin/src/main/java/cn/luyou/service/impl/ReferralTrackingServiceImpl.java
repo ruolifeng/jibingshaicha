@@ -624,6 +624,37 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void enableJointTracking(Long id) {
+        ReferralTracking record = getAndCheckExist(id);
+        if (!isConfirmedRecommend(record)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅已确认接收的推介可开启共同追踪");
+        }
+        if (record.getArchived() != null && record.getArchived() == 1) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法开启共同追踪");
+        }
+        if (Integer.valueOf(1).equals(record.getJointTracking())) {
+            log.info("共同追踪已开启（幂等），recordId={}", id);
+            return;
+        }
+        checkRecommendReceiver(record);
+
+        lambdaUpdate()
+                .eq(ReferralTracking::getId, id)
+                .set(ReferralTracking::getJointTracking, 1)
+                .set(ReferralTracking::getJointTrackingTime, LocalDateTime.now())
+                .update();
+
+        if (record.getCreatorId() != null) {
+            String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
+            sysMessageService.sendMessage(record.getCreatorId(), "共同追踪已开启",
+                    String.format("「%s」的推介已由接收方开启共同追踪，您可前往「追踪」页面参与追踪。", name),
+                    "referral_tracking_joint", id);
+        }
+        log.info("共同追踪已开启，recordId={}", id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void track(Long id, Integer status, String remark) {
         ReferralTracking record = getAndCheckExist(id);
         if (record.getRecommendSentTime() != null
@@ -648,9 +679,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             throw new ServiceException(StatusEnum.PARAM_INVALID, "追踪状态值无效（1到位 2未到位 3其他）");
         }
 
-        // 未到位必须填写原因
-        if (status == 2 && StrUtil.isBlank(remark)) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "未到位时必须填写原因");
+        // 每次追踪必须填写备注
+        if (StrUtil.isBlank(remark)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写追踪备注");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -658,17 +689,19 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         switch (status) {
             case 1 -> {
-                // 到位：记录到位时间，不需要原因
+                // 到位：记录到位时间与备注
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("attempt", history.size() + 1);
                 entry.put("status", 1);
                 entry.put("trackTime", now.toString());
+                entry.put("reason", remark);
                 history.add(entry);
 
                 lambdaUpdate()
                         .eq(ReferralTracking::getId, id)
                         .set(ReferralTracking::getTrackingStatus, 1)
                         .set(ReferralTracking::getArrivalTime, now)
+                        .set(ReferralTracking::getTrackingRemark, remark)
                         .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                         .update();
                 log.info("推介追踪到位，recordId={}", id);
@@ -710,15 +743,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 entry.put("attempt", history.size() + 1);
                 entry.put("status", 3);
                 entry.put("trackTime", now.toString());
-                if (StrUtil.isNotBlank(remark)) {
-                    entry.put("reason", remark);
-                }
+                entry.put("reason", remark);
                 history.add(entry);
 
                 lambdaUpdate()
                         .eq(ReferralTracking::getId, id)
                         .set(ReferralTracking::getTrackingStatus, 3)
-                        .set(StrUtil.isNotBlank(remark), ReferralTracking::getTrackingRemark, remark)
+                        .set(ReferralTracking::getTrackingRemark, remark)
                         .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                         .set(ReferralTracking::getArchived, 1)
                         .update();
@@ -880,6 +911,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         Long userId = BaseContext.getCurrentId();
         if (userId != null && userId.equals(record.getReceiverUserId())) {
+            return;
+        }
+        if (Integer.valueOf(1).equals(record.getJointTracking())
+                && userId != null && userId.equals(record.getCreatorId())) {
             return;
         }
         throw new ServiceException(StatusEnum.PARAM_INVALID, "该推介已由接收方承接追踪，仅接收方可操作");
@@ -1680,7 +1715,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 if (userId != null) {
                     w.or(or -> or.eq(ReferralTracking::getBizMode, "recommend")
                             .eq(ReferralTracking::getRecommendStatus, 2)
-                            .eq(ReferralTracking::getReceiverUserId, userId));
+                            .and(j -> j.eq(ReferralTracking::getReceiverUserId, userId)
+                                    .or(n -> n.eq(ReferralTracking::getJointTracking, 1)
+                                            .eq(ReferralTracking::getCreatorId, userId))));
                 } else if (BaseContext.isSuperAdmin()) {
                     w.or(or -> or.eq(ReferralTracking::getBizMode, "recommend")
                             .eq(ReferralTracking::getRecommendStatus, 2));

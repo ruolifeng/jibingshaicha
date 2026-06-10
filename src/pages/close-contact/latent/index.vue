@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import type { UploadRequestOptions } from "element-plus"
 import { getLevel5UsersApi } from "@@/apis/users"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
+import ImageUploader from "@@/components/ImageUploader.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 /**
  * 密接人群 — 潜伏感染者管理
@@ -32,8 +32,6 @@ import {
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { getToken } from "@@/utils/cache/cookies"
-import { getAttachmentLabel, parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
 import { idCardRule } from "@@/utils/validate"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
@@ -212,64 +210,6 @@ async function handleConfirmTreatment(done: boolean) {
 const supervisionDialogVisible = ref(false)
 const supervisionRow = ref<any>(null)
 
-/** 附件上传列表 */
-const attachmentFileList = ref<{ name: string, url: string }[]>([])
-const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
-
-function handleHttpUpload(options: UploadRequestOptions) {
-  return uploadAttachmentFile(options)
-}
-
-function beforeAttachmentUpload(file: File) {
-  if (file.size > 20 * 1024 * 1024) {
-    ElMessage.error("附件大小不能超过 20MB")
-    return false
-  }
-  return true
-}
-
-function syncAttachmentFileList(uploadFiles: { name: string, url?: string, status?: string }[]) {
-  attachmentFileList.value = uploadFiles
-    .filter(file => file.status === "success" && file.url)
-    .map((file, index) => ({
-      name: file.name || getAttachmentLabel(file.url!, index),
-      url: file.url!
-    }))
-}
-
-function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
-  const result = parseUploadApiResponse(response)
-  if (result.ok && result.url) {
-    uploadFile.url = result.url
-    uploadFile.status = "success"
-    syncAttachmentFileList(uploadFiles)
-  } else {
-    uploadFile.status = "fail"
-    ElMessage.error(result.msg || "附件上传失败")
-  }
-}
-
-function handleAttachmentChange(_uploadFile: any, uploadFiles: any[]) {
-  syncAttachmentFileList(uploadFiles)
-}
-
-function handleAttachmentRemove(uploadFile: { name: string, url?: string }) {
-  attachmentFileList.value = attachmentFileList.value.filter(
-    (f: { name: string, url: string }) => f.url !== uploadFile.url && f.name !== uploadFile.name
-  )
-}
-
-function handleAttachmentError() {
-  ElMessage.error("附件上传失败，请重试")
-}
-
-function loadAttachmentFileList(urls?: string) {
-  attachmentFileList.value = parseAttachmentUrls(urls).map((url, index) => ({
-    name: getAttachmentLabel(url, index),
-    url
-  }))
-}
-
 const supervisionForm = reactive({
   category: "",
   gender: "",
@@ -316,7 +256,6 @@ function openSupervisionDialog(row: any) {
   supervisionForm.managerName = ""
   supervisionForm.remark = ""
   supervisionForm.attachmentUrls = ""
-  attachmentFileList.value = []
   supervisionDialogVisible.value = true
   getSupervisionDetailApi(row.id).then(({ data }) => {
     if (data?.phoneRemark) supervisionForm.phoneRemark = data.phoneRemark
@@ -331,7 +270,6 @@ async function handleSaveSupervision() {
     if (!rate && supervisionForm.totalDoses && supervisionForm.actualDoses !== null) {
       rate = `${((supervisionForm.actualDoses / supervisionForm.totalDoses) * 100).toFixed(1)}%`
     }
-    const attachmentUrls = attachmentFileList.value.map((f: { name: string, url: string }) => f.url).join(",")
     // 密接潜伏感染者的督导表关联到 screening_close_contact.id（作为 latentInfectionId 存入）
     await saveSupervisionApi({
       latentInfectionId: supervisionRow.value.id,
@@ -355,7 +293,7 @@ async function handleSaveSupervision() {
       managerType: supervisionForm.managerType || undefined,
       managerName: supervisionForm.managerName || undefined,
       remark: supervisionForm.remark || undefined,
-      attachmentUrls: attachmentUrls || undefined,
+      attachmentUrls: supervisionForm.attachmentUrls || undefined,
       status: 2
     })
     ElMessage.success("督导表保存成功")
@@ -1017,30 +955,8 @@ async function handleSaveFollowupInput() {
         <el-form-item label="备注">
           <el-input v-model="supervisionForm.remark" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="附件上传">
-          <el-upload
-            :http-request="handleHttpUpload"
-            :headers="uploadHeaders"
-            :file-list="attachmentFileList"
-            :before-upload="beforeAttachmentUpload"
-            :on-success="handleAttachmentSuccess"
-            :on-change="handleAttachmentChange"
-            :on-remove="handleAttachmentRemove"
-            :on-error="handleAttachmentError"
-            multiple
-          >
-            <el-button type="primary" size="small">
-              <el-icon class="mr-1">
-                <Upload />
-              </el-icon>
-              点击上传
-            </el-button>
-            <template #tip>
-              <div class="el-upload__tip">
-                支持图片、PDF 等格式，单个文件不超过 20MB
-              </div>
-            </template>
-          </el-upload>
+        <el-form-item label="附件（2~6张图片）">
+          <ImageUploader v-model="supervisionForm.attachmentUrls" :min="2" :max="6" />
         </el-form-item>
       </el-form>
       <template #footer>

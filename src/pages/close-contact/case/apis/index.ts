@@ -65,7 +65,8 @@ export function exportCloseContactCaseApi(params?: {
     url: "close-contact/case/export",
     method: "get",
     params: query,
-    responseType: "blob"
+    responseType: "blob",
+    timeout: 120000
   })
 }
 

@@ -1,10 +1,11 @@
 <script lang="ts" setup>
-import type { UploadRequestOptions } from "element-plus"
 import { getLevel5UsersApi } from "@@/apis/users"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
+import ImageUploader from "@@/components/ImageUploader.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CHECK_PERIOD_OPTIONS,
@@ -26,9 +27,8 @@ import {
   normalizeLatentTreatmentPlan,
   parseLatentNoticeTreatmentPlan
 } from "@@/constants/disease"
-import { getToken } from "@@/utils/cache/cookies"
-import { getAttachmentLabel, parseAttachmentUrls, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
 import { idCardRule, phoneRule } from "@@/utils/validate"
+import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -169,6 +169,21 @@ const trackDialogVisible = ref(false)
 const trackRow = ref<any>(null)
 const trackStatus = ref<1 | 2 | 3>(1)
 const trackRemark = ref("")
+const historyViewVisible = ref(false)
+const historyViewRow = ref<any>(null)
+
+const trackHistory = computed(() =>
+  parseTrackingHistory(trackRow.value?.trackingHistoryJson)
+)
+
+function hasTrackingHistory(row: any) {
+  return parseTrackingHistory(row?.trackingHistoryJson).length > 0 || !!row?.trackingRemark?.trim()
+}
+
+function openHistoryView(row: any) {
+  historyViewRow.value = row
+  historyViewVisible.value = true
+}
 
 function openTrackDialog(row: any) {
   trackRow.value = row
@@ -178,6 +193,10 @@ function openTrackDialog(row: any) {
 }
 
 async function handleTrack() {
+  if (!trackRemark.value.trim()) {
+    ElMessage.warning("请填写追踪备注")
+    return
+  }
   if (submitting.value) return
   submitting.value = true
   try {
@@ -439,63 +458,6 @@ async function viewNotice(row: any) {
 const supervisionDialogVisible = ref(false)
 const supervisionRow = ref<any>(null)
 
-/** 附件上传列表 */
-const attachmentFileList = ref<{ name: string, url: string }[]>([])
-const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
-
-function handleHttpUpload(options: UploadRequestOptions) {
-  return uploadAttachmentFile(options)
-}
-
-function beforeAttachmentUpload(file: File) {
-  if (file.size > 20 * 1024 * 1024) {
-    ElMessage.error("附件大小不能超过 20MB")
-    return false
-  }
-  return true
-}
-
-function syncAttachmentFileList(uploadFiles: { name: string, url?: string, status?: string }[]) {
-  attachmentFileList.value = uploadFiles
-    .filter(file => file.status === "success" && file.url)
-    .map((file, index) => ({
-      name: file.name || getAttachmentLabel(file.url!, index),
-      url: file.url!
-    }))
-}
-
-function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
-  if (response?.code === 200 && response?.data) {
-    uploadFile.url = resolveFileUrl(response.data)
-    uploadFile.status = "success"
-    syncAttachmentFileList(uploadFiles)
-  } else {
-    uploadFile.status = "fail"
-    ElMessage.error(response?.msg || "附件上传失败")
-  }
-}
-
-function handleAttachmentChange(_uploadFile: any, uploadFiles: any[]) {
-  syncAttachmentFileList(uploadFiles)
-}
-
-function handleAttachmentRemove(uploadFile: { name: string, url?: string }) {
-  attachmentFileList.value = attachmentFileList.value.filter(
-    (f: { name: string, url: string }) => f.url !== uploadFile.url && f.name !== uploadFile.name
-  )
-}
-
-function handleAttachmentError() {
-  ElMessage.error("附件上传失败，请重试")
-}
-
-function loadAttachmentFileList(urls?: string) {
-  attachmentFileList.value = parseAttachmentUrls(urls).map((url, index) => ({
-    name: getAttachmentLabel(url, index),
-    url
-  }))
-}
-
 const supervisionForm = reactive({
   category: "",
   gender: "",
@@ -541,7 +503,6 @@ function openSupervisionDialog(row: any) {
   supervisionForm.managerName = ""
   supervisionForm.remark = ""
   supervisionForm.attachmentUrls = ""
-  attachmentFileList.value = []
   supervisionDialogVisible.value = true
   getSupervisionDetailApi(row.id).then(({ data }) => {
     if (data?.phoneRemark) supervisionForm.phoneRemark = data.phoneRemark
@@ -556,7 +517,6 @@ async function handleSaveSupervision() {
     if (!rate && supervisionForm.totalDoses && supervisionForm.actualDoses !== null && supervisionForm.totalDoses > 0) {
       rate = `${((supervisionForm.actualDoses / supervisionForm.totalDoses) * 100).toFixed(1)}%`
     }
-    const attachmentUrls = attachmentFileList.value.map((f: { name: string, url: string }) => f.url).join(",")
     await saveSupervisionApi({
       latentInfectionId: supervisionRow.value.id,
       populationType: POPULATION_TYPE,
@@ -581,7 +541,7 @@ async function handleSaveSupervision() {
       managerType: supervisionForm.managerType || undefined,
       managerName: supervisionForm.managerName || undefined,
       remark: supervisionForm.remark || undefined,
-      attachmentUrls: attachmentUrls || undefined,
+      attachmentUrls: supervisionForm.attachmentUrls || undefined,
       status: 2
     })
     ElMessage.success("督导表保存成功")
@@ -852,6 +812,15 @@ watch(
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
               查看详情
+            </el-button>
+            <el-button
+              v-if="hasTrackingHistory(row)"
+              type="info"
+              link
+              size="small"
+              @click="openHistoryView(row)"
+            >
+              追踪记录
             </el-button>
 
             <!-- 阶段1：待追踪 -->
@@ -1374,30 +1343,8 @@ watch(
         <el-form-item label="备注">
           <el-input v-model="supervisionForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
         </el-form-item>
-        <el-form-item label="附件上传">
-          <el-upload
-            :http-request="handleHttpUpload"
-            :headers="uploadHeaders"
-            :file-list="attachmentFileList"
-            :before-upload="beforeAttachmentUpload"
-            :on-success="handleAttachmentSuccess"
-            :on-change="handleAttachmentChange"
-            :on-remove="handleAttachmentRemove"
-            :on-error="handleAttachmentError"
-            multiple
-          >
-            <el-button type="primary" size="small">
-              <el-icon class="mr-1">
-                <Upload />
-              </el-icon>
-              点击上传
-            </el-button>
-            <template #tip>
-              <div class="el-upload__tip">
-                支持图片、PDF 等格式，单个文件不超过 20MB
-              </div>
-            </template>
-          </el-upload>
+        <el-form-item label="附件（2~6张图片）">
+          <ImageUploader v-model="supervisionForm.attachmentUrls" :min="2" :max="6" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1786,8 +1733,11 @@ watch(
     </el-dialog>
 
     <!-- 追踪弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="460px">
+    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
       <el-form label-width="90px">
+        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
+          <TrackingHistoryPanel :history-json="trackRow?.trackingHistoryJson" />
+        </el-form-item>
         <el-form-item label="追踪结果">
           <el-radio-group v-model="trackStatus">
             <el-radio :value="1">到位</el-radio>
@@ -1795,8 +1745,8 @@ watch(
             <el-radio :value="3">其他</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="trackStatus === 2 || trackStatus === 3" label="备注原因">
-          <el-input v-model="trackRemark" type="textarea" :rows="3" placeholder="请填写备注原因" />
+        <el-form-item label="备注" required>
+          <el-input v-model="trackRemark" type="textarea" :rows="3" placeholder="请填写本次追踪备注" />
         </el-form-item>
         <el-alert
           v-if="trackRow && trackRow.notInPlaceCount >= 2 && trackStatus === 2"
@@ -1813,6 +1763,25 @@ watch(
         </el-button>
         <el-button type="primary" :loading="submitting" @click="handleTrack">
           确认
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 查看追踪记录 -->
+    <el-dialog v-model="historyViewVisible" title="追踪记录" width="520px">
+      <TrackingHistoryPanel
+        v-if="parseTrackingHistory(historyViewRow?.trackingHistoryJson).length"
+        :history-json="historyViewRow?.trackingHistoryJson"
+      />
+      <p v-else-if="historyViewRow?.trackingRemark">
+        {{ historyViewRow.trackingRemark }}
+      </p>
+      <p v-else class="text-secondary">
+        暂无追踪记录
+      </p>
+      <template #footer>
+        <el-button @click="historyViewVisible = false">
+          关闭
         </el-button>
       </template>
     </el-dialog>

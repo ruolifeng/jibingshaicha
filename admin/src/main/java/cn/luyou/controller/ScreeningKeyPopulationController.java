@@ -5,6 +5,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -27,6 +28,7 @@ import java.util.List;
 public class ScreeningKeyPopulationController {
 
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "上传重点人群/疫情筛查Excel（sourceType=keyPopulation|regular，默认 keyPopulation）")
     @PostMapping("/upload")
@@ -98,11 +100,13 @@ public class ScreeningKeyPopulationController {
     @GetMapping("/export")
     public void export(
             HttpServletResponse response,
-            @RequestParam(required = false) String ids) throws Exception {
+            @RequestParam(required = false) String ids,
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode("重点人群筛查数据.xlsx", StandardCharsets.UTF_8));
         var query = Wrappers.<ScreeningKeyPopulation>lambdaQuery();
+        query.eq(ScreeningKeyPopulation::getSourceType, sourceType);
         if (ids != null && !ids.isBlank()) {
             List<Long> idList = Arrays.stream(ids.split(","))
                     .map(String::trim)
@@ -113,6 +117,8 @@ public class ScreeningKeyPopulationController {
                 query.in(ScreeningKeyPopulation::getId, idList);
             }
         }
+        screeningScopeHelper.applyDepartmentScope(
+                query, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
         query.orderByDesc(ScreeningKeyPopulation::getCreateTime);
         List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(query);
         EasyExcel.write(response.getOutputStream(), ScreeningKeyPopulation.class).sheet("筛查数据").doWrite(list);

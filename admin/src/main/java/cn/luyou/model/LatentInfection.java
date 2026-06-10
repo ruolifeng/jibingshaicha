@@ -44,6 +44,8 @@ public class LatentInfection extends BaseEntity {
     private Integer notInPlaceCount;
     /** 追踪情况 */
     private String trackingRemark;
+    /** 追踪历史 JSON（每次追踪的状态、时间、备注） */
+    private String trackingHistoryJson;
     /** 备注 */
     private String remark;
 

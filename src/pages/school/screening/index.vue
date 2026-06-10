@@ -2,7 +2,6 @@
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
-import { extractDateRangeParams } from "@@/utils/searchParams"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
@@ -19,7 +18,7 @@ const searchForm = reactive({
   district: "",
   phone: "",
   entryUnit: "",
-  dateRange: [] as string[],
+  year: "" as string,
   isLatent: undefined as number | undefined,
   diagnosisFirst: "" as string
 })
@@ -27,12 +26,12 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, entryUnit, ...rest } = searchForm
+    const { entryUnit, year, ...rest } = searchForm
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       ...rest,
-      ...extractDateRangeParams(dateRange),
+      ...(year ? { year } : {}),
       ...(entryUnit ? { entryUnit } : {})
     })
     tableData.value = data.records
@@ -54,7 +53,7 @@ function handleReset() {
   searchForm.district = ""
   searchForm.phone = ""
   searchForm.entryUnit = ""
-  searchForm.dateRange = []
+  searchForm.year = ""
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
   handleSearch()
@@ -296,14 +295,14 @@ watch(
         <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
         </el-form-item>
-        <el-form-item label="感染筛查时间">
+        <el-form-item label="年度">
           <el-date-picker
-            v-model="searchForm.dateRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            style="width: 240px"
+            v-model="searchForm.year"
+            type="year"
+            value-format="YYYY"
+            placeholder="请选择年度"
+            clearable
+            style="width: 120px"
           />
         </el-form-item>
         <el-form-item label="录入单位">

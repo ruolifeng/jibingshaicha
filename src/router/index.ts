@@ -246,7 +246,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "screening",
         component: () => import("@/pages/close-contact/screening/index.vue"),
         name: "CloseContactScreening",
-        meta: { title: "筛查管理", tagTitle: "密接-筛查管理", keepAlive: true, permission: "closeContact:screening" }
+        meta: { title: "密接筛查", tagTitle: "密接-筛查", keepAlive: true, permission: "closeContact:screening" }
       },
       {
         path: "latent",

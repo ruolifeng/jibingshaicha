@@ -131,7 +131,7 @@ function createRequest(instance: AxiosInstance) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(!isFormData ? { "Content-Type": "application/json" } : {})
       },
-      timeout: isFormData ? 60000 : 10000,
+      timeout: isFormData || config.responseType === "blob" ? 60000 : 10000,
       withCredentials: false
     }
     const mergeConfig = merge({}, defaultConfig, config)

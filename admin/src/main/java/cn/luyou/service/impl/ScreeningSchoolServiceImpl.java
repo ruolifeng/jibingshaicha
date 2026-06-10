@@ -29,6 +29,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -69,6 +70,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     private final EpidemicReportService epidemicReportService;
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     /** V4 阳性关键字（感染筛查结果列） */
     private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
@@ -99,7 +101,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     data.setUploadBatch(batchId);
                     boolean directXray = hasDirectXrayAndDiagnosis(data);
                     data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
-                    data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     dataList.add(data);
                 }
 
@@ -253,12 +255,15 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
     }
 
+    /** 年度筛选：优先取感染筛查日期年份，无感染筛查日期时取胸片检查日期年份 */
+    private static final String SCREEN_YEAR_SQL_EXPR =
+            "((screen_date IS NOT NULL AND YEAR(screen_date) = {0})"
+                    + " OR (screen_date IS NULL AND chest_xray_date IS NOT NULL AND YEAR(chest_xray_date) = {0}))";
+
     @Override
     public IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
-                                             String phone, String dateFrom, String dateTo, String entryUnit) {
-        LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
-        LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
+                                             String phone, String year, String entryUnit) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningSchool::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningSchool::getIdNumber, idNumber)
@@ -266,29 +271,25 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), ScreeningSchool::getPhone, phone)
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
-                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningSchool::getDiagnosisFirst, diagnosisFirst)
-                .ge(screenFrom != null, ScreeningSchool::getScreenDate, screenFrom)
-                .le(screenTo != null, ScreeningSchool::getScreenDate, screenTo);
+                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningSchool::getDiagnosisFirst, diagnosisFirst);
+        applyScreenYearFilter(wrapper, year);
         applyEntryUnitFilter(wrapper, entryUnit);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
         wrapper.orderByDesc(ScreeningSchool::getCreateTime);
-        if (!BaseContext.isSuperAdmin()) {
-            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            // 同时包含已确认转诊到当前用户的筛查记录（转诊接收方也可见）
-            List<Long> referredIds = referralService.lambdaQuery()
-                    .eq(Referral::getModuleType, "screening")
-                    .eq(Referral::getPopulationType, "school")
-                    .eq(Referral::getReceiverOrgId, BaseContext.getCurrentId())
-                    .eq(Referral::getStatus, 2)
-                    .list()
-                    .stream().map(Referral::getBizId).toList();
-            if (referredIds.isEmpty()) {
-                wrapper.in(ScreeningSchool::getDepartmentId, deptIds);
-            } else {
-                wrapper.and(w -> w.in(ScreeningSchool::getDepartmentId, deptIds)
-                        .or().in(ScreeningSchool::getId, referredIds));
-            }
-        }
         return page(new Page<>(page, size), wrapper);
+    }
+
+    /** 年度筛选：优先感染筛查日期，无则取胸片检查日期 */
+    private void applyScreenYearFilter(LambdaQueryWrapper<ScreeningSchool> wrapper, String year) {
+        if (StrUtil.isBlank(year)) {
+            return;
+        }
+        try {
+            wrapper.apply(SCREEN_YEAR_SQL_EXPR, Integer.parseInt(year.trim()));
+        } catch (NumberFormatException ignored) {
+            wrapper.eq(ScreeningSchool::getId, -1L);
+        }
     }
 
     /** 录入单位：按部门名称模糊匹配 department_id */
@@ -316,7 +317,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
         boolean directXray = hasDirectXrayAndDiagnosis(data);
         data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
-        data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+        data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
 
         if (data.getIsLatent() == 1) {

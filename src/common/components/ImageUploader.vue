@@ -2,7 +2,7 @@
 /**
  * 图片附件上传组件（V15）
  *
- * 用途：首次入户随访、后续随访记录中，上传 2~6 张照片作为附件。
+ * 用途：首次入户随访、后续随访记录、督导表等，上传 2~6 张（首次随访可配置为 10 张）照片作为附件。
  *
  * 用法：
  *   <ImageUploader v-model="form.attachmentUrls" :min="2" :max="6" />
@@ -15,7 +15,7 @@
 import type { UploadFile, UploadFiles, UploadProps, UploadRequestOptions } from "element-plus"
 import { Plus, ZoomIn } from "@element-plus/icons-vue"
 import { getToken } from "@@/utils/cache/cookies"
-import { parseAttachmentUrls, parseUploadApiResponse, resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
+import { parseAttachmentUrls, parseUploadApiResponse, uploadAttachmentFile } from "@@/utils/attachment"
 
 interface Props {
   /** v-model 绑定值：可以是 JSON 字符串或 string[] */
@@ -65,6 +65,16 @@ function sameUrlList(a: string[], b: string[]) {
   return a.length === b.length && a.every((url, index) => url === b[index])
 }
 
+/** 已上传成功的张数 */
+function uploadedCount() {
+  return fileList.value.filter(f => f.url).length
+}
+
+/** 当前占用的上传位（含上传中占位，不含已剔除的失败项） */
+function usedSlotCount() {
+  return fileList.value.length
+}
+
 /** 同步 v-model → fileList（仅在外部值变化时更新，避免覆盖上传中的列表） */
 watch(
   () => props.modelValue,
@@ -107,11 +117,15 @@ const beforeUpload: UploadProps["beforeUpload"] = (file) => {
     ElMessage.error(`图片大小不能超过 ${props.maxSizeMB}MB`)
     return false
   }
-  if (fileList.value.length >= props.max) {
+  if (usedSlotCount() >= props.max) {
     ElMessage.warning(`最多上传 ${props.max} 张图片`)
     return false
   }
   return true
+}
+
+const onExceed: UploadProps["onExceed"] = () => {
+  ElMessage.warning(`最多上传 ${props.max} 张图片`)
 }
 
 const onSuccess: UploadProps["onSuccess"] = (response, uploadFile, uploadFiles) => {
@@ -124,6 +138,7 @@ const onSuccess: UploadProps["onSuccess"] = (response, uploadFile, uploadFiles) 
     return
   }
   uploadFile.status = "fail"
+  refreshDisplayFiles(uploadFiles)
   ElMessage.error(result.msg || "上传失败")
 }
 
@@ -131,7 +146,8 @@ const onChange: UploadProps["onChange"] = (_uploadFile, uploadFiles) => {
   refreshDisplayFiles(uploadFiles)
 }
 
-const onError: UploadProps["onError"] = () => {
+const onError: UploadProps["onError"] = (_error, _uploadFile, uploadFiles) => {
+  refreshDisplayFiles(uploadFiles)
   ElMessage.error("图片上传失败，请重试")
 }
 
@@ -150,7 +166,7 @@ function handlePreview(uploadFile: UploadFile) {
   previewVisible.value = true
 }
 
-const canUpload = computed(() => !props.disabled && fileList.value.length < props.max)
+const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
 </script>
 
 <template>
@@ -160,10 +176,12 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
       :headers="uploadHeaders"
       :file-list="fileList"
       :limit="max"
+      multiple
       list-type="picture-card"
       accept="image/*"
       name="file"
       :before-upload="beforeUpload"
+      :on-exceed="onExceed"
       :on-success="onSuccess"
       :on-change="onChange"
       :on-error="onError"
@@ -193,8 +211,8 @@ const canUpload = computed(() => !props.disabled && fileList.value.length < prop
     </el-upload>
 
     <div class="image-uploader__tip">
-      <span>请上传 {{ min || 2 }}~{{ max }} 张图片</span>
-      <span class="image-uploader__count">已上传 {{ fileList.filter(f => f.url).length }} / {{ max }}</span>
+      <span>请上传 {{ min || 2 }}~{{ max }} 张图片（支持批量选择）</span>
+      <span class="image-uploader__count">已上传 {{ uploadedCount() }} / {{ max }}</span>
     </div>
 
     <el-dialog v-model="previewVisible" title="" width="60vw" append-to-body align-center>

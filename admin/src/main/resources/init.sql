@@ -387,6 +387,7 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
     `tracking_status`     TINYINT      NOT NULL DEFAULT 0 COMMENT '追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`  INT          NOT NULL DEFAULT 0 COMMENT '未到位次数',
     `tracking_remark`     TEXT         DEFAULT NULL COMMENT '追踪备注原因',
+    `tracking_history_json` TEXT       DEFAULT NULL COMMENT '追踪历史JSON（每次追踪的状态、时间、备注）',
     -- 追踪到位后录入胸片与诊断（V4新增步骤）
     `has_chest_xray`      VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查（是/否）',
     `chest_xray_date`     DATE         DEFAULT NULL COMMENT '胸片检查日期',
@@ -743,7 +744,7 @@ INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VAL
 (22, 'keyPopulation:patient',   '患者管理',     1, 2, 3),
 (23, 'keyPopulation:history',   '历史患者',     1, 2, 4),
 -- 密接人群子菜单
-(30, 'closeContact:screening',  '筛查管理',     1, 3, 1),
+(30, 'closeContact:screening',  '密接筛查',     1, 3, 1),
 (31, 'closeContact:latent',     '潜伏感染',     1, 3, 2),
 (32, 'closeContact:patient',    '患者管理',     1, 3, 3),
 (33, 'closeContact:history',    '历史患者',     1, 3, 4),
@@ -1579,6 +1580,8 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `rejected_reason`        VARCHAR(256),
     `recommend_sent_time`    DATETIME,
     `recommend_confirm_time` DATETIME,
+    `joint_tracking`         TINYINT       NOT NULL DEFAULT 0        COMMENT '是否共同追踪：0否 1是',
+    `joint_tracking_time`    DATETIME                                  COMMENT '开启共同追踪时间',
     -- 追踪状态
     `tracking_status`        TINYINT       NOT NULL DEFAULT 0        COMMENT '0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`     INT           NOT NULL DEFAULT 0,
@@ -2999,3 +3002,31 @@ WHERE p.`code` = 'screening'
       'school:screening', 'school:suspected',
       'keyPopulation:screening', 'keyPopulation:suspected'
   );
+
+-- ==================== V68：推介追踪共同追踪（见 migration/V68_referral_joint_tracking.sql） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'joint_tracking'
+);
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `joint_tracking` TINYINT NOT NULL DEFAULT 0 COMMENT ''是否共同追踪：0否 1是'' AFTER `recommend_confirm_time`',
+    'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'joint_tracking_time'
+);
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `joint_tracking_time` DATETIME DEFAULT NULL COMMENT ''开启共同追踪时间'' AFTER `joint_tracking`',
+    'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V70：密接筛查菜单改名（见 migration/V70_close_contact_screening_rename.sql） ====================
+UPDATE `permission`
+SET `name` = '密接筛查'
+WHERE `code` = 'closeContact:screening';

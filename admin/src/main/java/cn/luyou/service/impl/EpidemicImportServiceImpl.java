@@ -8,11 +8,11 @@ import cn.luyou.mapper.EpidemicImportMapper;
 import cn.luyou.model.EpidemicImport;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.Patient;
-import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicImportService;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -41,9 +41,9 @@ import java.util.Map;
 public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper, EpidemicImport>
         implements EpidemicImportService {
 
-    private final DepartmentService departmentService;
     private final PatientService patientService;
     private final LatentInfectionService latentInfectionService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -130,7 +130,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
                     .notInPlaceCount(0)
                     .archived(0)
                     .uploadBatch(batchNo)
-                    .departmentId(BaseContext.getCurrentDepartmentId())
+                    .departmentId(screeningScopeHelper.resolveUploadDepartmentId())
                     .creatorId(BaseContext.getCurrentId())
                     .build();
             save(entity);
@@ -158,10 +158,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
                 .eq(StrUtil.isNotBlank(diagnosisResult), EpidemicImport::getDiagnosisResult, diagnosisResult)
                 .orderByDesc(EpidemicImport::getCreateTime);
 
-        if (!BaseContext.isSuperAdmin()) {
-            List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-            wrapper.in(EpidemicImport::getDepartmentId, deptIds);
-        }
+        screeningScopeHelper.applySimpleDepartmentScope(wrapper, EpidemicImport::getDepartmentId);
 
         return page(new Page<>(page, size), wrapper);
     }

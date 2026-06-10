@@ -5,6 +5,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.service.ScreeningCloseContactService;
+import cn.luyou.utils.ScreeningScopeHelper;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 public class ScreeningCloseContactController {
 
     private final ScreeningCloseContactService screeningCloseContactService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "上传密接人群筛查Excel（新模板73列）")
     @PostMapping("/upload")
@@ -150,6 +152,8 @@ public class ScreeningCloseContactController {
                     .toList();
             if (!idList.isEmpty()) query.in(ScreeningCloseContact::getId, idList);
         }
+        screeningScopeHelper.applyDepartmentScope(
+                query, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
         query.orderByDesc(ScreeningCloseContact::getCreateTime);
         List<ScreeningCloseContact> list = screeningCloseContactService.list(query);
 

@@ -5,6 +5,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.service.ScreeningSchoolService;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -27,6 +28,7 @@ import java.util.List;
 public class ScreeningSchoolController {
 
     private final ScreeningSchoolService screeningSchoolService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "上传学校人群筛查Excel")
     @PostMapping("/upload")
@@ -47,11 +49,10 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) Integer isLatent,
             @RequestParam(required = false) String diagnosisFirst,
             @RequestParam(required = false) String phone,
-            @RequestParam(required = false) String dateFrom,
-            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String year,
             @RequestParam(required = false) String entryUnit) {
         IPage<ScreeningSchool> result = screeningSchoolService.queryPage(
-                page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, dateFrom, dateTo, entryUnit);
+                page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit);
         return ResultRes.success(result);
     }
 
@@ -109,6 +110,8 @@ public class ScreeningSchoolController {
                 query.in(ScreeningSchool::getId, idList);
             }
         }
+        screeningScopeHelper.applyDepartmentScope(
+                query, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
         query.orderByDesc(ScreeningSchool::getCreateTime);
         List<ScreeningSchool> list = screeningSchoolService.list(query);
         EasyExcel.write(response.getOutputStream(), ScreeningSchool.class).sheet("筛查数据").doWrite(list);

@@ -2,6 +2,7 @@ package cn.luyou.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.ImportResult;
@@ -516,17 +517,41 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         assertLatentNotTransferLocked(entity);
 
+        if (Integer.valueOf(1).equals(entity.getArchived())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "记录已归档，不能再追踪");
+        }
+        Integer currentStatus = entity.getTrackingStatus();
+        if (currentStatus != null && currentStatus != 0 && currentStatus != 2) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "当前追踪状态不允许继续操作");
+        }
+
+        if (status == null || status < 1 || status > 3) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的追踪状态");
+        }
+        if (StrUtil.isBlank(remark)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写追踪备注");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Map<String, Object>> history = parseTrackingHistory(entity.getTrackingHistoryJson());
+
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("attempt", history.size() + 1);
+        entry.put("status", status);
+        entry.put("trackTime", now.toString());
+        entry.put("reason", remark);
+        history.add(entry);
+
         switch (status) {
             case 1 -> entity.setTrackingStatus(1); // 到位
             case 2 -> {
                 // 未到位
-                int count = entity.getNotInPlaceCount() + 1;
+                int count = (entity.getNotInPlaceCount() == null ? 0 : entity.getNotInPlaceCount()) + 1;
                 entity.setNotInPlaceCount(count);
                 if (count >= 3) {
                     entity.setTrackingStatus(4); // 强制结束
-                    entity.setTrackingRemark(remark);
                     entity.setArchived(1);
-                    entity.setArchivedTime(LocalDateTime.now());
+                    entity.setArchivedTime(now);
                 } else {
                     entity.setTrackingStatus(2);
                 }
@@ -534,14 +559,28 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             case 3 -> {
                 // 其他
                 entity.setTrackingStatus(3);
-                entity.setTrackingRemark(remark);
                 entity.setArchived(1);
-                entity.setArchivedTime(LocalDateTime.now());
+                entity.setArchivedTime(now);
             }
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的追踪状态");
         }
 
+        entity.setTrackingRemark(remark);
+        entity.setTrackingHistoryJson(JSONUtil.toJsonStr(history));
         updateById(entity);
+    }
+
+    /** 解析追踪历史 JSON */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseTrackingHistory(String json) {
+        if (StrUtil.isBlank(json)) {
+            return new ArrayList<>();
+        }
+        try {
+            return (List<Map<String, Object>>) (List<?>) JSONUtil.toList(json, Map.class);
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
     }
 
     @Override

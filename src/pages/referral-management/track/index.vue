@@ -25,6 +25,7 @@ import {
   createReferralTrackingApi,
   updateReferralTrackingApi,
   trackReferralApi,
+  enableJointTrackingApi,
   saveScreeningInfoApi,
   saveDiagnosisApi,
   deleteReferralTrackingApi,
@@ -34,19 +35,33 @@ import {
 
 const userStore = useUserStore()
 
-/** 有接收人时仅接收人可操作；无接收人时创建人或辖区一至五级用户可操作 */
+/** 推介已确认且开启共同追踪时，发起方与接收方均可操作 */
+function isJointTrackingEnabled(row: any) {
+  return Number(row?.jointTracking) === 1
+}
+
+/** 有接收人时仅接收人可操作；共同追踪时发起方与接收方均可；无接收人时创建人或辖区一至五级用户可操作 */
 function canOperateTrack(row: any) {
   if (userStore.userRole === 1) return true
-  // 他人推介、本方已接收：仅接收方可操作
+  const uid = Number(userStore.userId)
   if (isFromRecommend(row) && row.receiverUserId) {
-    return Number(row.receiverUserId) === Number(userStore.userId)
+    if (isJointTrackingEnabled(row)) {
+      return uid === Number(row.receiverUserId) || uid === Number(row.creatorId)
+    }
+    return uid === Number(row.receiverUserId)
   }
   if (row.receiverUserId) {
-    return Number(row.receiverUserId) === Number(userStore.userId)
+    return uid === Number(row.receiverUserId)
   }
-  if (Number(row.creatorId) === Number(userStore.userId)) return true
+  if (uid === Number(row.creatorId)) return true
   // 追踪/大疫情：辖区一至五级用户对可见记录均可操作
   return userStore.userRole >= 2 && userStore.userRole <= 6
+}
+
+/** 接收方在推介确认后可开启共同追踪 */
+function canEnableJointTracking(row: any) {
+  if (row.archived || row.recommendStatus !== 2 || isJointTrackingEnabled(row)) return false
+  return Number(row.receiverUserId) === Number(userStore.userId) || userStore.userRole === 1
 }
 
 // ===== 列表 =====
@@ -318,13 +333,24 @@ function openTrackDialog(row: any) {
   trackDialogVisible.value = true
 }
 
+async function handleEnableJointTracking(row: any) {
+  await ElMessageBox.confirm(
+    `确认对「${row.name}」开启共同追踪吗？开启后您与推介发起方均可进行追踪，双方操作次数合并计算。`,
+    "共同追踪确认",
+    { type: "warning", confirmButtonText: "确认开启", cancelButtonText: "取消" }
+  )
+  await enableJointTrackingApi(row.id)
+  ElMessage.success("已开启共同追踪，推介发起方也可参与追踪")
+  fetchList()
+}
+
 async function handleTrack() {
   if (!trackForm.status) {
     ElMessage.warning("请选择追踪状态")
     return
   }
-  if (trackForm.status === 2 && !trackForm.remark.trim()) {
-    ElMessage.warning("未到位时必须填写原因")
+  if (!trackForm.remark.trim()) {
+    ElMessage.warning("请填写追踪备注")
     return
   }
   const willForceEnd = trackForm.status === 2 && (trackRow.value?.notInPlaceCount ?? 0) >= 2
@@ -493,6 +519,14 @@ function getRowClass({ row }: { row: any }) {
         </el-table-column>
         <el-table-column prop="epidemicRemark" label="备注" show-overflow-tooltip />
         <el-table-column prop="trackReason" label="追踪原因" show-overflow-tooltip />
+        <el-table-column label="共同追踪" width="90">
+          <template #default="{ row }">
+            <el-tag v-if="isFromRecommend(row)" :type="row.jointTracking === 1 ? 'success' : 'info'" size="small">
+              {{ row.jointTracking === 1 ? "已开启" : "未开启" }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="追踪状态">
           <template #default="{ row }">
             <el-tag
@@ -555,6 +589,13 @@ function getRowClass({ row }: { row: any }) {
               type="primary" link size="small"
               @click="openEditDialog(row)"
             >编辑</el-button>
+            <!-- 接收方开启共同追踪 -->
+            <el-button
+              v-if="canEnableJointTracking(row) && isFromRecommend(row)"
+              v-permission="'referralManagement:confirm'"
+              type="success" link size="small"
+              @click="handleEnableJointTracking(row)"
+            >共同追踪</el-button>
             <!-- 追踪：待追踪或未到位 -->
             <el-button
               v-if="canOperateTrack(row) && [0, 2].includes(row.trackingStatus) && !row.archived"
@@ -634,6 +675,14 @@ function getRowClass({ row }: { row: any }) {
               <el-descriptions-item v-if="viewDetail.recommendReason" label="原推介原因" :span="2">
                 {{ viewDetail.recommendReason }}
               </el-descriptions-item>
+              <el-descriptions-item label="共同追踪">
+                <el-tag :type="viewDetail.jointTracking === 1 ? 'success' : 'info'" size="small">
+                  {{ viewDetail.jointTracking === 1 ? "已开启" : "未开启" }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="viewDetail.jointTrackingTime" label="共同追踪时间">
+                {{ formatDateTime(viewDetail.jointTrackingTime) }}
+              </el-descriptions-item>
             </template>
             <template v-if="isEpidemicRow(viewDetail)">
               <el-descriptions-item label="卡片ID">{{ viewDetail.cardId || "-" }}</el-descriptions-item>
@@ -706,7 +755,7 @@ function getRowClass({ row }: { row: any }) {
                   {{ TRACK_STATUS_LABEL[item.status] }}
                 </el-tag>
                 <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-                <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+                <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
               </div>
             </div>
           </div>
@@ -904,7 +953,7 @@ function getRowClass({ row }: { row: any }) {
                 {{ TRACK_STATUS_LABEL[item.status] }}
               </el-tag>
               <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-              <span v-if="item.reason" class="tracking-history-reason">原因：{{ item.reason }}</span>
+              <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
             </div>
           </div>
         </el-form-item>
@@ -915,16 +964,13 @@ function getRowClass({ row }: { row: any }) {
             <el-radio :value="3">其他</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="trackForm.status === 2" label="未到位原因" required>
+        <el-form-item label="备注" required>
           <el-input
             v-model="trackForm.remark"
             type="textarea"
             :rows="3"
-            placeholder="请填写未到位原因"
+            placeholder="请填写本次追踪备注"
           />
-        </el-form-item>
-        <el-form-item v-else-if="trackForm.status === 3" label="备注">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
         </el-form-item>
         <el-alert
           v-if="trackForm.status === 2 && trackRow"

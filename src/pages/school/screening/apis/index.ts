@@ -78,8 +78,7 @@ export function getScreeningSchoolListApi(params: {
   diagnosisFirst?: string
   phone?: string
   entryUnit?: string
-  dateFrom?: string
-  dateTo?: string
+  year?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "screening/school/list",

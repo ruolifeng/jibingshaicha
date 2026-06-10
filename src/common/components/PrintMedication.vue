@@ -1,5 +1,13 @@
 <script lang="ts" setup>
 import { printElement } from "@@/utils/print"
+import {
+  countMedicationMarkedDays,
+  formatMedicationDayMark,
+  getMedicationDayMark,
+  getMedicationRecordYears,
+  type MedicationDayMark,
+  type MedicationRecordsMap
+} from "@@/utils/medicationRecords"
 
 /** 肺结核患者治疗记录卡打印组件（12个月服药情况表） */
 const props = defineProps<{
@@ -12,7 +20,7 @@ const props = defineProps<{
     supervisor: string
     sputumResult: string
     stopDate: string
-    checkedDates: string[]
+    dayMarks: MedicationRecordsMap
   }
 }>()
 
@@ -20,20 +28,10 @@ const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
 }>()
 
-/** 从 checkedDates 中提取所有出现的年份，默认当前年 */
-const availableYears = computed<number[]>(() => {
-  const years = new Set<number>()
-  props.medicationData.checkedDates.forEach((d) => {
-    const y = Number(d.split("-")[0])
-    if (!isNaN(y) && y > 2000) years.add(y)
-  })
-  if (years.size === 0) years.add(new Date().getFullYear())
-  return Array.from(years).sort()
-})
+const availableYears = computed(() => getMedicationRecordYears(props.medicationData.dayMarks))
 
 const selectedYear = ref<number>(new Date().getFullYear())
 
-/** 当可用年份变化时自动选取最新年份 */
 watchEffect(() => {
   if (availableYears.value.length > 0) {
     selectedYear.value = availableYears.value[availableYears.value.length - 1]
@@ -48,19 +46,22 @@ const monthGrid = computed(() => {
     const days = Array.from({ length: 31 }, (_, j) => {
       const day = j + 1
       if (day > daysInMonth) {
-        return { day, valid: false, checked: false }
+        return { day, valid: false, mark: "" as MedicationDayMark | "" }
       }
       const dateStr = `${selectedYear.value}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-      return { day, valid: true, checked: props.medicationData.checkedDates.includes(dateStr) }
+      return {
+        day,
+        valid: true,
+        mark: getMedicationDayMark(props.medicationData.dayMarks, dateStr)
+      }
     })
     return { month, days }
   })
 })
 
-/** 统计总服药天数（仅当前年份） */
-const totalCheckedDays = computed(() => {
-  return props.medicationData.checkedDates.filter(d => d.startsWith(String(selectedYear.value))).length
-})
+const totalCheckedDays = computed(() =>
+  countMedicationMarkedDays(props.medicationData.dayMarks, selectedYear.value)
+)
 
 function handlePrint() {
   printElement(
@@ -95,12 +96,10 @@ function handlePrint() {
     </div>
 
     <div id="print-medication-content" class="print-area">
-      <!-- 标题 -->
       <h2 class="print-title">
         肺结核患者治疗记录卡
       </h2>
 
-      <!-- 患者基本信息 -->
       <table class="info-table">
         <tbody>
           <tr>
@@ -136,7 +135,6 @@ function handlePrint() {
         </tbody>
       </table>
 
-      <!-- 服药记录主表：12月 × 31日 -->
       <table class="med-table">
         <thead>
           <tr>
@@ -164,15 +162,20 @@ function handlePrint() {
               v-for="(cell, idx) in row.days"
               :key="idx"
               class="td-day"
-              :class="{ 'td-invalid': !cell.valid, 'td-checked': cell.checked }"
+              :class="{
+                'td-invalid': !cell.valid,
+                'td-mark-x': cell.valid && cell.mark === 'x',
+                'td-mark-circled': cell.valid && cell.mark === 'circled'
+              }"
             >
-              <template v-if="cell.valid && cell.checked">√</template>
+              <template v-if="cell.valid && cell.mark">
+                {{ formatMedicationDayMark(cell.mark) }}
+              </template>
             </td>
           </tr>
         </tbody>
       </table>
 
-      <!-- 底部统计与签名 -->
       <div class="print-footer">
         <div>本年度累计服药天数：<strong>{{ totalCheckedDays }}</strong> 天</div>
         <div>管理人员签名：___________</div>
@@ -211,7 +214,6 @@ function handlePrint() {
   margin-bottom: 14px;
 }
 
-/* 基本信息表 */
 .info-table {
   width: 100%;
   border-collapse: collapse;
@@ -232,7 +234,6 @@ function handlePrint() {
   }
 }
 
-/* 服药记录主表 */
 .med-table {
   width: 100%;
   border-collapse: collapse;
@@ -268,7 +269,6 @@ function handlePrint() {
     font-weight: 600;
   }
 
-  /* 该月不存在的日期（如2月的30、31日）显示为灰色斜线背景 */
   .td-invalid {
     background: repeating-linear-gradient(
       45deg,
@@ -279,10 +279,15 @@ function handlePrint() {
     );
   }
 
-  .td-checked {
+  .td-mark-x,
+  .td-mark-circled {
     color: #000;
     font-weight: bold;
     font-size: 14px;
+  }
+
+  .td-mark-circled {
+    font-size: 15px;
   }
 }
 
@@ -294,4 +299,3 @@ function handlePrint() {
   color: #303133;
 }
 </style>
-

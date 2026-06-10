@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
@@ -10,6 +11,7 @@ import {
   SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS,
   TRACKING_STATUS_MAP
 } from "@@/constants/disease"
+import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
 import {
@@ -103,6 +105,21 @@ function getRowClass({ row }: { row: any }) {
 const trackDialogVisible = ref(false)
 const trackingRow = ref<any>(null)
 const trackForm = reactive({ status: 1, remark: "" })
+const historyViewVisible = ref(false)
+const historyViewRow = ref<any>(null)
+
+const trackHistory = computed(() =>
+  parseTrackingHistory(trackingRow.value?.trackingHistoryJson)
+)
+
+function hasTrackingHistory(row: any) {
+  return parseTrackingHistory(row?.trackingHistoryJson).length > 0 || !!row?.trackingRemark?.trim()
+}
+
+function openHistoryView(row: any) {
+  historyViewRow.value = row
+  historyViewVisible.value = true
+}
 
 function openTrackDialog(row: any) {
   trackingRow.value = row
@@ -112,6 +129,10 @@ function openTrackDialog(row: any) {
 }
 
 async function handleTrack() {
+  if (!trackForm.remark.trim()) {
+    ElMessage.warning("请填写追踪备注")
+    return
+  }
   if (submitting.value) return
   submitting.value = true
   try {
@@ -346,6 +367,15 @@ watch(
             <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
               查看详情
             </el-button>
+            <el-button
+              v-if="hasTrackingHistory(row)"
+              type="info"
+              link
+              size="small"
+              @click="openHistoryView(row)"
+            >
+              追踪记录
+            </el-button>
             <!-- 追踪 -->
             <el-button
               v-if="row.trackingStatus == null || row.trackingStatus === 0 || row.trackingStatus === 2"
@@ -400,8 +430,11 @@ watch(
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="school" :data="screeningDetailData" />
 
     <!-- 追踪弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="450px">
+    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
       <el-form label-width="80px">
+        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
+          <TrackingHistoryPanel :history-json="trackingRow?.trackingHistoryJson" />
+        </el-form-item>
         <el-form-item label="追踪状态">
           <el-radio-group v-model="trackForm.status">
             <el-radio :value="1">
@@ -415,8 +448,8 @@ watch(
             </el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="trackForm.status === 3 || (trackForm.status === 2 && trackingRow?.notInPlaceCount >= 2)" label="备注原因">
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写原因" />
+        <el-form-item label="备注" required>
+          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写本次追踪备注" />
         </el-form-item>
         <el-alert v-if="trackForm.status === 2 && trackingRow" :closable="false" class="mb-4">
           <template #default>
@@ -430,6 +463,25 @@ watch(
         </el-button>
         <el-button type="primary" :loading="submitting" @click="handleTrack">
           确认
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 查看追踪记录 -->
+    <el-dialog v-model="historyViewVisible" title="追踪记录" width="520px">
+      <TrackingHistoryPanel
+        v-if="parseTrackingHistory(historyViewRow?.trackingHistoryJson).length"
+        :history-json="historyViewRow?.trackingHistoryJson"
+      />
+      <p v-else-if="historyViewRow?.trackingRemark">
+        {{ historyViewRow.trackingRemark }}
+      </p>
+      <p v-else class="text-secondary">
+        暂无追踪记录
+      </p>
+      <template #footer>
+        <el-button @click="historyViewVisible = false">
+          关闭
         </el-button>
       </template>
     </el-dialog>

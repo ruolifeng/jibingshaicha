@@ -60,6 +60,14 @@ export function rejectRecommendApi(id: number, reason?: string) {
   })
 }
 
+/** 接收方开启共同追踪（发起方与接收方均可追踪，次数合并计算） */
+export function enableJointTrackingApi(id: number) {
+  return request<ApiResponseData<null>>({
+    url: `referral-tracking/${id}/joint-tracking`,
+    method: "post"
+  })
+}
+
 /** 追踪操作（status: 1到位 2未到位 3其他） */
 export function trackReferralApi(id: number, status: number, remark?: string) {
   return request<ApiResponseData<null>>({

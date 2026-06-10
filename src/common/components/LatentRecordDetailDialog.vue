@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { TRACKING_STATUS_MAP, getPopulationTypeLabel } from "@@/constants/disease"
+import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import { getLatentDetailApi } from "@/pages/latent-management/apis"
 
 const props = defineProps<{
@@ -97,8 +98,12 @@ watch(() => props.visible, (val) => {
         <el-descriptions-item label="首次诊断">
           {{ detail.diagnosisFirst || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="追踪情况">
-          {{ detail.trackingRemark || "-" }}
+        <el-descriptions-item label="追踪情况" :span="2">
+          <TrackingHistoryPanel
+            v-if="detail.trackingHistoryJson"
+            :history-json="detail.trackingHistoryJson"
+          />
+          <span v-else>{{ detail.trackingRemark || "-" }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">
           {{ detail.remark || "-" }}

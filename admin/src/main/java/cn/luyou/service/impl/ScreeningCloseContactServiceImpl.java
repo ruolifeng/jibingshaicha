@@ -25,6 +25,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -75,6 +76,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     private final EpidemicReportService epidemicReportService;
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     /** 活动性肺结核的最终筛查结果标识（模板中的文字） */
     private static final String RESULT_ACTIVE_TB = "活动性肺结核";
@@ -113,7 +115,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
                     }
                     data.setUploadBatch(batchId);
-                    data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     dataList.add(data);
                 }
 
@@ -386,7 +388,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
         determineStatus(data);
-        data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+        data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
     }
 
@@ -534,38 +536,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     /** 非超管按部门隔离；未绑定部门时仅看 department_id 为空的记录，避免 IN () SQL 异常 */
     private void applyDepartmentScope(LambdaQueryWrapper<ScreeningCloseContact> wrapper) {
-        if (BaseContext.isSuperAdmin()) {
-            return;
-        }
-        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
-        Long currentUserId = BaseContext.getCurrentId();
-        final List<Long> referredIds;
-        if (currentUserId != null) {
-            referredIds = referralService.lambdaQuery()
-                    .eq(Referral::getModuleType, "screening")
-                    .eq(Referral::getPopulationType, "close")
-                    .eq(Referral::getReceiverOrgId, currentUserId)
-                    .eq(Referral::getStatus, 2)
-                    .list()
-                    .stream().map(Referral::getBizId).toList();
-        } else {
-            referredIds = List.of();
-        }
-        if (deptIds.isEmpty()) {
-            if (referredIds.isEmpty()) {
-                wrapper.isNull(ScreeningCloseContact::getDepartmentId);
-            } else {
-                wrapper.and(w -> w.isNull(ScreeningCloseContact::getDepartmentId)
-                        .or().in(ScreeningCloseContact::getId, referredIds));
-            }
-            return;
-        }
-        if (referredIds.isEmpty()) {
-            wrapper.in(ScreeningCloseContact::getDepartmentId, deptIds);
-        } else {
-            wrapper.and(w -> w.in(ScreeningCloseContact::getDepartmentId, deptIds)
-                    .or().in(ScreeningCloseContact::getId, referredIds));
-        }
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
     }
 
     // ==================== 工具方法 ====================

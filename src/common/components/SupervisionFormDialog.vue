@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { FormInstance, FormRules, UploadRequestOptions } from "element-plus"
+import type { FormInstance, FormRules } from "element-plus"
 import {
   formatLatentSupervisionTreatmentPlan,
   INTERRUPT_MEDICATION_OPTIONS,
@@ -10,10 +10,9 @@ import {
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { getAttachmentLabel, parseAttachmentUrls, parseUploadApiResponse, uploadAttachmentFile } from "@@/utils/attachment"
-import { getToken } from "@@/utils/cache/cookies"
+import ImageUploader from "@@/components/ImageUploader.vue"
+import { parseAttachmentUrls } from "@@/utils/attachment"
 import { canEditSupervisionForm } from "@@/utils/supervisionForm"
-import { Upload } from "@element-plus/icons-vue"
 import {
   getSupervisionDraftApi,
   saveSupervisionApi,
@@ -81,7 +80,8 @@ const supervisionForm = reactive({
   medicationRate: "",
   managerType: "",
   managerName: "",
-  remark: ""
+  remark: "",
+  attachmentUrls: ""
 })
 
 const rules: FormRules = {
@@ -89,13 +89,7 @@ const rules: FormRules = {
   treatmentPlan: [{ required: true, message: "请选择治疗方案", trigger: "change" }]
 }
 
-const attachmentFileList = ref<{ name: string, url: string, uid?: number }[]>([])
-const uploadHeaders = computed(() => ({ Authorization: `Bearer ${getToken()}` }))
 const formDisabled = computed(() => props.readonly || formLocked.value)
-
-function handleHttpUpload(options: UploadRequestOptions) {
-  return uploadAttachmentFile(options)
-}
 
 function formatDateValue(value: unknown): string {
   if (!value) return ""
@@ -103,26 +97,9 @@ function formatDateValue(value: unknown): string {
   return str.length >= 10 ? str.slice(0, 10) : str
 }
 
-function getAttachmentDisplayLabel(url: string, index: number | string): string {
-  return getAttachmentLabel(url, Number(index))
-}
-
 function parseAttachmentUrlsField(urls?: string) {
-  attachmentFileList.value = parseAttachmentUrls(urls).map((url, index) => ({
-    name: getAttachmentDisplayLabel(url, index),
-    url,
-    uid: Date.now() + index
-  }))
-}
-
-function refreshAttachmentDisplay(uploadFiles: { name: string, url?: string, status?: string, uid?: number }[]) {
-  attachmentFileList.value = uploadFiles
-    .filter(file => file.status !== "fail")
-    .map((file, index) => ({
-      name: file.name || getAttachmentDisplayLabel(file.url || "", index),
-      url: file.url || "",
-      uid: file.uid ?? Date.now() + index
-    }))
+  const parsed = parseAttachmentUrls(urls)
+  supervisionForm.attachmentUrls = parsed.length ? JSON.stringify(parsed) : ""
 }
 
 function createEmptyRecord(): SupervisionRecord {
@@ -172,7 +149,7 @@ function resetFormFromRow(row: any) {
   supervisionForm.managerType = ""
   supervisionForm.managerName = ""
   supervisionForm.remark = ""
-  attachmentFileList.value = []
+  supervisionForm.attachmentUrls = ""
 }
 
 function applyFormData(data: Record<string, any>, row: any) {
@@ -234,41 +211,6 @@ watch(
   }
 )
 
-function beforeAttachmentUpload(file: File) {
-  const maxSize = 20 * 1024 * 1024
-  if (file.size > maxSize) {
-    ElMessage.error("附件大小不能超过 20MB")
-    return false
-  }
-  return true
-}
-
-function handleAttachmentSuccess(response: any, uploadFile: any, uploadFiles: any[]) {
-  const result = parseUploadApiResponse(response)
-  if (result.ok && result.url) {
-    uploadFile.url = result.url
-    uploadFile.status = "success"
-    refreshAttachmentDisplay(uploadFiles)
-    return
-  }
-  uploadFile.status = "fail"
-  ElMessage.error(result.msg || "附件上传失败")
-}
-
-function handleAttachmentChange(_uploadFile: any, uploadFiles: any[]) {
-  refreshAttachmentDisplay(uploadFiles)
-}
-
-function handleAttachmentRemove(uploadFile: { name: string, url?: string, uid?: number }) {
-  attachmentFileList.value = attachmentFileList.value.filter(
-    f => f.uid !== uploadFile.uid && f.url !== uploadFile.url && f.name !== uploadFile.name
-  )
-}
-
-function handleAttachmentError() {
-  ElMessage.error("附件上传失败，请重试")
-}
-
 function resolveMedicationRate() {
   if (supervisionForm.medicationRate) return supervisionForm.medicationRate
   if (supervisionForm.totalDoses && supervisionForm.actualDoses !== null && supervisionForm.totalDoses > 0) {
@@ -282,7 +224,7 @@ function resolveTreatmentPlan() {
 }
 
 function buildPayload(status: number) {
-  const attachmentUrls = attachmentFileList.value.map(f => f.url).filter(Boolean).join(",")
+  const attachmentUrls = supervisionForm.attachmentUrls || undefined
   return {
     id: draftId.value ?? props.initialData?.id ?? undefined,
     latentInfectionId: props.latentRow!.id,
@@ -308,7 +250,7 @@ function buildPayload(status: number) {
     managerType: supervisionForm.managerType || undefined,
     managerName: supervisionForm.managerName || undefined,
     remark: supervisionForm.remark || undefined,
-    attachmentUrls: attachmentUrls || undefined,
+    attachmentUrls,
     status
   }
 }
@@ -603,32 +545,13 @@ async function handleArchive() {
       <el-form-item label="备注">
         <el-input v-model="supervisionForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
       </el-form-item>
-      <el-form-item label="附件上传">
-        <el-upload
-          :http-request="handleHttpUpload"
-          :headers="uploadHeaders"
-          :file-list="attachmentFileList"
-          name="file"
-          :before-upload="beforeAttachmentUpload"
-          :on-success="handleAttachmentSuccess"
-          :on-change="handleAttachmentChange"
-          :on-remove="handleAttachmentRemove"
-          :on-error="handleAttachmentError"
+      <el-form-item label="附件（2~6张图片）">
+        <ImageUploader
+          v-model="supervisionForm.attachmentUrls"
+          :min="2"
+          :max="6"
           :disabled="formDisabled"
-          multiple
-        >
-          <el-button type="primary" size="small" :disabled="formDisabled">
-            <el-icon class="mr-1">
-              <Upload />
-            </el-icon>
-            点击上传
-          </el-button>
-          <template #tip>
-            <div class="el-upload__tip">
-              支持图片、PDF 等格式，单个文件不超过 20MB
-            </div>
-          </template>
-        </el-upload>
+        />
       </el-form-item>
     </el-form>
     <template #footer>

@@ -45,6 +45,9 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 接收方拒绝推介（recommendStatus: 1→3，归档） */
     void rejectRecommend(Long id, String reason);
 
+    /** 接收方开启共同追踪（发起方与接收方均可追踪，次数合并计算） */
+    void enableJointTracking(Long id);
+
     /** 追踪操作（更新 trackingStatus，处理未到位次数上限） */
     void track(Long id, Integer status, String remark);
 

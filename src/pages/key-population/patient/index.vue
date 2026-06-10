@@ -3,12 +3,14 @@ import { getLevel5UsersApi } from "@@/apis/users"
 import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
+import MedicationCalendar from "@@/components/MedicationCalendar.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
+import PrintMedication from "@@/components/PrintMedication.vue"
 import PrintNotice from "@@/components/PrintNotice.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
-import { printHtml } from "@@/utils/print"
 import { usePagination } from "@@/composables/usePagination"
+import { parseMedicationRecords, serializeMedicationRecords, type MedicationRecordsMap } from "@@/utils/medicationRecords"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
@@ -520,46 +522,10 @@ const medicationForm = reactive({
   supervisor: "",
   sputumResult: "",
   stopDate: "",
-  checkedDates: [] as string[]
+  dayMarks: {} as MedicationRecordsMap
 })
 
-const calendarMonth = ref(new Date())
-const calendarDays = computed(() => {
-  const year = calendarMonth.value.getFullYear()
-  const month = calendarMonth.value.getMonth()
-  const firstDay = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const days: { date: string, day: number, blank: boolean }[] = []
-  for (let i = 0; i < firstDay; i++) days.push({ date: "", day: 0, blank: true })
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-    days.push({ date: dateStr, day: d, blank: false })
-  }
-  return days
-})
-const calendarTitle = computed(() => {
-  const y = calendarMonth.value.getFullYear()
-  const m = calendarMonth.value.getMonth() + 1
-  return `${y}年${m}月`
-})
-function prevMonth() {
-  const d = new Date(calendarMonth.value)
-  d.setMonth(d.getMonth() - 1)
-  calendarMonth.value = d
-}
-function nextMonth() {
-  const d = new Date(calendarMonth.value)
-  d.setMonth(d.getMonth() + 1)
-  calendarMonth.value = d
-}
-function toggleDate(dateStr: string) {
-  const idx = medicationForm.checkedDates.indexOf(dateStr)
-  if (idx >= 0) medicationForm.checkedDates.splice(idx, 1)
-  else medicationForm.checkedDates.push(dateStr)
-}
-function isDateChecked(dateStr: string) {
-  return medicationForm.checkedDates.includes(dateStr)
-}
+const printMedicationVisible = ref(false)
 
 function openMedicationDialog(row: any) {
   medicationRow.value = row
@@ -567,50 +533,21 @@ function openMedicationDialog(row: any) {
   medicationForm.supervisor = ""
   medicationForm.sputumResult = ""
   medicationForm.stopDate = ""
-  medicationForm.checkedDates = []
-  calendarMonth.value = new Date()
+  medicationForm.dayMarks = {}
   getMedicationApi(row.id).then(({ data }) => {
     if (data) {
       medicationForm.managementMethod = data.managementMethod || ""
       medicationForm.supervisor = data.supervisor || ""
       medicationForm.sputumResult = data.sputumResult || ""
       medicationForm.stopDate = data.stopDate || ""
-      try {
-        medicationForm.checkedDates = data.medicationRecords
-          ? (typeof data.medicationRecords === "string"
-              ? JSON.parse(data.medicationRecords)
-              : data.medicationRecords)
-          : []
-      } catch {
-        medicationForm.checkedDates = []
-      }
+      medicationForm.dayMarks = parseMedicationRecords(data.medicationRecords)
     }
   }).catch(() => { /* 首次填写 */ })
   medicationDialogVisible.value = true
 }
 
 function handlePrintMedication() {
-  const printContent = document.querySelector(".med-calendar")
-  if (!printContent) return
-  const patientName = medicationRow.value?.name || ""
-  printHtml(
-    `<h2 style="text-align:center">肺结核患者治疗记录卡</h2>
-    <div style="margin-bottom:16px">
-      <span style="margin-right:24px">姓名：${patientName}</span>
-      <span style="margin-right:24px">管理方式：${medicationForm.managementMethod || ""}</span>
-      <span style="margin-right:24px">督导人员：${medicationForm.supervisor || ""}</span>
-      <span>痰菌检查：${medicationForm.sputumResult || ""}</span>
-    </div>
-    ${printContent.outerHTML}`,
-    `治疗记录卡 - ${patientName}`,
-    `
-      body { font-family: sans-serif; padding: 20px; }
-      .med-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-      .med-calendar-cell { border: 1px solid #ccc; padding: 4px; text-align: center; min-height: 40px; }
-      .checked { background: #e6f7e6; }
-      .med-calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; margin-bottom: 4px; }
-    `
-  )
+  printMedicationVisible.value = true
 }
 
 async function handleSaveMedication() {
@@ -622,7 +559,7 @@ async function handleSaveMedication() {
       supervisor: medicationForm.supervisor,
       sputumResult: medicationForm.sputumResult,
       stopDate: medicationForm.stopDate,
-      medicationRecords: JSON.stringify([...medicationForm.checkedDates].sort())
+      medicationRecords: serializeMedicationRecords(medicationForm.dayMarks)
     }
     if (medicationForm.stopDate) {
       await completeMedicationApi(saveData)
@@ -1385,8 +1322,8 @@ watch(
         <el-form-item label="备注">
           <el-input v-model="firstVisitForm.remarks" type="textarea" :rows="2" placeholder="请填写" />
         </el-form-item>
-        <el-form-item label="附件（2~6张图片）">
-          <ImageUploader v-model="firstVisitForm.attachmentUrls" :min="2" :max="6" />
+        <el-form-item label="附件（2~10张图片）">
+          <ImageUploader v-model="firstVisitForm.attachmentUrls" :min="2" :max="10" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1438,37 +1375,7 @@ watch(
     <el-dialog v-model="medicationDialogVisible" title="服药管理" width="700px">
       <el-form :model="medicationForm" label-width="130px">
         <el-form-item label="每日服药记录">
-          <div class="med-calendar">
-            <div class="med-calendar-header">
-              <el-button text @click="prevMonth">
-                &lt;
-              </el-button>
-              <span class="med-calendar-title">{{ calendarTitle }}</span>
-              <el-button text @click="nextMonth">
-                &gt;
-              </el-button>
-            </div>
-            <div class="med-calendar-weekdays">
-              <span v-for="w in ['日', '一', '二', '三', '四', '五', '六']" :key="w">{{ w }}</span>
-            </div>
-            <div class="med-calendar-grid">
-              <div
-                v-for="(cell, idx) in calendarDays"
-                :key="idx"
-                class="med-calendar-cell"
-                :class="{ blank: cell.blank, checked: !cell.blank && isDateChecked(cell.date) }"
-                @click="!cell.blank && toggleDate(cell.date)"
-              >
-                <template v-if="!cell.blank">
-                  <span class="day-num">{{ cell.day }}</span>
-                  <span v-if="isDateChecked(cell.date)" class="check-mark">✓</span>
-                </template>
-              </div>
-            </div>
-            <div class="med-calendar-summary">
-              已服药 <strong>{{ medicationForm.checkedDates.length }}</strong> 天
-            </div>
-          </div>
+          <MedicationCalendar v-model="medicationForm.dayMarks" />
         </el-form-item>
         <el-form-item label="管理方式">
           <el-select v-model="medicationForm.managementMethod" placeholder="请选择" style="width: 100%">
@@ -1511,6 +1418,13 @@ watch(
     <!-- 打印通知单 -->
     <PrintNotice v-model:visible="printNoticeVisible" :notice-data="printNoticeData" notice-type="patient" />
 
+    <!-- 打印治疗记录卡 -->
+    <PrintMedication
+      v-model:visible="printMedicationVisible"
+      :patient-data="medicationRow"
+      :medication-data="medicationForm"
+    />
+
     <!-- 打印首次随访表 -->
     <PrintFirstVisit v-model:visible="printVisitVisible" :visit-data="printVisitData" :patient-name="printPatientName" />
   </div>
@@ -1531,72 +1445,6 @@ watch(
   flex-wrap: nowrap;
 }
 
-.med-calendar {
-  width: 100%;
-  &-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin-bottom: 8px;
-  }
-  &-title {
-    font-size: 16px;
-    font-weight: bold;
-  }
-  &-weekdays {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    text-align: center;
-    font-size: 13px;
-    color: #909399;
-    margin-bottom: 4px;
-  }
-  &-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-  }
-  &-cell {
-    aspect-ratio: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #e4e7ed;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s;
-    position: relative;
-    &.blank {
-      border-color: transparent;
-      cursor: default;
-    }
-    &.checked {
-      background: #67c23a;
-      border-color: #67c23a;
-      color: #fff;
-    }
-    &:not(.blank):hover {
-      border-color: #409eff;
-    }
-    .check-mark {
-      font-size: 16px;
-      font-weight: bold;
-      line-height: 1;
-    }
-    .day-num {
-      line-height: 1.2;
-    }
-  }
-  &-summary {
-    margin-top: 8px;
-    text-align: center;
-    font-size: 14px;
-    color: #606266;
-  }
-}
 </style>
 
 <style lang="scss">
