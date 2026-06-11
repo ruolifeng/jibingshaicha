@@ -59,19 +59,8 @@ function resolvePath(routePath: string) {
   <template v-if="!alwaysShowRootMenu && theOnlyOneChild && !theOnlyOneChild.children">
     <Link v-if="theOnlyOneChild.meta" :to="resolvePath(theOnlyOneChild.path)">
       <el-menu-item :index="resolvePath(theOnlyOneChild.path)">
-        <el-badge
-          v-if="showUnreadBadge(theOnlyOneChild.meta)"
-          :value="unreadCount"
-          :max="99"
-          class="menu-icon-badge"
-        >
-          <SvgIcon v-if="theOnlyOneChild.meta.svgIcon" :name="theOnlyOneChild.meta.svgIcon" class="svg-icon" />
-          <component v-else-if="theOnlyOneChild.meta.elIcon" :is="theOnlyOneChild.meta.elIcon" class="el-icon" />
-        </el-badge>
-        <template v-else>
-          <SvgIcon v-if="theOnlyOneChild.meta.svgIcon" :name="theOnlyOneChild.meta.svgIcon" class="svg-icon" />
-          <component v-else-if="theOnlyOneChild.meta.elIcon" :is="theOnlyOneChild.meta.elIcon" class="el-icon" />
-        </template>
+        <SvgIcon v-if="theOnlyOneChild.meta.svgIcon" :name="theOnlyOneChild.meta.svgIcon" class="svg-icon" />
+        <component v-else-if="theOnlyOneChild.meta.elIcon" :is="theOnlyOneChild.meta.elIcon" class="el-icon" />
         <template v-if="theOnlyOneChild.meta.title" #title>
           <span class="menu-title-row">
             <span class="title">{{ theOnlyOneChild.meta.title }}</span>
@@ -134,8 +123,4 @@ function resolvePath(routePath: string) {
   flex-shrink: 0;
 }
 
-.menu-icon-badge {
-  display: inline-flex;
-  line-height: 1;
-}
 </style>

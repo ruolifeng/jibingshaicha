@@ -1574,7 +1574,7 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `epidemic_remark`        TEXT                                    COMMENT '大疫情备注',
     `upload_batch`           VARCHAR(64)                             COMMENT '导入批次号',
     -- 推介专用字段（biz_mode=recommend 时使用）
-    `receiver_user_id`       BIGINT                                  COMMENT '接收推介的三/四级用户ID',
+    `receiver_user_id`       BIGINT                                  COMMENT '接收推介的一至五级用户ID',
     `receiver_dept_id`       BIGINT                                  COMMENT '接收推介的用户所在部门ID（自动派生）',
     `recommend_status`       TINYINT                                 COMMENT '0未发送 1已发送 2已接受 3已拒绝',
     `rejected_reason`        VARCHAR(256),

@@ -183,9 +183,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public List<UserInfoVO> getLevel34Users() {
-        // 三级（role=4）、四级（role=5）、五级（role=6）用户，用于推介接收人选择
+        // 一至五级（role=2-6）用户均可作为推介接收人，支持同级和跨级互推。
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
-                .in(User::getRole, java.util.Arrays.asList(4, 5, 6))
+                .in(User::getRole, java.util.Arrays.asList(2, 3, 4, 5, 6))
                 .orderByAsc(User::getDepartmentId)
                 .orderByAsc(User::getRole)
                 .orderByAsc(User::getUsername);

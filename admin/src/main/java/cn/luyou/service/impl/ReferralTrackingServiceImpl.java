@@ -95,8 +95,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         if ("recommend".equals(bizMode)) {
             Integer role = currentUser != null ? currentUser.getRole() : null;
-            if (role == null || (role != 1 && (role < 4 || role > 6))) {
-                throw new ServiceException(StatusEnum.FORBIDDEN, "仅超级管理员或三/四/五级用户可发起推介");
+            if (role == null || (role != 1 && (role < 2 || role > 6))) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "仅超级管理员或一至五级用户可发起推介");
             }
             validateRecommendRequired(params);
             Long receiverUserId = getLong(params, "receiverUserId");
@@ -104,8 +104,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             if (receiver == null) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
             }
-            if (receiver.getRole() == null || (receiver.getRole() != 4 && receiver.getRole() != 5 && receiver.getRole() != 6)) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为三级、四级或五级用户");
+            if (receiver.getRole() == null || receiver.getRole() < 2 || receiver.getRole() > 6) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为一至五级用户");
             }
             record.setReceiverUserId(receiverUserId);
             record.setReceiverDeptId(receiver.getDepartmentId());
@@ -499,9 +499,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 if (receiver == null) {
                     throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人不存在");
                 }
-                if (receiver.getRole() == null
-                        || (receiver.getRole() != 4 && receiver.getRole() != 5 && receiver.getRole() != 6)) {
-                    throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为三级、四级或五级用户");
+                if (receiver.getRole() == null || receiver.getRole() < 2 || receiver.getRole() > 6) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID, "推介接收人须为一至五级用户");
                 }
                 record.setReceiverUserId(newReceiverId);
                 record.setReceiverDeptId(receiver.getDepartmentId());
@@ -968,8 +967,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return;
         }
         if ("recommend".equals(bizMode) && level5RecommendView) {
-            wrapper.eq(ReferralTracking::getCreatorId, userId)
-                    .isNotNull(ReferralTracking::getReceiverUserId);
+            wrapper.and(w -> w.eq(ReferralTracking::getCreatorId, userId)
+                    .or()
+                    .eq(ReferralTracking::getReceiverUserId, userId));
             return;
         }
         if (role == 6) {
@@ -988,7 +988,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         applyManagerScopeFilter(wrapper, userId);
     }
 
-    /** 一至四级：可见本部门及下级部门相关记录（含五级发起、三四级接收的推介/追踪） */
+    /** 一至四级：可见本部门及下级部门相关记录（含本人发起或接收的跨级/同级推介） */
     private void applyManagerScopeFilter(LambdaQueryWrapper<ReferralTracking> wrapper, Long userId) {
         List<Long> deptIds = resolveScopedDepartmentIds();
         if (deptIds.isEmpty()) {

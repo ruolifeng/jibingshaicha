@@ -8,6 +8,7 @@ import { useUserStore } from "@/pinia/stores/user"
 defineOptions({ name: "Profile" })
 
 const userStore = useUserStore()
+const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
@@ -83,6 +84,7 @@ function removeAvatar() {
 
 async function handleSubmit() {
   await formRef.value?.validate()
+  const isPasswordChanged = Boolean(formData.password)
   submitting.value = true
   try {
     await updateCurrentUserApi({
@@ -91,6 +93,12 @@ async function handleSubmit() {
       avatar: formData.avatar,
       password: formData.password || undefined
     })
+    if (isPasswordChanged) {
+      userStore.logout()
+      ElMessage.success("密码已修改，请重新登录")
+      router.replace("/login")
+      return
+    }
     await userStore.getInfo()
     syncFormData()
     ElMessage.success("个人信息已更新")

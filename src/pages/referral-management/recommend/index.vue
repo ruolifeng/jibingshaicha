@@ -57,12 +57,12 @@ function canOperateRecommendTrack(row: any) {
   return false
 }
 
-/** 超级管理员或拥有新增权限的三/四/五级用户可发起推介 */
+/** 超级管理员或拥有新增权限的一至五级用户可发起推介 */
 const canCreateRecommend = computed(() =>
-  userStore.userRole === 1 || ([4, 5, 6].includes(userStore.userRole) && userStore.hasPermission("referralManagement:create"))
+  userStore.userRole === 1 || ([2, 3, 4, 5, 6].includes(userStore.userRole) && userStore.hasPermission("referralManagement:create"))
 )
-/** 超级管理员和三/四/五级用户展示推介操作指引 */
-const showRecommendGuide = computed(() => userStore.userRole === 1 || [4, 5, 6].includes(userStore.userRole))
+/** 超级管理员和一至五级用户展示推介操作指引 */
+const showRecommendGuide = computed(() => userStore.userRole === 1 || [2, 3, 4, 5, 6].includes(userStore.userRole))
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -694,7 +694,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               type="primary" link size="small"
               @click="handleSend(row)"
             >发送推介</el-button>
-            <!-- 三/四级接收人：确认/拒绝待接收推介 -->
+            <!-- 接收人：确认/拒绝待接收推介 -->
             <el-button
               v-if="row.recommendStatus === 1 && isReceiver(row)"
               type="success" link size="small"
@@ -813,7 +813,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               <el-select
                 v-model="createForm.receiverUserId"
                 filterable
-                placeholder="选择三级、四级或五级用户"
+                placeholder="选择一至五级用户"
                 style="width: 100%"
               >
                 <el-option

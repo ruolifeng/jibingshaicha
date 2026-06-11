@@ -29,7 +29,7 @@ public interface UserService extends IService<User> {
     /** 获取转出/转诊接收方用户（二/三/四/五级 role 3–6，按部门-用户展示） */
     List<UserInfoVO> getReferralReceiverUsers();
 
-    /** 获取三级和四级用户（role=4/5，用于推介追踪接收人选择） */
+    /** 获取一至五级用户（role=2-6，用于推介追踪接收人选择） */
     List<UserInfoVO> getLevel34Users();
 
     /** 权限管理-按用户追加：获取同部门用户（超级管理员返回全部） */

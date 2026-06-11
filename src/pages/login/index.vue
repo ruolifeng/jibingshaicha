@@ -100,7 +100,6 @@ function handleLogin() {
       </div>
     </div>
     <footer class="login-footer">
-      <span>备案号：</span>
       <a
         href="https://beian.miit.gov.cn/"
         target="_blank"
@@ -112,12 +111,16 @@ function handleLogin() {
 
 <style lang="scss" scoped>
 .login-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   width: 100%;
   min-height: 100%;
+  padding: 48px 16px 76px;
+  box-sizing: border-box;
+  background: #f5f7fa url("@/static/image.png") center / cover no-repeat;
   .theme-switch {
     position: fixed;
     top: 5%;
@@ -152,9 +155,14 @@ function handleLogin() {
     }
   }
   .login-footer {
-    margin-top: 24px;
+    position: fixed;
+    bottom: 24px;
+    left: 0;
+    width: 100%;
+    text-align: center;
     font-size: 13px;
-    color: var(--el-text-color-placeholder);
+    color: rgba(255, 255, 255, 0.78);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
     a {
       color: inherit;
       text-decoration: none;

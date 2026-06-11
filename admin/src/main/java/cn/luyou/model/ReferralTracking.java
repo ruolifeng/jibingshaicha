@@ -69,7 +69,7 @@ public class ReferralTracking extends BaseEntity {
     private String uploadBatch;
 
     // ===== 推介专用字段（bizMode=recommend 时使用）=====
-    /** 接收推介的三/四级用户ID */
+    /** 接收推介的一至五级用户ID */
     private Long receiverUserId;
     /** 接收推介的用户所在部门ID（自动派生） */
     private Long receiverDeptId;
