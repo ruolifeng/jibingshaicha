@@ -545,11 +545,9 @@ async function handleArchive() {
       <el-form-item label="备注">
         <el-input v-model="supervisionForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
       </el-form-item>
-      <el-form-item label="附件（2~6张图片）">
+      <el-form-item label="上传10张">
         <ImageUploader
           v-model="supervisionForm.attachmentUrls"
-          :min="2"
-          :max="6"
           :disabled="formDisabled"
         />
       </el-form-item>

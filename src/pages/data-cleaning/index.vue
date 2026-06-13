@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { cleanScreeningDataApi, downloadCleaningResultApi } from "./apis/index"
+import { cleanScreeningDataApi, downloadCleaningResultApi, matchSchoolDataApi } from "./apis/index"
 import { downloadTemplateApi } from "@/pages/patient-management/apis/index"
 
 const templateDownloading = ref<string | null>(null)
@@ -31,8 +31,10 @@ async function handleDownloadTemplate(type: string, label: string) {
 type PopulationType = "school" | "keyPopulation" | "closeContact"
 
 const loading = ref(false)
+const matching = ref(false)
 const selectedType = ref<PopulationType>("school")
 const selectedFile = ref<File | null>(null)
+const matchFile = ref<File | null>(null)
 const result = ref<{
   totalCount: number
   abnormalCount: number
@@ -56,6 +58,37 @@ function onFileChange(uploadFile: any) {
   }
   selectedFile.value = file
   result.value = null
+}
+
+function onMatchFileChange(uploadFile: any) {
+  const file = uploadFile?.raw as File
+  if (!file) return
+  if (!(file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
+    ElMessage.error("请上传 .xlsx 或 .xls 文件")
+    return
+  }
+  matchFile.value = file
+}
+
+async function handleMatchSchool() {
+  if (!matchFile.value) {
+    ElMessage.warning("请先选择需要匹配的学生筛查 Excel")
+    return
+  }
+  matching.value = true
+  try {
+    const { data } = await matchSchoolDataApi(matchFile.value)
+    const blob = await downloadCleaningResultApi(data.fileId)
+    const url = URL.createObjectURL(new Blob([blob as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = data.fileName || "学生筛查数据匹配结果.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(`数据匹配完成，共生成 ${data.totalCount} 条`)
+  } finally {
+    matching.value = false
+  }
 }
 
 async function handleClean() {
@@ -126,6 +159,43 @@ async function handleDownload() {
           </div>
         </el-card>
       </div>
+    </el-card>
+
+    <el-card shadow="never" class="mb-4">
+      <template #header>
+        <span class="text-lg font-bold">数据匹配</span>
+      </template>
+      <el-alert
+        type="info"
+        :closable="false"
+        title="用于将其它学生筛查 Excel 按表头匹配为本系统学生筛查模板，生成后可到筛查管理上传。目前仅支持学生筛查。"
+        class="mb-4"
+      />
+      <el-form label-width="120px">
+        <el-form-item label="匹配类型">
+          <el-tag type="success">
+            学生筛查
+          </el-tag>
+        </el-form-item>
+        <el-form-item label="上传文件">
+          <el-upload
+            :auto-upload="false"
+            :show-file-list="true"
+            accept=".xlsx,.xls"
+            :limit="1"
+            :on-change="onMatchFileChange"
+          >
+            <el-button type="primary">
+              选择 Excel
+            </el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="success" :loading="matching" @click="handleMatchSchool">
+            开始匹配并下载
+          </el-button>
+        </el-form-item>
+      </el-form>
     </el-card>
 
     <!-- ==================== 数据清洗区（原有功能） ==================== -->

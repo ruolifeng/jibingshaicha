@@ -22,6 +22,19 @@ export function cleanScreeningDataApi(populationType: "school" | "keyPopulation"
   })
 }
 
+/** 将外部学生筛查 Excel 匹配为系统模板 */
+export function matchSchoolDataApi(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<DataCleaningResult>>({
+    url: "data-cleaning/match/school",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 120000
+  })
+}
+
 /** 下载清洗后的结果文件 */
 export function downloadCleaningResultApi(fileId: string) {
   return request<Blob>({

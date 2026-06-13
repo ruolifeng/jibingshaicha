@@ -43,10 +43,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -80,34 +84,43 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         String batchId = IdUtil.fastSimpleUUID();
         List<ScreeningSchool> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
-        AtomicInteger rowNum = new AtomicInteger(3); // 数据从第3行开始
 
         try {
-            // V4 学校模板：第1行为大分组标题，第2行为字段名，数据从第3行开始
-            EasyExcel.read(file.getInputStream(), ScreeningSchool.class, new ReadListener<ScreeningSchool>() {
+            List<Map<Integer, String>> rows = new ArrayList<>();
+            EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
                 @Override
-                public void invoke(ScreeningSchool data, AnalysisContext context) {
-                    int row = rowNum.getAndIncrement();
-                    // 身份证校验
-                    if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
-                        result.addError(row, data.getName(), "身份证号格式不正确");
-                    }
-                    // 手机号校验
-                    if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
-                        result.addError(row, data.getName(), "手机号格式不正确");
-                    }
-                    data.setUploadBatch(batchId);
-                    boolean directXray = hasDirectXrayAndDiagnosis(data);
-                    data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
-                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
-                    dataList.add(data);
+                public void invoke(Map<Integer, String> row, AnalysisContext context) {
+                    rows.add(new LinkedHashMap<>(row));
                 }
 
                 @Override
                 public void doAfterAllAnalysed(AnalysisContext context) {
-                    log.info("学校人群筛查数据解析完成，共 {} 条", dataList.size());
+                    log.info("学校人群筛查原始数据解析完成，共 {} 行", rows.size());
                 }
-            }).sheet().headRowNumber(2).doRead();
+            }).sheet().headRowNumber(0).doRead();
+
+            Map<String, Integer> headerIndex = buildSchoolHeaderIndex(rows);
+            if (!headerIndex.containsKey("姓名") || !headerIndex.containsKey("证件号")) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "模板表头不正确，请使用学生筛查模板或先进行数据匹配");
+            }
+            for (int i = 2; i < rows.size(); i++) {
+                int rowNum = i + 1;
+                ScreeningSchool data = mapSchoolRow(rows.get(i), headerIndex);
+                if (isBlankSchoolRow(data)) {
+                    continue;
+                }
+                if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+                    result.addError(rowNum, data.getName(), "身份证号格式不正确");
+                }
+                if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+                    result.addError(rowNum, data.getName(), "手机号格式不正确");
+                }
+                data.setUploadBatch(batchId);
+                data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
+                data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+                dataList.add(data);
+            }
+            log.info("学校人群筛查数据解析完成，共 {} 条", dataList.size());
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
@@ -131,17 +144,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .one();
             if (existing != null) {
                 // 合并基本信息，以最新导入为准
-                if (StrUtil.isNotBlank(d.getName())) existing.setName(d.getName());
-                if (StrUtil.isNotBlank(d.getPhone())) existing.setPhone(d.getPhone());
-                if (StrUtil.isNotBlank(d.getCurrentAddress())) existing.setCurrentAddress(d.getCurrentAddress());
-                if (StrUtil.isNotBlank(d.getInfectionResult())) existing.setInfectionResult(d.getInfectionResult());
-                if (StrUtil.isNotBlank(d.getHasChestXray())) existing.setHasChestXray(d.getHasChestXray());
-                if (d.getChestXrayDate() != null) existing.setChestXrayDate(d.getChestXrayDate());
-                if (StrUtil.isNotBlank(d.getChestXrayResult())) existing.setChestXrayResult(d.getChestXrayResult());
-                if (StrUtil.isNotBlank(d.getDiagnosisFirst())) existing.setDiagnosisFirst(d.getDiagnosisFirst());
-                if (StrUtil.isNotBlank(d.getRemark())) existing.setRemark(d.getRemark());
-                boolean directXray = hasDirectXrayAndDiagnosis(existing);
-                existing.setIsLatent((isPositive(existing.getInfectionResult()) || directXray) ? 1 : 0);
+                mergeSchoolImportFields(existing, d);
+                existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
                 toUpdate.add(existing);
             } else {
                 toInsert.add(d);
@@ -177,7 +181,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
+                            .diagnosisFirst(latentDiagnosisFirst(d))
                             .departmentId(d.getDepartmentId())
                             .creatorId(BaseContext.getCurrentId())
                             .build())
@@ -204,7 +208,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
+                            .diagnosisFirst(latentDiagnosisFirst(d))
                             .departmentId(d.getDepartmentId())
                             .creatorId(BaseContext.getCurrentId())
                             .build())
@@ -250,7 +254,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                         .hasChestXray(d.getHasChestXray())
                         .chestXrayDate(d.getChestXrayDate())
                         .chestXrayResult(d.getChestXrayResult())
-                        .diagnosisFirst(d.getDiagnosisFirst())
+                        .diagnosisFirst(latentDiagnosisFirst(d))
                         .departmentId(d.getDepartmentId())
                         .creatorId(BaseContext.getCurrentId())
                         .build();
@@ -270,9 +274,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .set(LatentInfection::getHasChestXray, d.getHasChestXray())
                     .set(LatentInfection::getChestXrayDate, d.getChestXrayDate())
                     .set(LatentInfection::getChestXrayResult, d.getChestXrayResult())
-                    .set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
+                    .set(LatentInfection::getDiagnosisFirst, latentDiagnosisFirst(d));
             update.update();
-            latent.setDiagnosisFirst(d.getDiagnosisFirst());
+            latent.setDiagnosisFirst(latentDiagnosisFirst(d));
             latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
     }
@@ -337,8 +341,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
-        boolean directXray = hasDirectXrayAndDiagnosis(data);
-        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
 
@@ -360,7 +363,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(data.getDiagnosisFirst())
+                    .diagnosisFirst(latentDiagnosisFirst(data))
                     .departmentId(data.getDepartmentId())
                     .creatorId(BaseContext.getCurrentId())
                     .build();
@@ -375,6 +378,23 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     }
 
     /**
+     * 是否应进入潜伏/待诊断流程。
+     * 感染阳性、胸片+诊断、或诊断结果为疑似/潜伏/确诊时均标记为潜伏管理者。
+     * 排除/其他仅在有感染阳性时进入（由 isPositive 覆盖）。
+     */
+    private boolean shouldMarkLatent(ScreeningSchool data) {
+        if (data == null) return false;
+        if (isPositive(data.getInfectionResult())) return true;
+        if (hasDirectXrayAndDiagnosis(data)) return true;
+        String diagnosis = data.getDiagnosisFirst();
+        if (StrUtil.isBlank(diagnosis)) return false;
+        return switch (diagnosis) {
+            case "疑似肺结核", "潜伏感染者", "确诊患者" -> true;
+            default -> false;
+        };
+    }
+
+    /**
      * 判断是否包含可直接同步的胸片检查与诊断数据。
      * 感染筛查阴性 + 胸片正常时直接结束流程，不进入待诊断。
      */
@@ -383,6 +403,175 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             return false;
         }
         return "是".equals(data.getHasChestXray()) && StrUtil.isNotBlank(data.getDiagnosisFirst());
+    }
+
+    /** 诊断结果写入潜伏表；疑似肺结核由分流逻辑保留在待诊断，不再归档。 */
+    private String latentDiagnosisFirst(ScreeningSchool data) {
+        return data == null ? null : data.getDiagnosisFirst();
+    }
+
+    /** 增量导入：按证件号匹配时，用最新 Excel 行覆盖筛查表字段。 */
+    private void mergeSchoolImportFields(ScreeningSchool existing, ScreeningSchool incoming) {
+        if (StrUtil.isNotBlank(incoming.getYear())) existing.setYear(incoming.getYear());
+        if (StrUtil.isNotBlank(incoming.getCity())) existing.setCity(incoming.getCity());
+        if (StrUtil.isNotBlank(incoming.getDistrict())) existing.setDistrict(incoming.getDistrict());
+        if (StrUtil.isNotBlank(incoming.getName())) existing.setName(incoming.getName());
+        if (StrUtil.isNotBlank(incoming.getGender())) existing.setGender(incoming.getGender());
+        if (incoming.getBirthDate() != null) existing.setBirthDate(incoming.getBirthDate());
+        if (incoming.getAge() != null) existing.setAge(incoming.getAge());
+        if (StrUtil.isNotBlank(incoming.getIdType())) existing.setIdType(incoming.getIdType());
+        if (StrUtil.isNotBlank(incoming.getEthnicity())) existing.setEthnicity(incoming.getEthnicity());
+        if (StrUtil.isNotBlank(incoming.getPhone())) existing.setPhone(incoming.getPhone());
+        if (StrUtil.isNotBlank(incoming.getHouseholdAddress())) existing.setHouseholdAddress(incoming.getHouseholdAddress());
+        if (StrUtil.isNotBlank(incoming.getCurrentAddress())) existing.setCurrentAddress(incoming.getCurrentAddress());
+        if (StrUtil.isNotBlank(incoming.getSchoolType())) existing.setSchoolType(incoming.getSchoolType());
+        if (StrUtil.isNotBlank(incoming.getSchoolName())) existing.setSchoolName(incoming.getSchoolName());
+        if (StrUtil.isNotBlank(incoming.getClassName())) existing.setClassName(incoming.getClassName());
+        if (StrUtil.isNotBlank(incoming.getTbHistory())) existing.setTbHistory(incoming.getTbHistory());
+        if (StrUtil.isNotBlank(incoming.getCloseContactHistory())) existing.setCloseContactHistory(incoming.getCloseContactHistory());
+        if (StrUtil.isNotBlank(incoming.getSuspiciousSymptoms())) existing.setSuspiciousSymptoms(incoming.getSuspiciousSymptoms());
+        if (StrUtil.isNotBlank(incoming.getHasInfectionScreen())) existing.setHasInfectionScreen(incoming.getHasInfectionScreen());
+        if (incoming.getScreenDate() != null) existing.setScreenDate(incoming.getScreenDate());
+        if (StrUtil.isNotBlank(incoming.getScreenMethod())) existing.setScreenMethod(incoming.getScreenMethod());
+        if (StrUtil.isNotBlank(incoming.getScreenResult())) existing.setScreenResult(incoming.getScreenResult());
+        if (StrUtil.isNotBlank(incoming.getInfectionResult())) existing.setInfectionResult(incoming.getInfectionResult());
+        if (StrUtil.isNotBlank(incoming.getHasChestXray())) existing.setHasChestXray(incoming.getHasChestXray());
+        if (incoming.getChestXrayDate() != null) existing.setChestXrayDate(incoming.getChestXrayDate());
+        if (StrUtil.isNotBlank(incoming.getChestXrayResult())) existing.setChestXrayResult(incoming.getChestXrayResult());
+        if (StrUtil.isNotBlank(incoming.getSputumSmearResult())) existing.setSputumSmearResult(incoming.getSputumSmearResult());
+        if (StrUtil.isNotBlank(incoming.getMolecularBiologyResult())) existing.setMolecularBiologyResult(incoming.getMolecularBiologyResult());
+        if (StrUtil.isNotBlank(incoming.getDiagnosisFirst())) existing.setDiagnosisFirst(incoming.getDiagnosisFirst());
+        if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
+    }
+
+    private Map<String, Integer> buildSchoolHeaderIndex(List<Map<Integer, String>> rows) {
+        Map<String, Integer> headerIndex = new HashMap<>();
+        int headerRows = Math.min(2, rows.size());
+        for (int rowIdx = 0; rowIdx < headerRows; rowIdx++) {
+            Map<Integer, String> row = rows.get(rowIdx);
+            for (Map.Entry<Integer, String> entry : row.entrySet()) {
+                putHeaderAlias(headerIndex, entry.getValue(), entry.getKey());
+            }
+        }
+        return headerIndex;
+    }
+
+    private void putHeaderAlias(Map<String, Integer> headerIndex, String rawHeader, Integer index) {
+        if (index == null || StrUtil.isBlank(rawHeader)) return;
+        String header = normalizeHeader(rawHeader);
+        if (StrUtil.isBlank(header)) return;
+        headerIndex.putIfAbsent(header, index);
+        switch (header) {
+            case "年度" -> headerIndex.putIfAbsent("年份", index);
+            case "区县", "县市区", "县市、区" -> headerIndex.putIfAbsent("县市区", index);
+            case "身份证号", "身份证号码" -> headerIndex.putIfAbsent("证件号", index);
+            case "现地址" -> headerIndex.putIfAbsent("现住址", index);
+            case "有无可疑症状" -> headerIndex.putIfAbsent("结核病可疑症状", index);
+            case "是否感染筛查" -> headerIndex.putIfAbsent("是否进行感染筛", index);
+            case "判定结果", "感染筛查结果学校人群感染筛查情况" -> headerIndex.putIfAbsent("感染筛查结果", index);
+            case "胸部DR", "胸片检查结果" -> headerIndex.putIfAbsent("胸片结果", index);
+            case "痰涂片" -> headerIndex.putIfAbsent("痰涂片结果", index);
+            case "分子生物学" -> headerIndex.putIfAbsent("分子生物学结果", index);
+            case "诊断" -> headerIndex.putIfAbsent("诊断结果", index);
+            default -> {
+            }
+        }
+    }
+
+    private String normalizeHeader(String value) {
+        if (value == null) return "";
+        return value.replaceAll("[\\s\\n\\r（）()：:；;、/]", "").trim();
+    }
+
+    private ScreeningSchool mapSchoolRow(Map<Integer, String> row, Map<String, Integer> headerIndex) {
+        ScreeningSchool data = new ScreeningSchool();
+        data.setYear(field(row, headerIndex, "年份", "年度"));
+        data.setCity(field(row, headerIndex, "市州"));
+        data.setDistrict(field(row, headerIndex, "县市区", "区县"));
+        data.setName(field(row, headerIndex, "姓名"));
+        data.setGender(field(row, headerIndex, "性别"));
+        data.setBirthDate(parseDate(field(row, headerIndex, "出生日期")));
+        data.setAge(parseInteger(field(row, headerIndex, "年龄")));
+        data.setIdType(field(row, headerIndex, "证件类型"));
+        data.setIdNumber(normalizeExcelCellText(field(row, headerIndex, "证件号", "身份证号", "身份证号码")));
+        data.setEthnicity(field(row, headerIndex, "民族"));
+        data.setPhone(normalizeExcelCellText(field(row, headerIndex, "联系电话")));
+        data.setHouseholdAddress(field(row, headerIndex, "户籍所在地XX市XX县区", "户籍所在地"));
+        data.setCurrentAddress(field(row, headerIndex, "现住址", "现地址"));
+        data.setSchoolType(field(row, headerIndex, "学校类型"));
+        data.setSchoolName(field(row, headerIndex, "学校名称"));
+        data.setClassName(field(row, headerIndex, "班级院系"));
+        data.setTbHistory(field(row, headerIndex, "既往结核病史"));
+        data.setCloseContactHistory(field(row, headerIndex, "密切接触史"));
+        data.setSuspiciousSymptoms(field(row, headerIndex, "结核病可疑症状"));
+        data.setHasInfectionScreen(field(row, headerIndex, "是否进行感染筛"));
+        data.setScreenDate(parseDate(field(row, headerIndex, "感染筛查日期")));
+        data.setScreenMethod(field(row, headerIndex, "方法", "感染筛查方法"));
+        data.setScreenResult(field(row, headerIndex, "结果PPDmmXmmEC及IGRA阳性阴性"));
+        data.setInfectionResult(field(row, headerIndex, "感染筛查结果", "判定结果"));
+        data.setHasChestXray(field(row, headerIndex, "是否进行胸片检查"));
+        data.setChestXrayDate(parseDate(field(row, headerIndex, "胸片检查日期")));
+        data.setChestXrayResult(field(row, headerIndex, "胸片结果", "胸部DR", "胸片检查结果"));
+        data.setSputumSmearResult(field(row, headerIndex, "痰涂片结果", "痰涂片"));
+        data.setMolecularBiologyResult(field(row, headerIndex, "分子生物学结果", "分子生物学"));
+        data.setDiagnosisFirst(field(row, headerIndex, "诊断结果", "诊断"));
+        data.setRemark(field(row, headerIndex, "备注"));
+        return data;
+    }
+
+    private String field(Map<Integer, String> row, Map<String, Integer> headerIndex, String... headers) {
+        for (String header : headers) {
+            Integer idx = headerIndex.get(normalizeHeader(header));
+            if (idx == null) continue;
+            String value = row.get(idx);
+            if (StrUtil.isNotBlank(value)) return value.trim();
+        }
+        return "";
+    }
+
+    private boolean isBlankSchoolRow(ScreeningSchool data) {
+        return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
+    }
+
+    private LocalDate parseDate(String value) {
+        if (StrUtil.isBlank(value)) return null;
+        String text = value.trim();
+        List<DateTimeFormatter> formatters = List.of(
+                DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+                DateTimeFormatter.ofPattern("yyyy.MM.dd"),
+                DateTimeFormatter.ofPattern("yyyyMMdd")
+        );
+        for (DateTimeFormatter formatter : formatters) {
+            try {
+                return LocalDate.parse(text, formatter);
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private Integer parseInteger(String value) {
+        if (StrUtil.isBlank(value)) return null;
+        try {
+            String digits = value.trim().replaceAll("[^0-9]", "");
+            return StrUtil.isBlank(digits) ? null : Integer.parseInt(digits);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String normalizeExcelCellText(String val) {
+        if (StrUtil.isBlank(val)) return "";
+        String text = val.trim();
+        if (text.matches(".*[eE].*") || text.matches("\\d+\\.0+")) {
+            try {
+                return new java.math.BigDecimal(text).toPlainString();
+            } catch (Exception ignored) {
+                return text;
+            }
+        }
+        return text;
     }
 
     /** 18位身份证格式 + 校验位验证 */
@@ -411,8 +600,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
-        boolean directXray = hasDirectXrayAndDiagnosis(data);
-        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(null);
         save(data);
 
@@ -432,7 +620,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(data.getDiagnosisFirst())
+                    .diagnosisFirst(latentDiagnosisFirst(data))
                     .departmentId(null)
                     .creatorId(BaseContext.getCurrentId())
                     .build();
@@ -448,9 +636,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }
-        // 根据感染筛查结果重新计算潜伏判定
-        boolean directXray = hasDirectXrayAndDiagnosis(data);
-        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        // 根据感染筛查结果与诊断结果重新计算潜伏判定
+        data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         if (data.getDepartmentId() == null) {
             data.setDepartmentId(existing.getDepartmentId());
         }

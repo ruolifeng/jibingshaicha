@@ -37,6 +37,12 @@ public class DataCleaningController {
         return ResultRes.success(dataCleaningService.clean(populationType, file));
     }
 
+    @Operation(summary = "学生筛查数据匹配为系统模板")
+    @PostMapping("/match/school")
+    public ResultResponse<DataCleaningResult> matchSchool(@RequestParam("file") MultipartFile file) {
+        return ResultRes.success(dataCleaningService.matchSchool(file));
+    }
+
     @Operation(summary = "下载清洗结果文件")
     @GetMapping("/download/{fileId}")
     public void download(@PathVariable String fileId, HttpServletResponse response) throws Exception {

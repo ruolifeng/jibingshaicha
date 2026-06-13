@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 /**
- * 学校人群筛查数据（V4 模板）
- * Excel 导入字段范围：A-AC（序号~首次诊断结果），预防治疗列由系统回写
+ * 学校人群筛查数据（学生筛查模板）
+ * Excel 导入字段范围：A-AE（序号~诊断结果），预防治疗列由系统回写
  * 胸片检查与诊断结果可由 Excel 直接导入，导入后同步进入疑似结核管理
  */
 @Data
@@ -102,14 +102,18 @@ public class ScreeningSchool extends BaseEntity {
     @ExcelProperty(value = "感染筛查结果", index = 24)
     private String infectionResult;
 
-    // ===== 胸片与诊断（Z-AC，index 25-28）：支持 Excel 直接导入 =====
+    // ===== 胸片、病原学与诊断（Z-AE，index 25-30）：支持 Excel 直接导入 =====
     @ExcelProperty(value = "是否胸片检查", index = 25)
     private String hasChestXray;
     @ExcelProperty(value = "胸片检查日期", index = 26, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;
     @ExcelProperty(value = "胸片检查结果", index = 27)
     private String chestXrayResult;
-    @ExcelProperty(value = "首次诊断结果", index = 28)
+    @ExcelProperty(value = "痰涂片结果", index = 28)
+    private String sputumSmearResult;
+    @ExcelProperty(value = "分子生物学结果", index = 29)
+    private String molecularBiologyResult;
+    @ExcelProperty(value = "诊断结果", index = 30)
     private String diagnosisFirst;
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====

@@ -955,8 +955,8 @@ async function handleSaveFollowupInput() {
         <el-form-item label="备注">
           <el-input v-model="supervisionForm.remark" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="附件（2~6张图片）">
-          <ImageUploader v-model="supervisionForm.attachmentUrls" :min="2" :max="6" />
+        <el-form-item label="上传10张">
+          <ImageUploader v-model="supervisionForm.attachmentUrls" />
         </el-form-item>
       </el-form>
       <template #footer>

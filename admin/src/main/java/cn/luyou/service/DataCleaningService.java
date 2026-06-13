@@ -7,5 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 public interface DataCleaningService {
     DataCleaningResult clean(String populationType, MultipartFile file);
 
+    DataCleaningResult matchSchool(MultipartFile file);
+
     Resource getResultFile(String fileId, Long currentUserId, boolean isSuperAdmin);
 }

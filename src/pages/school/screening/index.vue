@@ -160,6 +160,8 @@ function getEmptyEditForm() {
     hasChestXray: "",
     chestXrayDate: "",
     chestXrayResult: "",
+    sputumSmearResult: "",
+    molecularBiologyResult: "",
     diagnosisFirst: "",
     remark: ""
   }
@@ -391,7 +393,9 @@ watch(
         <el-table-column prop="hasChestXray" label="首次（是否胸片）" />
         <el-table-column prop="chestXrayDate" label="胸片检查日期" />
         <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column prop="diagnosisFirst" label="首次诊断结果" />
+        <el-table-column prop="sputumSmearResult" label="痰涂片结果" />
+        <el-table-column prop="molecularBiologyResult" label="分子生物学结果" />
+        <el-table-column prop="diagnosisFirst" label="诊断结果" />
         <!-- 预防性治疗情况（督导表归档后同步） -->
         <el-table-column prop="preventivePlan" label="预防性治疗方案" />
         <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
@@ -629,8 +633,24 @@ watch(
             </el-form-item>
           </el-col>
           <el-col v-if="isEditDiagnosisRequired" :span="24">
-            <el-form-item label="首次诊断结果">
-              <el-input v-model="editForm.diagnosisFirst" />
+            <el-form-item label="痰涂片结果">
+              <el-input v-model="editForm.sputumSmearResult" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isEditDiagnosisRequired" :span="24">
+            <el-form-item label="分子生物学结果">
+              <el-input v-model="editForm.molecularBiologyResult" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isEditDiagnosisRequired" :span="24">
+            <el-form-item label="诊断结果">
+              <el-select v-model="editForm.diagnosisFirst" style="width:100%" clearable>
+                <el-option label="排除" value="排除" />
+                <el-option label="疑似肺结核" value="疑似肺结核" />
+                <el-option label="潜伏感染者" value="潜伏感染者" />
+                <el-option label="确诊患者" value="确诊患者" />
+                <el-option label="其他" value="其他" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -733,7 +753,13 @@ watch(
         <el-descriptions-item label="胸片结果">
           {{ detailRow.chestXrayResult }}
         </el-descriptions-item>
-        <el-descriptions-item label="首次诊断结果" :span="3">
+        <el-descriptions-item label="痰涂片结果">
+          {{ detailRow.sputumSmearResult || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="分子生物学结果">
+          {{ detailRow.molecularBiologyResult || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="诊断结果">
           {{ detailRow.diagnosisFirst }}
         </el-descriptions-item>
         <el-descriptions-item label="户籍地址" :span="3">

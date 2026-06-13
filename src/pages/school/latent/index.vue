@@ -1409,8 +1409,8 @@ watch(
         <el-form-item label="备注">
           <el-input v-model="supervisionForm.remark" type="textarea" :rows="3" placeholder="请填写备注" />
         </el-form-item>
-        <el-form-item label="附件（2~6张图片）">
-          <ImageUploader v-model="supervisionForm.attachmentUrls" :min="2" :max="6" />
+        <el-form-item label="上传10张">
+          <ImageUploader v-model="supervisionForm.attachmentUrls" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1942,7 +1942,7 @@ watch(
         />
         <el-alert
           v-if="referralResultValue === 'suspected'"
-          title="确认后该记录将归档结案，不进入患者管理"
+          title="确认后该记录将保留在待诊断，不进入患者管理"
           type="warning"
           :closable="false"
           show-icon

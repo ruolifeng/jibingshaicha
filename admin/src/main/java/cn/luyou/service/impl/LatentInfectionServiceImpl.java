@@ -172,12 +172,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived)
                 .eq(StrUtil.isNotBlank(diagnosisFirst), LatentInfection::getDiagnosisFirst, diagnosisFirst)
-                // 潜伏感染列表始终排除确诊患者/疑似肺结核（已结案归档，不进入患者管理）。
+                // 潜伏感染列表始终排除确诊患者；疑似肺结核保持 diagnosisResult 为空，继续留在待诊断。
                 // 注意：SQL 中 NULL NOT IN (...) 结果为 NULL（即被过滤掉），
                 // 必须显式放行 diagnosisResult 为 NULL 的记录（导入后未录入诊断的待诊断数据）。
                 .and(w -> w.isNull(LatentInfection::getDiagnosisResult)
                         .or()
-                        .notIn(LatentInfection::getDiagnosisResult, Arrays.asList("确诊患者", "疑似肺结核")));
+                        .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
 
         // referralResult 过滤：pending = 查尚未转诊的记录；具体值 = 精确匹配
         if ("pending".equals(referralResult)) {
@@ -761,8 +761,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             int hasXrayIdx, xrayDateIdx, xrayResultIdx, diagnosisIdx;
             switch (populationType) {
                 case "school" -> {
-                    // 学校人群：hasChestXray(25) chestXrayDate(26) chestXrayResult(27) diagnosisFirst(28)
-                    hasXrayIdx = 25; xrayDateIdx = 26; xrayResultIdx = 27; diagnosisIdx = 28;
+                    // 学校人群：hasChestXray(25) chestXrayDate(26) chestXrayResult(27) diagnosisFirst(30)
+                    hasXrayIdx = 25; xrayDateIdx = 26; xrayResultIdx = 27; diagnosisIdx = 30;
                 }
                 case "keyPopulation", "regular" -> {
                     // 重点/常规筛查：hasChestXray(37) chestXrayDate(38) chestXrayResult(39) diagnosisFirst(40)
@@ -861,9 +861,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 entity.setArchivedTime(LocalDateTime.now());
             }
             case "suspected" -> {
-                entity.setDiagnosisResult("疑似肺结核");
-                entity.setArchived(1);
-                entity.setArchivedTime(LocalDateTime.now());
+                // 疑似肺结核不归档、不进入潜伏感染者管理，保留在待诊断阶段继续处理。
+                entity.setReferralResult(null);
+                entity.setReferralRemark(null);
+                entity.setDiagnosisResult(null);
+                entity.setArchived(0);
+                entity.setArchivedTime(null);
             }
             case "latent" -> entity.setDiagnosisResult("潜伏感染者");
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "无效的转诊结果");
@@ -994,13 +997,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             if (current == null || StrUtil.isNotBlank(current.getReferralResult())) continue;
 
             boolean archived = !"latent".equals(referralResult);
+            boolean keepPendingDiagnosis = "suspected".equals(referralResult);
             lambdaUpdate()
                     .eq(LatentInfection::getId, entity.getId())
                     .set(StrUtil.isBlank(current.getDiagnosisFirst()), LatentInfection::getDiagnosisFirst, diagnosisFirst)
-                    .set(LatentInfection::getReferralResult, referralResult)
-                    .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
-                    .set(LatentInfection::getArchived, archived ? 1 : 0)
-                    .set(LatentInfection::getArchivedTime, archived ? LocalDateTime.now() : null)
+                    .set(LatentInfection::getReferralResult, keepPendingDiagnosis ? null : referralResult)
+                    .set(LatentInfection::getDiagnosisResult, keepPendingDiagnosis ? null : diagnosisFirst)
+                    .set(LatentInfection::getArchived, archived && !keepPendingDiagnosis ? 1 : 0)
+                    .set(LatentInfection::getArchivedTime, archived && !keepPendingDiagnosis ? LocalDateTime.now() : null)
                     .update();
 
             log.info("导入时自动分流 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);

@@ -2,10 +2,10 @@
 /**
  * 图片附件上传组件（V15）
  *
- * 用途：首次入户随访、后续随访记录、督导表等，上传 2~6 张（首次随访可配置为 10 张）照片作为附件。
+ * 用途：首次入户随访、后续随访记录、督导表等，上传最多 10 张照片作为附件。
  *
  * 用法：
- *   <ImageUploader v-model="form.attachmentUrls" :min="2" :max="6" />
+ *   <ImageUploader v-model="form.attachmentUrls" />
  *
  * v-model 绑定的 attachmentUrls：
  *   - 在表单中以 JSON 字符串形式存储：'["url1","url2",...]'
@@ -22,7 +22,7 @@ interface Props {
   modelValue?: string | string[] | null
   /** 最少张数（默认 0；推荐随访场景设 2）。仅做 UI 提示，不强制阻止保存 */
   min?: number
-  /** 最多张数（默认 6） */
+  /** 最多张数（默认 10） */
   max?: number
   /** 单张图片大小上限 MB（默认 10MB） */
   maxSizeMB?: number
@@ -33,7 +33,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   modelValue: null,
   min: 0,
-  max: 6,
+  max: 10,
   maxSizeMB: 10,
   disabled: false
 })
@@ -217,7 +217,7 @@ const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
     </el-upload>
 
     <div class="image-uploader__tip">
-      <span>请上传 {{ min || 2 }}~{{ max }} 张图片（支持批量选择）</span>
+      <span>请上传 {{ max }} 张图片（支持批量选择）</span>
       <span class="image-uploader__count">已上传 {{ uploadedCount() }} / {{ max }}</span>
     </div>
 
