@@ -409,10 +409,12 @@ async function handleSaveScreening() {
 const diagnosisDialogVisible = ref(false)
 const diagnosisRow = ref<any>(null)
 const diagnosisResult = ref("")
+const diagnosisRemark = ref("")
 
 function openDiagnosisDialog(row: any) {
   diagnosisRow.value = row
   diagnosisResult.value = ""
+  diagnosisRemark.value = ""
   diagnosisDialogVisible.value = true
 }
 
@@ -421,7 +423,11 @@ async function handleSaveDiagnosis() {
     ElMessage.warning("请选择诊断结果")
     return
   }
-  await saveDiagnosisApi(diagnosisRow.value.id, diagnosisResult.value)
+  if (diagnosisResult.value === "其他" && !diagnosisRemark.value.trim()) {
+    ElMessage.warning("选择其他时请填写备注")
+    return
+  }
+  await saveDiagnosisApi(diagnosisRow.value.id, diagnosisResult.value, diagnosisRemark.value.trim() || undefined)
   ElMessage.success(
     diagnosisResult.value === "确诊患者" ? "诊断结果已保存，该记录已标红结案" : "诊断结果已保存"
   )
@@ -732,6 +738,9 @@ function getRowClass({ row }: { row: any }) {
                 {{ viewDetail.diagnosisResult }}{{ viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? "（结案）" : "" }}
               </el-tag>
               <span v-else>-</span>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="viewDetail.diagnosisRemark" label="诊断备注" :span="2">
+              {{ viewDetail.diagnosisRemark }}
             </el-descriptions-item>
             <el-descriptions-item label="诊断时间">
               {{ viewDetail.diagnosisTime ? formatDateTime(viewDetail.diagnosisTime) : "-" }}
@@ -1074,6 +1083,16 @@ function getRowClass({ row }: { row: any }) {
             <el-radio value="潜伏感染者">潜伏感染者</el-radio>
             <el-radio value="其他">其他</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="diagnosisResult === '其他'" label="备注" required>
+          <el-input
+            v-model="diagnosisRemark"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="请输入其他诊断结果说明"
+          />
         </el-form-item>
         <el-alert
           v-if="diagnosisResult === '确诊患者'"

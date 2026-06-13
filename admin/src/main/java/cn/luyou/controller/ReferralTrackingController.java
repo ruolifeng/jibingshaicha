@@ -160,7 +160,8 @@ public class ReferralTrackingController {
     public ResultResponse<Void> saveDiagnosis(@PathVariable Long id,
                                                @RequestBody Map<String, Object> body) {
         String diagnosisResult = body != null ? (String) body.get("diagnosisResult") : null;
-        referralTrackingService.saveDiagnosis(id, diagnosisResult);
+        String diagnosisRemark = body != null ? (String) body.get("diagnosisRemark") : null;
+        referralTrackingService.saveDiagnosis(id, diagnosisResult, diagnosisRemark);
         return ResultRes.success(null);
     }
 

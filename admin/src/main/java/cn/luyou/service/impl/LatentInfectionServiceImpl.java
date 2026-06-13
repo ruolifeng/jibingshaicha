@@ -101,9 +101,6 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact"
     );
 
-    /** 导入时含首次诊断且需自动结案归档的诊断（不进入患者管理） */
-    private static final List<String> DIAGNOSIS_AUTO_CLOSE = List.of("确诊患者");
-
     /**
      * 首次诊断结果（diagnosisFirst）→ 转诊编码（referralResult）映射。
      * 录入胸片诊断或批量导入胸片诊断后，根据该映射自动驱动转诊流程，
@@ -988,19 +985,25 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Transactional(rollbackFor = Exception.class)
     public void autoReferralForDirectDiagnosis(List<LatentInfection> latents) {
         for (LatentInfection entity : latents) {
+            if (entity == null || entity.getId() == null) continue;
             String diagnosisFirst = entity.getDiagnosisFirst();
-            if (!DIAGNOSIS_AUTO_CLOSE.contains(diagnosisFirst)) continue;
-
             String referralResult = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
+            if (StrUtil.isBlank(referralResult)) continue;
+
+            LatentInfection current = getById(entity.getId());
+            if (current == null || StrUtil.isNotBlank(current.getReferralResult())) continue;
+
+            boolean archived = !"latent".equals(referralResult);
             lambdaUpdate()
                     .eq(LatentInfection::getId, entity.getId())
+                    .set(StrUtil.isBlank(current.getDiagnosisFirst()), LatentInfection::getDiagnosisFirst, diagnosisFirst)
                     .set(LatentInfection::getReferralResult, referralResult)
                     .set(LatentInfection::getDiagnosisResult, diagnosisFirst)
-                    .set(LatentInfection::getArchived, 1)
-                    .set(LatentInfection::getArchivedTime, LocalDateTime.now())
+                    .set(LatentInfection::getArchived, archived ? 1 : 0)
+                    .set(LatentInfection::getArchivedTime, archived ? LocalDateTime.now() : null)
                     .update();
 
-            log.info("导入时自动结案 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);
+            log.info("导入时自动分流 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);
         }
     }
 

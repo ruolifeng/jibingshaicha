@@ -26,93 +26,93 @@ import java.time.LocalDate;
 @TableName("screening_key_population")
 public class ScreeningKeyPopulation extends BaseEntity {
 
-    @ExcelProperty(index = 1)
+    @ExcelProperty(value = "年度", index = 1)
     private String year;
-    @ExcelProperty(index = 2)
+    @ExcelProperty(value = "市/州", index = 2)
     private String city;
-    @ExcelProperty(index = 3)
+    @ExcelProperty(value = "区/县", index = 3)
     private String district;
-    @ExcelProperty(index = 4)
+    @ExcelProperty(value = "姓名", index = 4)
     private String name;
-    @ExcelProperty(index = 5)
+    @ExcelProperty(value = "性别", index = 5)
     private String gender;
-    @ExcelProperty(index = 6, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(value = "出生日期", index = 6, converter = FlexibleLocalDateConverter.class)
     private LocalDate birthDate;
-    @ExcelProperty(index = 7)
+    @ExcelProperty(value = "年龄", index = 7)
     private Integer age;
-    @ExcelProperty(index = 8)
+    @ExcelProperty(value = "证件类型", index = 8)
     private String idType;
-    @ExcelProperty(index = 9)
+    @ExcelProperty(value = "证件号", index = 9)
     private String idNumber;
-    @ExcelProperty(index = 10)
+    @ExcelProperty(value = "民族", index = 10)
     private String ethnicity;
-    @ExcelProperty(index = 11)
+    @ExcelProperty(value = "联系电话", index = 11)
     private String phone;
-    @ExcelProperty(index = 12)
+    @ExcelProperty(value = "户籍地址", index = 12)
     private String householdAddress;
-    @ExcelProperty(index = 13)
+    @ExcelProperty(value = "乡镇/社区", index = 13)
     private String townshipCommunity;
-    @ExcelProperty(index = 14)
+    @ExcelProperty(value = "现住址", index = 14)
     private String currentAddress;
 
     // 人群分类（各列独立，列15-22）
-    @ExcelProperty(index = 15)
+    @ExcelProperty(value = "密切接触者", index = 15)
     private String crowdCategoryClose;
-    @ExcelProperty(index = 16)
+    @ExcelProperty(value = "学生", index = 16)
     private String crowdCategoryStudent;
-    @ExcelProperty(index = 17)
+    @ExcelProperty(value = "教师", index = 17)
     private String crowdCategoryTeacher;
-    @ExcelProperty(index = 18)
+    @ExcelProperty(value = "老年人", index = 18)
     private String crowdCategoryElder;
-    @ExcelProperty(index = 19)
+    @ExcelProperty(value = "糖尿病患者", index = 19)
     private String crowdCategoryDiabetes;
-    @ExcelProperty(index = 20)
+    @ExcelProperty(value = "双重感染者", index = 20)
     private String crowdCategoryDual;
-    @ExcelProperty(index = 21)
+    @ExcelProperty(value = "既往结核病史", index = 21)
     private String crowdCategoryTbHist;
-    @ExcelProperty(index = 22)
+    @ExcelProperty(value = "普通人群", index = 22)
     private String crowdCategoryNormal;
 
     // 症状筛查（列23-31）
-    @ExcelProperty(index = 23)
+    @ExcelProperty(value = "有无可疑症状", index = 23)
     private String hasSuspiciousSymptoms;
-    @ExcelProperty(index = 24)
+    @ExcelProperty(value = "咳嗽", index = 24)
     private String cough;
-    @ExcelProperty(index = 25)
+    @ExcelProperty(value = "咯血", index = 25)
     private String hemoptysis;
-    @ExcelProperty(index = 26)
+    @ExcelProperty(value = "发热", index = 26)
     private String fever;
-    @ExcelProperty(index = 27)
+    @ExcelProperty(value = "胸痛", index = 27)
     private String chestPain;
-    @ExcelProperty(index = 28)
+    @ExcelProperty(value = "盗汗", index = 28)
     private String nightSweats;
-    @ExcelProperty(index = 29)
+    @ExcelProperty(value = "食欲减退", index = 29)
     private String appetiteLoss;
-    @ExcelProperty(index = 30)
+    @ExcelProperty(value = "乏力", index = 30)
     private String fatigue;
-    @ExcelProperty(index = 31)
+    @ExcelProperty(value = "体重减轻", index = 31)
     private String weightLoss;
 
     // 感染筛查（列32-36）
-    @ExcelProperty(index = 32)
+    @ExcelProperty(value = "是否感染筛查", index = 32)
     private String hasInfectionScreen;
-    @ExcelProperty(index = 33, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(value = "感染筛查日期", index = 33, converter = FlexibleLocalDateConverter.class)
     private LocalDate screenDate;
-    @ExcelProperty(index = 34)
+    @ExcelProperty(value = "感染筛查方法", index = 34)
     private String screenMethod;
-    @ExcelProperty(index = 35)
+    @ExcelProperty(value = "筛查结果", index = 35)
     private String screenResult;
-    @ExcelProperty(index = 36)
+    @ExcelProperty(value = "感染筛查结果", index = 36)
     private String infectionResult;
 
     // ===== 胸片与诊断（列37-40）：支持 Excel 直接导入 =====
-    @ExcelProperty(index = 37)
+    @ExcelProperty(value = "是否胸片检查", index = 37)
     private String hasChestXray;
-    @ExcelProperty(index = 38, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(value = "胸片检查日期", index = 38, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;
-    @ExcelProperty(index = 39)
+    @ExcelProperty(value = "胸片检查结果", index = 39)
     private String chestXrayResult;
-    @ExcelProperty(index = 40)
+    @ExcelProperty(value = "首次诊断结果", index = 40)
     private String diagnosisFirst;
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====

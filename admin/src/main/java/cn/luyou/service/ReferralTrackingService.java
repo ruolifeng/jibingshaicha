@@ -55,7 +55,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     void saveScreening(Long id, Map<String, Object> params);
 
     /** 保存诊断结果并分流（确诊患者仅标红结案；潜伏感染者进入潜伏感染管理） */
-    void saveDiagnosis(Long id, String diagnosisResult);
+    void saveDiagnosis(Long id, String diagnosisResult, String diagnosisRemark);
 
     /** 删除记录（软删） */
     void deleteRecord(Long id);

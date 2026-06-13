@@ -103,8 +103,9 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String ids,
             @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        String fileName = "regular".equals(sourceType) ? "疫情筛查数据.xlsx" : "重点人群筛查数据.xlsx";
         response.setHeader("Content-Disposition", "attachment;filename=" +
-                URLEncoder.encode("重点人群筛查数据.xlsx", StandardCharsets.UTF_8));
+                URLEncoder.encode(fileName, StandardCharsets.UTF_8));
         var query = Wrappers.<ScreeningKeyPopulation>lambdaQuery();
         query.eq(ScreeningKeyPopulation::getSourceType, sourceType);
         if (ids != null && !ids.isBlank()) {

@@ -68,10 +68,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                             String name, String idNumber, String phone,
                                             String startTime, String endTime);
 
-    /**
-     * 对导入时已包含确诊/疑似肺结核诊断的潜伏感染记录进行自动转诊处理：
-     * 创建对应患者记录并将潜伏感染记录标记为已转诊归档，避免数据丢失。
-     */
+    /** 对导入时已包含首次诊断的潜伏感染记录进行自动分流处理。 */
     void autoReferralForDirectDiagnosis(List<LatentInfection> latents);
 
     /** 查询潜伏感染详情（含筛查回填字段） */

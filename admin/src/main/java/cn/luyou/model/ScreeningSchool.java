@@ -25,91 +25,91 @@ import java.time.LocalDate;
 @TableName("screening_school")
 public class ScreeningSchool extends BaseEntity {
 
-    @ExcelProperty(index = 1)
+    @ExcelProperty(value = "年度", index = 1)
     private String year;
 
-    @ExcelProperty(index = 2)
+    @ExcelProperty(value = "市/州", index = 2)
     private String city;
 
-    @ExcelProperty(index = 3)
+    @ExcelProperty(value = "区/县", index = 3)
     private String district;
 
-    @ExcelProperty(index = 4)
+    @ExcelProperty(value = "姓名", index = 4)
     private String name;
 
-    @ExcelProperty(index = 5)
+    @ExcelProperty(value = "性别", index = 5)
     private String gender;
 
-    @ExcelProperty(index = 6, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(value = "出生日期", index = 6, converter = FlexibleLocalDateConverter.class)
     private LocalDate birthDate;
 
-    @ExcelProperty(index = 7)
+    @ExcelProperty(value = "年龄", index = 7)
     private Integer age;
 
-    @ExcelProperty(index = 8)
+    @ExcelProperty(value = "证件类型", index = 8)
     private String idType;
 
-    @ExcelProperty(index = 9)
+    @ExcelProperty(value = "证件号", index = 9)
     private String idNumber;
 
-    @ExcelProperty(index = 10)
+    @ExcelProperty(value = "民族", index = 10)
     private String ethnicity;
 
-    @ExcelProperty(index = 11)
+    @ExcelProperty(value = "联系电话", index = 11)
     private String phone;
 
-    @ExcelProperty(index = 12)
+    @ExcelProperty(value = "户籍地址", index = 12)
     private String householdAddress;
 
-    @ExcelProperty(index = 13)
+    @ExcelProperty(value = "现住址", index = 13)
     private String currentAddress;
 
-    @ExcelProperty(index = 14)
+    @ExcelProperty(value = "学校类型", index = 14)
     private String schoolType;
 
-    @ExcelProperty(index = 15)
+    @ExcelProperty(value = "学校名称", index = 15)
     private String schoolName;
 
-    @ExcelProperty(index = 16)
+    @ExcelProperty(value = "班级", index = 16)
     private String className;
 
-    @ExcelProperty(index = 17)
+    @ExcelProperty(value = "既往结核病史", index = 17)
     private String tbHistory;
 
-    @ExcelProperty(index = 18)
+    @ExcelProperty(value = "密切接触史", index = 18)
     private String closeContactHistory;
 
-    @ExcelProperty(index = 19)
+    @ExcelProperty(value = "有无可疑症状", index = 19)
     private String suspiciousSymptoms;
 
     /** 是否进行感染筛（列20） */
-    @ExcelProperty(index = 20)
+    @ExcelProperty(value = "是否感染筛查", index = 20)
     private String hasInfectionScreen;
 
     /** 感染筛查日期（列21） */
-    @ExcelProperty(index = 21, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(value = "感染筛查日期", index = 21, converter = FlexibleLocalDateConverter.class)
     private LocalDate screenDate;
 
     /** 方法（PPD/EC/IGRA，列22） */
-    @ExcelProperty(index = 22)
+    @ExcelProperty(value = "感染筛查方法", index = 22)
     private String screenMethod;
 
     /** 结果（mmXmm/EC阴性/EC阳性/IGRA阴性/IGRA阳性，列23） */
-    @ExcelProperty(index = 23)
+    @ExcelProperty(value = "筛查结果", index = 23)
     private String screenResult;
 
     /** 感染筛查结果（V4：PPD阴性/PPD+/PPD++/PPD+++/EC阴性/EC阳性/IGRA阴性/IGRA阳性，列24） */
-    @ExcelProperty(index = 24)
+    @ExcelProperty(value = "感染筛查结果", index = 24)
     private String infectionResult;
 
     // ===== 胸片与诊断（Z-AC，index 25-28）：支持 Excel 直接导入 =====
-    @ExcelProperty(index = 25)
+    @ExcelProperty(value = "是否胸片检查", index = 25)
     private String hasChestXray;
-    @ExcelProperty(index = 26, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(value = "胸片检查日期", index = 26, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;
-    @ExcelProperty(index = 27)
+    @ExcelProperty(value = "胸片检查结果", index = 27)
     private String chestXrayResult;
-    @ExcelProperty(index = 28)
+    @ExcelProperty(value = "首次诊断结果", index = 28)
     private String diagnosisFirst;
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====

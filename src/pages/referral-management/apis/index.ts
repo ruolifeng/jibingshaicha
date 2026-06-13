@@ -87,11 +87,11 @@ export function saveScreeningInfoApi(id: number, data: Record<string, any>) {
 }
 
 /** 保存诊断结果并分流 */
-export function saveDiagnosisApi(id: number, diagnosisResult: string) {
+export function saveDiagnosisApi(id: number, diagnosisResult: string, diagnosisRemark?: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/diagnosis`,
     method: "post",
-    data: { diagnosisResult }
+    data: { diagnosisResult, diagnosisRemark }
   })
 }
 

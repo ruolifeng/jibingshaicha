@@ -1600,6 +1600,7 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `symptoms_json`          TEXT,
     -- 诊断
     `diagnosis_result`       VARCHAR(64)                             COMMENT '排除/确诊患者/潜伏感染者/其他',
+    `diagnosis_remark`       TEXT                                    COMMENT '诊断结果选择其他时的备注',
     `diagnosis_time`         DATETIME,
     -- 归集去向
     `archived`               TINYINT       NOT NULL DEFAULT 0,
@@ -3030,3 +3031,16 @@ DEALLOCATE PREPARE stmt;
 UPDATE `permission`
 SET `name` = '密接筛查'
 WHERE `code` = 'closeContact:screening';
+
+-- ==================== V73：待诊断操作权限补齐（见 migration/V73_latent_suspected_role_permissions.sql） ====================
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.`role`, p.`id`
+FROM (
+    SELECT 2 AS `role`
+    UNION SELECT 3
+    UNION SELECT 4
+    UNION SELECT 5
+    UNION SELECT 6
+) r
+CROSS JOIN `permission` p
+WHERE p.`code` IN ('latent:track', 'latent:xray', 'latent:diagnosis');

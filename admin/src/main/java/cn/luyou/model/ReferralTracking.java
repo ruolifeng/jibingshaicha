@@ -108,6 +108,8 @@ public class ReferralTracking extends BaseEntity {
     // ===== 诊断 =====
     /** 诊断结果：排除 / 确诊患者 / 潜伏感染者 / 其他 */
     private String diagnosisResult;
+    /** 诊断结果选择其他时的补充说明 */
+    private String diagnosisRemark;
     private LocalDateTime diagnosisTime;
 
     // ===== 归集去向 =====

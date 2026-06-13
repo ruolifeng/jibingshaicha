@@ -185,9 +185,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
             String currentAddress = getFieldByHeader(row, headerIndex,
                     "现住详细地址", "现详细住址", "现住地址区现住详细", "现住址", "现住地址");
-            String township = getFieldByHeader(row, headerIndex, "乡镇", "病人属于");
+            String township = extractTownship(currentAddress);
             if (StrUtil.isBlank(township)) {
-                township = extractTownship(currentAddress);
+                township = getFieldByHeader(row, headerIndex, "乡镇");
             }
 
             Object reportCardTimeCell = getReportCardTimeCell(row, headerIndex);
@@ -197,7 +197,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     getFieldByHeader(row, headerIndex, "出生日期"),
                     getFieldByHeader(row, headerIndex, "联系电话", "电话"));
             if (existing != null) {
-                if (mergeEpidemicImportFields(existing, reportCardTime, currentUserId, currentDeptId)) {
+                if (mergeEpidemicImportFields(existing, reportCardTime, currentAddress, township, currentUserId, currentDeptId)) {
                     updateById(existing);
                     updated++;
                 }
@@ -282,8 +282,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     List.of("感染筛查时间"), List.of("感染筛查方法"), List.of("感染筛查结果"),
                     List.of("胸片筛查时间"), List.of("胸片筛查结果"), List.of("推介原因"),
                     List.of("推介接收人"), List.of("推介状态"), List.of("追踪状态"), List.of("未到位次数"),
-                    List.of("诊断结果"), List.of("推介时间"), List.of("最新追踪时间"), List.of("到位时间"),
-                    List.of("追踪过程明细"), List.of("未到位原因汇总")
+                    List.of("诊断结果"), List.of("诊断备注"), List.of("推介时间"), List.of("最新追踪时间"),
+                    List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总")
             );
         }
         return Arrays.asList(
@@ -292,8 +292,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 List.of("患者工作单位"), List.of("联系电话"), List.of("乡镇"), List.of("现住详细地址"),
                 List.of("人群分类"), List.of("病例分类"), List.of("疾病名称"), List.of("报告单位"),
                 List.of("报告卡录入时间"), List.of("备注"), List.of("追踪原因"), List.of("追踪状态"),
-                List.of("未到位次数"), List.of("诊断结果"), List.of("创建时间"), List.of("最新追踪时间"),
-                List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总")
+                List.of("未到位次数"), List.of("诊断结果"), List.of("诊断备注"), List.of("创建时间"),
+                List.of("最新追踪时间"), List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总")
         );
     }
 
@@ -314,7 +314,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     r.getRecommendReason(), r.getReceiverUserName(), recommendStatusLabel(r.getRecommendStatus()),
                     trackingStatusLabel(r.getTrackingStatus()),
                     r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
-                    r.getDiagnosisResult(), formatRecommendTime(r),
+                    r.getDiagnosisResult(), r.getDiagnosisRemark(), formatRecommendTime(r),
                     latestTrackTime,
                     r.getArrivalTime() != null ? r.getArrivalTime().toString() : "",
                     historyDetail, failureReasons
@@ -329,7 +329,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 r.getReportCardTime() != null ? r.getReportCardTime().toString() : "",
                 r.getEpidemicRemark(), r.getTrackReason(), trackingStatusLabel(r.getTrackingStatus()),
                 r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
-                r.getDiagnosisResult(),
+                r.getDiagnosisResult(), r.getDiagnosisRemark(),
                 r.getCreateTime() != null ? r.getCreateTime().toString() : "",
                 latestTrackTime,
                 r.getArrivalTime() != null ? r.getArrivalTime().toString() : "",
@@ -807,9 +807,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void saveDiagnosis(Long id, String diagnosisResult) {
+    public void saveDiagnosis(Long id, String diagnosisResult, String diagnosisRemark) {
         if (StrUtil.isBlank(diagnosisResult)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
+        }
+        if ("其他".equals(diagnosisResult) && StrUtil.isBlank(diagnosisRemark)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "选择其他时请填写备注");
         }
         ReferralTracking record = getAndCheckExist(id);
         if (!Integer.valueOf(1).equals(record.getTrackingStatus())) {
@@ -823,6 +826,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
                 .set(ReferralTracking::getDiagnosisResult, diagnosisResult)
+                .set(ReferralTracking::getDiagnosisRemark,
+                        "其他".equals(diagnosisResult) ? diagnosisRemark.trim() : null)
                 .set(ReferralTracking::getDiagnosisTime, LocalDateTime.now())
                 .update();
 
@@ -1592,10 +1597,19 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 重复导入时补全报告卡录入时间、录入人等信息 */
     private boolean mergeEpidemicImportFields(ReferralTracking existing, LocalDateTime reportCardTime,
+                                              String currentAddress, String township,
                                               Long currentUserId, Long currentDeptId) {
         boolean changed = false;
         if (reportCardTime != null && existing.getReportCardTime() == null) {
             existing.setReportCardTime(reportCardTime);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(currentAddress) && !currentAddress.equals(existing.getCurrentAddress())) {
+            existing.setCurrentAddress(currentAddress);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(township) && !township.equals(existing.getTownship())) {
+            existing.setTownship(township);
             changed = true;
         }
         if (existing.getCreatorId() == null && currentUserId != null) {
@@ -1647,19 +1661,28 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     private String extractTownship(String address) {
         if (StrUtil.isBlank(address)) return null;
-        int idx = address.indexOf("乡");
-        if (idx > 0) {
-            int start = Math.max(address.lastIndexOf("县", idx), address.lastIndexOf("区", idx));
-            start = Math.max(start, address.lastIndexOf("市", idx));
-            return address.substring(start + 1, idx + 1);
+        String normalized = address.replace('\u00A0', ' ').replaceAll("\\s+", "").trim();
+        String township = extractAdministrativeUnit(normalized, "街道");
+        if (StrUtil.isNotBlank(township)) return township;
+        township = extractAdministrativeUnit(normalized, "乡");
+        if (StrUtil.isNotBlank(township)) return township;
+        township = extractAdministrativeUnit(normalized, "镇");
+        if (StrUtil.isNotBlank(township)) return township;
+        township = extractAdministrativeUnit(normalized, "区");
+        if (StrUtil.isNotBlank(township)) return township;
+        return extractAdministrativeUnit(normalized, "县");
+    }
+
+    private String extractAdministrativeUnit(String address, String suffix) {
+        int idx = address.lastIndexOf(suffix);
+        if (idx <= 0) return null;
+        int start = -1;
+        for (String separator : List.of("省", "市", "州", "县", "区")) {
+            start = Math.max(start, address.lastIndexOf(separator, idx - 1));
         }
-        idx = address.indexOf("镇");
-        if (idx > 0) {
-            int start = Math.max(address.lastIndexOf("县", idx), address.lastIndexOf("区", idx));
-            start = Math.max(start, address.lastIndexOf("市", idx));
-            return address.substring(start + 1, idx + 1);
-        }
-        return null;
+        String unit = address.substring(start + 1, idx + suffix.length()).trim();
+        if (unit.length() <= suffix.length() || unit.length() > 20) return null;
+        return unit;
     }
 
     private LambdaQueryWrapper<ReferralTracking> buildQueryWrapper(

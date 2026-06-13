@@ -177,6 +177,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
+                            .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .creatorId(BaseContext.getCurrentId())
                             .build())
@@ -203,6 +204,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
+                            .diagnosisFirst(d.getDiagnosisFirst())
                             .departmentId(d.getDepartmentId())
                             .creatorId(BaseContext.getCurrentId())
                             .build())
@@ -211,6 +213,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         allLatent.addAll(latentFromUpdated);
         if (!allLatent.isEmpty()) {
             latentInfectionService.saveBatch(allLatent, 500);
+            latentInfectionService.autoReferralForDirectDiagnosis(allLatent);
             log.info("自动创建学校人群潜伏感染记录 {} 条", allLatent.size());
         }
         syncLatentFromScreening(toUpdate, "school");
@@ -229,29 +232,48 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .eq(LatentInfection::getScreeningId, d.getId())
                     .eq(LatentInfection::getPopulationType, populationType)
                     .eq(LatentInfection::getArchived, 0)
-                    .isNull(LatentInfection::getReferralResult)
                     .last("LIMIT 1")
                     .one();
-            if (latent == null) continue;
+            if (latent == null) {
+                latent = LatentInfection.builder()
+                        .screeningId(d.getId())
+                        .populationType(populationType)
+                        .name(d.getName())
+                        .idNumber(d.getIdNumber())
+                        .gender(d.getGender())
+                        .age(d.getAge())
+                        .phone(d.getPhone())
+                        .infectionResult(d.getInfectionResult())
+                        .trackingStatus(0)
+                        .notInPlaceCount(0)
+                        .archived(0)
+                        .hasChestXray(d.getHasChestXray())
+                        .chestXrayDate(d.getChestXrayDate())
+                        .chestXrayResult(d.getChestXrayResult())
+                        .diagnosisFirst(d.getDiagnosisFirst())
+                        .departmentId(d.getDepartmentId())
+                        .creatorId(BaseContext.getCurrentId())
+                        .build();
+                latentInfectionService.save(latent);
+                latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
+                continue;
+            }
 
             var update = latentInfectionService.lambdaUpdate()
-                    .eq(LatentInfection::getId, latent.getId());
-            boolean changed = false;
-            if (StrUtil.isNotBlank(d.getHasChestXray())) {
-                update.set(LatentInfection::getHasChestXray, d.getHasChestXray());
-                changed = true;
-            }
-            if (d.getChestXrayDate() != null) {
-                update.set(LatentInfection::getChestXrayDate, d.getChestXrayDate());
-                changed = true;
-            }
-            if (StrUtil.isNotBlank(d.getChestXrayResult())) {
-                update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
-                changed = true;
-            }
-            if (changed) {
-                update.update();
-            }
+                    .eq(LatentInfection::getId, latent.getId())
+                    .set(LatentInfection::getName, d.getName())
+                    .set(LatentInfection::getIdNumber, d.getIdNumber())
+                    .set(LatentInfection::getGender, d.getGender())
+                    .set(LatentInfection::getAge, d.getAge())
+                    .set(LatentInfection::getPhone, d.getPhone())
+                    .set(LatentInfection::getInfectionResult, d.getInfectionResult())
+                    .set(LatentInfection::getHasChestXray, d.getHasChestXray())
+                    .set(LatentInfection::getChestXrayDate, d.getChestXrayDate())
+                    .set(LatentInfection::getChestXrayResult, d.getChestXrayResult())
+                    .set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
+            update.update();
+            latent.setDiagnosisFirst(d.getDiagnosisFirst());
+            latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
     }
 
@@ -338,10 +360,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
+                    .diagnosisFirst(data.getDiagnosisFirst())
                     .departmentId(data.getDepartmentId())
                     .creatorId(BaseContext.getCurrentId())
                     .build();
             latentInfectionService.save(latent);
+            latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
     }
 
@@ -408,22 +432,31 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
+                    .diagnosisFirst(data.getDiagnosisFirst())
                     .departmentId(null)
                     .creatorId(BaseContext.getCurrentId())
                     .build();
             latentInfectionService.save(latent);
+            latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateScreening(ScreeningSchool data) {
-        if (getById(data.getId()) == null) {
+        ScreeningSchool existing = getById(data.getId());
+        if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }
         // 根据感染筛查结果重新计算潜伏判定
-        data.setIsLatent(isPositive(data.getInfectionResult()) ? 1 : 0);
+        boolean directXray = hasDirectXrayAndDiagnosis(data);
+        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        if (data.getDepartmentId() == null) {
+            data.setDepartmentId(existing.getDepartmentId());
+        }
         updateById(data);
+        ScreeningSchool updated = getById(data.getId());
+        syncLatentFromScreening(List.of(updated), "school");
     }
 
     @Override
