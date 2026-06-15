@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { downloadBlob } from "@@/utils/download"
 import { cleanScreeningDataApi, downloadCleaningResultApi, matchSchoolDataApi } from "./apis/index"
 import { downloadTemplateApi } from "@/pages/patient-management/apis/index"
 
@@ -13,13 +14,8 @@ const TEMPLATE_OPTIONS = [
 async function handleDownloadTemplate(type: string, label: string) {
   templateDownloading.value = type
   try {
-    const data = await downloadTemplateApi(type)
-    const url = URL.createObjectURL(new Blob([data as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${label}.xlsx`
-    a.click()
-    URL.revokeObjectURL(url)
+    const blob = await downloadTemplateApi(type)
+    downloadBlob(blob as unknown as Blob, `${label}.xlsx`)
     ElMessage.success("模板下载成功")
   } catch {
     ElMessage.error("模板下载失败")
@@ -79,13 +75,10 @@ async function handleMatchSchool() {
   try {
     const { data } = await matchSchoolDataApi(matchFile.value)
     const blob = await downloadCleaningResultApi(data.fileId)
-    const url = URL.createObjectURL(new Blob([blob as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))
-    const a = document.createElement("a")
-    a.href = url
-    a.download = data.fileName || "学生筛查数据匹配结果.xlsx"
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(blob as unknown as Blob, data.fileName || "学生筛查数据匹配结果.xlsx")
     ElMessage.success(`数据匹配完成，共生成 ${data.totalCount} 条`)
+  } catch {
+    ElMessage.error("数据匹配失败")
   } finally {
     matching.value = false
   }
@@ -110,12 +103,7 @@ async function handleDownload() {
   if (!result.value?.fileId) return
   try {
     const blob = await downloadCleaningResultApi(result.value.fileId)
-    const url = URL.createObjectURL(new Blob([blob as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))
-    const a = document.createElement("a")
-    a.href = url
-    a.download = result.value.fileName || "数据清洗结果.xlsx"
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(blob as unknown as Blob, result.value.fileName || "数据清洗结果.xlsx")
     ElMessage.success("下载成功")
   } catch {
     ElMessage.error("下载失败")

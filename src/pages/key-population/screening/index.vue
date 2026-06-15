@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
@@ -278,10 +278,6 @@ async function handleBatchDelete() {
   }
 }
 
-/** 判定结果标签颜色 */
-function getLatentTag(isLatent: number) {
-  return isLatent === 1 ? "danger" : "success"
-}
 
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
@@ -457,8 +453,8 @@ watch(
         <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
         <el-table-column label="待确诊" fixed="right">
           <template #default="{ row }">
-            <el-tag :type="getLatentTag(row.isLatent)" size="small">
-              {{ row.isLatent === 1 ? "待确诊" : "正常" }}
+            <el-tag :type="getScreeningLatentStatusTagType(row)" size="small">
+              {{ getScreeningLatentStatusLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -818,7 +814,7 @@ watch(
           {{ detailRow.infectionResult }}
         </el-descriptions-item>
         <el-descriptions-item label="判定结果">
-          {{ detailRow.isLatent === 1 ? "待确诊" : "正常" }}
+          {{ getScreeningLatentStatusLabel(detailRow) }}
         </el-descriptions-item>
         <el-descriptions-item label="是否进行胸片检查">
           {{ detailRow.hasChestXray }}

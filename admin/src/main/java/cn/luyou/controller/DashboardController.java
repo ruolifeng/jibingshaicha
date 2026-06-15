@@ -125,7 +125,7 @@ public class DashboardController {
                 : null;
         data.put("school", buildPopStats(schoolTotal,
                 countLatent("school", hasBatch, schoolIds),
-                countPatient("school", hasBatch, schoolIds)));
+                countConfirmedPatient("school", hasBatch, batch)));
 
         // ===== 重点人群 =====
         long keyTotal = screeningKeyPopulationService.count(
@@ -140,7 +140,7 @@ public class DashboardController {
                 : null;
         data.put("keyPopulation", buildPopStats(keyTotal,
                 countLatent("keyPopulation", hasBatch, keyIds),
-                countPatient("keyPopulation", hasBatch, keyIds)));
+                countConfirmedPatient("keyPopulation", hasBatch, batch)));
 
         // ===== 密接人群 =====
         long closeTotal = closeContactService.count(
@@ -154,14 +154,9 @@ public class DashboardController {
                         .eq(ScreeningCloseContact::getFinalScreeningResult, "潜伏感染者")
                         .eq(hasBatch, ScreeningCloseContact::getUploadBatch, batch)
         );
-        List<Object> closeIds = hasBatch
-                ? closeContactService.listObjs(new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .select(ScreeningCloseContact::getId)
-                        .eq(ScreeningCloseContact::getUploadBatch, batch))
-                : null;
         data.put("closeContact", buildPopStats(closeTotal,
                 closeLatent,
-                countPatient("closeContact", hasBatch, closeIds)));
+                countConfirmedPatient("closeContact", hasBatch, batch)));
 
         return ResultRes.success(data);
     }
@@ -212,14 +207,32 @@ public class DashboardController {
         return latentInfectionService.count(wrapper);
     }
 
-    private long countPatient(String populationType, boolean hasBatch, List<Object> ids) {
-        if (hasBatch && (ids == null || ids.isEmpty())) return 0L;
-        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
-                .eq(Patient::getPopulationType, populationType);
-        if (hasBatch) {
-            wrapper.in(Patient::getScreeningId, ids);
-        }
-        return patientService.count(wrapper);
+    /**
+     * 统计筛查确诊患者：以筛查表诊断结果为准（上传 Excel 时 diagnosis_first=确诊患者）。
+     * 确诊患者仅标红结案，不进入患者管理表，故不能从 patient 表统计。
+     */
+    private long countConfirmedPatient(String populationType, boolean hasBatch, String batch) {
+        return switch (populationType) {
+            case "school" -> {
+                LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<ScreeningSchool>()
+                        .eq(ScreeningSchool::getDiagnosisFirst, "确诊患者");
+                if (hasBatch) wrapper.eq(ScreeningSchool::getUploadBatch, batch);
+                yield screeningSchoolService.count(wrapper);
+            }
+            case "keyPopulation" -> {
+                LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<ScreeningKeyPopulation>()
+                        .eq(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者");
+                if (hasBatch) wrapper.eq(ScreeningKeyPopulation::getUploadBatch, batch);
+                yield screeningKeyPopulationService.count(wrapper);
+            }
+            case "closeContact" -> {
+                LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
+                        .eq(ScreeningCloseContact::getFinalScreeningResult, "活动性肺结核");
+                if (hasBatch) wrapper.eq(ScreeningCloseContact::getUploadBatch, batch);
+                yield closeContactService.count(wrapper);
+            }
+            default -> 0L;
+        };
     }
 
     private Map<String, Object> buildPopStats(long total, long latent, long patient) {

@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -29,29 +30,34 @@ import java.util.List;
 @RequestMapping("/template")
 public class TemplateController {
 
+    /** EasyExcel 多级表头需可变 List，不可使用 List.of 多元素不可变列表 */
+    private static List<String> head(String... parts) {
+        return new ArrayList<>(Arrays.asList(parts));
+    }
+
     /** 学校人群筛查模板列头 */
     private static final List<List<String>> SCHOOL_HEADERS = List.of(
-            List.of("序号"), List.of("年份"), List.of("市（州）"), List.of("县（市、区）"),
-            List.of("姓名"), List.of("性别"), List.of("出生日期"), List.of("年龄"),
-            List.of("证件类型"), List.of("证件号"), List.of("民族"), List.of("联系电话"),
-            List.of("户籍所在地（XX市XX县、区）"), List.of("现地址"),
-            List.of("学校类型"), List.of("学校名称"), List.of("班级（院系）"),
-            List.of("既往结核病史"), List.of("密切接触史"), List.of("结核病可疑症状"),
-            List.of("学校人群感染筛查情况", "是否进行感染筛"),
-            List.of("学校人群感染筛查情况", "感染筛查日期"),
-            List.of("学校人群感染筛查情况", "方法"),
-            List.of("学校人群感染筛查情况", "结果（PPD：mmXmm；EC及IGRA：阳性/阴性）"),
-            List.of("学校人群感染筛查情况", "感染筛查结果"),
-            List.of("学校人群胸片检查", "是否进行胸片检查"),
-            List.of("学校人群胸片检查", "胸片检查日期"),
-            List.of("学校人群胸片检查", "胸片结果"),
-            List.of("痰涂片结果"), List.of("分子生物学结果"), List.of("诊断结果"),
-            List.of("潜伏感染者管理情况", "是否进行预防者治疗"),
-            List.of("潜伏感染者管理情况", "预防性治疗方案"),
-            List.of("潜伏感染者管理情况", "预防性治疗开始时间（年月日）"),
-            List.of("潜伏感染者管理情况", "预防性治疗完成时间（年月日）"),
-            List.of("潜伏感染者管理情况", "预防性治疗结果"),
-            List.of("潜伏感染者管理情况", "预防性治疗期间随访管理人员")
+            head("序号"), head("年份"), head("市（州）"), head("县（市、区）"),
+            head("姓名"), head("性别"), head("出生日期"), head("年龄"),
+            head("证件类型"), head("证件号"), head("民族"), head("联系电话"),
+            head("户籍所在地（XX市XX县、区）"), head("现地址"),
+            head("学校类型"), head("学校名称"), head("班级（院系）"),
+            head("既往结核病史"), head("密切接触史"), head("结核病可疑症状"),
+            head("学校人群感染筛查情况", "是否进行感染筛"),
+            head("学校人群感染筛查情况", "感染筛查日期"),
+            head("学校人群感染筛查情况", "方法"),
+            head("学校人群感染筛查情况", "结果（PPD：mmXmm；EC及IGRA：阳性/阴性）"),
+            head("学校人群感染筛查情况", "感染筛查结果"),
+            head("学校人群胸片检查", "是否进行胸片检查"),
+            head("学校人群胸片检查", "胸片检查日期"),
+            head("学校人群胸片检查", "胸片结果"),
+            head("痰涂片结果"), head("分子生物学结果"), head("诊断结果"),
+            head("潜伏感染者管理情况", "是否进行预防者治疗"),
+            head("潜伏感染者管理情况", "预防性治疗方案"),
+            head("潜伏感染者管理情况", "预防性治疗开始时间（年月日）"),
+            head("潜伏感染者管理情况", "预防性治疗完成时间（年月日）"),
+            head("潜伏感染者管理情况", "预防性治疗结果"),
+            head("潜伏感染者管理情况", "预防性治疗期间随访管理人员")
     );
 
     /** 重点人群/疫情筛查模板列头（两者结构相同） */

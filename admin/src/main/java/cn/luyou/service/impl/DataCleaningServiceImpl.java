@@ -11,7 +11,9 @@ import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
@@ -31,6 +33,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -331,8 +336,9 @@ public class DataCleaningServiceImpl implements DataCleaningService {
                     if (sourceRow == null || isBlankSourceRow(sourceRow, headerIndex)) continue;
                     Row targetRow = targetSheet.createRow(targetRowNum++);
                     for (int col = 0; col < SCHOOL_FIELD_KEYS.size(); col++) {
-                        String value = matchedValue(sourceRow, headerIndex, SCHOOL_FIELD_KEYS.get(col), targetRowNum - 2);
-                        targetRow.createCell(col).setCellValue(value);
+                        String key = SCHOOL_FIELD_KEYS.get(col);
+                        String value = matchedValue(sourceRow, headerIndex, key, targetRowNum - 2);
+                        writeMatchedCell(targetRow, col, key, value);
                     }
                 }
                 for (int i = 0; i < SCHOOL_HEADER_TOP.size(); i++) {
@@ -428,7 +434,86 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     private String matchedValue(Row sourceRow, Map<String, Integer> headerIndex, String key, int seq) {
         if ("seq".equals(key)) return String.valueOf(seq);
         Integer col = headerIndex.get(key);
-        return col == null ? "" : getPoiCellString(sourceRow, col);
+        String value = col == null ? "" : getPoiCellString(sourceRow, col, key);
+        if ("age".equals(key)) {
+            if (isFormulaLike(value)) {
+                value = "";
+            }
+            if (StrUtil.isBlank(value)) {
+                value = calculateAgeFromIdNumber(matchedValue(sourceRow, headerIndex, "idNumber", seq));
+            }
+            if (StrUtil.isNotBlank(value)) {
+                String digits = value.replaceAll("[^0-9]", "");
+                return StrUtil.isBlank(digits) ? "" : digits;
+            }
+        }
+        if ("birthDate".equals(key) && StrUtil.isBlank(value)) {
+            value = birthDateFromIdNumber(matchedValue(sourceRow, headerIndex, "idNumber", seq));
+        }
+        return value;
+    }
+
+    private void writeMatchedCell(Row row, int col, String key, String value) {
+        Cell cell = row.createCell(col);
+        if (StrUtil.isBlank(value)) {
+            cell.setBlank();
+            return;
+        }
+        if (("age".equals(key) || "seq".equals(key) || "year".equals(key)) && value.matches("\\d+")) {
+            cell.setCellValue(Long.parseLong(value));
+            return;
+        }
+        cell.setCellValue(value);
+    }
+
+    private boolean isFormulaLike(String value) {
+        if (StrUtil.isBlank(value)) return false;
+        String text = value.trim();
+        return text.startsWith("=")
+                || text.contains("DATEDIF(")
+                || text.contains("MID(")
+                || text.contains("TODAY(")
+                || text.contains("TEXT(");
+    }
+
+    private String calculateAgeFromIdNumber(String idNumber) {
+        if (StrUtil.isBlank(idNumber) || idNumber.length() != 18) return "";
+        try {
+            LocalDate birthDate = LocalDate.parse(
+                    idNumber.substring(6, 14),
+                    DateTimeFormatter.ofPattern("yyyyMMdd")
+            );
+            int age = Period.between(birthDate, LocalDate.now()).getYears();
+            return age >= 0 ? String.valueOf(age) : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String birthDateFromIdNumber(String idNumber) {
+        if (StrUtil.isBlank(idNumber) || idNumber.length() != 18) return "";
+        try {
+            LocalDate birthDate = LocalDate.parse(
+                    idNumber.substring(6, 14),
+                    DateTimeFormatter.ofPattern("yyyyMMdd")
+            );
+            return birthDate.toString();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String normalizeExcelCellText(String val) {
+        if (StrUtil.isBlank(val)) return "";
+        String text = val.trim();
+        if (text.matches(".*[eE].*") || text.matches("\\d+\\.0+")) {
+            try {
+                return new java.math.BigDecimal(text).toPlainString();
+            } catch (Exception ignored) {
+                return text;
+            }
+        }
+        return text;
     }
 
     private boolean isBlankSourceRow(Row row, Map<String, Integer> headerIndex) {
@@ -437,10 +522,45 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     private String getPoiCellString(Row row, int col) {
+        return getPoiCellString(row, col, null);
+    }
+
+    private String getPoiCellString(Row row, int col, String fieldKey) {
         if (row == null || col < 0) return "";
         Cell cell = row.getCell(col);
         if (cell == null) return "";
-        return DATA_FORMATTER.formatCellValue(cell).trim();
+        // 证件号/手机号须保留 Excel 显示文本，避免数值型单元格精度丢失
+        if ("idNumber".equals(fieldKey) || "phone".equals(fieldKey)) {
+            return normalizeExcelCellText(DATA_FORMATTER.formatCellValue(cell).trim());
+        }
+        return formatCellValue(cell);
+    }
+
+    private String formatCellValue(Cell cell) {
+        if (cell == null) return "";
+        CellType type = cell.getCellType();
+        if (type == CellType.FORMULA) {
+            try {
+                type = cell.getCachedFormulaResultType();
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+        return switch (type) {
+            case NUMERIC -> {
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    yield cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                }
+                double num = cell.getNumericCellValue();
+                if (num == Math.floor(num) && !Double.isInfinite(num)) {
+                    yield String.valueOf((long) num);
+                }
+                yield String.valueOf(num);
+            }
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            case STRING -> cell.getStringCellValue().trim();
+            default -> DATA_FORMATTER.formatCellValue(cell).trim();
+        };
     }
 
     private String rowToText(Row row) {
@@ -464,7 +584,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             for (int i = 2; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row != null && (StrUtil.isNotBlank(getPoiCellString(row, 4))
-                        || StrUtil.isNotBlank(getPoiCellString(row, 9)))) {
+                        || StrUtil.isNotBlank(getPoiCellString(row, 9, "idNumber")))) {
                     count++;
                 }
             }

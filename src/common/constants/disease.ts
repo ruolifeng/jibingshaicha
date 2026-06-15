@@ -97,6 +97,28 @@ export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
   { label: "潜伏感染者", value: "潜伏感染者" }
 ]
 
+/** 筛查列表「待确诊/判定结果」列展示文案 */
+export function getScreeningLatentStatusLabel(row: {
+  isLatent?: number
+  diagnosisFirst?: string
+}): string {
+  if (row.isLatent !== 1) return "正常"
+  if (row.diagnosisFirst === "潜伏感染者") return "已确诊潜伏感染者"
+  if (row.diagnosisFirst === "确诊患者") return "已确诊患者"
+  return "待确诊"
+}
+
+/** 筛查列表「待确诊/判定结果」列标签颜色 */
+export function getScreeningLatentStatusTagType(row: {
+  isLatent?: number
+  diagnosisFirst?: string
+}): "success" | "warning" | "danger" {
+  if (row.isLatent !== 1) return "success"
+  if (row.diagnosisFirst === "潜伏感染者") return "warning"
+  if (row.diagnosisFirst === "确诊患者") return "danger"
+  return "danger"
+}
+
 /** 是否为筛查确诊患者（待诊断/筛查列表标红用） */
 export function isConfirmedPatientDiagnosis(row: {
   diagnosisFirst?: string
