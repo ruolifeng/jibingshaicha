@@ -376,28 +376,34 @@ watch(
         <el-table-column prop="tbHistory" label="既往结核病史" />
         <el-table-column prop="closeContactHistory" label="密切接触史" />
         <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
-        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" />
-        <el-table-column prop="screenDate" label="感染筛查日期" />
-        <el-table-column prop="screenMethod" label="筛查方法" />
-        <el-table-column label="筛查结果">
-          <template #default="{ row }">
-            {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
-          </template>
+        <el-table-column label="学校人群感染筛查情况">
+          <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
+          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" />
+          <el-table-column prop="screenMethod" label="方法" min-width="80" />
+          <el-table-column label="结果（PPD：mmXmm；EC及IGRA：阳性/阴性）" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="infectionResult" label="感染筛查结果" min-width="110" />
         </el-table-column>
-        <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="首次（是否胸片）" />
-        <el-table-column prop="chestXrayDate" label="胸片检查日期" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" />
+        <el-table-column label="学校人群胸片检查">
+          <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
+          <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
+          <el-table-column prop="chestXrayResult" label="胸片结果" min-width="90" />
+        </el-table-column>
         <el-table-column prop="sputumSmearResult" label="痰涂片结果" />
         <el-table-column prop="molecularBiologyResult" label="分子生物学结果" />
         <el-table-column prop="diagnosisFirst" label="诊断结果" />
         <!-- 预防性治疗情况（督导表归档后同步） -->
-        <el-table-column prop="preventivePlan" label="预防性治疗方案" />
-        <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
-        <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
-        <el-table-column prop="preventiveResult" label="治疗结果" />
-        <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
-        <el-table-column label="待确诊" fixed="right">
+        <el-table-column label="潜伏感染者管理情况">
+          <el-table-column prop="preventivePlan" label="预防性治疗方案" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="preventiveStartDate" label="预防性治疗开始时间（年月日）" min-width="150" />
+          <el-table-column prop="preventiveEndDate" label="预防性治疗完成时间（年月日）" min-width="150" />
+          <el-table-column prop="preventiveResult" label="预防性治疗结果" min-width="110" />
+          <el-table-column prop="preventiveManager" label="预防性治疗期间随访管理人员" min-width="150" show-overflow-tooltip />
+        </el-table-column>
+        <el-table-column label="待确诊" fixed="right" min-width="90">
           <template #default="{ row }">
             <el-tag :type="getScreeningLatentStatusTagType(row)" size="small">
               {{ getScreeningLatentStatusLabel(row) }}
@@ -405,7 +411,7 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" min-width="200">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">
               查看详情

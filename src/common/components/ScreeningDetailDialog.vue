@@ -108,7 +108,7 @@ const dialogTitle = computed(() => {
           <el-descriptions-item label="感染判定">
             {{ data.isLatent === 1 ? "阳性" : "阴性" }}
           </el-descriptions-item>
-          <el-descriptions-item label="是否进行胸片">
+          <el-descriptions-item label="是否进行胸片检查">
             {{ data.hasChestXray || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="胸片检查日期">
@@ -229,7 +229,7 @@ const dialogTitle = computed(() => {
           <el-descriptions-item label="感染判定">
             {{ data.isLatent === 1 ? "阳性" : "阴性" }}
           </el-descriptions-item>
-          <el-descriptions-item label="是否进行胸片">
+          <el-descriptions-item label="是否进行胸片检查">
             {{ data.hasChestXray || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="胸片检查日期">
@@ -304,9 +304,6 @@ const dialogTitle = computed(() => {
           <el-descriptions-item label="原患者确诊日期">
             {{ data.sourcePatientConfirmDate }}
           </el-descriptions-item>
-          <el-descriptions-item label="原患者身份证号">
-            {{ data.sourcePatientIdNumber }}
-          </el-descriptions-item>
           <el-descriptions-item label="户籍地址" :span="2">
             {{ data.householdAddress }}
           </el-descriptions-item>
@@ -335,10 +332,10 @@ const dialogTitle = computed(() => {
                   {{ data.firstInfectionResult || "-" }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="是否进行胸片">
+              <el-descriptions-item label="是否进行胸片检查">
                 {{ data.firstHasChestXray }}
               </el-descriptions-item>
-              <el-descriptions-item label="胸片日期">
+              <el-descriptions-item label="胸片检查日期">
                 {{ data.firstChestXrayDate }}
               </el-descriptions-item>
               <el-descriptions-item label="胸片结果">
@@ -372,10 +369,10 @@ const dialogTitle = computed(() => {
                   {{ data.halfYearInfectionResult || "-" }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="是否进行胸片">
+              <el-descriptions-item label="是否进行胸片检查">
                 {{ data.halfYearHasChestXray }}
               </el-descriptions-item>
-              <el-descriptions-item label="胸片日期">
+              <el-descriptions-item label="胸片检查日期">
                 {{ data.halfYearChestXrayDate }}
               </el-descriptions-item>
               <el-descriptions-item label="胸片结果">
@@ -409,10 +406,10 @@ const dialogTitle = computed(() => {
                   {{ data.oneYearInfectionResult || "-" }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="是否进行胸片">
+              <el-descriptions-item label="是否进行胸片检查">
                 {{ data.oneYearHasChestXray }}
               </el-descriptions-item>
-              <el-descriptions-item label="胸片日期">
+              <el-descriptions-item label="胸片检查日期">
                 {{ data.oneYearChestXrayDate }}
               </el-descriptions-item>
               <el-descriptions-item label="胸片结果">

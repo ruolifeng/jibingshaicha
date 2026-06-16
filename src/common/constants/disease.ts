@@ -97,15 +97,21 @@ export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
   { label: "潜伏感染者", value: "潜伏感染者" }
 ]
 
+/** 终态正常类诊断（排除/正常/其它），展示为「正常」 */
+export const NORMAL_TERMINAL_DIAGNOSIS = new Set(["排除", "正常", "其它", "其他"])
+
 /** 筛查列表「待确诊/判定结果」列展示文案 */
 export function getScreeningLatentStatusLabel(row: {
   isLatent?: number
   diagnosisFirst?: string
 }): string {
   if (row.isLatent !== 1) return "正常"
-  if (row.diagnosisFirst === "潜伏感染者") return "已确诊潜伏感染者"
-  if (row.diagnosisFirst === "确诊患者") return "已确诊患者"
-  return "待确诊"
+  const diagnosis = row.diagnosisFirst?.trim()
+  if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "正常"
+  if (diagnosis === "疑似肺结核") return "待诊断"
+  if (diagnosis === "确诊患者") return "已确诊患者"
+  if (diagnosis === "潜伏感染者") return "已确诊潜伏感染者"
+  return "待诊断"
 }
 
 /** 筛查列表「待确诊/判定结果」列标签颜色 */
@@ -114,9 +120,12 @@ export function getScreeningLatentStatusTagType(row: {
   diagnosisFirst?: string
 }): "success" | "warning" | "danger" {
   if (row.isLatent !== 1) return "success"
-  if (row.diagnosisFirst === "潜伏感染者") return "warning"
-  if (row.diagnosisFirst === "确诊患者") return "danger"
-  return "danger"
+  const diagnosis = row.diagnosisFirst?.trim()
+  if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "success"
+  if (diagnosis === "潜伏感染者") return "warning"
+  if (diagnosis === "确诊患者") return "danger"
+  if (diagnosis === "疑似肺结核") return "warning"
+  return "warning"
 }
 
 /** 是否为筛查确诊患者（待诊断/筛查列表标红用） */
@@ -140,6 +149,9 @@ export function getSuspectedConfirmDiagnosisLabel(row: {
 }): string {
   const draft = row.diagnosisFirst || row.screeningDiagnosisFirst
   if (draft) {
+    if (NORMAL_TERMINAL_DIAGNOSIS.has(draft)) return "正常"
+    if (draft === "疑似肺结核") return "疑似肺结核"
+    if (draft === "确诊患者") return "确诊患者"
     const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === draft)
     if (matched) return matched.label
     return draft
@@ -151,7 +163,7 @@ export function getSuspectedConfirmDiagnosisLabel(row: {
 /** 预防性治疗结果（V4新增，督导表字段） */
 export const PREVENTIVE_RESULT_OPTIONS = [
   "规范完成",
-  "失访",
+  "失访", 
   "自行中断治疗",
   "确诊肺结核"
 ]

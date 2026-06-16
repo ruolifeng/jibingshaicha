@@ -29,6 +29,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -47,7 +48,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -73,10 +73,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private final ReferralService referralService;
     private final ScreeningScopeHelper screeningScopeHelper;
 
-    private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
-            "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
-    );
-
     @Override
     public ImportResult uploadAndParse(MultipartFile file, String sourceType) {
         final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
@@ -98,8 +94,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                         result.addError(row, data.getName(), "手机号格式不正确");
                     }
                     data.setUploadBatch(batchId);
-                    boolean directXray = hasDirectXrayAndDiagnosis(data);
-                    data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+                    data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setSourceType(resolvedSourceType);
                     dataList.add(data);
@@ -152,8 +147,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 if (StrUtil.isNotBlank(d.getChestXrayResult())) existing.setChestXrayResult(d.getChestXrayResult());
                 if (StrUtil.isNotBlank(d.getDiagnosisFirst())) existing.setDiagnosisFirst(d.getDiagnosisFirst());
                 if (StrUtil.isNotBlank(d.getRemark())) existing.setRemark(d.getRemark());
-                boolean directXray = hasDirectXrayAndDiagnosis(existing);
-                existing.setIsLatent((isPositive(existing.getInfectionResult()) || directXray) ? 1 : 0);
+                existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
                 toUpdate.add(existing);
             } else {
                 toInsert.add(d);
@@ -243,8 +237,13 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
      */
     private void syncLatentFromScreening(List<ScreeningKeyPopulation> records) {
         for (ScreeningKeyPopulation d : records) {
-            if (d.getIsLatent() != 1 || d.getId() == null) continue;
+            if (d.getId() == null) continue;
             String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
+            if (d.getIsLatent() != 1) {
+                latentInfectionService.archivePendingLatentFromScreening(
+                        d.getId(), popType, d.getDiagnosisFirst());
+                continue;
+            }
             LatentInfection latent = latentInfectionService.lambdaQuery()
                     .eq(LatentInfection::getScreeningId, d.getId())
                     .eq(LatentInfection::getPopulationType, popType)
@@ -360,8 +359,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
-        boolean directXray = hasDirectXrayAndDiagnosis(data);
-        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
 
@@ -391,14 +389,13 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         }
     }
 
-    private boolean isPositive(String infectionResult) {
-        if (StrUtil.isBlank(infectionResult)) return false;
-        return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);
-    }
-
-    /** 判断是否包含可直接同步的胸片检查与诊断数据 */
-    private boolean hasDirectXrayAndDiagnosis(ScreeningKeyPopulation data) {
-        return "是".equals(data.getHasChestXray()) && StrUtil.isNotBlank(data.getDiagnosisFirst());
+    private boolean shouldMarkLatent(ScreeningKeyPopulation data) {
+        if (data == null) return false;
+        return ScreeningDiagnosisSupport.shouldMarkLatent(
+                data.getInfectionResult(),
+                data.getChestXrayResult(),
+                data.getHasChestXray(),
+                data.getDiagnosisFirst());
     }
 
     private boolean isValidIdCard(String id) {
@@ -417,8 +414,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }
-        boolean directXray = hasDirectXrayAndDiagnosis(data);
-        data.setIsLatent((isPositive(data.getInfectionResult()) || directXray) ? 1 : 0);
+        data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         if (StrUtil.isBlank(data.getSourceType())) {
             data.setSourceType(existing.getSourceType());
         }

@@ -2,6 +2,7 @@ package cn.luyou.controller;
 
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
+import cn.luyou.constant.ScreeningCloseContactExportHeaders;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.service.ScreeningCloseContactService;
@@ -37,7 +38,7 @@ public class ScreeningCloseContactController {
     private final ScreeningCloseContactService screeningCloseContactService;
     private final ScreeningScopeHelper screeningScopeHelper;
 
-    @Operation(summary = "上传密接人群筛查Excel（新模板73列）")
+    @Operation(summary = "上传密接人群筛查Excel（新模板72列）")
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(screeningCloseContactService.uploadAndParse(file));
@@ -164,7 +165,6 @@ public class ScreeningCloseContactController {
             row.put("区/县", s.getDistrict());
             row.put("原患者姓名", s.getSourcePatientName());
             row.put("原患者病案号", s.getSourcePatientCaseNo());
-            row.put("原患者身份证号", s.getSourcePatientIdNumber());
             row.put("接触者姓名", s.getName());
             row.put("接触者身份证号", s.getIdNumber());
             row.put("年龄", s.getAge());
@@ -192,13 +192,16 @@ public class ScreeningCloseContactController {
             rows.add(row);
         }
 
+        List<List<String>> heads = ScreeningCloseContactExportHeaders.asEasyExcelHead();
         if (rows.isEmpty()) {
-            EasyExcel.write(response.getOutputStream()).sheet("筛查数据").doWrite(new ArrayList<>());
+            EasyExcel.write(response.getOutputStream()).head(heads).sheet("筛查数据").doWrite(new ArrayList<>());
             return;
         }
-        List<List<String>> heads = rows.get(0).keySet().stream().map(List::of).collect(Collectors.toList());
         List<List<Object>> data = rows.stream()
-                .map(r -> new ArrayList<Object>(r.values())).collect(Collectors.toList());
+                .map(r -> ScreeningCloseContactExportHeaders.COLUMNS.stream()
+                        .map(col -> r.get(col))
+                        .collect(Collectors.toList()))
+                .collect(Collectors.toList());
         EasyExcel.write(response.getOutputStream()).head(heads).sheet("筛查数据").doWrite(data);
     }
 

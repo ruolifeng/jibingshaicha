@@ -6,6 +6,8 @@ import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.DataCleaningResult;
 import cn.luyou.service.DataCleaningService;
+import cn.luyou.utils.CloseContactCaseExcelSupport;
+import cn.luyou.utils.CloseContactCaseExcelSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
@@ -86,8 +88,11 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         String type = normalizeType(populationType);
         validateExcel(file);
 
-        int headRowNumber = resolveHeadRows(type);
-        ValidationResult validationResult = readAndValidate(type, file, headRowNumber);
+        int headRowNumber = resolveHeadRows(type, file);
+        CloseContactColumnLayout closeLayout = TYPE_CLOSE.equals(type)
+                ? resolveCloseContactLayout(file, headRowNumber)
+                : null;
+        ValidationResult validationResult = readAndValidate(type, file, headRowNumber, closeLayout);
         List<RowValidationError> allErrors = validationResult.getErrors();
         String fileId = IdUtil.fastSimpleUUID();
         File resultFile = markAndWriteResult(type, file, fileId, allErrors, headRowNumber);
@@ -158,12 +163,48 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         }
     }
 
-    private int resolveHeadRows(String type) {
-        if (TYPE_KEY.equals(type)) return 4;
+    private int resolveHeadRows(String type, MultipartFile file) {
+        if (TYPE_KEY.equals(type)) {
+            return 4;
+        }
+        if (TYPE_CLOSE.equals(type)) {
+            try {
+                return CloseContactCaseExcelSupport.resolveHeadRowNumber(file.getBytes());
+            } catch (IOException e) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+            }
+        }
         return 2;
     }
 
-    private ValidationResult readAndValidate(String type, MultipartFile file, int headRowNumber) {
+    /**
+     * 密接 72 列模板（已移除原患者身份证号）与旧 73 列模板列位不同。
+     */
+    private CloseContactColumnLayout resolveCloseContactLayout(MultipartFile file, int headRowNumber) {
+        try (InputStream inputStream = file.getInputStream();
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            Sheet sheet = workbook.getNumberOfSheets() > 0 ? workbook.getSheetAt(0) : null;
+            if (sheet == null) {
+                return CloseContactColumnLayout.STANDARD_72;
+            }
+            int headerRowIndex = Math.max(0, headRowNumber - 1);
+            Row headerRow = sheet.getRow(headerRowIndex);
+            String col6Header = getPoiCellString(headerRow, 6);
+            if (StrUtil.isNotBlank(col6Header) && col6Header.contains("身份证")) {
+                return CloseContactColumnLayout.LEGACY_73;
+            }
+            return CloseContactColumnLayout.STANDARD_72;
+        } catch (IOException e) {
+            return CloseContactColumnLayout.STANDARD_72;
+        }
+    }
+
+    private ValidationResult readAndValidate(
+            String type,
+            MultipartFile file,
+            int headRowNumber,
+            CloseContactColumnLayout closeLayout
+    ) {
         List<RowValidationError> errors = new ArrayList<>();
         AtomicInteger totalCount = new AtomicInteger(0);
         AtomicInteger rowOffset = new AtomicInteger(0);
@@ -171,11 +212,11 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             EasyExcel.read(inputStream, List.class, new PageReadListener<List<Object>>(rows -> {
                         for (List<Object> row : rows) {
                             int excelRowIndex = headRowNumber + rowOffset.getAndIncrement() + 1;
-                            if (shouldSkipValidationRow(type, row)) {
+                            if (shouldSkipValidationRow(type, row, closeLayout)) {
                                 continue;
                             }
                             totalCount.incrementAndGet();
-                            errors.addAll(validateRow(type, row, excelRowIndex));
+                            errors.addAll(validateRow(type, row, excelRowIndex, closeLayout));
                         }
                     }))
                     .sheet()
@@ -187,9 +228,15 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         return new ValidationResult(totalCount.get(), errors);
     }
 
-    private List<RowValidationError> validateRow(String type, List<Object> row, int excelRowIndex) {
+    private List<RowValidationError> validateRow(
+            String type,
+            List<Object> row,
+            int excelRowIndex,
+            CloseContactColumnLayout closeLayout
+    ) {
         List<RowValidationError> result = new ArrayList<>();
-        String name = getCellString(row, TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? 11 : 4));
+        int nameCol = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? closeLayout.nameCol() : 4);
+        String name = getCellString(row, nameCol);
 
         String idCard;
         String phone;
@@ -227,20 +274,25 @@ public class DataCleaningServiceImpl implements DataCleaningService {
                 }
             }
         } else {
-            idCard = getCellString(row, 12);
-            phone = getCellString(row, 15);
-            appendCommonValidation(result, excelRowIndex, name, idCard, 12, phone, 15, null, -1);
-            String finalResult = getCellString(row, 30);
-            if (StrUtil.isBlank(finalResult) || !isInOptions(finalResult, "活动性肺结核", "潜伏感染者", "未做", "未发现异常")) {
-                result.add(err(excelRowIndex, name, 30, "最终筛查结果仅支持：活动性肺结核/潜伏感染者/未做/未发现异常"));
+            int idCol = closeLayout.idCol();
+            int phoneCol = closeLayout.phoneCol();
+            int finalResultCol = closeLayout.finalResultCol();
+            idCard = getCellString(row, idCol);
+            phone = getCellString(row, phoneCol);
+            appendCommonValidation(result, excelRowIndex, name, idCard, idCol, phone, phoneCol, null, -1);
+            String finalResult = getCellString(row, finalResultCol);
+            if (StrUtil.isNotBlank(finalResult)
+                    && !isInOptions(finalResult, "活动性肺结核", "潜伏感染者", "未做", "未发现异常")) {
+                result.add(err(excelRowIndex, name, finalResultCol,
+                        "最终筛查结果仅支持：活动性肺结核/潜伏感染者/未做/未发现异常"));
             }
         }
         return result;
     }
 
-    private boolean shouldSkipValidationRow(String type, List<Object> row) {
-        int nameIndex = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? 11 : 4);
-        int idIndex = TYPE_CLOSE.equals(type) ? 12 : 9;
+    private boolean shouldSkipValidationRow(String type, List<Object> row, CloseContactColumnLayout closeLayout) {
+        int nameIndex = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? closeLayout.nameCol() : 4);
+        int idIndex = TYPE_CLOSE.equals(type) ? closeLayout.idCol() : 9;
         return StrUtil.isBlank(getCellString(row, nameIndex)) && StrUtil.isBlank(getCellString(row, idIndex));
     }
 
@@ -712,6 +764,13 @@ public class DataCleaningServiceImpl implements DataCleaningService {
                 deleteMetaFile(entry.getKey(), entry.getValue());
             }
         }
+    }
+
+    private record CloseContactColumnLayout(int nameCol, int idCol, int phoneCol, int finalResultCol) {
+        /** 72 列标准模板（已移除原患者身份证号） */
+        static final CloseContactColumnLayout STANDARD_72 = new CloseContactColumnLayout(10, 11, 14, 29);
+        /** 旧 73 列模板（G 列为患者身份证号） */
+        static final CloseContactColumnLayout LEGACY_73 = new CloseContactColumnLayout(11, 12, 15, 30);
     }
 
     private record HeaderLocation(int headerRow, int dataStartRow) {}

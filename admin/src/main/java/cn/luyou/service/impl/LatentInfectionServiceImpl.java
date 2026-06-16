@@ -42,6 +42,7 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningDiagnosisSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -111,6 +112,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         Map<String, String> m = new HashMap<>();
         m.put("排除", "excluded");
         m.put("其他", "other");
+        m.put("其它", "other");
+        m.put("正常", "excluded");
         m.put("确诊患者", "confirmed");
         m.put("疑似肺结核", "suspected");
         m.put("潜伏感染者", "latent");
@@ -743,8 +746,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         int updated = 0;
         for (Map<String, Object> row : rows) {
-            // 密接人群证件号在列12，其余人群在列9
-            int idNumberIdx = "closeContact".equals(populationType) ? 12 : 9;
+            // 密接人群证件号在列11（72列模板），其余人群在列9
+            int idNumberIdx = "closeContact".equals(populationType) ? 11 : 9;
             String idNumber = getStrCell(row, idNumberIdx);
             if (StrUtil.isBlank(idNumber)) continue;
 
@@ -989,7 +992,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     public void autoReferralForDirectDiagnosis(List<LatentInfection> latents) {
         for (LatentInfection entity : latents) {
             if (entity == null || entity.getId() == null) continue;
-            String diagnosisFirst = entity.getDiagnosisFirst();
+            String diagnosisFirst = ScreeningDiagnosisSupport.normalizeDiagnosis(entity.getDiagnosisFirst());
             String referralResult = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
             if (StrUtil.isBlank(referralResult)) continue;
 
@@ -1009,6 +1012,46 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
             log.info("导入时自动分流 latentId={} diagnosisFirst={} referralResult={}", entity.getId(), diagnosisFirst, referralResult);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void archivePendingLatentFromScreening(Long screeningId, String populationType, String diagnosisFirst) {
+        if (screeningId == null || StrUtil.isBlank(populationType)) {
+            return;
+        }
+        LatentInfection latent = lambdaQuery()
+                .eq(LatentInfection::getScreeningId, screeningId)
+                .eq(LatentInfection::getPopulationType, populationType)
+                .eq(LatentInfection::getArchived, 0)
+                .isNull(LatentInfection::getReferralResult)
+                .last("LIMIT 1")
+                .one();
+        if (latent == null) {
+            return;
+        }
+        String normalizedDiagnosis = ScreeningDiagnosisSupport.normalizeDiagnosis(
+                StrUtil.isNotBlank(diagnosisFirst) ? diagnosisFirst : latent.getDiagnosisFirst());
+        if (StrUtil.isBlank(normalizedDiagnosis)) {
+            normalizedDiagnosis = "正常";
+        }
+        String referralResult = DIAGNOSIS_TO_REFERRAL.get(normalizedDiagnosis);
+        if (referralResult == null) {
+            referralResult = "excluded";
+        }
+        if ("suspected".equals(referralResult) || "latent".equals(referralResult)) {
+            return;
+        }
+        lambdaUpdate()
+                .eq(LatentInfection::getId, latent.getId())
+                .set(LatentInfection::getDiagnosisFirst, normalizedDiagnosis)
+                .set(LatentInfection::getReferralResult, referralResult)
+                .set(LatentInfection::getDiagnosisResult, normalizedDiagnosis)
+                .set(LatentInfection::getArchived, 1)
+                .set(LatentInfection::getArchivedTime, LocalDateTime.now())
+                .update();
+        log.info("筛查不再需待诊断，归档 latentId={} screeningId={} diagnosisFirst={}",
+                latent.getId(), screeningId, normalizedDiagnosis);
     }
 
     private String getStrCell(Map<String, Object> row, int index) {

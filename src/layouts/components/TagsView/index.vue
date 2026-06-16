@@ -2,6 +2,7 @@
 import type { RouteLocationNormalizedGeneric, RouteRecordRaw, RouterLink } from "vue-router"
 import type { TagView } from "@/pinia/stores/tags-view"
 import { useRouteListener } from "@@/composables/useRouteListener"
+import { resolveRouteTagTitle, withResolvedTagTitle } from "@@/utils/route-tag-title"
 import { Close } from "@element-plus/icons-vue"
 import path from "path-browserify"
 import { usePermissionStore } from "@/pinia/stores/permission"
@@ -67,19 +68,41 @@ function filterAffixTags(routes: RouteRecordRaw[], basePath = "/") {
   return tags
 }
 
+/** 展示标签标题（兼容 localStorage 缓存的无 matched 数据） */
+function displayTagTitle(tag: TagView): string {
+  const routeLike = tag.matched?.length
+    ? tag
+    : router.resolve({ path: tag.path ?? "/", query: tag.query, hash: tag.hash })
+  return resolveRouteTagTitle(routeLike)
+}
+
+/** 刷新已缓存标签标题（父菜单-子菜单格式） */
+function refreshVisitedViewTitles() {
+  const views = tagsViewStore.visitedViews
+  views.forEach((view: TagView, index: number) => {
+    if (!view.path) return
+    const resolved = withResolvedTagTitle(
+      router.resolve({ path: view.path, query: view.query, hash: view.hash })
+    )
+    views[index] = { ...view, meta: { ...view.meta, ...resolved.meta } }
+  })
+}
+
 /** 初始化标签页 */
 function initTags() {
   affixTags = filterAffixTags(permissionStore.routes)
   for (const tag of affixTags) {
-    // 必须含有 name 属性
-    tag.name && tagsViewStore.addVisitedView(tag)
+    if (!tag.name) continue
+    const resolved = router.resolve(tag.path!)
+    tagsViewStore.addVisitedView(withResolvedTagTitle(resolved))
   }
+  refreshVisitedViewTitles()
 }
 
 /** 添加标签页 */
 function addTags(route: RouteLocationNormalizedGeneric) {
   if (route.name) {
-    tagsViewStore.addVisitedView(route)
+    tagsViewStore.addVisitedView(withResolvedTagTitle(route))
     tagsViewStore.addCachedView(route)
   }
 }
@@ -179,7 +202,7 @@ listenerRouteChange((route) => {
         @click.middle="!isAffix(tag) && closeSelectedTag(tag)"
         @contextmenu.prevent="openMenu(tag, $event)"
       >
-        {{ tag.meta?.tagTitle ?? tag.meta?.title }}
+        {{ displayTagTitle(tag) }}
         <el-icon v-if="!isAffix(tag)" :size="12" @click.prevent.stop="closeSelectedTag(tag)">
           <Close />
         </el-icon>

@@ -28,6 +28,7 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -46,7 +47,6 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,11 +73,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
     private final ScreeningScopeHelper screeningScopeHelper;
-
-    /** V4 阳性关键字（感染筛查结果列） */
-    private static final List<String> POSITIVE_KEYWORDS = Arrays.asList(
-            "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
-    );
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
@@ -231,7 +226,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
      */
     private void syncLatentFromScreening(List<ScreeningSchool> records, String populationType) {
         for (ScreeningSchool d : records) {
-            if (d.getIsLatent() != 1 || d.getId() == null) continue;
+            if (d.getId() == null) continue;
+            if (d.getIsLatent() != 1) {
+                latentInfectionService.archivePendingLatentFromScreening(
+                        d.getId(), populationType, d.getDiagnosisFirst());
+                continue;
+            }
             LatentInfection latent = latentInfectionService.lambdaQuery()
                     .eq(LatentInfection::getScreeningId, d.getId())
                     .eq(LatentInfection::getPopulationType, populationType)
@@ -281,7 +281,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
     }
 
-    /** 年度筛选：优先取感染筛查日期年份，无感染筛查日期时取胸片检查日期年份 */
+    /** 年度筛选兜底：year 字段为空时，按感染筛查日期或胸片检查日期年份匹配 */
     private static final String SCREEN_YEAR_SQL_EXPR =
             "((screen_date IS NOT NULL AND YEAR(screen_date) = {0})"
                     + " OR (screen_date IS NULL AND chest_xray_date IS NOT NULL AND YEAR(chest_xray_date) = {0}))";
@@ -306,15 +306,22 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         return page(new Page<>(page, size), wrapper);
     }
 
-    /** 年度筛选：优先感染筛查日期，无则取胸片检查日期 */
+    /** 年度筛选：优先匹配 Excel「年度/年份」列，无年度字段时按筛查日期兜底 */
     private void applyScreenYearFilter(LambdaQueryWrapper<ScreeningSchool> wrapper, String year) {
         if (StrUtil.isBlank(year)) {
             return;
         }
+        String trimmed = year.trim();
         try {
-            wrapper.apply(SCREEN_YEAR_SQL_EXPR, Integer.parseInt(year.trim()));
+            int yearInt = Integer.parseInt(trimmed);
+            wrapper.and(w -> w.eq(ScreeningSchool::getYear, trimmed)
+                    .or().apply("LEFT(TRIM(year), 4) = {0}", trimmed)
+                    .or(nested -> nested.and(emptyYear -> emptyYear.isNull(ScreeningSchool::getYear)
+                            .or().eq(ScreeningSchool::getYear, ""))
+                            .apply(SCREEN_YEAR_SQL_EXPR, yearInt)));
         } catch (NumberFormatException ignored) {
-            wrapper.eq(ScreeningSchool::getId, -1L);
+            wrapper.and(w -> w.eq(ScreeningSchool::getYear, trimmed)
+                    .or().apply("LEFT(TRIM(year), 4) = {0}", trimmed));
         }
     }
 
@@ -372,37 +379,13 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
     }
 
-    private boolean isPositive(String infectionResult) {
-        if (StrUtil.isBlank(infectionResult)) return false;
-        return POSITIVE_KEYWORDS.stream().anyMatch(infectionResult::contains);
-    }
-
-    /**
-     * 是否应进入潜伏/待诊断流程。
-     * 感染阳性、胸片+诊断、或诊断结果为疑似/潜伏/确诊时均标记为潜伏管理者。
-     * 排除/其他仅在有感染阳性时进入（由 isPositive 覆盖）。
-     */
     private boolean shouldMarkLatent(ScreeningSchool data) {
         if (data == null) return false;
-        if (isPositive(data.getInfectionResult())) return true;
-        if (hasDirectXrayAndDiagnosis(data)) return true;
-        String diagnosis = data.getDiagnosisFirst();
-        if (StrUtil.isBlank(diagnosis)) return false;
-        return switch (diagnosis) {
-            case "疑似肺结核", "潜伏感染者", "确诊患者" -> true;
-            default -> false;
-        };
-    }
-
-    /**
-     * 判断是否包含可直接同步的胸片检查与诊断数据。
-     * 感染筛查阴性 + 胸片正常时直接结束流程，不进入待诊断。
-     */
-    private boolean hasDirectXrayAndDiagnosis(ScreeningSchool data) {
-        if (!isPositive(data.getInfectionResult()) && "正常".equals(data.getChestXrayResult())) {
-            return false;
-        }
-        return "是".equals(data.getHasChestXray()) && StrUtil.isNotBlank(data.getDiagnosisFirst());
+        return ScreeningDiagnosisSupport.shouldMarkLatent(
+                data.getInfectionResult(),
+                data.getChestXrayResult(),
+                data.getHasChestXray(),
+                data.getDiagnosisFirst());
     }
 
     /** 诊断结果写入潜伏表；疑似肺结核由分流逻辑保留在待诊断，不再归档。 */
@@ -485,7 +468,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     private ScreeningSchool mapSchoolRow(Map<Integer, String> row, Map<String, Integer> headerIndex) {
         ScreeningSchool data = new ScreeningSchool();
-        data.setYear(field(row, headerIndex, "年份", "年度"));
+        data.setYear(normalizeYearValue(field(row, headerIndex, "年份", "年度")));
         data.setCity(field(row, headerIndex, "市州"));
         data.setDistrict(field(row, headerIndex, "县市区", "区县"));
         data.setName(field(row, headerIndex, "姓名"));
@@ -572,6 +555,16 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             }
         }
         return text;
+    }
+
+    /** 统一年度字段：兼容 Excel 数值型（2026.0）、带后缀（2026年）等格式 */
+    private String normalizeYearValue(String value) {
+        String text = normalizeExcelCellText(value);
+        if (StrUtil.isBlank(text)) {
+            return "";
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{4})").matcher(text);
+        return matcher.find() ? matcher.group(1) : text;
     }
 
     /** 18位身份证格式 + 校验位验证 */

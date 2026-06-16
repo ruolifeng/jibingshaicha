@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 /**
- * 密接个案表（电子表格，73列模板与密接筛查表一致，独立存储不含流程状态）
+ * 密接个案表（电子表格，72列模板与密接筛查表一致，独立存储不含流程状态）
  */
 @Data
 @Builder
@@ -43,212 +43,213 @@ public class CloseContactCase extends BaseEntity {
     @ExcelProperty(index = 5)
     private String sourcePatientPhone;
 
-    @ExcelProperty(index = 6)
+    /** 原患者身份证号（已从 Excel 模板移除，仅数据库历史字段） */
+    @ExcelIgnore
     private String sourcePatientIdNumber;
 
-    @ExcelProperty(index = 7, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 6, converter = FlexibleLocalDateConverter.class)
     private LocalDate reportDate;
 
-    @ExcelProperty(index = 8, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 7, converter = FlexibleLocalDateConverter.class)
     private LocalDate registrationDate;
 
     /** 报表填报季度（Excel 自动生成列，仅导入/导出占位） */
     @TableField(exist = false)
-    @ExcelProperty(index = 9)
+    @ExcelProperty(index = 8)
     private String reportQuarter;
 
     /** 登记日期至当前日期间隔提示（Excel 自动生成列，仅导入/导出占位） */
     @TableField(exist = false)
-    @ExcelProperty(index = 10)
+    @ExcelProperty(index = 9)
     private String registrationIntervalHint;
 
-    @ExcelProperty(index = 11)
+    @ExcelProperty(index = 10)
     private String name;
 
-    @ExcelProperty(index = 12)
+    @ExcelProperty(index = 11)
     private String idNumber;
 
-    @ExcelProperty(index = 13, converter = FlexibleIntegerConverter.class)
+    @ExcelProperty(index = 12, converter = FlexibleIntegerConverter.class)
     private Integer age;
 
     /** 年龄组（Excel 自动判断列，仅导入/导出占位） */
     @TableField(exist = false)
-    @ExcelProperty(index = 14)
+    @ExcelProperty(index = 13)
     private String ageGroup;
 
-    @ExcelProperty(index = 15)
+    @ExcelProperty(index = 14)
     private String phone;
 
-    @ExcelProperty(index = 16)
+    @ExcelProperty(index = 15)
     private String contactType;
 
-    @ExcelProperty(index = 17)
+    @ExcelProperty(index = 16)
     private String contactPlace;
 
-    @ExcelProperty(index = 18, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 17, converter = FlexibleLocalDateConverter.class)
     private LocalDate firstScreenDate;
 
-    @ExcelProperty(index = 19)
+    @ExcelProperty(index = 18)
     private String symptom1;
 
-    @ExcelProperty(index = 20)
+    @ExcelProperty(index = 19)
     private String symptom2;
 
-    @ExcelProperty(index = 21, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 20, converter = FlexibleLocalDateConverter.class)
     private LocalDate infectionCheckDate;
 
-    @ExcelProperty(index = 22)
+    @ExcelProperty(index = 21)
     private String infectionCheckMethod;
 
-    @ExcelProperty(index = 23)
+    @ExcelProperty(index = 22)
     private String infectionCheckResult;
 
-    @ExcelProperty(index = 24, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 23, converter = FlexibleLocalDateConverter.class)
     private LocalDate imagingDate;
 
-    @ExcelProperty(index = 25)
+    @ExcelProperty(index = 24)
     private String imagingMethod;
 
-    @ExcelProperty(index = 26)
+    @ExcelProperty(index = 25)
     private String imagingResult;
 
-    @ExcelProperty(index = 27, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 26, converter = FlexibleLocalDateConverter.class)
     private LocalDate sputumCheckDate;
 
-    @ExcelProperty(index = 28)
+    @ExcelProperty(index = 27)
     private String sputumCheckMethod;
 
-    @ExcelProperty(index = 29)
+    @ExcelProperty(index = 28)
     private String sputumCheckResult;
 
     /** 诊断结果（AE列）：活动性肺结核/潜伏感染者/未做/未发现异常 */
-    @ExcelProperty(index = 30)
+    @ExcelProperty(index = 29)
     private String finalScreeningResult;
 
-    @ExcelProperty(index = 31)
+    @ExcelProperty(index = 30)
     private String hasContraindication;
 
-    @ExcelProperty(index = 32)
+    @ExcelProperty(index = 31)
     private String noTreatmentReason;
 
-    @ExcelProperty(index = 33)
+    @ExcelProperty(index = 32)
     private String contraindicationRemark;
 
-    @ExcelProperty(index = 34)
+    @ExcelProperty(index = 33)
     private String hasPreventiveTreatment;
 
-    @ExcelProperty(index = 35)
+    @ExcelProperty(index = 34)
     private String preventivePlan;
 
-    @ExcelProperty(index = 36)
+    @ExcelProperty(index = 35)
     private String preventivePlanRemark;
 
-    @ExcelProperty(index = 37)
+    @ExcelProperty(index = 36)
     private String treatmentCompleted;
 
-    @ExcelProperty(index = 38)
+    @ExcelProperty(index = 37)
     private String incompleteReason;
 
-    @ExcelProperty(index = 39, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 38, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup6DueDate;
 
-    @ExcelProperty(index = 40, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 39, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup6ScreenDate;
 
-    @ExcelProperty(index = 41)
+    @ExcelProperty(index = 40)
     private String followup6Symptom1;
 
-    @ExcelProperty(index = 42)
+    @ExcelProperty(index = 41)
     private String followup6Symptom2;
 
-    @ExcelProperty(index = 43, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 42, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup6ImagingDate;
 
-    @ExcelProperty(index = 44)
+    @ExcelProperty(index = 43)
     private String followup6ImagingMethod;
 
-    @ExcelProperty(index = 45)
+    @ExcelProperty(index = 44)
     private String followup6ImagingResult;
 
-    @ExcelProperty(index = 46, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 45, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup6SputumDate;
 
-    @ExcelProperty(index = 47)
+    @ExcelProperty(index = 46)
     private String followup6SputumMethod;
 
-    @ExcelProperty(index = 48)
+    @ExcelProperty(index = 47)
     private String followup6SputumResult;
 
-    @ExcelProperty(index = 49)
+    @ExcelProperty(index = 48)
     private String followup6Result;
 
-    @ExcelProperty(index = 50, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 49, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup12DueDate;
 
-    @ExcelProperty(index = 51, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 50, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup12ScreenDate;
 
-    @ExcelProperty(index = 52)
+    @ExcelProperty(index = 51)
     private String followup12Symptom1;
 
-    @ExcelProperty(index = 53)
+    @ExcelProperty(index = 52)
     private String followup12Symptom2;
 
-    @ExcelProperty(index = 54, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 53, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup12ImagingDate;
 
-    @ExcelProperty(index = 55)
+    @ExcelProperty(index = 54)
     private String followup12ImagingMethod;
 
-    @ExcelProperty(index = 56)
+    @ExcelProperty(index = 55)
     private String followup12ImagingResult;
 
-    @ExcelProperty(index = 57, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 56, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup12SputumDate;
 
-    @ExcelProperty(index = 58)
+    @ExcelProperty(index = 57)
     private String followup12SputumMethod;
 
-    @ExcelProperty(index = 59)
+    @ExcelProperty(index = 58)
     private String followup12SputumResult;
 
-    @ExcelProperty(index = 60)
+    @ExcelProperty(index = 59)
     private String followup12Result;
 
-    @ExcelProperty(index = 61, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 60, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup24DueDate;
 
-    @ExcelProperty(index = 62, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 61, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup24ScreenDate;
 
-    @ExcelProperty(index = 63)
+    @ExcelProperty(index = 62)
     private String followup24Symptom1;
 
-    @ExcelProperty(index = 64)
+    @ExcelProperty(index = 63)
     private String followup24Symptom2;
 
-    @ExcelProperty(index = 65, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 64, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup24ImagingDate;
 
-    @ExcelProperty(index = 66)
+    @ExcelProperty(index = 65)
     private String followup24ImagingMethod;
 
-    @ExcelProperty(index = 67)
+    @ExcelProperty(index = 66)
     private String followup24ImagingResult;
 
-    @ExcelProperty(index = 68, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 67, converter = FlexibleLocalDateConverter.class)
     private LocalDate followup24SputumDate;
 
-    @ExcelProperty(index = 69)
+    @ExcelProperty(index = 68)
     private String followup24SputumMethod;
 
-    @ExcelProperty(index = 70)
+    @ExcelProperty(index = 69)
     private String followup24SputumResult;
 
-    @ExcelProperty(index = 71)
+    @ExcelProperty(index = 70)
     private String followup24Result;
 
-    @ExcelProperty(index = 72)
+    @ExcelProperty(index = 71)
     private String remark;
 
     @ExcelIgnore

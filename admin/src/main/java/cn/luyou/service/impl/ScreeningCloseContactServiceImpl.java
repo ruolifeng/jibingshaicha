@@ -24,6 +24,7 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -50,7 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * 密接人群筛查 Service（新模板73列，基于 finalScreeningResult 分类）
+ * 密接人群筛查 Service（新模板72列，基于 finalScreeningResult 分类）
  *
  * 分类规则（AE列 = final_screening_result）：
  *  - 活动性肺结核  → ccStatus=1，标红结案（不进入患者管理）
@@ -97,10 +98,22 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         String batchId = IdUtil.fastSimpleUUID();
         List<ScreeningCloseContact> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
-        AtomicInteger rowNum = new AtomicInteger(3); // 数据从第3行（跳过2行表头+示例）
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+        }
+        int headRowNumber;
+        try {
+            headRowNumber = CloseContactCaseExcelSupport.resolveHeadRowNumber(fileBytes);
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+        }
+        AtomicInteger rowNum = new AtomicInteger(headRowNumber + 1);
 
         try {
-            EasyExcel.read(file.getInputStream(), ScreeningCloseContact.class, new ReadListener<ScreeningCloseContact>() {
+            EasyExcel.read(new java.io.ByteArrayInputStream(fileBytes), ScreeningCloseContact.class, new ReadListener<ScreeningCloseContact>() {
                 @Override
                 public void invoke(ScreeningCloseContact data, AnalysisContext context) {
                     int row = rowNum.getAndIncrement();
@@ -123,12 +136,11 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     log.info("密接人群筛查数据解析完成，共 {} 条", dataList.size());
                 }
-            }).sheet().headRowNumber(2).doRead();
-        } catch (IOException e) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+            }).sheet().headRowNumber(headRowNumber).doRead();
         } catch (Exception e) {
             log.error("密接筛查 Excel 解析失败", e);
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel解析失败，请确认使用系统模板（前两行为表头）: " + e.getMessage());
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "Excel解析失败，请使用系统导出的模板或标准密接表（含表头）: " + e.getMessage());
         }
 
         if (dataList.isEmpty()) {

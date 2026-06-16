@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 密接个案表 / 密接筛查 73 列 Excel 表头（与「密接测试数据.xlsx」第 1 行一致）。
+ * 密接个案表 / 密接筛查 72 列 Excel 表头（已移除原患者身份证号列）。
  */
 public final class CloseContactCaseExcelHeaders {
 
@@ -19,7 +19,6 @@ public final class CloseContactCaseExcelHeaders {
             "病案号",
             "病原学结果",
             "患者电话",
-            "患者身份证号",
             "填表日期（填写yyyy/mm/dd格式）",
             "密切接触者登记日期（填写yyyy/mm/dd格式）",
             "报表填报季度（自动生成）",

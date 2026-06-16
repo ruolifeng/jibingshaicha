@@ -18,6 +18,10 @@ declare module "vue-router" {
      */
     tagTitle?: string
     /**
+     * @description 父级路由在标签页中的简称前缀，自动拼接为「前缀-子菜单」
+     */
+    tagTitlePrefix?: string
+    /**
      * @description 设置该路由的图标，记得将 svg 导入 src/common/assets/icons
      */
     svgIcon?: SvgName

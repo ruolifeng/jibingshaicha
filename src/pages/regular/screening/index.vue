@@ -432,7 +432,7 @@ watch(
         <el-table-column prop="appetiteLoss" label="食欲不振" />
         <el-table-column prop="fatigue" label="乏力" />
         <el-table-column prop="weightLoss" label="体重减轻" />
-        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" />
+        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
         <el-table-column prop="screenDate" label="感染筛查日期" />
         <el-table-column prop="screenMethod" label="筛查方法" />
         <el-table-column label="筛查结果">
@@ -441,9 +441,9 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="首次（是否胸片）" />
-        <el-table-column prop="chestXrayDate" label="胸片检查日期" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" />
+        <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
+        <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
+        <el-table-column prop="chestXrayResult" label="胸片结果" min-width="90" />
         <el-table-column prop="diagnosisFirst" label="首次诊断结果" />
         <!-- 预防性治疗情况（督导表归档后同步） -->
         <el-table-column prop="preventivePlan" label="预防性治疗方案" />
@@ -451,7 +451,7 @@ watch(
         <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
         <el-table-column prop="preventiveResult" label="治疗结果" />
         <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
-        <el-table-column label="待确诊" fixed="right">
+        <el-table-column label="待确诊" fixed="right" min-width="90">
           <template #default="{ row }">
             <el-tag :type="getScreeningLatentStatusTagType(row)" size="small">
               {{ getScreeningLatentStatusLabel(row) }}
@@ -459,7 +459,7 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" min-width="200">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">
               查看详情

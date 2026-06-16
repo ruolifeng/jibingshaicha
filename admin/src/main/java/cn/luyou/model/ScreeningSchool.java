@@ -103,7 +103,7 @@ public class ScreeningSchool extends BaseEntity {
     private String infectionResult;
 
     // ===== 胸片、病原学与诊断（Z-AE，index 25-30）：支持 Excel 直接导入 =====
-    @ExcelProperty(value = "是否胸片检查", index = 25)
+    @ExcelProperty(value = "是否进行胸片检查", index = 25)
     private String hasChestXray;
     @ExcelProperty(value = "胸片检查日期", index = 26, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;

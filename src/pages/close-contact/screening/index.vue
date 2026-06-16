@@ -246,7 +246,6 @@ function getEmptyEditForm() {
     district: "",
     sourcePatientName: "",
     sourcePatientCaseNo: "",
-    sourcePatientIdNumber: "",
     sourcePatientPhone: "",
     name: "",
     idNumber: "",
@@ -581,8 +580,8 @@ async function handleThreeMonthSubmit() {
 
       <div class="table-scroll-wrap">
         <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
-          <el-table-column type="selection" width="48" fixed />
-          <el-table-column prop="name" label="接触者姓名" min-width="100" fixed show-overflow-tooltip />
+          <el-table-column type="selection" width="40" fixed />
+          <el-table-column prop="name" label="接触者姓名" min-width="90" show-overflow-tooltip />
           <el-table-column prop="idNumber" label="接触者身份证号" min-width="180" show-overflow-tooltip />
           <el-table-column prop="age" label="年龄" width="70" />
           <el-table-column prop="phone" label="联系电话" min-width="120" show-overflow-tooltip />
@@ -624,7 +623,7 @@ async function handleThreeMonthSubmit() {
               <span v-else class="text-gray-400">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="最终筛查结果" min-width="130" fixed="right">
+          <el-table-column label="最终筛查结果" min-width="110">
             <template #default="{ row }">
               <el-tag
                 v-if="formatFinalScreeningDisplay(row.finalScreeningResult, row.finalScreeningResultOther)"
@@ -636,14 +635,14 @@ async function handleThreeMonthSubmit() {
               <span v-else class="text-gray-400">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="流程状态" min-width="140" fixed="right" show-overflow-tooltip>
+          <el-table-column label="流程状态" min-width="110" show-overflow-tooltip>
             <template #default="{ row }">
               <el-tag v-if="CC_STATUS_MAP[row.ccStatus]" :type="tagType(CC_STATUS_MAP[row.ccStatus].type)" size="small">
                 {{ CC_STATUS_MAP[row.ccStatus].label }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" min-width="240" fixed="right">
+          <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link size="small" @click="viewDetail(row)">
                 详情
@@ -703,11 +702,6 @@ async function handleThreeMonthSubmit() {
               <el-col :span="8">
                 <el-form-item label="原患者姓名">
                   <el-input v-model="editForm.sourcePatientName" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="原患者身份证号">
-                  <el-input v-model="editForm.sourcePatientIdNumber" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -978,9 +972,6 @@ async function handleThreeMonthSubmit() {
             </el-descriptions-item>
             <el-descriptions-item label="原患者姓名">
               {{ detailRow.sourcePatientName }}
-            </el-descriptions-item>
-            <el-descriptions-item label="原患者身份证号">
-              {{ detailRow.sourcePatientIdNumber }}
             </el-descriptions-item>
             <el-descriptions-item label="密接登记日期">
               {{ detailRow.registrationDate }}

@@ -8,7 +8,8 @@ const templateDownloading = ref<string | null>(null)
 const TEMPLATE_OPTIONS = [
   { label: "学生筛查数据模板", type: "school" },
   { label: "重点人群筛查数据模板", type: "keyPopulation" },
-  { label: "疫情筛查数据模板", type: "regular" }
+  { label: "疫情筛查数据模板", type: "regular" },
+  { label: "密接个案表模板", type: "closeContactCase" }
 ]
 
 async function handleDownloadTemplate(type: string, label: string) {
@@ -195,7 +196,7 @@ async function handleDownload() {
       <el-alert
         type="info"
         :closable="false"
-        title="用于筛查数据上传前的异常识别：系统会校验特殊字段并将异常单元格标黄，同时新增“异常原因”列，方便导出后筛选修正。"
+        title="用于筛查数据上传前的异常识别：密接人群请选择「密接人群」类型，并上传系统 72 列密接个案表模板（已不含原患者身份证号）。系统会校验特殊字段并将异常单元格标黄，同时新增「异常原因」列。"
         class="mb-4"
       />
 

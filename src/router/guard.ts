@@ -1,6 +1,7 @@
 import type { Router } from "vue-router"
 import { setRouteChange } from "@@/composables/useRouteListener"
 import { useTitle } from "@@/composables/useTitle"
+import { resolveRouteTagTitle } from "@@/utils/route-tag-title"
 import { getToken } from "@@/utils/cache/cookies"
 import NProgress from "nprogress"
 import { usePermissionStore } from "@/pinia/stores/permission"
@@ -71,7 +72,7 @@ export function registerNavigationGuard(router: Router) {
   // 全局后置钩子
   router.afterEach((to) => {
     setRouteChange(to)
-    setTitle(to.meta.title)
+    setTitle(resolveRouteTagTitle(to))
     NProgress.done()
   })
 }

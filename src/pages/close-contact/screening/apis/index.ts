@@ -1,6 +1,6 @@
 import { request } from "@/http/axios"
 
-/** 上传密接人群筛查 Excel（新73列模板） */
+/** 上传密接人群筛查 Excel（新72列模板） */
 export function uploadScreeningCloseContactApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)

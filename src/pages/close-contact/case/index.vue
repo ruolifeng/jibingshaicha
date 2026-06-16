@@ -176,7 +176,6 @@ function getEmptyEditForm() {
     district: "",
     sourcePatientName: "",
     sourcePatientCaseNo: "",
-    sourcePatientIdNumber: "",
     sourcePatientPhone: "",
     name: "",
     idNumber: "",
@@ -393,7 +392,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           @checkbox-change="handleCheckboxChange"
           @checkbox-all="handleCheckboxChange"
         >
-          <vxe-column type="checkbox" width="48" fixed="left" />
+          <vxe-column type="checkbox" width="40" fixed="left" />
           <vxe-column
             v-for="col in previewColumns"
             :key="col.field"
@@ -409,7 +408,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
               <span v-else class="text-gray-400">—</span>
             </template>
           </vxe-column>
-          <vxe-column title="操作" width="180" fixed="right">
+          <vxe-column title="操作" width="140" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link size="small" @click="viewDetail(row)">
                 详情
@@ -457,11 +456,6 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
               <el-col :span="8">
                 <el-form-item label="原患者姓名">
                   <el-input v-model="editForm.sourcePatientName" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="原患者身份证号">
-                  <el-input v-model="editForm.sourcePatientIdNumber" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -638,9 +632,6 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         </el-descriptions-item>
         <el-descriptions-item label="原患者姓名">
           {{ detailRow.sourcePatientName }}
-        </el-descriptions-item>
-        <el-descriptions-item label="原患者身份证号">
-          {{ detailRow.sourcePatientIdNumber }}
         </el-descriptions-item>
         <el-descriptions-item label="密接登记日期">
           {{ detailRow.registrationDate }}

@@ -1,4 +1,4 @@
-/** 密接个案表 — 线上预览列定义（与73列Excel模板字段对应） */
+/** 密接个案表 — 线上预览列定义（与72列Excel模板字段对应） */
 export interface CloseContactCaseColumn {
   field: string
   title: string
@@ -15,16 +15,15 @@ export const DIAGNOSIS_RESULT_OPTIONS = [
 
 /** 电子表格预览列（横向滚动展示全部字段） */
 export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
-  { field: "creatorUsername", title: "录入用户", width: 110, fixed: "left" },
-  { field: "name", title: "接触者姓名", width: 100, fixed: "left" },
-  { field: "idNumber", title: "接触者身份证号", width: 180, fixed: "left" },
+  { field: "creatorUsername", title: "录入用户", width: 90 },
+  { field: "name", title: "接触者姓名", width: 90 },
+  { field: "idNumber", title: "接触者身份证号", width: 160 },
   { field: "city", title: "市/州", width: 100 },
   { field: "district", title: "区/县", width: 100 },
   { field: "sourcePatientName", title: "原患者姓名", width: 110 },
   { field: "sourcePatientCaseNo", title: "原患者病案号", width: 120 },
   { field: "sourcePatientBacteriologyResult", title: "原患者病原学结果", width: 140 },
   { field: "sourcePatientPhone", title: "原患者电话", width: 120 },
-  { field: "sourcePatientIdNumber", title: "原患者身份证号", width: 180 },
   { field: "reportDate", title: "填表日期", width: 110 },
   { field: "registrationDate", title: "密接登记日期", width: 120 },
   { field: "age", title: "年龄", width: 70 },

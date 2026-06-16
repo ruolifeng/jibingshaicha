@@ -74,7 +74,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "ScreeningStudent",
         meta: {
           title: "学生人群",
-          tagTitle: "学生人群",
           keepAlive: true,
           anyPermission: ["school:screening", "school:suspected"]
         }
@@ -85,7 +84,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "ScreeningKeyPopulation",
         meta: {
           title: "重点人群",
-          tagTitle: "重点人群",
           keepAlive: true,
           anyPermission: ["keyPopulation:screening", "keyPopulation:suspected"]
         }
@@ -96,7 +94,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "ScreeningRegular",
         meta: {
           title: "疫情筛查",
-          tagTitle: "疫情筛查",
           keepAlive: true,
           anyPermission: ["regular:screening", "regular:suspected"]
         }

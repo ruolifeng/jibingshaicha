@@ -71,6 +71,11 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /** 对导入时已包含首次诊断的潜伏感染记录进行自动分流处理。 */
     void autoReferralForDirectDiagnosis(List<LatentInfection> latents);
 
+    /**
+     * 筛查记录不再需进入待诊断时，归档误创建的待处理潜伏记录（重新导入时调用）。
+     */
+    void archivePendingLatentFromScreening(Long screeningId, String populationType, String diagnosisFirst);
+
     /** 查询潜伏感染详情（含筛查回填字段） */
     LatentInfection getDetail(Long id);
 
