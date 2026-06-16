@@ -30,4 +30,7 @@ public interface ReferralService extends IService<Referral> {
 
     /** 当前用户已发送的分级诊疗分页列表 */
     IPage<SentReferralVO> sentPage(Long senderId, int pageNum, int size);
+
+    /** 删除业务关联的转出记录及消息（超级管理员强制删患者等场景） */
+    void deleteReferralsAndMessagesByBizId(Long bizId);
 }

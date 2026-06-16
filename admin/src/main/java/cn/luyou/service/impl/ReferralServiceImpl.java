@@ -105,7 +105,8 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已拒绝，不可再确认");
         }
         Long currentUserId = BaseContext.getCurrentId();
-        if (referral.getReceiverOrgId() != null && currentUserId != null
+        if (!BaseContext.isSuperAdmin()
+                && referral.getReceiverOrgId() != null && currentUserId != null
                 && !referral.getReceiverOrgId().equals(currentUserId)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅接收方可确认");
         }
@@ -439,5 +440,24 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
                     String.format("【%s - %s】%s，您已拒绝转出。",
                             popLabel, moduleLabel, referral.getSubjectName()));
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteReferralsAndMessagesByBizId(Long bizId) {
+        if (bizId == null) {
+            return;
+        }
+        List<Long> referralIds = lambdaQuery()
+                .eq(Referral::getBizId, bizId)
+                .list()
+                .stream()
+                .map(Referral::getId)
+                .toList();
+        if (referralIds.isEmpty()) {
+            return;
+        }
+        sysMessageService.lambdaUpdate().in(cn.luyou.model.SysMessage::getBizId, referralIds).remove();
+        lambdaUpdate().eq(Referral::getBizId, bizId).remove();
     }
 }

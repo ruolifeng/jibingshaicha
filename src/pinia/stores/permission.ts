@@ -32,6 +32,10 @@ function filterRoutes(routes: RouteRecordRaw[], roles: string[]) {
     if (hasPermission(roles, tempRoute) && hasMenuPermission(tempRoute)) {
       if (tempRoute.children) {
         tempRoute.children = filterRoutes(tempRoute.children, roles)
+        // 父级菜单下无任何可见子项时不展示（避免空「系统管理」）
+        if (tempRoute.children.length === 0) {
+          return
+        }
       }
       res.push(tempRoute)
     }

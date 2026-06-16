@@ -3067,3 +3067,18 @@ SET `diagnosis_result` = NULL,
     `archived` = 0,
     `archived_time` = NULL
 WHERE `diagnosis_result` = '疑似肺结核';
+
+-- ==================== V75：一至四级用户默认可访问部门管理（见 migration/V75_system_department_roles.sql） ====================
+-- 一至四级（role=2~5）获得部门管理菜单权限（父菜单 anyPermission 已含 system:department，无需额外授予 system）
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) r
+CROSS JOIN `permission` p
+WHERE p.code = 'system:department';
+
+-- ==================== V76：一至五级用户部门管理权限补全（见 migration/V76_system_department_all_levels.sql） ====================
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
+CROSS JOIN `permission` p
+WHERE p.code = 'system:department';

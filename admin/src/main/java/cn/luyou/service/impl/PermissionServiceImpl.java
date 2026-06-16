@@ -96,8 +96,9 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
                 new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRole, role)
         );
         List<Long> sanitizedIds = sanitizeLevel5Pickup(role, permissionIds);
-        if (sanitizedIds != null && !sanitizedIds.isEmpty()) {
-            List<RolePermission> records = sanitizedIds.stream()
+        List<Long> expandedIds = expandAncestorPermissionIds(sanitizedIds);
+        if (expandedIds != null && !expandedIds.isEmpty()) {
+            List<RolePermission> records = expandedIds.stream()
                     .map(pid -> RolePermission.builder().role(role).permissionId(pid).build())
                     .toList();
             for (RolePermission rp : records) {
@@ -127,8 +128,9 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         User user = userId == null ? null : userMapper.selectById(userId);
         int role = user != null && user.getRole() != null ? user.getRole() : 0;
         List<Long> sanitizedIds = sanitizeLevel5Pickup(role, permissionIds);
-        if (sanitizedIds != null && !sanitizedIds.isEmpty()) {
-            for (Long pid : sanitizedIds) {
+        List<Long> expandedIds = expandAncestorPermissionIds(sanitizedIds);
+        if (expandedIds != null && !expandedIds.isEmpty()) {
+            for (Long pid : expandedIds) {
                 userPermissionMapper.insert(UserPermission.builder()
                         .userId(userId)
                         .permissionId(pid)
@@ -157,6 +159,7 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
                 list(w).stream().map(Permission::getCode).forEach(codes::add);
             }
         }
+        expandAncestorPermissionCodes(codes);
         return new ArrayList<>(codes);
     }
 
@@ -197,5 +200,53 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
                 .eq(Permission::getCode, PICKUP_PERMISSION_CODE)
                 .last("LIMIT 1"));
         return pickup == null ? null : pickup.getId();
+    }
+
+    /** 保存权限时自动补全祖先节点，避免仅勾选子菜单时父级权限码缺失 */
+    private List<Long> expandAncestorPermissionIds(List<Long> permissionIds) {
+        if (permissionIds == null || permissionIds.isEmpty()) {
+            return permissionIds;
+        }
+        List<Permission> all = list();
+        Map<Long, Permission> byId = all.stream()
+                .collect(Collectors.toMap(Permission::getId, p -> p, (a, b) -> a));
+        LinkedHashSet<Long> expanded = new LinkedHashSet<>(permissionIds);
+        for (Long id : permissionIds) {
+            Permission current = byId.get(id);
+            while (current != null && current.getParentId() != null && current.getParentId() > 0) {
+                Long parentId = current.getParentId();
+                if (!expanded.add(parentId)) {
+                    current = byId.get(parentId);
+                    continue;
+                }
+                current = byId.get(parentId);
+            }
+        }
+        return new ArrayList<>(expanded);
+    }
+
+    /** 生效权限码补全祖先菜单码（如勾选部门管理时同时带上 system） */
+    private void expandAncestorPermissionCodes(LinkedHashSet<String> codes) {
+        if (codes.isEmpty()) {
+            return;
+        }
+        List<Permission> all = list();
+        Map<String, Permission> byCode = all.stream()
+                .collect(Collectors.toMap(Permission::getCode, p -> p, (a, b) -> a));
+        Map<Long, Permission> byId = all.stream()
+                .collect(Collectors.toMap(Permission::getId, p -> p, (a, b) -> a));
+        LinkedHashSet<String> ancestors = new LinkedHashSet<>();
+        for (String code : codes) {
+            Permission current = byCode.get(code);
+            while (current != null && current.getParentId() != null && current.getParentId() > 0) {
+                Permission parent = byId.get(current.getParentId());
+                if (parent == null || parent.getCode() == null) {
+                    break;
+                }
+                ancestors.add(parent.getCode());
+                current = parent;
+            }
+        }
+        codes.addAll(ancestors);
     }
 }

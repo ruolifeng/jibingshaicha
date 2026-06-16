@@ -341,15 +341,8 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "数据清洗", elIcon: "MagicStick", permission: "dataCleaning" }
       }
     ]
-  }
-]
-
-/**
- * @name 动态路由
- * @description 用来放置有权限 (Roles 属性) 的路由
- * @description 必须带有唯一的 Name 属性
- */
-export const dynamicRoutes: RouteRecordRaw[] = [
+  },
+  // ==================== 系统管理（与其它菜单一致放在常驻路由，由 permission 控制侧栏与守卫） ====================
   {
     path: "/system",
     component: Layouts,
@@ -357,8 +350,6 @@ export const dynamicRoutes: RouteRecordRaw[] = [
     meta: {
       title: "系统管理",
       elIcon: "Setting",
-      // roles 限制移至各子路由，父路由仅通过 permission 码控制可见性
-      // 一二级用户拥有 system 权限后可见此菜单（仅展示其有权访问的子项）
       anyPermission: [
         "system",
         "system:users",
@@ -367,7 +358,9 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         "user:delete",
         "system:department",
         "system:permissions",
-        "permission:assign"
+        "permission:assign",
+        "system:operationLog",
+        "system:backup"
       ]
     },
     children: [
@@ -381,13 +374,12 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         path: "department",
         component: () => import("@/pages/system/department/index.vue"),
         name: "SystemDepartment",
-        meta: { title: "部门管理", roles: ["admin"], permission: "system:department" }
+        meta: { title: "部门管理", permission: "system:department" }
       },
       {
         path: "permissions",
         component: () => import("@/pages/system/permissions.vue"),
         name: "SystemPermissions",
-        // 不设 roles 限制，由 permission 码控制：一二级用户拥有 system:permissions 权限即可访问
         meta: { title: "权限管理", anyPermission: ["system:permissions", "permission:assign"] }
       },
       {
@@ -400,12 +392,18 @@ export const dynamicRoutes: RouteRecordRaw[] = [
         path: "operation-log",
         component: () => import("@/pages/system/operation-log.vue"),
         name: "SystemOperationLog",
-        // 不设 roles，由 permission 码控制可见性（一/二级用户也可访问）
         meta: { title: "操作日志", permission: "system:operationLog" }
       }
     ]
   }
 ]
+
+/**
+ * @name 动态路由
+ * @description 用来放置有权限 (Roles 属性) 的路由
+ * @description 必须带有唯一的 Name 属性
+ */
+export const dynamicRoutes: RouteRecordRaw[] = []
 
 /** 路由实例 */
 export const router = createRouter({

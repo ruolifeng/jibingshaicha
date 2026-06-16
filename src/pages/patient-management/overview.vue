@@ -5,10 +5,15 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
-import { isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass, isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
+import { isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass, isPatientTransferLocked, isPatientTransferPending, getPatientTransferStatusLabel } from "@@/utils/patient"
+import { confirmReferralApi, getReferralListApi } from "@@/apis/referral"
+import { useUserStore } from "@/pinia/stores/user"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
+
+const userStore = useUserStore()
+const isSuperAdmin = computed(() => userStore.userRole === 1)
 
 const {
   paginationData,
@@ -89,15 +94,19 @@ async function handleExport() {
 
 async function handleBatchDelete() {
   if (!selectedRows.value.length) return
-  if (selectedRows.value.some(r => isPatientTransferLocked(r))) {
+  const hasLocked = selectedRows.value.some(r => isPatientTransferLocked(r))
+  if (hasLocked && !isSuperAdmin.value) {
     ElMessage.warning("选中记录包含已转出或转出待确认的患者，不可删除")
     return
   }
   const names = selectedRows.value.map(r => r.name).join("、")
+  const forceTip = hasLocked && isSuperAdmin.value
+    ? "选中含转出待确认/已转出记录，超级管理员强制删除将一并清理关联转出数据。"
+    : ""
   try {
     await ElMessageBox.confirm(
-      `确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、随访、服药等数据将一并删除，且不可恢复！`,
-      "警告",
+      `${forceTip}确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、随访、服药等数据将一并删除，且不可恢复！`,
+      hasLocked ? "超级管理员强制删除" : "警告",
       { type: "warning" }
     )
     await batchDeletePatientsApi(selectedRows.value.map(r => r.id))
@@ -147,6 +156,28 @@ async function handleImport(uploadFile: any) {
     ElMessage.error("导入失败")
   } finally {
     importing.value = false
+  }
+}
+
+async function handleAdminConfirmTransfer(row: any) {
+  if (!isPatientTransferPending(row)) return
+  try {
+    const { data } = await getReferralListApi(row.id, "patient_aggregate")
+    const pending = (data ?? []).find((r: { status: number }) => r.status === 1)
+    if (!pending) {
+      ElMessage.warning("未找到待确认的转出记录")
+      return
+    }
+    await ElMessageBox.confirm(
+      `确定代接收方确认接收患者「${row.name}」的转出信息吗？确认后将复制患者数据至接收方并在本机构标记为已转出。`,
+      "代确认接收转出",
+      { type: "warning" }
+    )
+    await confirmReferralApi(pending.id)
+    ElMessage.success("已代接收方确认转出")
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("代确认失败")
   }
 }
 </script>
@@ -335,6 +366,15 @@ async function handleImport(uploadFile: any) {
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="openDetail(row)">
               查看详情
+            </el-button>
+            <el-button
+              v-if="isSuperAdmin && isPatientTransferPending(row)"
+              type="success"
+              link
+              size="small"
+              @click="handleAdminConfirmTransfer(row)"
+            >
+              代确认接收
             </el-button>
             <el-button
               v-if="!isPatientTransferLocked(row)"

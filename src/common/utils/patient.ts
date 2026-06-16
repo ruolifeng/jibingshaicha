@@ -257,6 +257,11 @@ export function isPatientTransferLocked(row: Record<string, any> | null | undefi
   return remark === PATIENT_TRANSFER_PENDING || remark === PATIENT_TRANSFERRED_OUT
 }
 
+/** 患者是否处于转出待确认 */
+export function isPatientTransferPending(row: Record<string, any> | null | undefined): boolean {
+  return row?.archiveRemark === PATIENT_TRANSFER_PENDING
+}
+
 /** 转出状态展示文案 */
 export function getPatientTransferStatusLabel(archiveRemark?: string | null): string {
   if (archiveRemark === PATIENT_TRANSFERRED_OUT) return PATIENT_TRANSFERRED_OUT

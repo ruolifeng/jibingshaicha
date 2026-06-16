@@ -32,7 +32,7 @@ public class DepartmentController {
     @Operation(summary = "创建部门")
     @PostMapping("/create")
     public ResultResponse<Void> create(@RequestBody Department department) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("system:department");
         departmentService.createDepartment(department);
         return ResultRes.success(null);
     }
@@ -40,14 +40,14 @@ public class DepartmentController {
     @Operation(summary = "批量导入部门")
     @PostMapping("/import")
     public ResultResponse<ImportResult> importDepartments(@RequestParam("file") MultipartFile file) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("system:department");
         return ResultRes.success(departmentService.importDepartments(file));
     }
 
     @Operation(summary = "更新部门")
     @PutMapping("/update")
     public ResultResponse<Void> update(@RequestBody Department department) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("system:department");
         departmentService.updateDepartment(department);
         return ResultRes.success(null);
     }
@@ -55,7 +55,7 @@ public class DepartmentController {
     @Operation(summary = "删除部门")
     @DeleteMapping("/delete/{id}")
     public ResultResponse<Void> delete(@PathVariable Long id) {
-        userService.checkPermission(1);
+        userService.checkPermissionCode("system:department");
         departmentService.deleteDepartment(id);
         return ResultRes.success(null);
     }

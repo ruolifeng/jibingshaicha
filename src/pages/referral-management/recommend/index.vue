@@ -241,11 +241,10 @@ function canEditRecommend(row: any) {
   return isCreator(row) && !row.archived
 }
 
+/** 推介列表可见即可删（未追踪、已追踪、已结案等推介后各状态均允许，具体权限由 v-permission 控制） */
 function canDeleteRecommend(row: any) {
-  if (userStore.userRole === 1) return !row.archived
-  if (row.recommendStatus === 2 || row.recommendStatus === 3) return false
-  if (isReceiver(row) && row.recommendStatus === 1) return true
-  return isCreator(row) && !row.archived && row.recommendStatus !== 2
+  if (userStore.userRole === 1) return true
+  return userStore.userRole >= 2 && userStore.userRole <= 6
 }
 
 // ===== 查看详情 =====
@@ -691,6 +690,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             >编辑</el-button>
             <el-button
               v-if="canDeleteRecommend(row)"
+              v-permission="'referralManagement:delete'"
               type="danger" link size="small"
               @click="handleDelete(row)"
             >删除</el-button>

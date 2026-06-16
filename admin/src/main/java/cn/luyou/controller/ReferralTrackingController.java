@@ -169,6 +169,7 @@ public class ReferralTrackingController {
     @Operation(summary = "删除推介/追踪记录（软删）")
     @DeleteMapping("/{id}")
     public ResultResponse<Void> delete(@PathVariable Long id) {
+        userService.checkPermissionCode("referralManagement:delete");
         referralTrackingService.deleteRecord(id);
         return ResultRes.success(null);
     }

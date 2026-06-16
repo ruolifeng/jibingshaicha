@@ -932,7 +932,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
     }
 
-    /** 删除：创建人、接收人（待接收推介单）或辖区一至五级用户（追踪/大疫情） */
+    /** 删除：须具备 referralManagement:delete 权限；推介模块列表可见用户均可删（各推介/追踪状态）；追踪模块按辖区规则 */
     private void assertCanDeleteRecord(ReferralTracking record) {
         if (BaseContext.isSuperAdmin()) {
             return;
@@ -941,19 +941,17 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (userId == null) {
             throw new ServiceException(StatusEnum.FORBIDDEN, "无权删除该记录");
         }
-        if (userId.equals(record.getCreatorId())) {
-            if ("recommend".equals(record.getBizMode())
-                    && record.getRecommendStatus() != null && record.getRecommendStatus() >= 2) {
-                throw new ServiceException(StatusEnum.FORBIDDEN, "推介已办结，发起方不可删除");
+        if ("recommend".equals(record.getBizMode())) {
+            if (canOperateRecord(record)) {
+                return;
             }
-            return;
+            Integer role = BaseContext.getCurrentRole();
+            if (role != null && role >= 2 && role <= 6) {
+                return;
+            }
+            throw new ServiceException(StatusEnum.FORBIDDEN, "无权删除该记录");
         }
-        if (userId.equals(record.getReceiverUserId())
-                && "recommend".equals(record.getBizMode())
-                && Integer.valueOf(1).equals(record.getRecommendStatus())) {
-            return;
-        }
-        if ("track".equals(record.getBizMode()) && record.getReceiverUserId() == null && canOperateRecord(record)) {
+        if (canOperateRecord(record)) {
             return;
         }
         throw new ServiceException(StatusEnum.FORBIDDEN, "无权删除该记录");

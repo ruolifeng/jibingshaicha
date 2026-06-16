@@ -33,6 +33,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.PatientService;
+import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -44,9 +45,9 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,7 +68,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         implements PatientService {
 
@@ -116,6 +116,36 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
     private final UserMapper userMapper;
+    private final ReferralService referralService;
+
+    public PatientServiceImpl(
+            DataScopeHelper dataScopeHelper,
+            EpidemicReportService epidemicReportService,
+            ObjectMapper objectMapper,
+            NoticeMapper noticeMapper,
+            FirstVisitMapper firstVisitMapper,
+            FollowUpVisitMapper followUpVisitMapper,
+            MedicationManagementMapper medicationManagementMapper,
+            MedicationPickupMapper medicationPickupMapper,
+            ScreeningSchoolMapper screeningSchoolMapper,
+            ScreeningKeyPopulationMapper screeningKeyPopulationMapper,
+            ScreeningCloseContactMapper screeningCloseContactMapper,
+            UserMapper userMapper,
+            @Lazy ReferralService referralService) {
+        this.dataScopeHelper = dataScopeHelper;
+        this.epidemicReportService = epidemicReportService;
+        this.objectMapper = objectMapper;
+        this.noticeMapper = noticeMapper;
+        this.firstVisitMapper = firstVisitMapper;
+        this.followUpVisitMapper = followUpVisitMapper;
+        this.medicationManagementMapper = medicationManagementMapper;
+        this.medicationPickupMapper = medicationPickupMapper;
+        this.screeningSchoolMapper = screeningSchoolMapper;
+        this.screeningKeyPopulationMapper = screeningKeyPopulationMapper;
+        this.screeningCloseContactMapper = screeningCloseContactMapper;
+        this.userMapper = userMapper;
+        this.referralService = referralService;
+    }
 
     @Override
     public IPage<Patient> queryPage(int page, int size, String populationType,
@@ -1019,7 +1049,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
-        assertPatientNotTransferLocked(patient);
+        if (BaseContext.isSuperAdmin() && PatientService.isTransferLocked(patient)) {
+            referralService.deleteReferralsAndMessagesByBizId(id);
+        } else {
+            assertPatientNotTransferLocked(patient);
+        }
         // 级联软删：首次随访
         firstVisitMapper.delete(new LambdaQueryWrapper<FirstVisit>()
                 .eq(FirstVisit::getPatientId, id));
