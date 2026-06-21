@@ -32,7 +32,7 @@ public class CloseContactCaseController {
 
     private final CloseContactCaseService closeContactCaseService;
 
-    @Operation(summary = "上传密接个案表Excel（72列模板）")
+    @Operation(summary = "上传密接个案表Excel（71列官方模板）")
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(closeContactCaseService.uploadAndParse(file));
@@ -121,7 +121,7 @@ public class CloseContactCaseController {
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode(fileName, StandardCharsets.UTF_8));
 
-        // 第 1 行为 72 列表头，数据从第 2 行起；与导入自动识别 headRowNumber(1) 对齐
+        // 第 1 行为 71 列表头，数据从第 2 行起；与导入自动识别 headRowNumber(1) 对齐
         EasyExcel.write(response.getOutputStream(), CloseContactCase.class)
                 .head(CloseContactCaseExcelHeaders.asEasyExcelHead())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())

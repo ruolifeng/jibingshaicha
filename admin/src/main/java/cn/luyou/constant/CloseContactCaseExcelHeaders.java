@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 密接个案表 / 密接筛查 72 列 Excel 表头（已移除原患者身份证号列）。
+ * 密接个案表 / 密接筛查 71 列 Excel 表头（官方模板，已移除原患者身份证号、是否开展预防治疗列）。
  */
 public final class CloseContactCaseExcelHeaders {
 
@@ -13,18 +13,18 @@ public final class CloseContactCaseExcelHeaders {
     }
 
     public static final List<String> COLUMNS = Collections.unmodifiableList(Arrays.asList(
-            "市/州",
-            "区/县",
+            "市/州（**市或**州）",
+            "区/县（**区/县/市）",
             "患者姓名",
-            "病案号",
-            "病原学结果",
+            "传报卡号",
+            "病原学结果（下拉选择）",
             "患者电话",
-            "填表日期（填写yyyy/mm/dd格式）",
+            "填表日期",
             "密切接触者登记日期（填写yyyy/mm/dd格式）",
             "报表填报季度（自动生成）",
             "计算登记日期到当前日期的时间间隔，提示随访期限（自动生成）",
             "接触者姓名",
-            "接触者身份证号",
+            "身份证号",
             "年龄（岁）",
             "年龄组（自动判断）",
             "接触者电话",
@@ -46,7 +46,6 @@ public final class CloseContactCaseExcelHeaders {
             "有无禁忌症(下拉选择)",
             "不接受预防性治疗的原因(下拉选择)",
             "备注：其他原因和具体的禁忌症（自行填写）",
-            "是否开展预防治疗(下拉选择)",
             "预防性治疗方案(下拉选择)",
             "其他方案，请备注",
             "是否完成治疗(下拉选择)",

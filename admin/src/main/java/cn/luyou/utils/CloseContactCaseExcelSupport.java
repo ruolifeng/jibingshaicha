@@ -51,7 +51,8 @@ public final class CloseContactCaseExcelSupport {
         return value.contains("市/州")
                 || value.contains("患者姓名")
                 || value.contains("接触者姓名")
-                || value.contains("接触者身份证号");
+                || value.contains("接触者身份证号")
+                || value.contains("身份证号");
     }
 
     private static String cellText(Sheet sheet, int rowIndex, int colIndex) {

@@ -1,4 +1,4 @@
-/** 密接个案表 — 线上预览列定义（与72列Excel模板字段对应） */
+/** 密接个案表 — 线上预览列定义（与 71 列 Excel 官方模板字段对应） */
 export interface CloseContactCaseColumn {
   field: string
   title: string

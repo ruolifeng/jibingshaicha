@@ -38,7 +38,7 @@ public class ScreeningCloseContactController {
     private final ScreeningCloseContactService screeningCloseContactService;
     private final ScreeningScopeHelper screeningScopeHelper;
 
-    @Operation(summary = "上传密接人群筛查Excel（新模板72列）")
+    @Operation(summary = "上传密接人群筛查Excel（71列官方模板）")
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(screeningCloseContactService.uploadAndParse(file));

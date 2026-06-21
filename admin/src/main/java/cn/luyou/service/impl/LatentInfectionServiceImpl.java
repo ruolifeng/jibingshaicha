@@ -746,7 +746,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         int updated = 0;
         for (Map<String, Object> row : rows) {
-            // 密接人群证件号在列11（72列模板），其余人群在列9
+            // 密接人群证件号在列 11（71 列官方模板），其余人群在列 9
             int idNumberIdx = "closeContact".equals(populationType) ? 11 : 9;
             String idNumber = getStrCell(row, idNumberIdx);
             if (StrUtil.isBlank(idNumber)) continue;
@@ -772,16 +772,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     hasXrayIdx = 37; xrayDateIdx = 38; xrayResultIdx = 39; diagnosisIdx = 40;
                 }
                 case "closeContact" -> {
-                    // 密接人群：按阳性轮次读取对应列组
+                    // 密接人群：按阳性轮次读取对应列组（71 列官方模板）
                     Integer round = entity.getActiveRound();
                     if (round == null) round = 1;
                     switch (round) {
-                        // 首次筛查：imagingDate(24) imagingMethod(25) imagingResult(26) finalScreeningResult(30)
-                        case 1 -> { hasXrayIdx = 24; xrayDateIdx = 25; xrayResultIdx = 26; diagnosisIdx = 30; }
-                        // 6月随访：followup6ImagingDate(43) followup6ImagingMethod(44) followup6ImagingResult(45) followup6Result(49)
-                        case 2 -> { hasXrayIdx = 43; xrayDateIdx = 44; xrayResultIdx = 45; diagnosisIdx = 49; }
-                        // 12月随访：followup12ImagingDate(54) followup12ImagingMethod(55) followup12ImagingResult(56) followup12Result(60)
-                        case 3 -> { hasXrayIdx = 54; xrayDateIdx = 55; xrayResultIdx = 56; diagnosisIdx = 60; }
+                        // 首次筛查：imagingDate(23) imagingMethod(24) imagingResult(25) finalScreeningResult(29)
+                        case 1 -> { hasXrayIdx = 23; xrayDateIdx = 24; xrayResultIdx = 25; diagnosisIdx = 29; }
+                        // 6月随访：followup6ImagingDate(42) followup6ImagingMethod(43) followup6ImagingResult(44) followup6Result(48)
+                        case 2 -> { hasXrayIdx = 42; xrayDateIdx = 43; xrayResultIdx = 44; diagnosisIdx = 48; }
+                        // 12月随访：followup12ImagingDate(53) followup12ImagingMethod(54) followup12ImagingResult(55) followup12Result(59)
+                        case 3 -> { hasXrayIdx = 53; xrayDateIdx = 54; xrayResultIdx = 55; diagnosisIdx = 59; }
                         default -> { continue; }
                     }
                 }

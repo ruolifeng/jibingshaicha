@@ -178,14 +178,14 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     /**
-     * 密接 72 列模板（已移除原患者身份证号）与旧 73 列模板列位不同。
+     * 密接 71 列官方模板与旧版（含原患者身份证号 / 是否开展预防治疗）列位不同。
      */
     private CloseContactColumnLayout resolveCloseContactLayout(MultipartFile file, int headRowNumber) {
         try (InputStream inputStream = file.getInputStream();
              Workbook workbook = WorkbookFactory.create(inputStream)) {
             Sheet sheet = workbook.getNumberOfSheets() > 0 ? workbook.getSheetAt(0) : null;
             if (sheet == null) {
-                return CloseContactColumnLayout.STANDARD_72;
+                return CloseContactColumnLayout.STANDARD_71;
             }
             int headerRowIndex = Math.max(0, headRowNumber - 1);
             Row headerRow = sheet.getRow(headerRowIndex);
@@ -193,9 +193,9 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             if (StrUtil.isNotBlank(col6Header) && col6Header.contains("身份证")) {
                 return CloseContactColumnLayout.LEGACY_73;
             }
-            return CloseContactColumnLayout.STANDARD_72;
+            return CloseContactColumnLayout.STANDARD_71;
         } catch (IOException e) {
-            return CloseContactColumnLayout.STANDARD_72;
+            return CloseContactColumnLayout.STANDARD_71;
         }
     }
 
@@ -767,8 +767,8 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     private record CloseContactColumnLayout(int nameCol, int idCol, int phoneCol, int finalResultCol) {
-        /** 72 列标准模板（已移除原患者身份证号） */
-        static final CloseContactColumnLayout STANDARD_72 = new CloseContactColumnLayout(10, 11, 14, 29);
+        /** 71 列官方模板 */
+        static final CloseContactColumnLayout STANDARD_71 = new CloseContactColumnLayout(10, 11, 14, 29);
         /** 旧 73 列模板（G 列为患者身份证号） */
         static final CloseContactColumnLayout LEGACY_73 = new CloseContactColumnLayout(11, 12, 15, 30);
     }

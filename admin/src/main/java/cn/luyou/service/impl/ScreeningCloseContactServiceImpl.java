@@ -51,9 +51,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * 密接人群筛查 Service（新模板72列，基于 finalScreeningResult 分类）
+ * 密接人群筛查 Service（官方 71 列模板，基于 finalScreeningResult 分类）
  *
- * 分类规则（AE列 = final_screening_result）：
+ * 分类规则（AD列 = final_screening_result）：
  *  - 活动性肺结核  → ccStatus=1，标红结案（不进入患者管理）
  *  - 疑似肺结核    → ccStatus=9，标黄结案
  *  - 潜伏感染者    → ccStatus=2，进入密接潜伏感染专属流程
