@@ -1,5 +1,7 @@
-/** 项目标题 */
-const VITE_APP_TITLE = import.meta.env.VITE_APP_TITLE ?? "V3 Admin Vite"
+import { APP_TITLE } from "@@/constants/app"
+
+/** 项目标题（统一使用品牌常量，不依赖 .env 旧值） */
+const VITE_APP_TITLE = APP_TITLE
 
 /** 动态标题 */
 const dynamicTitle = ref<string>("")

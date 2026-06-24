@@ -39,7 +39,7 @@ const DEFAULT_CONFIG: LayoutsConfig = {
   showSettings: true,
   showTagsView: true,
   fixedHeader: true,
-  showFooter: true,
+  showFooter: false,
   showLogo: true,
   showNotify: true,
   showThemeSwitch: true,
@@ -52,4 +52,8 @@ const DEFAULT_CONFIG: LayoutsConfig = {
 }
 
 /** 项目配置 */
-export const layoutsConfig: LayoutsConfig = { ...DEFAULT_CONFIG, ...getLayoutsConfig() }
+export const layoutsConfig: LayoutsConfig = {
+  ...DEFAULT_CONFIG,
+  ...getLayoutsConfig(),
+  showFooter: false
+}

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { useLayoutMode } from "@@/composables/useLayoutMode"
+import { APP_TITLE } from "@@/constants/app"
 
 interface Props {
   collapse?: boolean
@@ -13,9 +14,9 @@ const { isTop } = useLayoutMode()
 <template>
   <div class="layout-logo-container" :class="{ 'collapse': collapse, 'layout-mode-top': isTop }">
     <router-link to="/" class="logo-link">
-      <span v-if="!collapse" class="logo-text">筛查管理</span>
+      <span v-if="!collapse" class="logo-text">{{ APP_TITLE }}</span>
       <!-- 折叠时显示首字缩写 -->
-      <span v-else class="logo-icon">筛</span>
+      <span v-else class="logo-icon">自</span>
     </router-link>
   </div>
 </template>
@@ -38,11 +39,12 @@ const { isTop } = useLayoutMode()
   }
 
   .logo-text {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 700;
     color: #fff;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     white-space: nowrap;
+    padding: 0 8px;
   }
 
   .logo-icon {

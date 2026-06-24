@@ -1,8 +1,11 @@
 <script lang="ts" setup>
 import type { LoginRequestData } from "./apis/type"
 import ThemeSwitch from "@@/components/ThemeSwitch/index.vue"
+import { APP_TITLE } from "@@/constants/app"
 import { useSettingsStore } from "@/pinia/stores/settings"
 import { useUserStore } from "@/pinia/stores/user"
+import loginBg2 from "@/static/image2.png"
+import loginBg1 from "@/static/image.png"
 import { loginApi } from "./apis"
 
 const router = useRouter()
@@ -10,6 +13,9 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const settingsStore = useSettingsStore()
+
+const bgImages = [loginBg1, loginBg2]
+const currentBgIndex = ref(0)
 
 /** 登录按钮 Loading */
 const loading = ref(false)
@@ -27,6 +33,18 @@ const errors = reactive({
 const loginFormData: LoginRequestData = reactive({
   username: "",
   password: ""
+})
+
+let bgTimer: ReturnType<typeof setInterval> | undefined
+
+onMounted(() => {
+  bgTimer = setInterval(() => {
+    currentBgIndex.value = (currentBgIndex.value + 1) % bgImages.length
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (bgTimer) clearInterval(bgTimer)
 })
 
 function clearErrors() {
@@ -84,12 +102,23 @@ function handlePasswordInput() {
 
 <template>
   <div class="login-container">
+    <div class="login-bg" aria-hidden="true">
+      <div
+        v-for="(img, index) in bgImages"
+        :key="index"
+        class="login-bg__slide"
+        :class="{ 'is-active': index === currentBgIndex }"
+        :style="{ backgroundImage: `url(${img})` }"
+      />
+    </div>
+
     <ThemeSwitch v-if="settingsStore.showThemeSwitch" class="theme-switch" />
 
     <div class="login-panel">
       <div class="login-panel__header">
-        <h1 class="login-panel__title">筛查管理</h1>
-        <p class="login-panel__subtitle">疾病追踪与筛查数据管理平台</p>
+        <h1 class="login-panel__title">
+          {{ APP_TITLE }}
+        </h1>
       </div>
 
       <form class="login-form" @submit.prevent="handleLogin">
@@ -110,7 +139,9 @@ function handlePasswordInput() {
               @input="handleUsernameInput"
             >
           </div>
-          <p v-if="errors.username" class="form-field__error">{{ errors.username }}</p>
+          <p v-if="errors.username" class="form-field__error">
+            {{ errors.username }}
+          </p>
         </div>
 
         <div class="form-field" :class="{ 'is-error': errors.password }">
@@ -143,7 +174,9 @@ function handlePasswordInput() {
               </svg>
             </button>
           </div>
-          <p v-if="errors.password" class="form-field__error">{{ errors.password }}</p>
+          <p v-if="errors.password" class="form-field__error">
+            {{ errors.password }}
+          </p>
         </div>
 
         <button class="login-btn" type="submit" :disabled="loading">
@@ -152,14 +185,6 @@ function handlePasswordInput() {
         </button>
       </form>
     </div>
-
-    <footer class="login-footer">
-      <a
-        href="https://beian.miit.gov.cn/"
-        target="_blank"
-        rel="noopener noreferrer"
-      >桂ICP备2026008858号-1</a>
-    </footer>
   </div>
 </template>
 
@@ -172,9 +197,9 @@ function handlePasswordInput() {
   align-items: center;
   width: 100%;
   min-height: 100%;
-  padding: 48px 16px 76px;
+  padding: 48px 16px;
   box-sizing: border-box;
-  background: #f5f7fa url("@/static/image.png") center / cover no-repeat;
+  overflow: hidden;
 
   .theme-switch {
     position: fixed;
@@ -185,16 +210,32 @@ function handlePasswordInput() {
   }
 }
 
+.login-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+
+  &__slide {
+    position: absolute;
+    inset: 0;
+    background: #f5f7fa center / cover no-repeat;
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+
+    &.is-active {
+      opacity: 1;
+    }
+  }
+}
+
 .login-panel {
+  position: relative;
+  z-index: 1;
   width: min(420px, 92vw);
-  padding: 36px 32px 32px;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(18px);
-  box-shadow:
-    0 24px 48px rgba(15, 45, 90, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  padding: 24px 8px 8px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 
   &__header {
     display: flex;
@@ -205,19 +246,14 @@ function handlePasswordInput() {
   }
 
   &__title {
-    margin: 0 0 6px;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    color: #fff;
-    text-shadow: 0 2px 12px rgba(0, 60, 120, 0.35);
-  }
-
-  &__subtitle {
     margin: 0;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.82);
-    letter-spacing: 1px;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: 2px;
+    color: #fff;
+    white-space: nowrap;
+    text-shadow: 0 2px 12px rgba(0, 60, 120, 0.45);
   }
 }
 
@@ -233,8 +269,9 @@ function handlePasswordInput() {
     margin-bottom: 8px;
     font-size: 13px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.92);
     letter-spacing: 0.5px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   }
 
   &__control {
@@ -248,7 +285,7 @@ function handlePasswordInput() {
     left: 14px;
     width: 18px;
     height: 18px;
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.78);
     pointer-events: none;
   }
 
@@ -256,15 +293,14 @@ function handlePasswordInput() {
     width: 100%;
     height: 48px;
     padding: 0 44px 0 42px;
-    border: 1px solid rgba(255, 255, 255, 0.38);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    border-radius: 24px;
     background: transparent;
     color: #fff;
     font-size: 15px;
     outline: none;
     transition:
       border-color 0.2s ease,
-      box-shadow 0.2s ease,
       background-color 0.2s ease;
 
     &::placeholder {
@@ -273,8 +309,7 @@ function handlePasswordInput() {
 
     &:focus {
       border-color: rgba(255, 255, 255, 0.72);
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.04);
+      background: transparent;
     }
   }
 
@@ -292,7 +327,9 @@ function handlePasswordInput() {
     background: transparent;
     color: rgba(255, 255, 255, 0.72);
     cursor: pointer;
-    transition: color 0.2s ease, background-color 0.2s ease;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
 
     svg {
       width: 18px;
@@ -306,7 +343,7 @@ function handlePasswordInput() {
   }
 
   &__error {
-    margin: 6px 0 0;
+    margin: 6px 0 0 12px;
     font-size: 12px;
     color: #ffd6d6;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -327,24 +364,22 @@ function handlePasswordInput() {
   width: 100%;
   height: 48px;
   margin-top: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 14px;
-  background: transparent;
+  border: none;
+  border-radius: 24px;
+  background: rgba(236, 72, 153, 0.88);
   color: #fff;
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 4px;
   cursor: pointer;
   transition:
-    border-color 0.2s ease,
     background-color 0.2s ease,
     transform 0.15s ease,
     box-shadow 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 8px 24px rgba(15, 45, 90, 0.15);
+    background: rgba(236, 72, 153, 1);
+    box-shadow: 0 8px 24px rgba(236, 72, 153, 0.35);
   }
 
   &:active:not(:disabled) {
@@ -366,30 +401,17 @@ function handlePasswordInput() {
   }
 }
 
-.login-footer {
-  position: fixed;
-  bottom: 24px;
-  left: 0;
-  width: 100%;
-  text-align: center;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-
-  a {
-    color: inherit;
-    text-decoration: none;
-
-    &:hover {
-      color: #fff;
-      text-decoration: underline;
-    }
-  }
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .login-panel__title {
+    font-size: 18px;
+    letter-spacing: 1px;
+    white-space: normal;
   }
 }
 </style>

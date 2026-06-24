@@ -1,11 +1,7 @@
 <script lang="ts" setup>
 import { useTagsViewStore } from "@/pinia/stores/tags-view"
-import { useSettingsStore } from "@/pinia/stores/settings"
-import Footer from "../Footer/index.vue"
 
 const tagsViewStore = useTagsViewStore()
-const settingsStore = useSettingsStore()
-const { showFooter } = storeToRefs(settingsStore)
 </script>
 
 <template>
@@ -19,7 +15,6 @@ const { showFooter } = storeToRefs(settingsStore)
           </keep-alive>
         </transition>
       </router-view>
-      <Footer v-if="showFooter" />
     </div>
     <!-- 返回顶部 -->
     <el-backtop />

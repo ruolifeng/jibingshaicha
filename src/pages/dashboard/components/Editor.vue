@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { DashboardSummaryData } from "../apis"
+import { DASHBOARD_EDITOR_WELCOME } from "@@/constants/app"
 import { Bell, Calendar, FirstAidKit, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
 
@@ -77,7 +78,7 @@ function alphaColor(hex: string, alpha = "20") {
         我的工作台
       </div>
       <div class="dashboard-subtitle">
-        欢迎使用疾病监控管理系统
+        {{ DASHBOARD_EDITOR_WELCOME }}
       </div>
     </div>
 

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
+import { DASHBOARD_ADMIN_TITLE, DASHBOARD_ADMIN_WELCOME } from "@@/constants/app"
 import {
   Bell,
   Calendar,
@@ -164,10 +165,10 @@ const noticeMaxSent = computed(() =>
     <div class="db-header">
       <div class="db-header-left">
         <div class="db-title">
-          疾病监控工作台
+          {{ DASHBOARD_ADMIN_TITLE }}
         </div>
         <div class="db-subtitle">
-          欢迎使用结核病筛查追踪管理系统
+          {{ DASHBOARD_ADMIN_WELCOME }}
         </div>
       </div>
       <div class="db-header-right">
