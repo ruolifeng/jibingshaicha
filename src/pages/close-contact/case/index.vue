@@ -85,7 +85,7 @@ async function handleDownloadTemplate() {
   templateDownloading.value = true
   try {
     const blob = await downloadCloseContactCaseTemplateApi()
-    downloadBlob(blob as unknown as Blob, "密接个案表.xlsx")
+    downloadBlob(blob as unknown as Blob, "密接个案表模板.xlsx")
     ElMessage.success("模板下载成功")
   } catch {
     ElMessage.error("模板下载失败")
@@ -303,10 +303,10 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <el-input v-model="searchForm.name" placeholder="接触者姓名" clearable />
         </el-form-item>
         <el-form-item label="身份证号">
-          <el-input v-model="searchForm.idNumber" placeholder="接触者身份证号" clearable />
+          <el-input v-model="searchForm.idNumber" placeholder="身份证号" clearable />
         </el-form-item>
         <el-form-item label="电话">
-          <el-input v-model="searchForm.phone" placeholder="联系电话" clearable />
+          <el-input v-model="searchForm.phone" placeholder="接触者电话" clearable />
         </el-form-item>
         <el-form-item label="区县">
           <el-input v-model="searchForm.district" placeholder="区/县" clearable />
@@ -314,7 +314,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-form-item label="用户名">
           <el-input v-model="searchForm.creatorUsername" placeholder="录入账号" clearable />
         </el-form-item>
-        <el-form-item label="诊断结果">
+        <el-form-item label="最终筛查结果">
           <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable style="width: 150px">
             <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
@@ -454,17 +454,17 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="原患者姓名">
+                <el-form-item label="患者姓名">
                   <el-input v-model="editForm.sourcePatientName" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="原患者病案号">
+                <el-form-item label="传报卡号">
                   <el-input v-model="editForm.sourcePatientCaseNo" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="原患者电话">
+                <el-form-item label="患者电话">
                   <el-input v-model="editForm.sourcePatientPhone" />
                 </el-form-item>
               </el-col>
@@ -490,7 +490,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="联系电话">
+                <el-form-item label="接触者电话">
                   <el-input v-model="editForm.phone" />
                 </el-form-item>
               </el-col>
@@ -563,7 +563,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item label="诊断结果">
+                <el-form-item label="最终筛查结果">
                   <el-select v-model="editForm.finalScreeningResult" style="width:100%" clearable>
                     <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
                   </el-select>
@@ -630,13 +630,13 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-descriptions-item label="区/县">
           {{ detailRow.district }}
         </el-descriptions-item>
-        <el-descriptions-item label="原患者姓名">
+        <el-descriptions-item label="患者姓名">
           {{ detailRow.sourcePatientName }}
         </el-descriptions-item>
-        <el-descriptions-item label="密接登记日期">
+        <el-descriptions-item label="密切接触者登记日期">
           {{ detailRow.registrationDate }}
         </el-descriptions-item>
-        <el-descriptions-item label="诊断结果" :span="3">
+        <el-descriptions-item label="最终筛查结果" :span="3">
           <el-tag v-if="detailRow.finalScreeningResult" :type="getDiagnosisTag(detailRow.finalScreeningResult)">
             {{ detailRow.finalScreeningResult }}
           </el-tag>
@@ -645,7 +645,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-descriptions-item label="感染检测方法">
           {{ detailRow.infectionCheckMethod }}
         </el-descriptions-item>
-        <el-descriptions-item label="感染检测结果">
+        <el-descriptions-item label="结果判定">
           {{ detailRow.infectionCheckResult }}
         </el-descriptions-item>
         <el-descriptions-item label="影像结果">

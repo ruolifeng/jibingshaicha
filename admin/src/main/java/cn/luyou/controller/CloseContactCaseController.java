@@ -2,12 +2,10 @@ package cn.luyou.controller;
 
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
-import cn.luyou.constant.CloseContactCaseExcelHeaders;
 import cn.luyou.model.CloseContactCase;
 import cn.luyou.model.ImportResult;
 import cn.luyou.service.CloseContactCaseService;
-import com.alibaba.excel.EasyExcel;
-import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
+import cn.luyou.utils.CloseContactCaseExcelExportSupport;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -121,12 +119,8 @@ public class CloseContactCaseController {
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode(fileName, StandardCharsets.UTF_8));
 
-        // 第 1 行为 71 列表头，数据从第 2 行起；与导入自动识别 headRowNumber(1) 对齐
-        EasyExcel.write(response.getOutputStream(), CloseContactCase.class)
-                .head(CloseContactCaseExcelHeaders.asEasyExcelHead())
-                .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
-                .sheet("密接个案表")
-                .doWrite(list);
+        // 官方 71 列表头，与导入模板一致
+        CloseContactCaseExcelExportSupport.write(response.getOutputStream(), CloseContactCaseExcelExportSupport.SHEET_NAME, CloseContactCase.class, list);
     }
 
     @Operation(summary = "按ID查询密接个案详情")

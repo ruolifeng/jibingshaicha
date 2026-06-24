@@ -7,7 +7,6 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.DataCleaningResult;
 import cn.luyou.service.DataCleaningService;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
-import cn.luyou.utils.CloseContactCaseExcelSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
@@ -106,6 +105,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         return DataCleaningResult.builder()
                 .totalCount(validationResult.getTotalCount())
                 .abnormalCount((int) allErrors.stream().map(RowValidationError::getRowIndex).distinct().count())
+                .errorItemCount(allErrors.size())
                 .fileId(fileId)
                 .fileName(resultFile.getName())
                 .errors(previewErrors)
@@ -123,6 +123,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         return DataCleaningResult.builder()
                 .totalCount(totalCount)
                 .abnormalCount(0)
+                .errorItemCount(0)
                 .fileId(fileId)
                 .fileName(resultFile.getName())
                 .errors(List.of())

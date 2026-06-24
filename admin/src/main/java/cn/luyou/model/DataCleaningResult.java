@@ -17,6 +17,8 @@ public class DataCleaningResult {
     private int totalCount;
     /** 异常数据行数 */
     private int abnormalCount;
+    /** 异常条目总数（一行可能有多条校验问题） */
+    private int errorItemCount;
     /** 下载清洗结果文件ID */
     private String fileId;
     /** 清洗结果文件名 */

@@ -3,6 +3,7 @@ import { request } from "@/http/axios"
 export interface DataCleaningResult {
   totalCount: number
   abnormalCount: number
+  errorItemCount: number
   fileId: string
   fileName: string
   errors: string[]

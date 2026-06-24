@@ -41,7 +41,7 @@ export function countByResultApi() {
   })
 }
 
-/** 导出密接人群筛查数据 */
+/** 导出密接人群筛查 Excel（71列官方模板，可再导入） */
 export function exportScreeningCloseContactApi(ids?: number[]) {
   return request<Blob>({
     url: "screening/close-contact/export",

@@ -1,8 +1,8 @@
 package cn.luyou.controller;
 
-import cn.luyou.constant.CloseContactCaseExcelHeaders;
 import cn.luyou.constant.LatentImportHeaders;
 import cn.luyou.constant.PatientManualImportHeaders;
+import cn.luyou.utils.CloseContactCaseExcelExportSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import io.swagger.v3.oas.annotations.Operation;
@@ -87,6 +87,17 @@ public class TemplateController {
             @RequestParam String type,
             HttpServletResponse response) throws IOException {
 
+        if ("closeContactCase".equals(type)) {
+            String fileName = "密接个案表模板";
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding("UTF-8");
+            String encodedName = URLEncoder.encode(fileName + ".xlsx", StandardCharsets.UTF_8).replace("+", "%20");
+            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
+            CloseContactCaseExcelExportSupport.writeTemplate(response.getOutputStream());
+            log.info("[模板下载] type={} fileName={}", type, fileName);
+            return;
+        }
+
         String fileName;
         List<List<String>> headers;
 
@@ -111,10 +122,6 @@ public class TemplateController {
                 fileName = "在管患者导入模板";
                 headers = PatientManualImportHeaders.FIELDS.stream().map(List::of).toList();
             }
-            case "closeContactCase" -> {
-                fileName = "密接个案表";
-                headers = CloseContactCaseExcelHeaders.asEasyExcelHead();
-            }
             default -> {
                 response.sendError(400, "未知模板类型：" + type);
                 return;
@@ -126,7 +133,7 @@ public class TemplateController {
         String encodedName = URLEncoder.encode(fileName + ".xlsx", StandardCharsets.UTF_8).replace("+", "%20");
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
 
-        String sheetName = "closeContactCase".equals(type) ? "密接个案表" : "数据";
+        String sheetName = "数据";
         EasyExcel.write(response.getOutputStream())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
                 .head(headers)

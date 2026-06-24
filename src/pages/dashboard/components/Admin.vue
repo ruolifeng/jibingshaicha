@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
+import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
 import {
   Bell,
   Calendar,
@@ -23,7 +23,12 @@ import {
 
 const summaryLoading = ref(false)
 const taskLoading = ref(false)
-const summary = ref<Record<string, number>>({})
+const summary = ref<DashboardSummaryData>({
+  pendingTracking: 0,
+  pendingVisit: 0,
+  pendingNotice: 0,
+  upcomingReview: 0
+})
 const batches = ref<string[]>([])
 const selectedBatch = ref<string>("")
 const taskStats = ref<TaskStatsData>({
@@ -50,7 +55,7 @@ async function fetchAll() {
       getDashboardBatchesApi(),
       getDashboardMessageStatsApi()
     ])
-    summary.value = summaryRes.data || {}
+    summary.value = { ...summary.value, ...(summaryRes.data || {}) }
     batches.value = batchRes.data || []
     messageStats.value = msgRes.data || messageStats.value
   } catch { /* handled globally */ } finally {
@@ -79,11 +84,48 @@ watch(selectedBatch, () => {
 
 // ===== 统计卡片配置 =====
 const statCards = [
-  { label: "待追踪人数", key: "pendingTracking", color: "#f56c6c", icon: Search, bg: "#fff5f5" },
-  { label: "在管患者数", key: "pendingVisit", color: "#e6a23c", icon: FirstAidKit, bg: "#fffbf0" },
-  { label: "待确认通知单", key: "pendingNotice", color: "#409eff", icon: Bell, bg: "#f0f7ff" },
-  { label: "近期复查(15天)", key: "upcomingReview", color: "#67c23a", icon: Calendar, bg: "#f0fff4" }
+  { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search, bg: "#fff5f5" },
+  { label: "年度管理患者数", key: "pendingVisit" as const, color: "#e6a23c", icon: FirstAidKit, bg: "#fffbf0" },
+  { label: "待确认通知单", key: "pendingNotice" as const, color: "#409eff", icon: Bell, bg: "#f0f7ff" },
+  { label: "近期复查(15天)", key: "upcomingReview" as const, color: "#67c23a", icon: Calendar, bg: "#f0fff4" }
 ]
+
+const managementYear = computed(() => summary.value.managementYear ?? new Date().getFullYear())
+
+function getStatCardLabel(key: string, label: string) {
+  if (key === "pendingVisit") {
+    return `${managementYear.value}年度管理患者数`
+  }
+  return label
+}
+
+const pathogenPositiveRateText = computed(() => {
+  const rate = summary.value.pathogenPositiveRate
+  return rate == null ? "—" : `${rate.toFixed(1)}%`
+})
+
+const treatmentSuccessRateText = computed(() => {
+  const rate = summary.value.treatmentSuccessRate
+  return rate == null ? "—" : `${rate.toFixed(1)}%`
+})
+
+const recommendArrivalRateText = computed(() => {
+  const rate = summary.value.recommendArrivalRate
+  return rate == null ? "—" : `${rate.toFixed(1)}%`
+})
+
+const trackingStatYear = computed(() => summary.value.trackingStatYear ?? new Date().getFullYear())
+
+const trackingArrivalRateText = computed(() => {
+  const rate = summary.value.trackingArrivalRate
+  return rate == null ? "—" : `${rate.toFixed(1)}%`
+})
+
+const trackingPeriodText = computed(() => {
+  const { trackingPeriodFrom, trackingPeriodTo } = summary.value
+  if (!trackingPeriodFrom || !trackingPeriodTo) return ""
+  return `统计周期：${trackingPeriodFrom} 至 ${trackingPeriodTo}`
+})
 
 // ===== 人群卡片配置 =====
 const popCards = [
@@ -159,13 +201,64 @@ const noticeMaxSent = computed(() =>
               {{ summary[card.key] ?? "—" }}
             </div>
             <div class="stat-label">
-              {{ card.label }}
+              {{ getStatCardLabel(card.key, card.label) }}
             </div>
           </div>
           <div class="stat-deco" :style="{ borderColor: card.color }" />
         </div>
       </el-col>
     </el-row>
+
+    <div class="pathogen-panel">
+      <div class="pathogen-title">
+        {{ managementYear }}年度病原学阳性情况
+      </div>
+      <div class="pathogen-content">
+        <span>{{ managementYear }}年度病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+        <span class="pathogen-divider">|</span>
+        <span>病原学阳性率：<strong>{{ pathogenPositiveRateText }}</strong></span>
+      </div>
+    </div>
+
+    <div class="treatment-panel">
+      <div class="treatment-title">
+        {{ managementYear }}年度治疗情况
+      </div>
+      <div class="treatment-content">
+        <span>{{ managementYear }}年度治疗成功人数：<strong>{{ summary.treatmentSuccessCount ?? 0 }}</strong> 例</span>
+        <span class="treatment-divider">|</span>
+        <span>治疗成功率：<strong>{{ treatmentSuccessRateText }}</strong></span>
+      </div>
+    </div>
+
+    <div class="referral-panel">
+      <div class="referral-title">
+        推介情况
+      </div>
+      <div class="referral-content">
+        <span>推介人数：<strong>{{ summary.recommendCount ?? 0 }}</strong> 例</span>
+        <span class="referral-divider">|</span>
+        <span>到位人数：<strong>{{ summary.recommendArrivedCount ?? 0 }}</strong> 例</span>
+        <span class="referral-divider">|</span>
+        <span>推介到位率：<strong>{{ recommendArrivalRateText }}</strong></span>
+      </div>
+    </div>
+
+    <div class="tracking-panel">
+      <div class="tracking-title">
+        {{ trackingStatYear }}年度追踪情况
+      </div>
+      <div v-if="trackingPeriodText" class="tracking-period">
+        {{ trackingPeriodText }}
+      </div>
+      <div class="tracking-content">
+        <span>追踪人数：<strong>{{ summary.trackingCount ?? 0 }}</strong> 例</span>
+        <span class="tracking-divider">|</span>
+        <span>到位人数：<strong>{{ summary.trackingArrivedCount ?? 0 }}</strong> 例</span>
+        <span class="tracking-divider">|</span>
+        <span>追踪到位率：<strong>{{ trackingArrivalRateText }}</strong></span>
+      </div>
+    </div>
 
     <!-- ===== 三类人群数据 ===== -->
     <div class="section-label" style="margin-top: 32px">
@@ -606,6 +699,152 @@ const noticeMaxSent = computed(() =>
     border-radius: 50%;
     border: 10px solid;
     opacity: 0.12;
+  }
+}
+
+.pathogen-panel {
+  margin: 4px 0 28px;
+  padding: 18px 24px;
+  border-radius: 12px;
+  background: #fffbf0;
+  border: 1px solid #f5dab1;
+  border-left: 4px solid #e6a23c;
+
+  .pathogen-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e6a23c;
+    margin-bottom: 10px;
+  }
+
+  .pathogen-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+
+    strong {
+      color: #e6a23c;
+      font-size: 18px;
+      font-weight: 700;
+    }
+  }
+
+  .pathogen-divider {
+    color: var(--el-text-color-placeholder);
+  }
+}
+
+.treatment-panel {
+  margin: 4px 0 16px;
+  padding: 18px 24px;
+  border-radius: 12px;
+  background: #fff5f5;
+  border: 1px solid #fbc4c4;
+  border-left: 4px solid #f56c6c;
+
+  .treatment-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f56c6c;
+    margin-bottom: 10px;
+  }
+
+  .treatment-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+
+    strong {
+      color: #f56c6c;
+      font-size: 18px;
+      font-weight: 700;
+    }
+  }
+
+  .treatment-divider {
+    color: var(--el-text-color-placeholder);
+  }
+}
+
+.referral-panel {
+  margin: 4px 0 28px;
+  padding: 18px 24px;
+  border-radius: 12px;
+  background: #f0f7ff;
+  border: 1px solid #b3d8ff;
+  border-left: 4px solid #409eff;
+
+  .referral-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #409eff;
+    margin-bottom: 10px;
+  }
+
+  .referral-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+
+    strong {
+      color: #409eff;
+      font-size: 18px;
+      font-weight: 700;
+    }
+  }
+
+  .referral-divider {
+    color: var(--el-text-color-placeholder);
+  }
+}
+
+.tracking-panel {
+  margin: 4px 0 28px;
+  padding: 18px 24px;
+  border-radius: 12px;
+  background: #f0fff4;
+  border: 1px solid #b3e19d;
+  border-left: 4px solid #67c23a;
+
+  .tracking-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #67c23a;
+    margin-bottom: 6px;
+  }
+
+  .tracking-period {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    margin-bottom: 10px;
+  }
+
+  .tracking-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+
+    strong {
+      color: #67c23a;
+      font-size: 18px;
+      font-weight: 700;
+    }
+  }
+
+  .tracking-divider {
+    color: var(--el-text-color-placeholder);
   }
 }
 

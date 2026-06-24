@@ -24,9 +24,46 @@ export interface MessageStatsData {
   referralRejected: number
 }
 
+export interface DashboardSummaryData {
+  pendingTracking: number
+  pendingVisit: number
+  pendingNotice: number
+  upcomingReview: number
+  /** 统计年度（用于「某某年度管理患者数」展示） */
+  managementYear?: number
+  /** 统计周期起止（上年度 12/1—本年度 11/30） */
+  statPeriodFrom?: string
+  statPeriodTo?: string
+  /** 病原学阳性人数 */
+  pathogenPositiveCount?: number
+  /** 病原学阳性率（%，保留 1 位小数） */
+  pathogenPositiveRate?: number
+  /** 推介人数（已发送） */
+  recommendCount?: number
+  /** 推介到位人数 */
+  recommendArrivedCount?: number
+  /** 推介到位率（%，保留 1 位小数） */
+  recommendArrivalRate?: number
+  /** 追踪统计年度（周期结束日所在自然年） */
+  trackingStatYear?: number
+  /** 追踪统计周期起止（上年度12/1—本年度11/30） */
+  trackingPeriodFrom?: string
+  trackingPeriodTo?: string
+  /** 追踪人数 */
+  trackingCount?: number
+  /** 追踪到位人数 */
+  trackingArrivedCount?: number
+  /** 追踪到位率（%，保留 1 位小数） */
+  trackingArrivalRate?: number
+  /** 治疗成功人数（后续随访完成疗程） */
+  treatmentSuccessCount?: number
+  /** 治疗成功率（%，保留 1 位小数） */
+  treatmentSuccessRate?: number
+}
+
 /** 获取首页待处理事项汇总数据 */
 export function getDashboardSummaryApi() {
-  return request<ApiResponseData<Record<string, number>>>({
+  return request<ApiResponseData<DashboardSummaryData>>({
     url: "dashboard/summary",
     method: "get"
   })

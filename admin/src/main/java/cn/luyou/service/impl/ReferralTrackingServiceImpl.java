@@ -7,6 +7,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.constant.EpidemicTrackImportHeaders;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.StatYearPeriod;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
 import cn.luyou.model.Department;
@@ -1793,5 +1794,74 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     String.format("「%s」的推介通知单您已拒绝，原因：%s",
                             name, StrUtil.blankToDefault(rejectReason, "（未填写）")));
         }
+    }
+
+    @Override
+    public long countRecommendSentForDashboard(Integer statYear) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildRecommendDashboardWrapper();
+        wrapper.isNotNull(ReferralTracking::getRecommendSentTime);
+        applyStatYearTimeFilter(wrapper, ReferralTracking::getRecommendSentTime, statYear);
+        return count(wrapper);
+    }
+
+    @Override
+    public long countRecommendArrivedForDashboard(Integer statYear) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildRecommendDashboardWrapper();
+        wrapper.isNotNull(ReferralTracking::getRecommendSentTime)
+                .isNotNull(ReferralTracking::getArrivalTime);
+        applyStatYearTimeFilter(wrapper, ReferralTracking::getRecommendSentTime, statYear);
+        return count(wrapper);
+    }
+
+    /** 首页推介统计：与推介管理列表一致的业务范围与数据权限 */
+    private LambdaQueryWrapper<ReferralTracking> buildRecommendDashboardWrapper() {
+        LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
+        applyBizModeFilter(wrapper, "recommend");
+        Integer role = BaseContext.getCurrentRole();
+        boolean level5RecommendView = Integer.valueOf(6).equals(role);
+        applyUserScopeFilter(wrapper, "recommend", level5RecommendView);
+        return wrapper;
+    }
+
+    @Override
+    public Map<String, Object> getTrackDashboardStats(Integer statYear) {
+        int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
+        StatYearPeriod period = StatYearPeriod.of(year);
+        long trackingCount = count(buildTrackDashboardWrapper(period));
+        LambdaQueryWrapper<ReferralTracking> arrivedWrapper = buildTrackDashboardWrapper(period);
+        arrivedWrapper.isNotNull(ReferralTracking::getArrivalTime);
+        long trackingArrivedCount = count(arrivedWrapper);
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("trackingStatYear", period.statYear());
+        stats.put("trackingPeriodFrom", period.start().toString());
+        stats.put("trackingPeriodTo", period.end().toString());
+        stats.put("trackingCount", trackingCount);
+        stats.put("trackingArrivedCount", trackingArrivedCount);
+        stats.put("trackingArrivalRate", trackingCount > 0
+                ? Math.round(trackingArrivedCount * 1000.0 / trackingCount) / 10.0
+                : 0.0);
+        return stats;
+    }
+
+    /** 首页追踪统计：与追踪管理列表一致的业务范围、数据权限及创建时间周期 */
+    private LambdaQueryWrapper<ReferralTracking> buildTrackDashboardWrapper(StatYearPeriod period) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
+        applyBizModeFilter(wrapper, "track");
+        applyUserScopeFilter(wrapper, "track", false);
+        wrapper.ge(ReferralTracking::getCreateTime, period.start().atStartOfDay())
+                .le(ReferralTracking::getCreateTime, period.end().atTime(23, 59, 59));
+        return wrapper;
+    }
+
+    private void applyStatYearTimeFilter(LambdaQueryWrapper<ReferralTracking> wrapper,
+                                         com.baomidou.mybatisplus.core.toolkit.support.SFunction<ReferralTracking, LocalDateTime> column,
+                                         Integer statYear) {
+        if (statYear == null) {
+            return;
+        }
+        StatYearPeriod period = StatYearPeriod.of(statYear);
+        wrapper.ge(column, period.start().atStartOfDay())
+                .le(column, period.end().atTime(23, 59, 59));
     }
 }

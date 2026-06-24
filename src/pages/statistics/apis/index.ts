@@ -1,3 +1,5 @@
+import type { DashboardSummaryData } from "@/pages/dashboard/apis"
+
 import { request } from "@/http/axios"
 
 /** 获取区县选项列表（从实际数据动态获取） */
@@ -29,6 +31,35 @@ export function getDistrictStatisticsApi(params: {
     url: "statistics/district",
     method: "get",
     params
+  })
+}
+
+/** 我的工作台年度统计 */
+export function getWorkbenchStatisticsApi(year?: number | string) {
+  return request<ApiResponseData<DashboardSummaryData>>({
+    url: "statistics/workbench",
+    method: "get",
+    params: year != null && year !== "" ? { year: Number(year) } : {}
+  })
+}
+
+/** 患者分布热力图（三级及以上用户） */
+export interface PatientHeatmapData {
+  managementYear?: number
+  statPeriodFrom?: string
+  statPeriodTo?: string
+  total?: number
+  maxCount?: number
+  rowLabels?: string[]
+  colLabels?: string[]
+  data?: Array<Array<string | number>>
+}
+
+export function getPatientHeatmapApi(year?: number | string) {
+  return request<ApiResponseData<PatientHeatmapData>>({
+    url: "statistics/patient-heatmap",
+    method: "get",
+    params: year != null && year !== "" ? { year: Number(year) } : {}
   })
 }
 

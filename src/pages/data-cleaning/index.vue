@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { downloadBlob } from "@@/utils/download"
-import { cleanScreeningDataApi, downloadCleaningResultApi, matchSchoolDataApi } from "./apis/index"
 import { downloadTemplateApi } from "@/pages/patient-management/apis/index"
+import { cleanScreeningDataApi, downloadCleaningResultApi, matchSchoolDataApi } from "./apis/index"
 
 const templateDownloading = ref<string | null>(null)
 
@@ -35,6 +35,7 @@ const matchFile = ref<File | null>(null)
 const result = ref<{
   totalCount: number
   abnormalCount: number
+  errorItemCount: number
   fileId: string
   fileName: string
   errors: string[]
@@ -136,7 +137,9 @@ async function handleDownload() {
             <el-icon style="font-size: 32px; color: #67c23a; margin-bottom: 8px">
               <document />
             </el-icon>
-            <p style="font-size: 14px; color: #303133; margin: 4px 0 12px">{{ tpl.label }}</p>
+            <p style="font-size: 14px; color: #303133; margin: 4px 0 12px">
+              {{ tpl.label }}
+            </p>
             <el-button
               type="success"
               size="small"
@@ -237,7 +240,7 @@ async function handleDownload() {
         <span class="text-lg font-bold">清洗结果</span>
       </template>
 
-      <el-descriptions :column="3" border class="mb-4">
+      <el-descriptions :column="4" border class="mb-4">
         <el-descriptions-item label="总数据行数">
           {{ result.totalCount }}
         </el-descriptions-item>
@@ -246,21 +249,28 @@ async function handleDownload() {
             {{ result.abnormalCount }}
           </el-tag>
         </el-descriptions-item>
+        <el-descriptions-item label="异常条目数">
+          <el-tag :type="result.errorItemCount > 0 ? 'warning' : 'success'">
+            {{ result.errorItemCount }}
+          </el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="结果文件">
           {{ result.fileName }}
         </el-descriptions-item>
       </el-descriptions>
 
       <el-alert
-        :title="result.abnormalCount > 0 ? '已识别异常并完成标黄，可下载后按“异常原因”列筛选修正。' : '未发现异常数据。'"
+        :title="result.abnormalCount > 0
+          ? `已识别 ${result.errorItemCount} 条异常（涉及 ${result.abnormalCount} 行），下载文件保留全部原始数据并标黄异常单元格。`
+          : '未发现异常数据。'"
         :type="result.abnormalCount > 0 ? 'warning' : 'success'"
         :closable="false"
         class="mb-3"
       />
 
       <el-table v-if="result.errors.length > 0" :data="result.errors.map((msg, idx) => ({ idx: idx + 1, msg }))" border max-height="360">
-        <el-table-column prop="idx" label="#" />
-        <el-table-column prop="msg" label="异常详情" />
+        <el-table-column prop="idx" label="#" width="60" />
+        <el-table-column prop="msg" label="异常详情（预览前200条）" />
       </el-table>
     </el-card>
   </div>

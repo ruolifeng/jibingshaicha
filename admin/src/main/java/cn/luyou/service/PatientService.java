@@ -2,6 +2,7 @@ package cn.luyou.service;
 
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.Patient;
+import cn.luyou.model.vo.PatientDistributionHeatmapVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
@@ -115,5 +116,27 @@ public interface PatientService extends IService<Patient> {
 
     /** 校验患者可编辑（非转出锁定） */
     void assertPatientOperable(Long id);
+
+    /**
+     * 首页统计：在管总览 + 历史患者总数（与列表查询一致的数据权限）。
+     *
+     * @param statYear 统计年度，周期为上年度 12/1—本年度 11/30；为 null 时不限年度
+     */
+    long countManagedPatientsForDashboard(Integer statYear);
+
+    /**
+     * 首页统计：在管总览 + 历史患者中病原学阳性人数（与列表一致的数据权限）。
+     */
+    long countPathogenPositivePatientsForDashboard(Integer statYear);
+
+    /**
+     * 首页统计：治疗成功人数（后续随访停止治疗原因为「完成疗程」，与患者列表一致的数据权限）。
+     */
+    long countTreatmentSuccessForDashboard(Integer statYear);
+
+    /**
+     * 患者分布热力图（三级及以上用户，按区县×社区聚合，与年度管理患者数口径一致）。
+     */
+    PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear);
 
 }

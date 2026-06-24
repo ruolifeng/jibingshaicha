@@ -3,8 +3,11 @@ package cn.luyou.controller;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.vo.DistrictStatisticsVO;
+import cn.luyou.model.vo.PatientDistributionHeatmapVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
+import cn.luyou.service.PatientService;
 import cn.luyou.service.StatisticsService;
+import cn.luyou.service.WorkbenchStatisticsService;
 import com.alibaba.excel.EasyExcel;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +19,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "统计分析")
 @RestController
@@ -24,6 +28,8 @@ import java.util.List;
 public class StatisticsController {
 
     private final StatisticsService statisticsService;
+    private final WorkbenchStatisticsService workbenchStatisticsService;
+    private final PatientService patientService;
 
     @Operation(summary = "获取区县选项列表")
     @GetMapping("/district-options")
@@ -45,6 +51,20 @@ public class StatisticsController {
             @RequestParam(required = false) String year,
             @RequestParam(required = false) String district) {
         return ResultRes.success(statisticsService.getDistrictStatistics(year, district));
+    }
+
+    @Operation(summary = "我的工作台年度统计")
+    @GetMapping("/workbench")
+    public ResultResponse<Map<String, Object>> workbenchStatistics(
+            @RequestParam(required = false) Integer year) {
+        return ResultRes.success(workbenchStatisticsService.buildSummary(year));
+    }
+
+    @Operation(summary = "患者分布热力图（三级及以上用户）")
+    @GetMapping("/patient-heatmap")
+    public ResultResponse<PatientDistributionHeatmapVO> patientHeatmap(
+            @RequestParam(required = false) Integer year) {
+        return ResultRes.success(patientService.buildPatientDistributionHeatmap(year));
     }
 
     @Operation(summary = "导出学校人群统计Excel")

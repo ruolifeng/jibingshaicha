@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 public interface ReferralTrackingService extends IService<ReferralTracking> {
@@ -59,4 +60,15 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
 
     /** 删除记录（软删） */
     void deleteRecord(Long id);
+
+    /** 首页统计：推介人数（已发送推介，与推介管理列表一致的数据权限） */
+    long countRecommendSentForDashboard(Integer statYear);
+
+    /** 首页统计：推介到位人数（已记录到位时间） */
+    long countRecommendArrivedForDashboard(Integer statYear);
+
+    /**
+     * 首页追踪统计（追踪模块，统计周期：上年度12月1日—本年度11月30日）。
+     */
+    Map<String, Object> getTrackDashboardStats(Integer statYear);
 }

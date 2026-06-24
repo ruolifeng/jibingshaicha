@@ -22,12 +22,12 @@ import java.util.stream.Collectors;
 public class DashboardController {
 
     private final LatentInfectionService latentInfectionService;
-    private final PatientService patientService;
     private final NoticeService noticeService;
     private final ScreeningCloseContactService closeContactService;
     private final ScreeningSchoolService screeningSchoolService;
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
     private final ReferralService referralService;
+    private final WorkbenchStatisticsService workbenchStatisticsService;
 
     @Operation(summary = "获取待处理事项汇总")
     @GetMapping("/summary")
@@ -42,11 +42,8 @@ public class DashboardController {
         );
         data.put("pendingTracking", pendingTracking);
 
-        // 在管患者：未归档的患者数
-        long pendingVisit = patientService.count(
-                new LambdaQueryWrapper<Patient>().eq(Patient::getArchived, 0)
-        );
-        data.put("pendingVisit", pendingVisit);
+        // 年度统计（周期：上年度 12/1—本年度 11/30）
+        data.putAll(workbenchStatisticsService.buildSummary(null));
 
         // 待确认通知单：状态为已发送（1）的通知单数
         long pendingNotice = noticeService.count(

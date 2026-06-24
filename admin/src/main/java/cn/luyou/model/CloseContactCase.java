@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import cn.luyou.utils.ExcelTextStringConverter;
 import cn.luyou.utils.FlexibleIntegerConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
@@ -34,13 +35,13 @@ public class CloseContactCase extends BaseEntity {
     @ExcelProperty(index = 2)
     private String sourcePatientName;
 
-    @ExcelProperty(index = 3)
+    @ExcelProperty(index = 3, converter = ExcelTextStringConverter.class)
     private String sourcePatientCaseNo;
 
     @ExcelProperty(index = 4)
     private String sourcePatientBacteriologyResult;
 
-    @ExcelProperty(index = 5)
+    @ExcelProperty(index = 5, converter = ExcelTextStringConverter.class)
     private String sourcePatientPhone;
 
     /** 原患者身份证号（已从 Excel 模板移除，仅数据库历史字段） */
@@ -66,7 +67,7 @@ public class CloseContactCase extends BaseEntity {
     @ExcelProperty(index = 10)
     private String name;
 
-    @ExcelProperty(index = 11)
+    @ExcelProperty(index = 11, converter = ExcelTextStringConverter.class)
     private String idNumber;
 
     @ExcelProperty(index = 12, converter = FlexibleIntegerConverter.class)
@@ -77,7 +78,7 @@ public class CloseContactCase extends BaseEntity {
     @ExcelProperty(index = 13)
     private String ageGroup;
 
-    @ExcelProperty(index = 14)
+    @ExcelProperty(index = 14, converter = ExcelTextStringConverter.class)
     private String phone;
 
     @ExcelProperty(index = 15)

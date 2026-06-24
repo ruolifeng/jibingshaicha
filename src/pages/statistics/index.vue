@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { PatientHeatmapData } from "./apis"
+import type { DashboardSummaryData } from "@/pages/dashboard/apis"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -11,16 +13,21 @@ import {
   exportWideTableApi,
   getDistrictOptionsApi,
   getDistrictStatisticsApi,
-  getSchoolStatisticsApi
+  getPatientHeatmapApi,
+  getSchoolStatisticsApi,
+  getWorkbenchStatisticsApi
 } from "./apis"
 import QuestionnairePanel from "./components/QuestionnairePanel.vue"
+import WorkbenchStatsPanel from "./components/WorkbenchStatsPanel.vue"
 
 defineOptions({ name: "Statistics" })
 
 const userStore = useUserStore()
 const canQuestionnaire = computed(() => userStore.hasPermission("statistics:questionnaire"))
+/** 超级管理员及一级、二级、三级用户（role ≤ 4）可查看患者分布热力图 */
+const canViewPatientHeatmap = computed(() => userStore.userRole > 0 && userStore.userRole <= 4)
 
-const activeTab = ref("school")
+const activeTab = ref("workbench")
 
 // ==================== 筛选条件 ====================
 const filterForm = reactive({
@@ -72,12 +79,49 @@ async function fetchDistrictStatistics() {
   }
 }
 
+// ==================== 我的工作台年度统计 ====================
+const workbenchLoading = ref(false)
+const workbenchSummary = ref<DashboardSummaryData>({
+  pendingTracking: 0,
+  pendingVisit: 0,
+  pendingNotice: 0,
+  upcomingReview: 0
+})
+
+async function fetchWorkbenchStatistics() {
+  workbenchLoading.value = true
+  const heatmapPromise = canViewPatientHeatmap.value ? fetchPatientHeatmap() : Promise.resolve()
+  try {
+    const { data } = await getWorkbenchStatisticsApi(filterForm.year)
+    workbenchSummary.value = { ...workbenchSummary.value, ...(data || {}) }
+  } catch { /* handled */ } finally {
+    workbenchLoading.value = false
+  }
+  await heatmapPromise
+}
+
+const heatmapLoading = ref(false)
+const heatmapData = ref<PatientHeatmapData>({})
+
+async function fetchPatientHeatmap() {
+  if (!canViewPatientHeatmap.value) return
+  heatmapLoading.value = true
+  try {
+    const { data } = await getPatientHeatmapApi(filterForm.year)
+    heatmapData.value = data || {}
+  } catch { /* handled */ } finally {
+    heatmapLoading.value = false
+  }
+}
+
 // ==================== 搜索与重置 ====================
 function handleSearch() {
   if (activeTab.value === "school") {
     fetchSchoolStatistics()
-  } else {
+  } else if (activeTab.value === "district") {
     fetchDistrictStatistics()
+  } else if (activeTab.value === "workbench") {
+    fetchWorkbenchStatistics()
   }
 }
 
@@ -267,12 +311,14 @@ function handleTabChange(tab: string | number) {
     fetchSchoolStatistics()
   } else if (tab === "district") {
     fetchDistrictStatistics()
+  } else if (tab === "workbench") {
+    fetchWorkbenchStatistics()
   }
 }
 
 onMounted(() => {
   loadDistrictOptions()
-  fetchSchoolStatistics()
+  fetchWorkbenchStatistics()
 })
 </script>
 
@@ -286,7 +332,7 @@ onMounted(() => {
             <el-option v-for="y in yearOptions" :key="y" :label="y" :value="y" />
           </el-select>
         </el-form-item>
-        <el-form-item label="区县">
+        <el-form-item v-if="activeTab !== 'workbench'" label="区县">
           <el-select v-model="filterForm.district" placeholder="全部区县" clearable style="width: 160px">
             <el-option v-for="d in districtOptions" :key="d" :label="d" :value="d" />
           </el-select>
@@ -300,7 +346,7 @@ onMounted(() => {
           </el-button>
         </el-form-item>
         <el-form-item>
-          <el-dropdown>
+          <el-dropdown v-if="activeTab !== 'workbench'">
             <el-button type="warning">
               高级导出 <el-icon class="el-icon--right">
                 <ArrowDown />
@@ -330,6 +376,17 @@ onMounted(() => {
     <!-- Tab 切换 -->
     <el-card shadow="never">
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+        <!-- 我的工作台年度统计 -->
+        <el-tab-pane label="我的工作台" name="workbench">
+          <WorkbenchStatsPanel
+            :summary="workbenchSummary"
+            :loading="workbenchLoading"
+            :show-heatmap="canViewPatientHeatmap"
+            :heatmap="heatmapData"
+            :heatmap-loading="heatmapLoading"
+          />
+        </el-tab-pane>
+
         <!-- 学校人群统计总表 -->
         <el-tab-pane label="辖区教育机构统计总表" name="school">
           <div class="mb-3 flex justify-end">
@@ -422,7 +479,9 @@ onMounted(() => {
             <p style="color: #606266; font-size: 13px; margin-bottom: 12px">
               包含字段：数据来源、基本信息、诊断结果、通知单状态、首次随访、后续随访次数、服药管理、归档状态、归档时间
             </p>
-            <el-button type="primary" @click="handleExportAllPatients">导出患者信息总表</el-button>
+            <el-button type="primary" @click="handleExportAllPatients">
+              导出患者信息总表
+            </el-button>
           </el-card>
 
           <!-- 潜伏感染者信息总表 -->
@@ -453,7 +512,9 @@ onMounted(() => {
             <p style="color: #606266; font-size: 13px; margin-bottom: 12px">
               包含字段：数据来源、基本信息、感染筛查结果、追踪状态、诊断结果、通知单状态、督导表状态、预防性治疗信息、治疗阶段、归档状态
             </p>
-            <el-button type="primary" @click="handleExportAllLatent">导出潜伏感染者信息总表</el-button>
+            <el-button type="primary" @click="handleExportAllLatent">
+              导出潜伏感染者信息总表
+            </el-button>
           </el-card>
         </el-tab-pane>
 

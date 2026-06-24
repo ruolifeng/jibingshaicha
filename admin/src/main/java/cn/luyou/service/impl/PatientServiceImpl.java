@@ -17,6 +17,8 @@ import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.ScreeningSchool;
+import cn.luyou.model.Department;
+import cn.luyou.model.vo.PatientDistributionHeatmapVO;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.FollowUpVisitMapper;
 import cn.luyou.mapper.MedicationManagementMapper;
@@ -32,11 +34,13 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import cn.luyou.service.EpidemicReportService;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.StatYearPeriod;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -81,7 +85,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     );
 
     private static final String EPIDEMIC_JSON_REGISTRATION_DATE = "$.\"登记日期\"";
+    private static final String EPIDEMIC_JSON_PATHOGEN_RESULT = "$.\"病原学结果\"";
+    private static final String EPIDEMIC_JSON_DIAGNOSIS_RESULT = "$.\"诊断结果\"";
     private static final String EPIDEMIC_JSON_MEDICATION_UNIT = "$.\"服药管理单位\"";
+    /** 后续随访中停止治疗原因为「完成疗程」的患者（去重） */
+    private static final String TREATMENT_SUCCESS_FOLLOW_UP_SQL =
+            "SELECT DISTINCT patient_id FROM follow_up_visit WHERE deleted = 0 "
+                    + "AND stop_treatment = '是' AND stop_treatment_reason = '完成疗程' AND patient_id IS NOT NULL";
     /** 取前 10 位以兼容 yyyy-MM-dd 与 yyyy-MM-dd HH:mm:ss */
     private static final String REGISTRATION_DATE_SQL_EXPR =
             "STR_TO_DATE(LEFT(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
@@ -117,6 +127,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final ScreeningCloseContactMapper screeningCloseContactMapper;
     private final UserMapper userMapper;
     private final ReferralService referralService;
+    private final DepartmentService departmentService;
 
     public PatientServiceImpl(
             DataScopeHelper dataScopeHelper,
@@ -131,7 +142,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             ScreeningKeyPopulationMapper screeningKeyPopulationMapper,
             ScreeningCloseContactMapper screeningCloseContactMapper,
             UserMapper userMapper,
-            @Lazy ReferralService referralService) {
+            @Lazy ReferralService referralService,
+            DepartmentService departmentService) {
         this.dataScopeHelper = dataScopeHelper;
         this.epidemicReportService = epidemicReportService;
         this.objectMapper = objectMapper;
@@ -145,6 +157,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         this.screeningCloseContactMapper = screeningCloseContactMapper;
         this.userMapper = userMapper;
         this.referralService = referralService;
+        this.departmentService = departmentService;
     }
 
     @Override
@@ -329,6 +342,264 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     /** 与列表查询保持一致的数据权限过滤 */
     private void applyPatientScopeFilter(LambdaQueryWrapper<Patient> wrapper) {
         dataScopeHelper.applyPatientScope(wrapper);
+    }
+
+    @Override
+    public long countManagedPatientsForDashboard(Integer statYear) {
+        return count(buildManagedPatientDashboardWrapper(statYear));
+    }
+
+    @Override
+    public long countPathogenPositivePatientsForDashboard(Integer statYear) {
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear);
+        applyPathogenPositiveFilter(wrapper);
+        return count(wrapper);
+    }
+
+    @Override
+    public long countTreatmentSuccessForDashboard(Integer statYear) {
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear);
+        wrapper.inSql(Patient::getId, buildTreatmentSuccessFollowUpSql(statYear));
+        return count(wrapper);
+    }
+
+    @Override
+    public PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear) {
+        assertHeatmapRoleAllowed();
+        int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
+        StatYearPeriod period = StatYearPeriod.of(year);
+
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(year);
+        wrapper.select(Patient::getDepartmentId);
+        List<Patient> patients = list(wrapper);
+
+        Map<Long, Long> countByDeptId = patients.stream()
+                .collect(Collectors.groupingBy(
+                        p -> p.getDepartmentId() == null ? -1L : p.getDepartmentId(),
+                        Collectors.counting()));
+        long total = countByDeptId.values().stream().mapToLong(Long::longValue).sum();
+
+        Map<Long, Department> deptMap = departmentService.list().stream()
+                .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
+        Set<Long> scopeDeptIds = resolveHeatmapScopeDeptIds();
+
+        // district -> (community -> count)，先按辖区部门树预置 0，再填入实际统计
+        Map<String, Map<String, Long>> matrix = new LinkedHashMap<>();
+        seedHeatmapMatrixFromScope(matrix, deptMap, scopeDeptIds);
+        for (Map.Entry<Long, Long> entry : countByDeptId.entrySet()) {
+            long deptId = entry.getKey();
+            long cnt = entry.getValue();
+            String district;
+            String community;
+            if (deptId < 0) {
+                district = "未分配";
+                community = "—";
+            } else {
+                Department dept = deptMap.get(deptId);
+                if (dept == null) {
+                    district = "未分配";
+                    community = "—";
+                } else {
+                    Department districtDept = resolveDistrictDept(dept, deptMap);
+                    district = districtDept != null ? districtDept.getName() : "未分配";
+                    community = resolveCommunityLabel(dept);
+                }
+            }
+            matrix.computeIfAbsent(district, k -> new LinkedHashMap<>())
+                    .merge(community, cnt, Long::sum);
+        }
+
+        List<String> allDistricts = sortDistrictLabels(matrix.keySet());
+
+        List<String> rowLabels = new ArrayList<>();
+        List<List<Object>> heatData = new ArrayList<>();
+        int maxCount = 0;
+        for (String district : allDistricts) {
+            List<String> communities = sortCommunityLabels(matrix.get(district).keySet());
+            Map<String, Long> communityCounts = matrix.get(district);
+            List<List<Object>> rowPoints = new ArrayList<>();
+            for (int colIdx = 0; colIdx < communities.size(); colIdx++) {
+                String community = communities.get(colIdx);
+                int count = communityCounts.get(community).intValue();
+                if (count <= 0) {
+                    continue;
+                }
+                maxCount = Math.max(maxCount, count);
+                rowPoints.add(new ArrayList<>(List.of(colIdx, 0, count, district, community)));
+            }
+            if (rowPoints.isEmpty()) {
+                continue;
+            }
+            int rowIdx = rowLabels.size();
+            rowLabels.add(district);
+            for (List<Object> point : rowPoints) {
+                point.set(1, rowIdx);
+                heatData.add(point);
+            }
+        }
+
+        int maxCols = heatData.stream()
+                .mapToInt(p -> ((Number) p.get(0)).intValue())
+                .max()
+                .orElse(-1) + 1;
+        if (maxCols <= 0) {
+            maxCols = 1;
+        }
+        List<String> colLabels = new ArrayList<>();
+        for (int i = 0; i < maxCols; i++) {
+            colLabels.add("社区" + (i + 1));
+        }
+
+        return PatientDistributionHeatmapVO.builder()
+                .managementYear(year)
+                .statPeriodFrom(period.start().toString())
+                .statPeriodTo(period.end().toString())
+                .total((int) Math.min(total, Integer.MAX_VALUE))
+                .maxCount(maxCount)
+                .rowLabels(rowLabels)
+                .colLabels(colLabels)
+                .data(heatData)
+                .build();
+    }
+
+    /** 辖区可见部门 ID（超级管理员为全部部门） */
+    private Set<Long> resolveHeatmapScopeDeptIds() {
+        if (BaseContext.isSuperAdmin()) {
+            return departmentService.list().stream()
+                    .map(Department::getId)
+                    .collect(Collectors.toSet());
+        }
+        Long deptId = BaseContext.getCurrentDepartmentId();
+        if (deptId == null) {
+            return Set.of();
+        }
+        return new HashSet<>(departmentService.getDescendantIds(deptId));
+    }
+
+    /** 按辖区部门树预置区县×社区格子（患者数为 0 的社区不渲染，但保证排序稳定） */
+    private void seedHeatmapMatrixFromScope(Map<String, Map<String, Long>> matrix,
+                                            Map<Long, Department> deptMap,
+                                            Set<Long> scopeDeptIds) {
+        List<Department> scoped = deptMap.values().stream()
+                .filter(d -> scopeDeptIds.contains(d.getId()))
+                .sorted((a, b) -> StrUtil.compare(a.getName(), b.getName(), true))
+                .toList();
+        for (Department dept : scoped) {
+            if (dept.getLevel() != null && dept.getLevel() == 2) {
+                String district = dept.getName();
+                matrix.computeIfAbsent(district, k -> new LinkedHashMap<>())
+                        .putIfAbsent("区县本级", 0L);
+            }
+            if (dept.getLevel() != null && dept.getLevel() == 3) {
+                Department districtDept = resolveDistrictDept(dept, deptMap);
+                if (districtDept == null) {
+                    continue;
+                }
+                matrix.computeIfAbsent(districtDept.getName(), k -> new LinkedHashMap<>())
+                        .putIfAbsent(dept.getName(), 0L);
+            }
+        }
+    }
+
+    private List<String> sortDistrictLabels(Set<String> districts) {
+        List<String> sorted = districts.stream()
+                .filter(d -> !"未分配".equals(d))
+                .sorted(String::compareTo)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (districts.contains("未分配")) {
+            sorted.add("未分配");
+        }
+        return sorted;
+    }
+
+    private List<String> sortCommunityLabels(Set<String> communities) {
+        List<String> sorted = communities.stream()
+                .filter(c -> !"—".equals(c) && !"区县本级".equals(c))
+                .sorted(String::compareTo)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (communities.contains("区县本级")) {
+            sorted.add(0, "区县本级");
+        }
+        if (communities.contains("—")) {
+            sorted.add("—");
+        }
+        return sorted;
+    }
+
+    /** 仅超级管理员及一级、二级、三级用户（role ≤ 4）可查看热力图 */
+    private void assertHeatmapRoleAllowed() {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role > 4) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "仅三级及以上用户可查看患者分布热力图");
+        }
+    }
+
+    private Department resolveDistrictDept(Department dept, Map<Long, Department> deptMap) {
+        Department current = dept;
+        while (current != null) {
+            if (current.getLevel() != null && current.getLevel() == 2) {
+                return current;
+            }
+            if (current.getParentId() == null) {
+                return current.getLevel() != null && current.getLevel() == 1 ? current : null;
+            }
+            current = deptMap.get(current.getParentId());
+        }
+        return null;
+    }
+
+    private String resolveCommunityLabel(Department dept) {
+        if (dept.getLevel() != null && dept.getLevel() == 3) {
+            return dept.getName();
+        }
+        if (dept.getLevel() != null && dept.getLevel() == 2) {
+            return "区县本级";
+        }
+        return dept.getName();
+    }
+
+    private LambdaQueryWrapper<Patient> buildManagedPatientDashboardWrapper(Integer statYear) {
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(Patient::getArchived, 0, 1);
+        dataScopeHelper.applyPatientScope(wrapper);
+        if (statYear != null) {
+            applyStatYearPatientFilter(wrapper, StatYearPeriod.of(statYear));
+        }
+        return wrapper;
+    }
+
+    /** 统计年度内患者：登记日期在周期内，或无登记日期时按创建时间 */
+    private void applyStatYearPatientFilter(LambdaQueryWrapper<Patient> wrapper, StatYearPeriod period) {
+        LocalDateTime from = period.start().atStartOfDay();
+        LocalDateTime to = period.end().atTime(23, 59, 59);
+        wrapper.and(w -> w
+                .and(w1 -> w1.isNotNull(Patient::getEpidemicData)
+                        .apply(REGISTRATION_DATE_SQL_EXPR + " IS NOT NULL")
+                        .apply(REGISTRATION_DATE_SQL_EXPR + " >= {0}", period.start())
+                        .apply(REGISTRATION_DATE_SQL_EXPR + " <= {0}", period.end()))
+                .or(w2 -> w2.ge(Patient::getCreateTime, from).le(Patient::getCreateTime, to)));
+    }
+
+    private String buildTreatmentSuccessFollowUpSql(Integer statYear) {
+        StringBuilder sql = new StringBuilder(TREATMENT_SUCCESS_FOLLOW_UP_SQL);
+        if (statYear != null) {
+            StatYearPeriod period = StatYearPeriod.of(statYear);
+            sql.append(" AND stop_treatment_date >= '").append(period.start())
+                    .append("' AND stop_treatment_date <= '").append(period.end()).append("'");
+        }
+        return sql.toString();
+    }
+
+    /** 病原学阳性：与在管总览/历史患者列表中「病原学结果」筛选口径一致 */
+    private void applyPathogenPositiveFilter(LambdaQueryWrapper<Patient> wrapper) {
+        wrapper.and(w -> w.in(Patient::getDiagnosisResult, "阳性", "病原学阳性")
+                .or().apply("JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                        + EPIDEMIC_JSON_PATHOGEN_RESULT + "')) IN ('阳性', '病原学阳性')")
+                .or().apply("JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                        + EPIDEMIC_JSON_DIAGNOSIS_RESULT + "')) IN ('阳性', '病原学阳性')"));
     }
 
     /** 五级用户已完成首次随访的可编辑天数 */
