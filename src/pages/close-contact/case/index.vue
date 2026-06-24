@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { usePagination } from "@@/composables/usePagination"
-import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS } from "@@/constants/close-contact-case"
+import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { downloadBlob } from "@@/utils/download"
 import {
   batchDeleteCloseContactCaseApi,
@@ -577,7 +577,9 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="是否开展预防治疗">
-                  <el-input v-model="editForm.hasPreventiveTreatment" />
+                  <el-select v-model="editForm.hasPreventiveTreatment" style="width:100%" clearable placeholder="请选择">
+                    <el-option v-for="opt in HAS_PREVENTIVE_TREATMENT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">

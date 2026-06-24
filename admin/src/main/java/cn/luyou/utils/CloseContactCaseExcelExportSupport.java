@@ -10,7 +10,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 密接个案表 / 密接筛查 — 按官方 71 列模板导出（与导入模板表头一致，可再导入）。
+ * 密接个案表 / 密接筛查 — 按官方 72 列模板导出（与导入模板表头一致，可再导入）。
  */
 public final class CloseContactCaseExcelExportSupport {
 
@@ -27,7 +27,7 @@ public final class CloseContactCaseExcelExportSupport {
                 .doWrite(rows);
     }
 
-    /** 下载空模板（仅官方 71 列表头，与导出/导入一致） */
+    /** 下载空模板（仅官方 72 列表头，与导出/导入一致） */
     public static void writeTemplate(OutputStream outputStream) {
         write(outputStream, SHEET_NAME, CloseContactCase.class, Collections.emptyList());
     }

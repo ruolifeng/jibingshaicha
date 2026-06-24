@@ -2,6 +2,7 @@
 import type { FormInstance, FormRules } from "element-plus"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import {
   CC_FINAL_RESULT_STAT_OPTIONS,
   CC_FINAL_SCREENING_RESULT_OPTIONS,
@@ -912,7 +913,9 @@ async function handleThreeMonthSubmit() {
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="是否开展预防治疗">
-                  <el-input v-model="editForm.hasPreventiveTreatment" />
+                  <el-select v-model="editForm.hasPreventiveTreatment" style="width:100%" clearable placeholder="请选择">
+                    <el-option v-for="opt in HAS_PREVENTIVE_TREATMENT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">

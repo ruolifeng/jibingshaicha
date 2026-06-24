@@ -33,7 +33,7 @@ public class ScreeningCloseContactController {
     private final ScreeningCloseContactService screeningCloseContactService;
     private final ScreeningScopeHelper screeningScopeHelper;
 
-    @Operation(summary = "上传密接人群筛查Excel（71列官方模板）")
+    @Operation(summary = "上传密接人群筛查Excel（72列官方模板）")
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(screeningCloseContactService.uploadAndParse(file));
@@ -130,7 +130,7 @@ public class ScreeningCloseContactController {
 
     // ==================== 导出 ====================
 
-    @Operation(summary = "导出密接人群筛查数据（71列官方模板，可再导入）")
+    @Operation(summary = "导出密接人群筛查数据（72列官方模板，可再导入）")
     @GetMapping("/export")
     public void export(
             HttpServletResponse response,

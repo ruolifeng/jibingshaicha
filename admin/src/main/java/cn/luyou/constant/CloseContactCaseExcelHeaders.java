@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 密接个案表 / 密接筛查 71 列 Excel 表头（官方模板，已移除原患者身份证号、是否开展预防治疗列）。
+ * 密接个案表 / 密接筛查 72 列 Excel 表头（官方模板，已移除原患者身份证号列）。
  */
 public final class CloseContactCaseExcelHeaders {
 
@@ -46,6 +46,7 @@ public final class CloseContactCaseExcelHeaders {
             "有无禁忌症(下拉选择)",
             "不接受预防性治疗的原因(下拉选择)",
             "备注：其他原因和具体的禁忌症（自行填写）",
+            "是否开展预防治疗(下拉选择)",
             "预防性治疗方案(下拉选择)",
             "其他方案，请备注",
             "是否完成治疗(下拉选择)",

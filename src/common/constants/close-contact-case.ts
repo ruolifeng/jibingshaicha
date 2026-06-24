@@ -1,4 +1,4 @@
-/** 密接个案表 — 线上预览列定义（与官方 71 列 Excel 模板字段、顺序一致） */
+/** 密接个案表 — 线上预览列定义（与官方 72 列 Excel 模板字段、顺序一致） */
 export interface CloseContactCaseColumn {
   field: string
   title: string
@@ -11,6 +11,12 @@ export const DIAGNOSIS_RESULT_OPTIONS = [
   { label: "潜伏感染者", value: "潜伏感染者" },
   { label: "未做", value: "未做" },
   { label: "未发现异常", value: "未发现异常" }
+] as const
+
+/** 是否开展预防治疗（与密接潜伏感染者流程一致） */
+export const HAS_PREVENTIVE_TREATMENT_OPTIONS = [
+  { label: "开展", value: "开展" },
+  { label: "未开展", value: "未开展" }
 ] as const
 
 /**
@@ -52,6 +58,7 @@ export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
   { field: "hasContraindication", title: "有无禁忌症(下拉选择)", width: 160 },
   { field: "noTreatmentReason", title: "不接受预防性治疗的原因(下拉选择)", width: 240 },
   { field: "contraindicationRemark", title: "备注：其他原因和具体的禁忌症（自行填写）", width: 280 },
+  { field: "hasPreventiveTreatment", title: "是否开展预防治疗(下拉选择)", width: 200 },
   { field: "preventivePlan", title: "预防性治疗方案(下拉选择)", width: 180 },
   { field: "preventivePlanRemark", title: "其他方案，请备注", width: 140 },
   { field: "treatmentCompleted", title: "是否完成治疗(下拉选择)", width: 170 },

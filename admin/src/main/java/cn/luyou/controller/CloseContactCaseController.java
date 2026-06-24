@@ -30,7 +30,7 @@ public class CloseContactCaseController {
 
     private final CloseContactCaseService closeContactCaseService;
 
-    @Operation(summary = "上传密接个案表Excel（71列官方模板）")
+    @Operation(summary = "上传密接个案表Excel（72列官方模板）")
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(closeContactCaseService.uploadAndParse(file));
@@ -119,7 +119,7 @@ public class CloseContactCaseController {
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode(fileName, StandardCharsets.UTF_8));
 
-        // 官方 71 列表头，与导入模板一致
+        // 官方 72 列表头，与导入模板一致
         CloseContactCaseExcelExportSupport.write(response.getOutputStream(), CloseContactCaseExcelExportSupport.SHEET_NAME, CloseContactCase.class, list);
     }
 

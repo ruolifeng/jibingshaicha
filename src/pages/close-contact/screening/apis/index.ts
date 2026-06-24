@@ -1,6 +1,6 @@
 import { request } from "@/http/axios"
 
-/** 上传密接人群筛查 Excel（71列官方模板） */
+/** 上传密接人群筛查 Excel（72列官方模板） */
 export function uploadScreeningCloseContactApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
@@ -41,7 +41,7 @@ export function countByResultApi() {
   })
 }
 
-/** 导出密接人群筛查 Excel（71列官方模板，可再导入） */
+/** 导出密接人群筛查 Excel（72列官方模板，可再导入） */
 export function exportScreeningCloseContactApi(ids?: number[]) {
   return request<Blob>({
     url: "screening/close-contact/export",

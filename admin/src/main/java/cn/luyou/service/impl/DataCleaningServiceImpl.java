@@ -179,7 +179,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     /**
-     * 密接 71 列官方模板与旧版（含原患者身份证号 / 是否开展预防治疗）列位不同。
+     * 密接 72 列官方模板与旧版（含原患者身份证号 / 无「是否开展预防治疗」列）列位不同。
      */
     private CloseContactColumnLayout resolveCloseContactLayout(MultipartFile file, int headRowNumber) {
         try (InputStream inputStream = file.getInputStream();
@@ -470,7 +470,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             case "痰涂片", "痰涂片结果" -> "sputumSmearResult";
             case "分子生物学", "分子生物学结果" -> "molecularBiologyResult";
             case "诊断", "诊断结果" -> "diagnosisResult";
-            case "符合潜伏治疗条件者是否进行预防性治疗是写出方案否填写原因", "是否进行预防者治疗", "是否进行预防性治疗" -> "hasPreventiveTreatment";
+            case "符合潜伏治疗条件者是否进行预防性治疗是写出方案否填写原因", "是否进行预防者治疗", "是否进行预防性治疗", "是否开展预防治疗" -> "hasPreventiveTreatment";
             case "预防性治疗方案" -> "preventivePlan";
             case "预防性治疗开始时间年月日" -> "preventiveStartDate";
             case "预防性治疗完成时间年月日" -> "preventiveEndDate";
@@ -768,7 +768,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     private record CloseContactColumnLayout(int nameCol, int idCol, int phoneCol, int finalResultCol) {
-        /** 71 列官方模板 */
+        /** 72 列官方模板（校验列位：姓名/证件/电话/最终筛查结果与 index 33 前一致） */
         static final CloseContactColumnLayout STANDARD_71 = new CloseContactColumnLayout(10, 11, 14, 29);
         /** 旧 73 列模板（G 列为患者身份证号） */
         static final CloseContactColumnLayout LEGACY_73 = new CloseContactColumnLayout(11, 12, 15, 30);
