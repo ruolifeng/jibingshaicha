@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -225,8 +226,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
-                .eq(StrUtil.isNotBlank(diagnosisResult), Patient::getDiagnosisResult, diagnosisResult)
                 .eq(archived != null, Patient::getArchived, archived);
+        applyDiagnosisResultFilter(wrapper, diagnosisResult);
         if (hasFirstVisitFillDateRange) {
             applyPatientIdFilter(wrapper,
                     resolvePatientFirstVisitDateBizIds(populationType, createFrom, createTo));
@@ -593,13 +594,42 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         return sql.toString();
     }
 
+    /**
+     * 病原学结果筛选：兼容主表 diagnosisResult 与 epidemic_data 中的「病原学结果」「诊断结果」。
+     * 专病网等导入数据常存为「病原学阳性/阴性」，筛选项为「阳性/阴性」时需一并匹配。
+     */
+    private void applyDiagnosisResultFilter(LambdaQueryWrapper<Patient> wrapper, String diagnosisResult) {
+        if (StrUtil.isBlank(diagnosisResult)) {
+            return;
+        }
+        if ("阳性".equals(diagnosisResult)) {
+            applyPathogenPositiveFilter(wrapper);
+            return;
+        }
+        if ("阴性".equals(diagnosisResult)) {
+            applyPathogenValueFilter(wrapper, "阴性", "病原学阴性");
+            return;
+        }
+        applyPathogenValueFilter(wrapper, diagnosisResult);
+    }
+
     /** 病原学阳性：与在管总览/历史患者列表中「病原学结果」筛选口径一致 */
     private void applyPathogenPositiveFilter(LambdaQueryWrapper<Patient> wrapper) {
-        wrapper.and(w -> w.in(Patient::getDiagnosisResult, "阳性", "病原学阳性")
+        applyPathogenValueFilter(wrapper, "阳性", "病原学阳性");
+    }
+
+    private void applyPathogenValueFilter(LambdaQueryWrapper<Patient> wrapper, String... values) {
+        if (values == null || values.length == 0) {
+            return;
+        }
+        String inClause = Arrays.stream(values)
+                .map(v -> "'" + v.replace("'", "''") + "'")
+                .collect(Collectors.joining(", "));
+        wrapper.and(w -> w.in(Patient::getDiagnosisResult, (Object[]) values)
                 .or().apply("JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
-                        + EPIDEMIC_JSON_PATHOGEN_RESULT + "')) IN ('阳性', '病原学阳性')")
+                        + EPIDEMIC_JSON_PATHOGEN_RESULT + "')) IN (" + inClause + ")")
                 .or().apply("JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
-                        + EPIDEMIC_JSON_DIAGNOSIS_RESULT + "')) IN ('阳性', '病原学阳性')"));
+                        + EPIDEMIC_JSON_DIAGNOSIS_RESULT + "')) IN (" + inClause + ")"));
     }
 
     /** 五级用户已完成首次随访的可编辑天数 */
@@ -1126,10 +1156,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
-                .eq(StrUtil.isNotBlank(diagnosisResult), Patient::getDiagnosisResult, diagnosisResult)
                 .ge(StrUtil.isNotBlank(startTime), Patient::getArchivedTime, startTime)
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
+        applyDiagnosisResultFilter(wrapper, diagnosisResult);
         dataScopeHelper.applyPatientScope(wrapper);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
