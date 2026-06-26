@@ -22,6 +22,7 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
 
+        // 分母均限定 statYear 管理/发起 cohort；分子可跨年（如治疗成功、推介/追踪到位）
         long managedPatientCount = patientService.countManagedPatientsForDashboard(year);
         long pathogenPositiveCount = patientService.countPathogenPositivePatientsForDashboard(year);
         long treatmentSuccessCount = patientService.countTreatmentSuccessForDashboard(year);

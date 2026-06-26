@@ -130,13 +130,15 @@ public interface PatientService extends IService<Patient> {
     long countPathogenPositivePatientsForDashboard(Integer statYear);
 
     /**
-     * 首页统计：治疗成功人数（后续随访停止治疗原因为「完成疗程」，与患者列表一致的数据权限）。
+     * 首页统计：治疗成功人数。分母为 statYear 年度管理患者；分子为其中任意时间完成疗程者（可跨年）。
      */
     long countTreatmentSuccessForDashboard(Integer statYear);
 
     /**
-     * 患者分布热力图（三级及以上用户，按区县×社区聚合，与年度管理患者数口径一致）。
+     * 患者分布热力图（三级及以上用户，自贡地图：市级区县 / 区县级乡镇）。
+     *
+     * @param districtName 下钻区县名称，为空时返回自贡各区县汇总
      */
-    PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear);
+    PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName);
 
 }

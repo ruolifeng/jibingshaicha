@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import cn.luyou.utils.ExcelTextStringConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
@@ -42,11 +43,11 @@ public class ScreeningKeyPopulation extends BaseEntity {
     private Integer age;
     @ExcelProperty(value = "证件类型", index = 8)
     private String idType;
-    @ExcelProperty(value = "证件号", index = 9)
+    @ExcelProperty(value = "证件号", index = 9, converter = ExcelTextStringConverter.class)
     private String idNumber;
     @ExcelProperty(value = "民族", index = 10)
     private String ethnicity;
-    @ExcelProperty(value = "联系电话", index = 11)
+    @ExcelProperty(value = "联系电话", index = 11, converter = ExcelTextStringConverter.class)
     private String phone;
     @ExcelProperty(value = "户籍地址", index = 12)
     private String householdAddress;
@@ -116,23 +117,22 @@ public class ScreeningKeyPopulation extends BaseEntity {
     private String diagnosisFirst;
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====
-    @ExcelIgnore
+    @ExcelProperty(index = 41)
     private String diagnosisHalfYear;
-    @ExcelIgnore
+    @ExcelProperty(index = 42)
     private String diagnosisOneYear;
 
-    // V4 AQ-AV（index 42-47）：预防性治疗情况，由督导表归档后系统写入
-    @ExcelIgnore
+    @ExcelProperty(index = 43)
     private String hasPreventiveTreatment;
-    @ExcelIgnore
+    @ExcelProperty(index = 44)
     private String preventivePlan;
-    @ExcelIgnore
+    @ExcelProperty(index = 45, converter = FlexibleLocalDateConverter.class)
     private LocalDate preventiveStartDate;
-    @ExcelIgnore
+    @ExcelProperty(index = 46, converter = FlexibleLocalDateConverter.class)
     private LocalDate preventiveEndDate;
-    @ExcelIgnore
+    @ExcelProperty(index = 47)
     private String preventiveResult;
-    @ExcelIgnore
+    @ExcelProperty(index = 48)
     private String preventiveManager;
 
     @ExcelIgnore

@@ -64,7 +64,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 首页统计：推介人数（已发送推介，与推介管理列表一致的数据权限） */
     long countRecommendSentForDashboard(Integer statYear);
 
-    /** 首页统计：推介到位人数（已记录到位时间） */
+    /** 首页统计：推介到位人数（statYear 内已发送推介中，任意时间到位者） */
     long countRecommendArrivedForDashboard(Integer statYear);
 
     /**

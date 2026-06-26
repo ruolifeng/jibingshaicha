@@ -112,6 +112,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             record.setReceiverDeptId(receiver.getDepartmentId());
             record.setRecommendStatus(0);
             record.setRecommendReason(getStr(params, "recommendReason"));
+            record.setRecommendUnitName(resolveRecommendUnitName(currentUser));
+            record.setFillUserName(resolveFillUserName(currentUser));
         } else if ("track".equals(bizMode)) {
             validateTrackRequired(params);
             record.setTrackReason(getStr(params, "trackReason"));
@@ -281,7 +283,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     List.of("证件类型"), List.of("有效证件号"), List.of("民族"), List.of("联系电话"),
                     List.of("户籍地址"), List.of("现住详细地址"), List.of("人群分类"),
                     List.of("感染筛查时间"), List.of("感染筛查方法"), List.of("感染筛查结果"),
-                    List.of("胸片筛查时间"), List.of("胸片筛查结果"), List.of("推介原因"),
+                    List.of("胸片筛查时间"), List.of("胸片筛查结果"),
+                    List.of("推介单位名称"), List.of("填写用户名称"), List.of("推介原因"),
                     List.of("推介接收人"), List.of("推介状态"), List.of("追踪状态"), List.of("未到位次数"),
                     List.of("诊断结果"), List.of("诊断备注"), List.of("推介时间"), List.of("最新追踪时间"),
                     List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总")
@@ -312,6 +315,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     r.getScreenMethod(), r.getInfectionResult(),
                     r.getChestXrayDate() != null ? r.getChestXrayDate().toString() : "",
                     r.getChestXrayResult(),
+                    r.getRecommendUnitName(), r.getFillUserName(),
                     r.getRecommendReason(), r.getReceiverUserName(), recommendStatusLabel(r.getRecommendStatus()),
                     trackingStatusLabel(r.getTrackingStatus()),
                     r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
@@ -1184,11 +1188,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 record.setReceiverUserName(formatReceiverDisplayName(receiver));
             }
         }
-        if (record.getCreatorId() != null) {
-            User creator = userService.getById(record.getCreatorId());
-            if (creator != null) {
-                record.setCreatorUserName(StrUtil.blankToDefault(creator.getRealName(), creator.getUsername()));
-            }
+        User creator = record.getCreatorId() != null ? userService.getById(record.getCreatorId()) : null;
+        if (creator != null) {
+            record.setCreatorUserName(StrUtil.blankToDefault(creator.getRealName(), creator.getUsername()));
         }
         if (record.getDepartmentId() != null) {
             Department dept = departmentService.getById(record.getDepartmentId());
@@ -1196,12 +1198,35 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 record.setEntryUnitName(dept.getName());
             }
         }
-        if (StrUtil.isBlank(record.getEntryUnitName()) && record.getCreatorId() != null) {
-            User creator = userService.getById(record.getCreatorId());
-            if (creator != null) {
-                record.setEntryUnitName(creator.getOrgName());
+        if (StrUtil.isBlank(record.getEntryUnitName()) && creator != null) {
+            record.setEntryUnitName(creator.getOrgName());
+        }
+        if (StrUtil.isBlank(record.getRecommendUnitName()) && creator != null) {
+            record.setRecommendUnitName(resolveRecommendUnitName(creator));
+        }
+        if (StrUtil.isBlank(record.getFillUserName()) && creator != null) {
+            record.setFillUserName(resolveFillUserName(creator));
+        }
+    }
+
+    private String resolveRecommendUnitName(User user) {
+        if (user == null) {
+            return "";
+        }
+        if (user.getDepartmentId() != null) {
+            Department dept = departmentService.getById(user.getDepartmentId());
+            if (dept != null && StrUtil.isNotBlank(dept.getName())) {
+                return dept.getName();
             }
         }
+        return StrUtil.blankToDefault(user.getOrgName(), "");
+    }
+
+    private String resolveFillUserName(User user) {
+        if (user == null) {
+            return "";
+        }
+        return StrUtil.blankToDefault(user.getRealName(), user.getUsername());
     }
 
     /** 录入者或录入单位：匹配创建人姓名/用户名、用户所属单位名称，或录入部门名称 */

@@ -43,6 +43,10 @@ public class ReferralTracking extends BaseEntity {
     private String crowdCategory;
     /** 推介原因（bizMode=recommend 时手动录入） */
     private String recommendReason;
+    /** 推介单位名称（创建时快照，默认取填报用户所属部门/单位） */
+    private String recommendUnitName;
+    /** 填写用户名称（创建时快照，默认取填报用户姓名） */
+    private String fillUserName;
     /** 追踪原因（bizMode=track 时手动录入） */
     private String trackReason;
 

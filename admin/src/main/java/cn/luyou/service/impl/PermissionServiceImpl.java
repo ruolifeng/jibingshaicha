@@ -160,7 +160,15 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
             }
         }
         expandAncestorPermissionCodes(codes);
+        normalizeLegacyPermissionCodes(codes);
         return new ArrayList<>(codes);
+    }
+
+    /** 兼容历史权限码 dataClean → dataCleaning */
+    private void normalizeLegacyPermissionCodes(LinkedHashSet<String> codes) {
+        if (codes.contains("dataClean") && !codes.contains("dataCleaning")) {
+            codes.add("dataCleaning");
+        }
     }
 
     private List<Permission> buildTree(List<Permission> all, Long parentId) {

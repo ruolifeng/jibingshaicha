@@ -2,6 +2,7 @@ package cn.luyou.utils;
 
 import cn.luyou.constant.CloseContactCaseExcelHeaders;
 import cn.luyou.model.CloseContactCase;
+import cn.luyou.model.ScreeningCloseContact;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 
@@ -20,6 +21,7 @@ public final class CloseContactCaseExcelExportSupport {
     }
 
     public static <T> void write(OutputStream outputStream, String sheetName, Class<T> rowType, List<T> rows) {
+        applyDerivedFields(rows);
         EasyExcel.write(outputStream, rowType)
                 .head(CloseContactCaseExcelHeaders.asEasyExcelHead())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
@@ -30,5 +32,21 @@ public final class CloseContactCaseExcelExportSupport {
     /** 下载空模板（仅官方 72 列表头，与导出/导入一致） */
     public static void writeTemplate(OutputStream outputStream) {
         write(outputStream, SHEET_NAME, CloseContactCase.class, Collections.emptyList());
+    }
+
+    private static <T> void applyDerivedFields(List<T> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        Object first = rows.get(0);
+        if (first instanceof CloseContactCase) {
+            @SuppressWarnings("unchecked")
+            List<CloseContactCase> cases = (List<CloseContactCase>) rows;
+            CloseContactCaseExcelDerivedSupport.applyAll(cases);
+        } else if (first instanceof ScreeningCloseContact) {
+            @SuppressWarnings("unchecked")
+            List<ScreeningCloseContact> contacts = (List<ScreeningCloseContact>) rows;
+            CloseContactCaseExcelDerivedSupport.applyAllScreening(contacts);
+        }
     }
 }

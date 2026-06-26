@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PatientHeatmapData } from "../apis"
 import type { DashboardSummaryData } from "@/pages/dashboard/apis"
+import { getCurrentStatYear } from "@@/utils/stat-year"
 import PatientHeatmapChart from "./PatientHeatmapChart.vue"
 
 const props = defineProps<{
@@ -11,7 +12,11 @@ const props = defineProps<{
   heatmapLoading?: boolean
 }>()
 
-const managementYear = computed(() => props.summary.managementYear ?? new Date().getFullYear())
+const emit = defineEmits<{
+  heatmapDrill: [district: string | null]
+}>()
+
+const managementYear = computed(() => props.summary.managementYear ?? getCurrentStatYear())
 
 const periodText = computed(() => {
   const { statPeriodFrom, statPeriodTo, trackingPeriodFrom, trackingPeriodTo } = props.summary
@@ -73,7 +78,7 @@ function rateText(rate?: number) {
 
       <div class="referral-panel">
         <div class="panel-title">
-          推介情况
+          {{ managementYear }}年度推介情况
         </div>
         <div class="panel-content">
           <span>推介人数：<strong>{{ summary.recommendCount ?? 0 }}</strong> 例</span>
@@ -102,6 +107,7 @@ function rateText(rate?: number) {
       v-if="showHeatmap"
       :heatmap="heatmap ?? {}"
       :loading="heatmapLoading"
+      @drill="emit('heatmapDrill', $event)"
     />
   </div>
 </template>

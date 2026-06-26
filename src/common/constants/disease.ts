@@ -1,3 +1,15 @@
+/** 筛查列表「人群分类」筛选项（支持多选，逗号分隔传参） */
+export const SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS = [
+  { label: "密接", value: "密接" },
+  { label: "学生", value: "学生" },
+  { label: "教职工", value: "教职工" },
+  { label: "老年人", value: "老年人" },
+  { label: "糖尿病", value: "糖尿病" },
+  { label: "双感", value: "双感" },
+  { label: "既往结核史", value: "既往结核史" },
+  { label: "非重点人群", value: "非重点人群" }
+]
+
 /** 人群分类选项 */
 export const CROWD_CATEGORY_OPTIONS = [
   "密接",
@@ -163,7 +175,7 @@ export function getSuspectedConfirmDiagnosisLabel(row: {
 /** 预防性治疗结果（V4新增，督导表字段） */
 export const PREVENTIVE_RESULT_OPTIONS = [
   "规范完成",
-  "失访", 
+  "失访",
   "自行中断治疗",
   "确诊肺结核"
 ]

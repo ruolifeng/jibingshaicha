@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 患者分布热力图数据（区县 × 社区/街道）。
+ * 患者分布地图热力图（自贡市：市级区县 / 区县级乡镇）。
  */
 @Data
 @Builder
@@ -21,12 +21,27 @@ public class PatientDistributionHeatmapVO {
     private String statPeriodTo;
     /** 患者总数 */
     private Integer total;
-    /** 单格最大患者数（用于色阶） */
+    /** 单区域最大患者数（用于色阶） */
     private Integer maxCount;
-    /** 行：区县 */
-    private List<String> rowLabels;
-    /** 列：社区序号（具体名称见 data 中 community 字段） */
-    private List<String> colLabels;
-    /** 热力点：[列索引, 行索引, 患者数, 区县名, 社区名] */
-    private List<List<Object>> data;
+    /** city=自贡各区县，district=区县下乡镇 */
+    private String mapLevel;
+    /** 下钻区县名称（mapLevel=district 时有值） */
+    private String districtName;
+    /** 下钻区县 adcode（mapLevel=district 时有值） */
+    private String districtAdcode;
+    /** 地图区域统计 */
+    private List<MapRegion> regions;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MapRegion {
+        /** 区域名称（区县名或乡镇/社区名） */
+        private String name;
+        /** 患者数 */
+        private Integer value;
+        /** 行政区划 adcode（市级区县时有值） */
+        private String adcode;
+    }
 }

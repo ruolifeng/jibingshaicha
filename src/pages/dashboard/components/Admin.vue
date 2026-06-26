@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
+import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import {
   Bell,
   Calendar,
@@ -21,7 +22,11 @@ import {
 
 } from "../apis"
 
+const selectedStatYear = ref(String(getCurrentStatYear()))
+const yearOptions = buildStatYearOptions()
+
 const summaryLoading = ref(false)
+const yearStatsLoading = ref(false)
 const taskLoading = ref(false)
 const summary = ref<DashboardSummaryData>({
   pendingTracking: 0,
@@ -46,12 +51,22 @@ const messageStats = ref<MessageStatsData>({
   referralRejected: 0
 })
 
+async function fetchYearSummary() {
+  yearStatsLoading.value = true
+  try {
+    const { data } = await getDashboardSummaryApi(selectedStatYear.value)
+    summary.value = { ...summary.value, ...(data || {}) }
+  } catch { /* handled globally */ } finally {
+    yearStatsLoading.value = false
+  }
+}
+
 async function fetchAll() {
   summaryLoading.value = true
   taskLoading.value = true
   try {
     const [summaryRes, batchRes, msgRes] = await Promise.all([
-      getDashboardSummaryApi(),
+      getDashboardSummaryApi(selectedStatYear.value),
       getDashboardBatchesApi(),
       getDashboardMessageStatsApi()
     ])
@@ -82,6 +97,12 @@ watch(selectedBatch, () => {
   fetchTaskStats()
 })
 
+watch(selectedStatYear, () => {
+  fetchYearSummary()
+})
+
+const managementYear = computed(() => summary.value.managementYear ?? getCurrentStatYear())
+
 // ===== 统计卡片配置 =====
 const statCards = [
   { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search, bg: "#fff5f5" },
@@ -89,8 +110,6 @@ const statCards = [
   { label: "待确认通知单", key: "pendingNotice" as const, color: "#409eff", icon: Bell, bg: "#f0f7ff" },
   { label: "近期复查(15天)", key: "upcomingReview" as const, color: "#67c23a", icon: Calendar, bg: "#f0fff4" }
 ]
-
-const managementYear = computed(() => summary.value.managementYear ?? new Date().getFullYear())
 
 function getStatCardLabel(key: string, label: string) {
   if (key === "pendingVisit") {
@@ -114,7 +133,7 @@ const recommendArrivalRateText = computed(() => {
   return rate == null ? "—" : `${rate.toFixed(1)}%`
 })
 
-const trackingStatYear = computed(() => summary.value.trackingStatYear ?? new Date().getFullYear())
+const trackingStatYear = computed(() => summary.value.trackingStatYear ?? getCurrentStatYear())
 
 const trackingArrivalRateText = computed(() => {
   const rate = summary.value.trackingArrivalRate
@@ -122,9 +141,11 @@ const trackingArrivalRateText = computed(() => {
 })
 
 const trackingPeriodText = computed(() => {
-  const { trackingPeriodFrom, trackingPeriodTo } = summary.value
-  if (!trackingPeriodFrom || !trackingPeriodTo) return ""
-  return `统计周期：${trackingPeriodFrom} 至 ${trackingPeriodTo}`
+  const { statPeriodFrom, statPeriodTo, trackingPeriodFrom, trackingPeriodTo } = summary.value
+  const from = statPeriodFrom || trackingPeriodFrom
+  const to = statPeriodTo || trackingPeriodTo
+  if (!from || !to) return ""
+  return `统计周期：${from} 至 ${to}`
 })
 
 // ===== 人群卡片配置 =====
@@ -159,7 +180,7 @@ const noticeMaxSent = computed(() =>
 </script>
 
 <template>
-  <div v-loading="summaryLoading" class="dashboard-wrap">
+  <div class="dashboard-wrap">
     <!-- ===== 顶部 Header ===== -->
     <div class="db-header">
       <div class="db-header-left">
@@ -171,6 +192,13 @@ const noticeMaxSent = computed(() =>
         </div>
       </div>
       <div class="db-header-right">
+        <el-select
+          v-model="selectedStatYear"
+          placeholder="统计年度"
+          class="year-select"
+        >
+          <el-option v-for="y in yearOptions" :key="y" :label="`${y}年度`" :value="y" />
+        </el-select>
         <el-select
           v-model="selectedBatch"
           placeholder="全部任务"
@@ -188,7 +216,7 @@ const noticeMaxSent = computed(() =>
     <div class="section-label">
       <span class="label-bar" />待处理事项
     </div>
-    <el-row :gutter="20" class="stat-row">
+    <el-row :gutter="20" v-loading="summaryLoading" class="stat-row">
       <el-col v-for="card in statCards" :key="card.key" :xs="12" :sm="12" :md="6">
         <div class="stat-card" :style="{ '--card-color': card.color, 'backgroundColor': card.bg }">
           <div class="stat-icon-wrap">
@@ -209,54 +237,57 @@ const noticeMaxSent = computed(() =>
       </el-col>
     </el-row>
 
-    <div class="pathogen-panel">
-      <div class="pathogen-title">
-        {{ managementYear }}年度病原学阳性情况
-      </div>
-      <div class="pathogen-content">
-        <span>{{ managementYear }}年度病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
-        <span class="pathogen-divider">|</span>
-        <span>病原学阳性率：<strong>{{ pathogenPositiveRateText }}</strong></span>
-      </div>
-    </div>
-
-    <div class="treatment-panel">
-      <div class="treatment-title">
-        {{ managementYear }}年度治疗情况
-      </div>
-      <div class="treatment-content">
-        <span>{{ managementYear }}年度治疗成功人数：<strong>{{ summary.treatmentSuccessCount ?? 0 }}</strong> 例</span>
-        <span class="treatment-divider">|</span>
-        <span>治疗成功率：<strong>{{ treatmentSuccessRateText }}</strong></span>
-      </div>
-    </div>
-
-    <div class="referral-panel">
-      <div class="referral-title">
-        推介情况
-      </div>
-      <div class="referral-content">
-        <span>推介人数：<strong>{{ summary.recommendCount ?? 0 }}</strong> 例</span>
-        <span class="referral-divider">|</span>
-        <span>到位人数：<strong>{{ summary.recommendArrivedCount ?? 0 }}</strong> 例</span>
-        <span class="referral-divider">|</span>
-        <span>推介到位率：<strong>{{ recommendArrivalRateText }}</strong></span>
-      </div>
-    </div>
-
-    <div class="tracking-panel">
-      <div class="tracking-title">
-        {{ trackingStatYear }}年度追踪情况
-      </div>
-      <div v-if="trackingPeriodText" class="tracking-period">
+    <div v-loading="summaryLoading || yearStatsLoading" class="year-stats-section">
+      <div v-if="trackingPeriodText" class="year-stats-period">
         {{ trackingPeriodText }}
       </div>
-      <div class="tracking-content">
-        <span>追踪人数：<strong>{{ summary.trackingCount ?? 0 }}</strong> 例</span>
-        <span class="tracking-divider">|</span>
-        <span>到位人数：<strong>{{ summary.trackingArrivedCount ?? 0 }}</strong> 例</span>
-        <span class="tracking-divider">|</span>
-        <span>追踪到位率：<strong>{{ trackingArrivalRateText }}</strong></span>
+
+      <div class="pathogen-panel">
+        <div class="pathogen-title">
+          {{ managementYear }}年度病原学阳性情况
+        </div>
+        <div class="pathogen-content">
+          <span>{{ managementYear }}年度病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+          <span class="pathogen-divider">|</span>
+          <span>病原学阳性率：<strong>{{ pathogenPositiveRateText }}</strong></span>
+        </div>
+      </div>
+
+      <div class="treatment-panel">
+        <div class="treatment-title">
+          {{ managementYear }}年度治疗情况
+        </div>
+        <div class="treatment-content">
+          <span>{{ managementYear }}年度治疗成功人数：<strong>{{ summary.treatmentSuccessCount ?? 0 }}</strong> 例</span>
+          <span class="treatment-divider">|</span>
+          <span>治疗成功率：<strong>{{ treatmentSuccessRateText }}</strong></span>
+        </div>
+      </div>
+
+      <div class="referral-panel">
+        <div class="referral-title">
+          {{ managementYear }}年度推介情况
+        </div>
+        <div class="referral-content">
+          <span>推介人数：<strong>{{ summary.recommendCount ?? 0 }}</strong> 例</span>
+          <span class="referral-divider">|</span>
+          <span>到位人数：<strong>{{ summary.recommendArrivedCount ?? 0 }}</strong> 例</span>
+          <span class="referral-divider">|</span>
+          <span>推介到位率：<strong>{{ recommendArrivalRateText }}</strong></span>
+        </div>
+      </div>
+
+      <div class="tracking-panel">
+        <div class="tracking-title">
+          {{ trackingStatYear }}年度追踪情况
+        </div>
+        <div class="tracking-content">
+          <span>追踪人数：<strong>{{ summary.trackingCount ?? 0 }}</strong> 例</span>
+          <span class="tracking-divider">|</span>
+          <span>到位人数：<strong>{{ summary.trackingArrivedCount ?? 0 }}</strong> 例</span>
+          <span class="tracking-divider">|</span>
+          <span>追踪到位率：<strong>{{ trackingArrivalRateText }}</strong></span>
+        </div>
       </div>
     </div>
 
@@ -590,8 +621,10 @@ const noticeMaxSent = computed(() =>
   align-items: center;
   gap: 12px;
 
+  .year-select,
   .batch-select {
-    width: 200px;
+    width: 140px;
+
     :deep(.el-input__wrapper) {
       background: rgba(255, 255, 255, 0.15);
       box-shadow: none;
@@ -607,6 +640,10 @@ const noticeMaxSent = computed(() =>
     :deep(.el-input__prefix-inner) {
       color: rgba(255, 255, 255, 0.8);
     }
+  }
+
+  .batch-select {
+    width: 200px;
   }
 }
 
@@ -641,6 +678,19 @@ const noticeMaxSent = computed(() =>
 // ===== Stat Cards =====
 .stat-row {
   margin-bottom: 0;
+}
+
+.year-stats-section {
+  margin: 4px 0 28px;
+}
+
+.year-stats-period {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-extra-light);
+  border-radius: 8px;
 }
 
 .stat-card {

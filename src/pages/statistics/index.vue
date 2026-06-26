@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PatientHeatmapData } from "./apis"
 import type { DashboardSummaryData } from "@/pages/dashboard/apis"
+import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -31,12 +32,12 @@ const activeTab = ref("workbench")
 
 // ==================== 筛选条件 ====================
 const filterForm = reactive({
-  year: String(new Date().getFullYear()),
+  year: String(getCurrentStatYear()),
   district: ""
 })
 
 const districtOptions = ref<string[]>([])
-const yearOptions = Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() - i))
+const yearOptions = buildStatYearOptions()
 
 async function loadDistrictOptions() {
   try {
@@ -90,6 +91,7 @@ const workbenchSummary = ref<DashboardSummaryData>({
 
 async function fetchWorkbenchStatistics() {
   workbenchLoading.value = true
+  heatmapDistrict.value = undefined
   const heatmapPromise = canViewPatientHeatmap.value ? fetchPatientHeatmap() : Promise.resolve()
   try {
     const { data } = await getWorkbenchStatisticsApi(filterForm.year)
@@ -102,16 +104,26 @@ async function fetchWorkbenchStatistics() {
 
 const heatmapLoading = ref(false)
 const heatmapData = ref<PatientHeatmapData>({})
+const heatmapDistrict = ref<string>()
 
-async function fetchPatientHeatmap() {
+async function fetchPatientHeatmap(district?: string) {
   if (!canViewPatientHeatmap.value) return
   heatmapLoading.value = true
   try {
-    const { data } = await getPatientHeatmapApi(filterForm.year)
+    const { data } = await getPatientHeatmapApi(filterForm.year, district)
     heatmapData.value = data || {}
-  } catch { /* handled */ } finally {
+    heatmapDistrict.value = district
+  } catch {
+    if (district) {
+      ElMessage.warning("无法查看该区县，请确认您有相应辖区权限")
+    }
+  } finally {
     heatmapLoading.value = false
   }
+}
+
+function handleHeatmapDrill(district: string | null) {
+  fetchPatientHeatmap(district || undefined)
 }
 
 // ==================== 搜索与重置 ====================
@@ -126,7 +138,7 @@ function handleSearch() {
 }
 
 function handleReset() {
-  filterForm.year = String(new Date().getFullYear())
+  filterForm.year = String(getCurrentStatYear())
   filterForm.district = ""
   handleSearch()
 }
@@ -384,6 +396,7 @@ onMounted(() => {
             :show-heatmap="canViewPatientHeatmap"
             :heatmap="heatmapData"
             :heatmap-loading="heatmapLoading"
+            @heatmap-drill="handleHeatmapDrill"
           />
         </el-tab-pane>
 

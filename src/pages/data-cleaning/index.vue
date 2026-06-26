@@ -32,6 +32,8 @@ const matching = ref(false)
 const selectedType = ref<PopulationType>("school")
 const selectedFile = ref<File | null>(null)
 const matchFile = ref<File | null>(null)
+const cleanUploadRef = ref<any>()
+const matchUploadRef = ref<any>()
 const result = ref<{
   totalCount: number
   abnormalCount: number
@@ -52,10 +54,20 @@ function onFileChange(uploadFile: any) {
   if (!file) return
   if (!(file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
     ElMessage.error("请上传 .xlsx 或 .xls 文件")
+    cleanUploadRef.value?.clearFiles()
+    selectedFile.value = null
     return
   }
   selectedFile.value = file
   result.value = null
+}
+
+function onCleanFileExceed(files: File[]) {
+  cleanUploadRef.value?.clearFiles()
+  const raw = files[0]
+  if (!raw) return
+  cleanUploadRef.value?.handleStart(raw)
+  onFileChange({ raw })
 }
 
 function onMatchFileChange(uploadFile: any) {
@@ -63,9 +75,19 @@ function onMatchFileChange(uploadFile: any) {
   if (!file) return
   if (!(file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
     ElMessage.error("请上传 .xlsx 或 .xls 文件")
+    matchUploadRef.value?.clearFiles()
+    matchFile.value = null
     return
   }
   matchFile.value = file
+}
+
+function onMatchFileExceed(files: File[]) {
+  matchUploadRef.value?.clearFiles()
+  const raw = files[0]
+  if (!raw) return
+  matchUploadRef.value?.handleStart(raw)
+  onMatchFileChange({ raw })
 }
 
 async function handleMatchSchool() {
@@ -96,6 +118,8 @@ async function handleClean() {
     const { data } = await cleanScreeningDataApi(selectedType.value, selectedFile.value)
     result.value = data
     ElMessage.success("数据清洗完成")
+  } catch {
+    // 错误提示由 axios 拦截器统一处理
   } finally {
     loading.value = false
   }
@@ -171,11 +195,13 @@ async function handleDownload() {
         </el-form-item>
         <el-form-item label="上传文件">
           <el-upload
+            ref="matchUploadRef"
             :auto-upload="false"
             :show-file-list="true"
             accept=".xlsx,.xls"
             :limit="1"
             :on-change="onMatchFileChange"
+            :on-exceed="onMatchFileExceed"
           >
             <el-button type="primary">
               选择 Excel
@@ -213,11 +239,13 @@ async function handleDownload() {
         </el-form-item>
         <el-form-item label="上传文件">
           <el-upload
+            ref="cleanUploadRef"
             :auto-upload="false"
             :show-file-list="true"
             accept=".xlsx,.xls"
             :limit="1"
             :on-change="onFileChange"
+            :on-exceed="onCleanFileExceed"
           >
             <el-button type="primary">
               选择 Excel

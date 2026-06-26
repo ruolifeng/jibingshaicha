@@ -44,22 +44,33 @@ export function getWorkbenchStatisticsApi(year?: number | string) {
 }
 
 /** 患者分布热力图（三级及以上用户） */
+export interface PatientHeatmapRegion {
+  name: string
+  value?: number
+  adcode?: string
+}
+
 export interface PatientHeatmapData {
   managementYear?: number
   statPeriodFrom?: string
   statPeriodTo?: string
   total?: number
   maxCount?: number
-  rowLabels?: string[]
-  colLabels?: string[]
-  data?: Array<Array<string | number>>
+  /** city=自贡各区县 district=区县下乡镇 */
+  mapLevel?: "city" | "district"
+  districtName?: string
+  districtAdcode?: string
+  regions?: PatientHeatmapRegion[]
 }
 
-export function getPatientHeatmapApi(year?: number | string) {
+export function getPatientHeatmapApi(year?: number | string, district?: string) {
   return request<ApiResponseData<PatientHeatmapData>>({
     url: "statistics/patient-heatmap",
     method: "get",
-    params: year != null && year !== "" ? { year: Number(year) } : {}
+    params: {
+      ...(year != null && year !== "" ? { year: Number(year) } : {}),
+      ...(district ? { district } : {})
+    }
   })
 }
 

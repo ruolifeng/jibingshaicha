@@ -72,7 +72,15 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 7, converter = FlexibleLocalDateConverter.class)
     private LocalDate registrationDate;
 
-    // index 8(季度)、9(时间间隔) 自动生成，跳过
+    /** 报表填报季度（Excel 自动生成列，仅导入/导出占位） */
+    @TableField(exist = false)
+    @ExcelProperty(index = 8)
+    private String reportQuarter;
+
+    /** 登记日期至当前日期间隔提示（Excel 自动生成列，仅导入/导出占位） */
+    @TableField(exist = false)
+    @ExcelProperty(index = 9)
+    private String registrationIntervalHint;
 
     // ===== 接触者基本信息（index 10-16）=====
     @ExcelProperty(index = 10)
@@ -84,7 +92,10 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelProperty(index = 12, converter = FlexibleIntegerConverter.class)
     private Integer age;
 
-    // index 13(年龄组) 自动生成，跳过
+    /** 年龄组（Excel 自动判断列，仅导入/导出占位） */
+    @TableField(exist = false)
+    @ExcelProperty(index = 13)
+    private String ageGroup;
 
     @ExcelProperty(index = 14, converter = ExcelTextStringConverter.class)
     private String phone;
