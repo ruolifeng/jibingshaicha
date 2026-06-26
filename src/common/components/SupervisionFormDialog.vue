@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
+import ImageUploader from "@@/components/ImageUploader.vue"
 import {
   formatLatentSupervisionTreatmentPlan,
   INTERRUPT_MEDICATION_OPTIONS,
@@ -8,9 +9,9 @@ import {
   parseLatentSupervisionTreatmentPlan,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
-  SUPERVISION_METHOD_OPTIONS
+  SUPERVISION_METHOD_OPTIONS,
+  TREATMENT_COMPLETION_STATUS_OPTIONS
 } from "@@/constants/disease"
-import ImageUploader from "@@/components/ImageUploader.vue"
 import { parseAttachmentUrls } from "@@/utils/attachment"
 import { canEditSupervisionForm } from "@@/utils/supervisionForm"
 import {
@@ -73,6 +74,7 @@ const supervisionForm = reactive({
   treatmentPlan: "",
   customPlanDetail: "",
   supervisionRecords: [] as SupervisionRecord[],
+  treatmentCompletionStatus: "",
   interruptMedication: "",
   interruptCount: null as number | null,
   totalDoses: null as number | null,
@@ -141,6 +143,7 @@ function resetFormFromRow(row: any) {
   supervisionForm.treatmentPlan = ""
   supervisionForm.customPlanDetail = ""
   supervisionForm.supervisionRecords = [createEmptyRecord()]
+  supervisionForm.treatmentCompletionStatus = ""
   supervisionForm.interruptMedication = ""
   supervisionForm.interruptCount = null
   supervisionForm.totalDoses = null
@@ -166,6 +169,7 @@ function applyFormData(data: Record<string, any>, row: any) {
   supervisionForm.treatmentEndDate = formatDateValue(data.treatmentEndDate)
   parseTreatmentPlan(data.treatmentPlan)
   parseSupervisionRecords(data.supervisionRecords)
+  supervisionForm.treatmentCompletionStatus = data.treatmentCompletionStatus ?? ""
   supervisionForm.interruptMedication = data.interruptMedication ?? ""
   supervisionForm.interruptCount = data.interruptCount ?? null
   supervisionForm.totalDoses = data.totalDoses ?? null
@@ -242,6 +246,7 @@ function buildPayload(status: number) {
     supervisionRecords: supervisionForm.supervisionRecords.length > 0
       ? JSON.stringify(supervisionForm.supervisionRecords)
       : undefined,
+    treatmentCompletionStatus: supervisionForm.treatmentCompletionStatus || undefined,
     interruptMedication: supervisionForm.interruptMedication || undefined,
     interruptCount: supervisionForm.interruptMedication === "有" ? supervisionForm.interruptCount ?? undefined : undefined,
     totalDoses: supervisionForm.totalDoses ?? undefined,
@@ -474,7 +479,7 @@ async function handleArchive() {
         全疗程规律治疗评价
       </el-divider>
       <el-row :gutter="12">
-        <el-col :span="12">
+        <el-col :span="8">
           <el-form-item label="中断用药">
             <el-radio-group v-model="supervisionForm.interruptMedication">
               <el-radio v-for="item in INTERRUPT_MEDICATION_OPTIONS" :key="item.value" :value="item.value">
@@ -483,7 +488,14 @@ async function handleArchive() {
             </el-radio-group>
           </el-form-item>
         </el-col>
-        <el-col :span="12">
+        <el-col :span="8">
+          <el-form-item label="治疗完成情况">
+            <el-select v-model="supervisionForm.treatmentCompletionStatus" placeholder="请选择" clearable style="width: 100%">
+              <el-option v-for="item in TREATMENT_COMPLETION_STATUS_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
           <el-form-item label="中断次数">
             <el-input-number
               v-model="supervisionForm.interruptCount"

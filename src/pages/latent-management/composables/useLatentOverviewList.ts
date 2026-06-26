@@ -16,6 +16,7 @@ export function useLatentOverviewList() {
     idNumber: "",
     phone: "",
     populationType: "",
+    keyPopulationSubCategories: [] as string[],
     creatorName: "",
     dateRange: [] as string[]
   })
@@ -23,14 +24,17 @@ export function useLatentOverviewList() {
   async function fetchData() {
     loading.value = true
     try {
-      const { dateRange, ...rest } = searchForm
+      const { dateRange, keyPopulationSubCategories, ...rest } = searchForm
       const params: Record<string, any> = {
         page: 1,
         size: FETCH_ALL_SIZE,
         archived: 0,
         referralResult: "latent",
         ...rest,
-        ...extractDateRangeParams(dateRange)
+        ...extractDateRangeParams(dateRange),
+        ...(keyPopulationSubCategories.length > 0
+          ? { crowdCategory: keyPopulationSubCategories.join(",") }
+          : {})
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
@@ -56,6 +60,7 @@ export function useLatentOverviewList() {
     searchForm.idNumber = ""
     searchForm.phone = ""
     searchForm.populationType = ""
+    searchForm.keyPopulationSubCategories = []
     searchForm.creatorName = ""
     searchForm.dateRange = []
     handleSearch()

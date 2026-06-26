@@ -19,7 +19,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                       String name, String idNumber, Integer trackingStatus, Integer archived,
                                       String referralResult, String diagnosisFirst,
                                       String phone, String dateFrom, String dateTo,
-                                      String dateFilterBy, String creatorName);
+                                      String dateFilterBy, String creatorName, String crowdCategory);
 
     /** 追踪操作 */
     void track(Long id, Integer status, String remark);
@@ -66,7 +66,11 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /** 历史患者（已归档潜伏感染者）列表 */
     IPage<LatentInfection> queryHistoryPage(int page, int size, String populationType,
                                             String name, String idNumber, String phone,
-                                            String startTime, String endTime);
+                                            String startTime, String endTime,
+                                            String treatmentCompletionStatus);
+
+    /** 按督导表优先记录的治疗完成情况筛选潜伏感染 ID */
+    List<Long> findLatentIdsByPreferredTreatmentCompletionStatus(String treatmentCompletionStatus);
 
     /** 对导入时已包含首次诊断的潜伏感染记录进行自动分流处理。 */
     void autoReferralForDirectDiagnosis(List<LatentInfection> latents);

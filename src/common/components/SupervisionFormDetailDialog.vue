@@ -106,6 +106,9 @@ const supervisionRecords = computed(() => {
         <el-descriptions-item label="中断用药">
           {{ d.interruptMedication || "-" }}
         </el-descriptions-item>
+        <el-descriptions-item label="治疗完成情况">
+          {{ d.treatmentCompletionStatus || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="中断次数">
           {{ d.interruptCount ?? "-" }}
         </el-descriptions-item>

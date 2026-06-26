@@ -25,6 +25,8 @@ public class LatentInfection extends BaseEntity {
 
     private Long screeningId;
     private String populationType;
+    /** 人群分类（手动新增/导入持久化；有筛查关联时由筛查表回填展示） */
+    private String crowdCategory;
     private String name;
     private String idNumber;
     private String gender;
@@ -102,13 +104,15 @@ public class LatentInfection extends BaseEntity {
     @TableField(exist = false)
     private Integer supervisionStatus;
 
+    /** 治疗完成情况（来自督导表，非持久化） */
+    @TableField(exist = false)
+    private String treatmentCompletionStatus;
+
     // ===== 通知单自动回填字段（非持久化）=====
     @TableField(exist = false)
     private LocalDate birthDate;
     @TableField(exist = false)
     private String ethnicity;
-    @TableField(exist = false)
-    private String crowdCategory;
     /** 感染检测时间（通知单展示，优先筛查表，否则取 infectionScreenDate） */
     @TableField(exist = false)
     private LocalDate screenDate;

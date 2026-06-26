@@ -81,10 +81,11 @@ public class PatientController {
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String dateFilterBy,
-            @RequestParam(required = false) String medicationManagementUnit) {
+            @RequestParam(required = false) String medicationManagementUnit,
+            @RequestParam(required = false) String crowdCategory) {
         return ResultRes.success(patientService.queryPage(
                 page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
-                dateFrom, dateTo, dateFilterBy, medicationManagementUnit));
+                dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory));
     }
 
     @Operation(summary = "历史患者列表")
@@ -98,9 +99,10 @@ public class PatientController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String diagnosisResult,
             @RequestParam(required = false) String startTime,
-            @RequestParam(required = false) String endTime) {
+            @RequestParam(required = false) String endTime,
+            @RequestParam(required = false) String stopTreatmentReason) {
         return ResultRes.success(patientService.queryHistoryPage(
-                page, size, populationType, name, idNumber, phone, diagnosisResult, startTime, endTime));
+                page, size, populationType, name, idNumber, phone, diagnosisResult, startTime, endTime, stopTreatmentReason));
     }
 
     @Operation(summary = "历史患者统计汇总")

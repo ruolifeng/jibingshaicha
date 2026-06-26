@@ -2,18 +2,32 @@
 import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue"
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, LATENT_MANUAL_POPULATION_TYPE_OPTIONS } from "@@/constants/disease"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
-import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { isLatentTransferLocked, getLatentTransferStatusLabel } from "@@/utils/latent"
+import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteLatentApi, downloadLatentTemplateApi, exportAllLatentApi, importLatentApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const {
-  paginationData, handleCurrentChange, handleSizeChange,
-  loading, tableData, total, searchForm, fetchData, handleSearch, handleReset
+  paginationData,
+  handleCurrentChange,
+  handleSizeChange,
+  loading,
+  tableData,
+  total,
+  searchForm,
+  fetchData,
+  handleSearch,
+  handleReset
 } = useLatentOverviewList()
+
+watch(() => searchForm.populationType, (val) => {
+  if (val !== "keyPopulation") {
+    searchForm.keyPopulationSubCategories = []
+  }
+})
 
 const detailVisible = ref(false)
 const editVisible = ref(false)
@@ -63,6 +77,9 @@ async function handleExport() {
       phone: searchForm.phone || undefined,
       populationType: searchForm.populationType || undefined,
       creatorName: searchForm.creatorName || undefined,
+      crowdCategory: searchForm.keyPopulationSubCategories.length
+        ? searchForm.keyPopulationSubCategories.join(",")
+        : undefined,
       ...extractDateRangeParams(searchForm.dateRange)
     })
     downloadBlob(blob as unknown as Blob, "在管潜伏感染者信息总表.xlsx")
@@ -171,12 +188,30 @@ async function handleImport(uploadFile: any) {
         </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width: 140px">
-            <el-option label="学生筛查" value="school" />
-            <el-option label="重点人群" value="keyPopulation" />
-            <el-option label="疫情筛查" value="regular" />
-            <el-option label="大疫情" value="epidemic" />
-            <el-option label="推介" value="referral" />
-            <el-option label="密接" value="closeContact" />
+            <el-option
+              v-for="item in LATENT_MANUAL_POPULATION_TYPE_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="searchForm.populationType === 'keyPopulation'" label="重点人群分类">
+          <el-select
+            v-model="searchForm.keyPopulationSubCategories"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="全部"
+            clearable
+            style="width: 180px"
+          >
+            <el-option
+              v-for="item in LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="录入者">
@@ -260,7 +295,7 @@ async function handleImport(uploadFile: any) {
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
-              {{ getPopulationTypeLabel(row.populationType) }}
+              {{ getLatentPopulationDisplayLabel(row.populationType, row.crowdCategory) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -351,7 +386,10 @@ async function handleImport(uploadFile: any) {
           模板包含字段：{{ LATENT_IMPORT_FIELDS.join("、") }}
         </p>
         <p class="text-sm text-gray-500">
-          数据来源可填写：学生筛查、重点人群、疫情筛查、大疫情、推介、密接
+          数据来源可填写：{{ LATENT_MANUAL_POPULATION_TYPE_OPTIONS.map(item => item.label).join("、") }}；亦可用「重点人群-老年人」「密接-家庭内」等格式
+        </p>
+        <p class="text-sm text-gray-500 mt-2">
+          人群分类：重点人群填写老年人/糖尿病/双感（可多选，用顿号分隔）；密接填写家庭内/家庭外
         </p>
         <p class="text-sm text-gray-500 mt-2">
           证件号、联系电话列建议设为「文本」格式，避免 Excel 自动转换导致校验失败

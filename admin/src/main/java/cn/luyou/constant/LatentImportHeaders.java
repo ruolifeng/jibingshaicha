@@ -15,6 +15,7 @@ public final class LatentImportHeaders {
 
     public static final List<String> FIELDS = Collections.unmodifiableList(Arrays.asList(
             "数据来源",
+            "人群分类",
             "姓名",
             "性别",
             "年龄",

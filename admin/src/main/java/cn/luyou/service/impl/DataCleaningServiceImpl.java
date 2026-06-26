@@ -790,7 +790,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             return new CleaningFileMeta(
                     file,
                     json.getLong("creatorUserId"),
-                    json.getLong("createAtMs", Files.getLastModifiedTime(file).toMillis())
+                    json.getLong("createAtMs", Files.getLastModifiedTime(file.toPath()).toMillis())
             );
         } catch (IOException e) {
             log.warn("读取数据清洗结果元数据失败 fileId={}: {}", fileId, e.getMessage());
