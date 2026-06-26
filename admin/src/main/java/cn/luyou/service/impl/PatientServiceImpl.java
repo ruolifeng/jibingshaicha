@@ -39,6 +39,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.StatYearPeriod;
 import com.alibaba.excel.EasyExcel;
@@ -62,6 +63,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -165,10 +167,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     public IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo,
-                                     String dateFilterBy, String medicationManagementUnit) {
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
-                dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit);
+                dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory);
         wrapper.orderByDesc(Patient::getCreateTime);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
@@ -184,10 +186,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                         String phone, String currentAddress, String diagnosisResult,
                                         Integer archived, String dateFrom, String dateTo,
                                         String startTime, String endTime,
-                                        String dateFilterBy, String medicationManagementUnit) {
+                                        String dateFilterBy, String medicationManagementUnit,
+                                        String crowdCategory) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult,
-                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit);
+                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit, crowdCategory);
         if (Integer.valueOf(1).equals(archived)) {
             wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getArchivedTime);
         } else {
@@ -205,7 +208,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                   String dateFrom, String dateTo,
                                                                   String startTime, String endTime,
                                                                   String dateFilterBy,
-                                                                  String medicationManagementUnit) {
+                                                                  String medicationManagementUnit,
+                                                                  String crowdCategory) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         boolean registrationDateFilter = "registrationDate".equals(dateFilterBy);
@@ -249,6 +253,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     .le(createTo != null, Patient::getCreateTime, createTo);
         }
         applyMedicationManagementUnitFilter(wrapper, populationType, medicationManagementUnit);
+        KeyPopulationCrowdCategoryQuerySupport.applyPatientFilter(
+                wrapper, populationType, crowdCategory, screeningKeyPopulationMapper);
         applyPatientScopeFilter(wrapper);
         return wrapper;
     }
@@ -483,7 +489,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                      String districtName,
                                                                      Map<String, Map<String, Long>> matrix,
                                                                      long total) {
-        Map<String, Long> communities = matrix.getOrDefault(districtName, Map.of());
+        Map<String, Long> communities = new LinkedHashMap<>(matrix.getOrDefault(districtName, Map.of()));
+        if (communities.isEmpty()) {
+            enrichDistrictCommunitiesFromScope(districtName, communities);
+        }
         List<String> labels = sortCommunityLabels(communities.keySet());
         List<PatientDistributionHeatmapVO.MapRegion> regions = new ArrayList<>();
         int maxCount = 0;
@@ -536,7 +545,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         return key;
                     }
                 }
-                return matrix.containsKey(canonical) ? canonical : null;
+                // 地图下钻：即使该区县暂无患者数据，也允许进入乡镇视图
+                return canonical;
             }
         }
         return null;
@@ -621,6 +631,28 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 }
                 matrix.computeIfAbsent(districtDept.getName(), k -> new LinkedHashMap<>())
                         .putIfAbsent(dept.getName(), 0L);
+            }
+        }
+    }
+
+    /** 下钻区县时，从辖区部门树补全乡镇/社区格子（无患者时仍展示地图） */
+    private void enrichDistrictCommunitiesFromScope(String districtName, Map<String, Long> communities) {
+        Map<Long, Department> deptMap = departmentService.list().stream()
+                .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
+        Set<Long> scopeDeptIds = resolveHeatmapScopeDeptIds();
+        for (Department dept : deptMap.values()) {
+            if (!scopeDeptIds.contains(dept.getId())) {
+                continue;
+            }
+            if (dept.getLevel() != null && dept.getLevel() == 2
+                    && districtNamesMatch(dept.getName(), districtName)) {
+                communities.putIfAbsent("区县本级", 0L);
+            }
+            if (dept.getLevel() != null && dept.getLevel() == 3) {
+                Department districtDept = resolveDistrictDept(dept, deptMap);
+                if (districtDept != null && districtNamesMatch(districtDept.getName(), districtName)) {
+                    communities.putIfAbsent(dept.getName(), 0L);
+                }
             }
         }
     }
@@ -1262,7 +1294,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     public IPage<Patient> queryHistoryPage(int page, int size, String populationType,
                                             String name, String idNumber, String phone,
-                                            String diagnosisResult, String startTime, String endTime) {
+                                            String diagnosisResult, String startTime, String endTime,
+                                            String stopTreatmentReason) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .eq(Patient::getArchived, 1)
@@ -1273,13 +1306,83 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
         applyDiagnosisResultFilter(wrapper, diagnosisResult);
+        if (StrUtil.isNotBlank(stopTreatmentReason)) {
+            List<Long> matchedPatientIds = findPatientIdsByPreferredStopTreatmentReason(stopTreatmentReason);
+            if (matchedPatientIds.isEmpty()) {
+                return new Page<>(page, size, 0);
+            }
+            wrapper.in(Patient::getId, matchedPatientIds);
+        }
         dataScopeHelper.applyPatientScope(wrapper);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
         fillMedicationPickupSummary(result.getRecords());
         fillEpidemicExtraFields(result.getRecords());
+        fillStopTreatmentReason(result.getRecords());
         return result;
+    }
+
+    private void fillStopTreatmentReason(List<Patient> patients) {
+        if (patients == null || patients.isEmpty()) {
+            return;
+        }
+        List<Long> patientIds = patients.stream()
+                .map(Patient::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (patientIds.isEmpty()) {
+            return;
+        }
+        Map<Long, FollowUpVisit> preferredMap = followUpVisitMapper.selectList(
+                new LambdaQueryWrapper<FollowUpVisit>()
+                        .in(FollowUpVisit::getPatientId, patientIds)
+                        .eq(FollowUpVisit::getStatus, 1)
+                        .eq(FollowUpVisit::getStopTreatment, "是")
+                        .orderByDesc(FollowUpVisit::getVisitDate)
+                        .orderByDesc(FollowUpVisit::getId)
+        ).stream().collect(Collectors.groupingBy(
+                FollowUpVisit::getPatientId,
+                Collectors.collectingAndThen(Collectors.toList(), this::selectPreferredStopTreatmentVisit)
+        ));
+        patients.forEach(patient -> {
+            FollowUpVisit visit = preferredMap.get(patient.getId());
+            if (visit != null) {
+                patient.setStopTreatmentReason(visit.getStopTreatmentReason());
+                patient.setStopTreatmentReasonOther(visit.getStopTreatmentReasonOther());
+            }
+        });
+    }
+
+    private FollowUpVisit selectPreferredStopTreatmentVisit(List<FollowUpVisit> visits) {
+        if (visits == null || visits.isEmpty()) {
+            return null;
+        }
+        return visits.stream()
+                .filter(v -> "是".equals(v.getStopTreatment()) && Integer.valueOf(1).equals(v.getStatus()))
+                .max(Comparator.comparing(FollowUpVisit::getId, Comparator.nullsLast(Long::compareTo)))
+                .orElse(null);
+    }
+
+    @Override
+    public List<Long> findPatientIdsByPreferredStopTreatmentReason(String stopTreatmentReason) {
+        if (StrUtil.isBlank(stopTreatmentReason)) {
+            return List.of();
+        }
+        return followUpVisitMapper.selectList(
+                new LambdaQueryWrapper<FollowUpVisit>()
+                        .eq(FollowUpVisit::getStatus, 1)
+                        .eq(FollowUpVisit::getStopTreatment, "是")
+                        .isNotNull(FollowUpVisit::getPatientId)
+        ).stream()
+                .collect(Collectors.groupingBy(FollowUpVisit::getPatientId))
+                .entrySet().stream()
+                .filter(entry -> {
+                    FollowUpVisit preferred = selectPreferredStopTreatmentVisit(entry.getValue());
+                    return preferred != null && stopTreatmentReason.equals(preferred.getStopTreatmentReason());
+                })
+                .map(Map.Entry::getKey)
+                .toList();
     }
 
     /** 从 epidemicData JSON 解析导入扩展字段（人群分类、现管单位、治疗分类及完整导入字段） */

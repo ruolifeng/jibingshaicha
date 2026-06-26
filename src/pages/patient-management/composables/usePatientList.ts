@@ -36,6 +36,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     currentAddress: "",
     diagnosisResult: "",
     populationType: "",
+    keyPopulationSubCategories: [] as string[],
     dateRange: [] as string[],
     archived: defaultArchived,
     ...(hasMedicationUnitSearch(options) ? { medicationManagementUnit: "" } : {})
@@ -44,12 +45,15 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
   async function fetchData() {
     loading.value = true
     try {
-      const { dateRange, ...rest } = searchForm
+      const { dateRange, keyPopulationSubCategories, ...rest } = searchForm
       const params: Record<string, any> = {
         page: paginationData.currentPage,
         size: paginationData.pageSize,
         ...rest,
-        ...extractDateRangeParams(dateRange)
+        ...extractDateRangeParams(dateRange),
+        ...(keyPopulationSubCategories.length > 0
+          ? { crowdCategory: keyPopulationSubCategories.join(",") }
+          : {})
       }
       if (options?.overviewSearch) {
         params.dateFilterBy = "registrationDate"
@@ -73,7 +77,10 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     }
   }
 
-  function handleSearch() { paginationData.currentPage = 1; fetchData() }
+  function handleSearch() {
+    paginationData.currentPage = 1
+    fetchData()
+  }
   function handleReset() {
     searchForm.name = ""
     searchForm.idNumber = ""
@@ -81,6 +88,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     searchForm.currentAddress = ""
     searchForm.diagnosisResult = ""
     searchForm.populationType = ""
+    searchForm.keyPopulationSubCategories = []
     searchForm.dateRange = []
     if (hasMedicationUnitSearch(options) && "medicationManagementUnit" in searchForm) {
       searchForm.medicationManagementUnit = ""
@@ -92,9 +100,16 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
   watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
 
   return {
-    paginationData, handleCurrentChange, handleSizeChange,
-    loading, tableData, total,
-    searchForm, fetchData, handleSearch, handleReset,
+    paginationData,
+    handleCurrentChange,
+    handleSizeChange,
+    loading,
+    tableData,
+    total,
+    searchForm,
+    fetchData,
+    handleSearch,
+    handleReset,
     overviewSearch: options?.overviewSearch ?? false
   }
 }

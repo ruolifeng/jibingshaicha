@@ -134,26 +134,32 @@ function handlePrint() {
           <tr>
             <th>中断用药</th>
             <td>{{ data?.interruptMedication || "-" }}</td>
+            <th>治疗完成情况</th>
+            <td>{{ data?.treatmentCompletionStatus || "-" }}</td>
+          </tr>
+          <tr>
             <th>中断次数</th>
             <td>{{ data?.interruptCount ?? "-" }}</td>
-          </tr>
-          <tr>
             <th>全程应用药次数</th>
             <td>{{ data?.totalDoses ?? "-" }}</td>
+          </tr>
+          <tr>
             <th>实际用药次数</th>
             <td>{{ data?.actualDoses ?? "-" }}</td>
-          </tr>
-          <tr>
             <th>用药率(%)</th>
             <td>{{ data?.medicationRate || "-" }}</td>
-            <th>结束疗程时间</th>
-            <td>{{ data?.treatmentEndDate || "-" }}</td>
           </tr>
           <tr>
+            <th>结束疗程时间</th>
+            <td>{{ data?.treatmentEndDate || "-" }}</td>
             <th>管理人员类型</th>
             <td>{{ data?.managerType || "-" }}</td>
+          </tr>
+          <tr>
             <th>管理人员姓名</th>
-            <td>{{ data?.managerName || "-" }}</td>
+            <td colspan="3">
+              {{ data?.managerName || "-" }}
+            </td>
           </tr>
 
           <tr class="section-header">

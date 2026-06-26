@@ -5,7 +5,8 @@ import {
   buildMapSeriesData,
   buildTownshipGeoJson,
   findDistrictFeature,
-  loadZigongCityGeo
+  loadZigongCityGeo,
+  normalizeDistrictName
 } from "@@/utils/zigong-map"
 import { ArrowLeft } from "@element-plus/icons-vue"
 import * as echarts from "echarts"
@@ -14,10 +15,13 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 const props = defineProps<{
   heatmap: PatientHeatmapData
   loading?: boolean
+  year?: string
+  yearOptions?: string[]
 }>()
 
 const emit = defineEmits<{
-  drill: [district: string | null]
+  "drill": [district: string | null]
+  "update:year": [year: string]
 }>()
 
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -59,7 +63,7 @@ function bindMapClick() {
   chart.on("click", (params: any) => {
     if (params.componentType !== "series" || params.seriesType !== "map") return
     if (props.heatmap.mapLevel !== "city") return
-    const name = params.name as string
+    const name = normalizeDistrictName(params.name as string)
     if (!name || name === "未分配") return
     emit("drill", name)
   })
@@ -209,11 +213,20 @@ onBeforeUnmount(() => {
           返回自贡市
         </el-button>
         <span class="title">
-          {{ heatmap.managementYear ?? "—" }}年度患者分布热力图
+          {{ heatmap.managementYear ?? year ?? "—" }}年度患者分布热力图
           <template v-if="heatmap.mapLevel === 'district' && heatmap.districtName">
             · {{ heatmap.districtName }}
           </template>
         </span>
+        <el-select
+          v-if="yearOptions?.length"
+          :model-value="year"
+          class="heatmap-year-select"
+          size="small"
+          @update:model-value="emit('update:year', $event)"
+        >
+          <el-option v-for="y in yearOptions" :key="`heatmap-${y}`" :label="`${y}年度`" :value="y" />
+        </el-select>
       </div>
       <span v-if="heatmap.total != null" class="total">共 {{ heatmap.total }} 例</span>
     </div>
@@ -253,6 +266,10 @@ onBeforeUnmount(() => {
       font-size: 15px;
       font-weight: 600;
       color: #409eff;
+    }
+
+    .heatmap-year-select {
+      width: 108px;
     }
 
     .total {

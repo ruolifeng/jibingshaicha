@@ -70,6 +70,8 @@ public class SupervisionForm extends BaseEntity {
      */
     private String supervisionRecords;
 
+    /** 治疗完成情况：完成治疗/失败/死亡/失访/不良反应停药/未评估 */
+    private String treatmentCompletionStatus;
     /** 全疗程规律治疗评价 — 中断用药：有/无 */
     private String interruptMedication;
     /** 中断次数（interruptMedication=有时填写） */

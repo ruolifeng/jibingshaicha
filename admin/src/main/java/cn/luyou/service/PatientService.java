@@ -48,7 +48,7 @@ public interface PatientService extends IService<Patient> {
     IPage<Patient> queryPage(int page, int size, String populationType,
                               String name, String idNumber, String phone, String currentAddress,
                               String diagnosisResult, Integer archived, String dateFrom, String dateTo,
-                              String dateFilterBy, String medicationManagementUnit);
+                              String dateFilterBy, String medicationManagementUnit, String crowdCategory);
 
     /** 手动新增在管患者（在管总览） */
     Long createManual(Map<String, Object> body);
@@ -64,7 +64,8 @@ public interface PatientService extends IService<Patient> {
                                  String phone, String currentAddress, String diagnosisResult,
                                  Integer archived, String dateFrom, String dateTo,
                                  String startTime, String endTime,
-                                 String dateFilterBy, String medicationManagementUnit);
+                                 String dateFilterBy, String medicationManagementUnit,
+                                 String crowdCategory);
 
     /** 导入大疫情表并模糊匹配合并 */
     int importEpidemic(MultipartFile file, String populationType);
@@ -96,7 +97,11 @@ public interface PatientService extends IService<Patient> {
     /** 历史患者列表 */
     IPage<Patient> queryHistoryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone,
-                                     String diagnosisResult, String startTime, String endTime);
+                                     String diagnosisResult, String startTime, String endTime,
+                                     String stopTreatmentReason);
+
+    /** 按后续随访优先记录的停止治疗原因筛选患者 ID */
+    List<Long> findPatientIdsByPreferredStopTreatmentReason(String stopTreatmentReason);
 
     /** 删除患者（级联软删首次随访、后续随访、服药记录、通知单） */
     void deletePatient(Long id);

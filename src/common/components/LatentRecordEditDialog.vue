@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+import {
+  LATENT_CLOSE_CONTACT_TYPE_OPTIONS,
+  LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
+  LATENT_MANUAL_POPULATION_TYPE_OPTIONS
+} from "@@/constants/disease"
+import { CONTACT_TYPE_OPTIONS } from "@@/constants/screening-close-contact"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { createLatentApi, getLatentDetailApi, updateLatentApi } from "@/pages/latent-management/apis"
 
@@ -13,11 +19,21 @@ const emit = defineEmits<{
 }>()
 
 const isCreate = computed(() => props.latentId == null)
+const screeningId = ref<number | null>(null)
+const showCrowdCategoryFields = computed(() => isCreate.value || screeningId.value == null)
+const showKeyPopulationSubCategories = computed(() =>
+  showCrowdCategoryFields.value && form.populationType === "keyPopulation"
+)
+const showCloseContactType = computed(() =>
+  showCrowdCategoryFields.value && form.populationType === "closeContact"
+)
 
 const formRef = ref()
 const submitting = ref(false)
 const form = reactive({
   populationType: "",
+  keyPopulationSubCategories: [] as string[],
+  closeContactType: "",
   name: "",
   gender: "",
   age: null as number | null,
@@ -40,14 +56,31 @@ const rules = computed(() => ({
   ...(isCreate.value
     ? { populationType: [{ required: true, message: "请选择数据来源", trigger: "change" }] }
     : {}),
+  ...(showKeyPopulationSubCategories.value
+    ? {
+        keyPopulationSubCategories: [{
+          type: "array" as const,
+          required: true,
+          min: 1,
+          message: "请选择重点人群分类",
+          trigger: "change"
+        }]
+      }
+    : {}),
+  ...(showCloseContactType.value
+    ? { closeContactType: [{ required: true, message: "请选择密接类型", trigger: "change" }] }
+    : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   idNumber: [idCardRule(true)],
   phone: [phoneRule(!isCreate.value)]
 }))
 
 function resetForm() {
+  screeningId.value = null
   Object.assign(form, {
     populationType: "",
+    keyPopulationSubCategories: [],
+    closeContactType: "",
     name: "",
     gender: "",
     age: null,
@@ -67,10 +100,39 @@ function resetForm() {
   })
 }
 
+function parseCrowdCategory(data: { populationType?: string, crowdCategory?: string }) {
+  form.keyPopulationSubCategories = []
+  form.closeContactType = ""
+  if (!data.crowdCategory) return
+  if (data.populationType === "keyPopulation") {
+    form.keyPopulationSubCategories = data.crowdCategory
+      .split(/[、,，/]/)
+      .map(item => item.trim())
+      .filter(Boolean)
+      .filter(item => LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS.includes(item as typeof LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS[number]))
+  } else if (data.populationType === "closeContact") {
+    const type = data.crowdCategory.trim()
+    if (LATENT_CLOSE_CONTACT_TYPE_OPTIONS.includes(type as typeof LATENT_CLOSE_CONTACT_TYPE_OPTIONS[number])) {
+      form.closeContactType = type
+    }
+  }
+}
+
+function buildCrowdCategory() {
+  if (form.populationType === "keyPopulation") {
+    return form.keyPopulationSubCategories.join("、")
+  }
+  if (form.populationType === "closeContact") {
+    return form.closeContactType
+  }
+  return ""
+}
+
 async function loadDetail() {
   if (!props.latentId) return
   const { data } = await getLatentDetailApi(props.latentId)
   if (!data) return
+  screeningId.value = data.screeningId ?? null
   Object.assign(form, {
     populationType: data.populationType || "",
     name: data.name || "",
@@ -90,7 +152,14 @@ async function loadDetail() {
     trackingRemark: data.trackingRemark || "",
     remark: data.remark || ""
   })
+  parseCrowdCategory(data)
 }
+
+watch(() => form.populationType, (val, oldVal) => {
+  if (val === oldVal) return
+  form.keyPopulationSubCategories = []
+  form.closeContactType = ""
+})
 
 watch(() => props.visible, async (val) => {
   if (val) {
@@ -114,12 +183,16 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
+    const crowdCategory = buildCrowdCategory()
     if (isCreate.value) {
-      await createLatentApi({ ...form })
+      await createLatentApi({ ...form, crowdCategory })
       ElMessage.success("新增成功")
     } else {
-      const { populationType, ...payload } = form
-      await updateLatentApi(props.latentId!, payload)
+      const { populationType, keyPopulationSubCategories, closeContactType, ...payload } = form
+      await updateLatentApi(props.latentId!, {
+        ...payload,
+        ...(showCrowdCategoryFields.value ? { crowdCategory } : {})
+      })
       ElMessage.success("保存成功")
     }
     close()
@@ -143,12 +216,43 @@ async function handleSubmit() {
         <el-col v-if="isCreate" :span="12">
           <el-form-item label="数据来源" prop="populationType">
             <el-select v-model="form.populationType" placeholder="请选择" style="width: 100%">
-              <el-option label="学生筛查" value="school" />
-              <el-option label="重点人群" value="keyPopulation" />
-              <el-option label="疫情筛查" value="regular" />
-              <el-option label="大疫情" value="epidemic" />
-              <el-option label="推介" value="referral" />
-              <el-option label="密接" value="closeContact" />
+              <el-option
+                v-for="item in LATENT_MANUAL_POPULATION_TYPE_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col v-if="showKeyPopulationSubCategories" :span="12">
+          <el-form-item label="重点人群分类" prop="keyPopulationSubCategories">
+            <el-select
+              v-model="form.keyPopulationSubCategories"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="请选择（可多选）"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col v-if="showCloseContactType" :span="12">
+          <el-form-item label="密接类型" prop="closeContactType">
+            <el-select v-model="form.closeContactType" placeholder="请选择" style="width: 100%">
+              <el-option
+                v-for="item in CONTACT_TYPE_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
             </el-select>
           </el-form-item>
         </el-col>

@@ -1,121 +1,261 @@
 <script lang="ts" setup>
 import type { PatientHeatmapData } from "../apis"
 import type { DashboardSummaryData } from "@/pages/dashboard/apis"
-import { getCurrentStatYear } from "@@/utils/stat-year"
+import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
+import { getPatientHeatmapApi, getWorkbenchStatisticsApi } from "../apis"
 import PatientHeatmapChart from "./PatientHeatmapChart.vue"
 
 const props = defineProps<{
-  summary: DashboardSummaryData
-  loading?: boolean
   showHeatmap?: boolean
-  heatmap?: PatientHeatmapData
-  heatmapLoading?: boolean
 }>()
 
-const emit = defineEmits<{
-  heatmapDrill: [district: string | null]
-}>()
+const yearOptions = buildStatYearOptions()
 
-const managementYear = computed(() => props.summary.managementYear ?? getCurrentStatYear())
+type PanelKey = "managed" | "pathogen" | "treatment" | "referral" | "tracking" | "heatmap"
 
-const periodText = computed(() => {
-  const { statPeriodFrom, statPeriodTo, trackingPeriodFrom, trackingPeriodTo } = props.summary
+const panelYears = reactive<Record<Exclude<PanelKey, "heatmap">, string>>({
+  managed: String(getCurrentStatYear()),
+  pathogen: String(getCurrentStatYear()),
+  treatment: String(getCurrentStatYear()),
+  referral: String(getCurrentStatYear()),
+  tracking: String(getCurrentStatYear())
+})
+const heatmapYear = ref(String(getCurrentStatYear()))
+
+function emptySummary(): DashboardSummaryData {
+  return {
+    pendingTracking: 0,
+    pendingVisit: 0,
+    pendingNotice: 0,
+    upcomingReview: 0
+  }
+}
+
+const panelSummaries = reactive<Record<Exclude<PanelKey, "heatmap">, DashboardSummaryData>>({
+  managed: emptySummary(),
+  pathogen: emptySummary(),
+  treatment: emptySummary(),
+  referral: emptySummary(),
+  tracking: emptySummary()
+})
+const panelLoading = reactive<Record<Exclude<PanelKey, "heatmap">, boolean>>({
+  managed: false,
+  pathogen: false,
+  treatment: false,
+  referral: false,
+  tracking: false
+})
+
+const heatmapLoading = ref(false)
+const heatmapData = ref<PatientHeatmapData>({})
+const heatmapDistrict = ref<string>()
+
+async function fetchPanel(key: Exclude<PanelKey, "heatmap">) {
+  panelLoading[key] = true
+  try {
+    const { data } = await getWorkbenchStatisticsApi(panelYears[key])
+    panelSummaries[key] = { ...emptySummary(), ...(data || {}) }
+  } catch {
+    panelSummaries[key] = emptySummary()
+  } finally {
+    panelLoading[key] = false
+  }
+}
+
+async function fetchAllPanels() {
+  await Promise.all([
+    fetchPanel("managed"),
+    fetchPanel("pathogen"),
+    fetchPanel("treatment"),
+    fetchPanel("referral"),
+    fetchPanel("tracking")
+  ])
+}
+
+async function fetchPatientHeatmap(district?: string) {
+  if (!props.showHeatmap) return
+  heatmapLoading.value = true
+  try {
+    const { data } = await getPatientHeatmapApi(heatmapYear.value, district)
+    heatmapData.value = data || {}
+    heatmapDistrict.value = district
+  } catch {
+    if (district) {
+      ElMessage.warning("无法查看该区县，请确认您有相应辖区权限")
+    }
+    heatmapData.value = {}
+  } finally {
+    heatmapLoading.value = false
+  }
+}
+
+function handleHeatmapDrill(district: string | null) {
+  fetchPatientHeatmap(district || undefined)
+}
+
+watch(() => panelYears.managed, () => fetchPanel("managed"))
+watch(() => panelYears.pathogen, () => fetchPanel("pathogen"))
+watch(() => panelYears.treatment, () => fetchPanel("treatment"))
+watch(() => panelYears.referral, () => fetchPanel("referral"))
+watch(() => panelYears.tracking, () => fetchPanel("tracking"))
+watch(heatmapYear, () => {
+  heatmapDistrict.value = undefined
+  fetchPatientHeatmap()
+})
+
+function panelYear(summary: DashboardSummaryData, fallback: string) {
+  return String(summary.managementYear ?? summary.trackingStatYear ?? fallback)
+}
+
+function trackingYear(summary: DashboardSummaryData) {
+  return String(summary.trackingStatYear ?? panelYears.tracking)
+}
+
+function periodText(summary: DashboardSummaryData) {
+  const { statPeriodFrom, statPeriodTo, trackingPeriodFrom, trackingPeriodTo } = summary
   const from = statPeriodFrom || trackingPeriodFrom
   const to = statPeriodTo || trackingPeriodTo
   if (!from || !to) return ""
-  return `统计周期：${from} 至 ${to}（上年度 12 月 1 日 — 本年度 11 月 30 日）`
-})
+  return `统计周期：${from} 至 ${to}`
+}
 
 function rateText(rate?: number) {
   return rate == null ? "—" : `${rate.toFixed(1)}%`
 }
+
+onMounted(() => {
+  fetchAllPanels()
+  fetchPatientHeatmap()
+})
+
+defineExpose({
+  refresh: fetchAllPanels
+})
 </script>
 
 <template>
   <div class="workbench-stats">
-    <div v-loading="!!loading">
-      <el-alert
-        v-if="periodText"
-        :title="periodText"
-        type="info"
-        :closable="false"
-        show-icon
-        class="period-alert"
-      />
-
-      <div class="stat-grid">
-        <div class="stat-block primary">
+    <div class="stat-grid">
+      <div v-loading="panelLoading.managed" class="stat-block primary">
+        <div class="panel-header">
           <div class="stat-value">
-            {{ summary.pendingVisit ?? 0 }}
+            {{ panelSummaries.managed.pendingVisit ?? 0 }}
           </div>
-          <div class="stat-label">
-            {{ managementYear }}年度管理患者数
-          </div>
+          <el-select v-model="panelYears.managed" class="panel-year-select" size="small">
+            <el-option v-for="y in yearOptions" :key="`managed-${y}`" :label="`${y}年度`" :value="y" />
+          </el-select>
+        </div>
+        <div class="stat-label">
+          {{ panelYear(panelSummaries.managed, panelYears.managed) }}年度管理患者数
+        </div>
+        <div v-if="periodText(panelSummaries.managed)" class="panel-period">
+          {{ periodText(panelSummaries.managed) }}
         </div>
       </div>
+    </div>
 
-      <div class="pathogen-panel">
+    <div v-loading="panelLoading.pathogen" class="pathogen-panel">
+      <div class="panel-header">
         <div class="panel-title">
-          {{ managementYear }}年度病原学阳性情况
+          {{ panelYear(panelSummaries.pathogen, panelYears.pathogen) }}年度病原学阳性情况
         </div>
-        <div class="panel-content">
-          <span>{{ managementYear }}年度病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
-          <span class="divider">|</span>
-          <span>病原学阳性率：<strong>{{ rateText(summary.pathogenPositiveRate) }}</strong></span>
-        </div>
+        <el-select v-model="panelYears.pathogen" class="panel-year-select" size="small">
+          <el-option v-for="y in yearOptions" :key="`pathogen-${y}`" :label="`${y}年度`" :value="y" />
+        </el-select>
       </div>
-
-      <div class="treatment-panel">
-        <div class="panel-title">
-          {{ managementYear }}年度治疗情况
-        </div>
-        <div class="panel-content">
-          <span>{{ managementYear }}年度治疗成功人数：<strong>{{ summary.treatmentSuccessCount ?? 0 }}</strong> 例</span>
-          <span class="divider">|</span>
-          <span>治疗成功率：<strong>{{ rateText(summary.treatmentSuccessRate) }}</strong></span>
-        </div>
+      <div class="panel-content">
+        <span>{{ panelYear(panelSummaries.pathogen, panelYears.pathogen) }}年度病原学阳性人数：<strong>{{ panelSummaries.pathogen.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+        <span class="divider">|</span>
+        <span>病原学阳性率：<strong>{{ rateText(panelSummaries.pathogen.pathogenPositiveRate) }}</strong></span>
       </div>
+    </div>
 
-      <div class="referral-panel">
+    <div v-loading="panelLoading.treatment" class="treatment-panel">
+      <div class="panel-header">
         <div class="panel-title">
-          {{ managementYear }}年度推介情况
+          {{ panelYear(panelSummaries.treatment, panelYears.treatment) }}年度治疗情况
         </div>
-        <div class="panel-content">
-          <span>推介人数：<strong>{{ summary.recommendCount ?? 0 }}</strong> 例</span>
-          <span class="divider">|</span>
-          <span>到位人数：<strong>{{ summary.recommendArrivedCount ?? 0 }}</strong> 例</span>
-          <span class="divider">|</span>
-          <span>推介到位率：<strong>{{ rateText(summary.recommendArrivalRate) }}</strong></span>
-        </div>
+        <el-select v-model="panelYears.treatment" class="panel-year-select" size="small">
+          <el-option v-for="y in yearOptions" :key="`treatment-${y}`" :label="`${y}年度`" :value="y" />
+        </el-select>
       </div>
+      <div class="panel-content">
+        <span>{{ panelYear(panelSummaries.treatment, panelYears.treatment) }}年度治疗成功人数：<strong>{{ panelSummaries.treatment.treatmentSuccessCount ?? 0 }}</strong> 例</span>
+        <span class="divider">|</span>
+        <span>治疗成功率：<strong>{{ rateText(panelSummaries.treatment.treatmentSuccessRate) }}</strong></span>
+      </div>
+    </div>
 
-      <div class="tracking-panel">
+    <div v-loading="panelLoading.referral" class="referral-panel">
+      <div class="panel-header">
         <div class="panel-title">
-          {{ summary.trackingStatYear ?? managementYear }}年度追踪情况
+          {{ panelYear(panelSummaries.referral, panelYears.referral) }}年度推介情况
         </div>
-        <div class="panel-content">
-          <span>追踪人数：<strong>{{ summary.trackingCount ?? 0 }}</strong> 例</span>
-          <span class="divider">|</span>
-          <span>到位人数：<strong>{{ summary.trackingArrivedCount ?? 0 }}</strong> 例</span>
-          <span class="divider">|</span>
-          <span>追踪到位率：<strong>{{ rateText(summary.trackingArrivalRate) }}</strong></span>
+        <el-select v-model="panelYears.referral" class="panel-year-select" size="small">
+          <el-option v-for="y in yearOptions" :key="`referral-${y}`" :label="`${y}年度`" :value="y" />
+        </el-select>
+      </div>
+      <div class="panel-content">
+        <span>推介人数：<strong>{{ panelSummaries.referral.recommendCount ?? 0 }}</strong> 例</span>
+        <span class="divider">|</span>
+        <span>到位人数：<strong>{{ panelSummaries.referral.recommendArrivedCount ?? 0 }}</strong> 例</span>
+        <span class="divider">|</span>
+        <span>推介到位率：<strong>{{ rateText(panelSummaries.referral.recommendArrivalRate) }}</strong></span>
+      </div>
+    </div>
+
+    <div v-loading="panelLoading.tracking" class="tracking-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          {{ trackingYear(panelSummaries.tracking) }}年度追踪情况
         </div>
+        <el-select v-model="panelYears.tracking" class="panel-year-select" size="small">
+          <el-option v-for="y in yearOptions" :key="`tracking-${y}`" :label="`${y}年度`" :value="y" />
+        </el-select>
+      </div>
+      <div v-if="periodText(panelSummaries.tracking)" class="panel-period">
+        {{ periodText(panelSummaries.tracking) }}
+      </div>
+      <div class="panel-content">
+        <span>追踪人数：<strong>{{ panelSummaries.tracking.trackingCount ?? 0 }}</strong> 例</span>
+        <span class="divider">|</span>
+        <span>到位人数：<strong>{{ panelSummaries.tracking.trackingArrivedCount ?? 0 }}</strong> 例</span>
+        <span class="divider">|</span>
+        <span>追踪到位率：<strong>{{ rateText(panelSummaries.tracking.trackingArrivalRate) }}</strong></span>
       </div>
     </div>
 
     <PatientHeatmapChart
       v-if="showHeatmap"
-      :heatmap="heatmap ?? {}"
+      :heatmap="heatmapData"
       :loading="heatmapLoading"
-      @drill="emit('heatmapDrill', $event)"
+      :year="heatmapYear"
+      :year-options="yearOptions"
+      @drill="handleHeatmapDrill"
+      @update:year="heatmapYear = $event"
     />
   </div>
 </template>
 
 <style lang="scss" scoped>
 .workbench-stats {
-  .period-alert {
-    margin-bottom: 16px;
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .panel-year-select {
+    width: 108px;
+    flex-shrink: 0;
+  }
+
+  .panel-period {
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
   }
 
   .stat-grid {
@@ -155,7 +295,6 @@ function rateText(rate?: number) {
     .panel-title {
       font-size: 15px;
       font-weight: 600;
-      margin-bottom: 10px;
     }
 
     .panel-content {

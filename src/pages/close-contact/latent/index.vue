@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
-import PrintSupervision from "@@/components/PrintSupervision.vue"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
+import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 /**
  * 密接人群 — 潜伏感染者管理
@@ -30,10 +30,11 @@ import {
   parseLatentSupervisionTreatmentPlan,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
-  SUPERVISION_METHOD_OPTIONS
+  SUPERVISION_METHOD_OPTIONS,
+  TREATMENT_COMPLETION_STATUS_OPTIONS
 } from "@@/constants/disease"
-import { idCardRule } from "@@/utils/validate"
 import { extractDateRangeParams } from "@@/utils/searchParams"
+import { idCardRule } from "@@/utils/validate"
 import {
   confirmTreatmentApi,
   getScreeningCloseContactDetailApi,
@@ -222,6 +223,7 @@ const supervisionForm = reactive({
   treatmentPlan: "",
   customPlanDetail: "",
   supervisionRecords: [] as { time: string, content: string, method: string, remark: string }[],
+  treatmentCompletionStatus: "",
   interruptMedication: "",
   interruptCount: null as number | null,
   totalDoses: null as number | null,
@@ -247,6 +249,7 @@ function openSupervisionDialog(row: any) {
   supervisionForm.treatmentPlan = parsedPlan.treatmentPlan
   supervisionForm.customPlanDetail = parsedPlan.customPlanDetail
   supervisionForm.supervisionRecords = [{ time: "", content: "", method: "", remark: "" }]
+  supervisionForm.treatmentCompletionStatus = ""
   supervisionForm.interruptMedication = ""
   supervisionForm.interruptCount = null
   supervisionForm.totalDoses = null
@@ -285,6 +288,7 @@ async function handleSaveSupervision() {
       treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
       treatmentPlan: formatLatentSupervisionTreatmentPlan(supervisionForm.treatmentPlan, supervisionForm.customPlanDetail),
       supervisionRecords: JSON.stringify(supervisionForm.supervisionRecords),
+      treatmentCompletionStatus: supervisionForm.treatmentCompletionStatus || undefined,
       interruptMedication: supervisionForm.interruptMedication || undefined,
       interruptCount: supervisionForm.interruptMedication === "有" ? supervisionForm.interruptCount : undefined,
       totalDoses: supervisionForm.totalDoses || undefined,
@@ -897,7 +901,7 @@ async function handleSaveFollowupInput() {
           全疗程评价
         </el-divider>
         <el-row :gutter="12">
-          <el-col :span="12">
+          <el-col :span="8">
             <el-form-item label="中断用药">
               <el-radio-group v-model="supervisionForm.interruptMedication">
                 <el-radio v-for="item in INTERRUPT_MEDICATION_OPTIONS" :key="item.value" :value="item.value">
@@ -906,7 +910,14 @@ async function handleSaveFollowupInput() {
               </el-radio-group>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="8">
+            <el-form-item label="治疗完成情况">
+              <el-select v-model="supervisionForm.treatmentCompletionStatus" placeholder="请选择" clearable style="width: 100%">
+                <el-option v-for="item in TREATMENT_COMPLETION_STATUS_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="中断次数">
               <el-input-number
                 v-model="supervisionForm.interruptCount" :min="0"
@@ -998,6 +1009,9 @@ async function handleSaveFollowupInput() {
         </el-descriptions-item>
         <el-descriptions-item label="结束疗程时间">
           {{ supervisionDetailData.treatmentEndDate || "—" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗完成情况">
+          {{ supervisionDetailData.treatmentCompletionStatus || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="用药率">
           {{ supervisionDetailData.medicationRate || "—" }}
@@ -1211,7 +1225,6 @@ async function handleSaveFollowupInput() {
         </el-button>
       </template>
     </el-dialog>
-
 
     <!-- ==================== 弹窗：随访监测详情 ==================== -->
     <el-dialog v-model="followupDetailVisible" :title="`${followupDetailRow?.name} — 随访监测详情`" width="680px">

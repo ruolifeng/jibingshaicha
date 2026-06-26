@@ -42,9 +42,10 @@ public class LatentInfectionController {
             @RequestParam(required = false) String idNumber,
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String startTime,
-            @RequestParam(required = false) String endTime) {
+            @RequestParam(required = false) String endTime,
+            @RequestParam(required = false) String treatmentCompletionStatus) {
         return ResultRes.success(latentInfectionService.queryHistoryPage(
-                page, size, populationType, name, idNumber, phone, startTime, endTime));
+                page, size, populationType, name, idNumber, phone, startTime, endTime, treatmentCompletionStatus));
     }
 
     @Operation(summary = "潜伏感染详情")
@@ -112,10 +113,11 @@ public class LatentInfectionController {
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String dateFilterBy,
-            @RequestParam(required = false) String creatorName) {
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) String crowdCategory) {
         return ResultRes.success(latentInfectionService.queryPage(
                 page, size, populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst,
-                phone, dateFrom, dateTo, dateFilterBy, creatorName));
+                phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory));
     }
 
     @Operation(summary = "追踪操作")

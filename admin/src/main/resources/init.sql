@@ -500,6 +500,7 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     -- V5 改造：督导记录改为 JSON 数组（督导时间/内容/方式/备注）
     `supervision_records`    TEXT         DEFAULT NULL COMMENT '督导记录（JSON数组：time/content/method/remark）',
     -- V5 新增：全疗程规律治疗评价
+    `treatment_completion_status` VARCHAR(32) DEFAULT NULL COMMENT '治疗完成情况：完成治疗/失败/死亡/失访/不良反应停药/未评估',
     `interrupt_medication`   VARCHAR(16)  DEFAULT NULL COMMENT '中断用药：有/无',
     `interrupt_count`        INT          DEFAULT NULL COMMENT '中断次数',
     `total_doses`            INT          DEFAULT NULL COMMENT '全程应用药次数',
@@ -3082,3 +3083,29 @@ SELECT r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
 CROSS JOIN `permission` p
 WHERE p.code = 'system:department';
+
+-- ==================== V80：督导表增加治疗完成情况（见 migration/V80_supervision_treatment_completion_status.sql） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supervision_form' AND COLUMN_NAME = 'treatment_completion_status'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `supervision_form` ADD COLUMN `treatment_completion_status` VARCHAR(32) DEFAULT NULL COMMENT ''治疗完成情况：完成治疗/失败/死亡/失访/不良反应停药/未评估'' AFTER `supervision_records`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ==================== V81：潜伏感染者人群分类（见 migration/V81_latent_crowd_category.sql） ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'crowd_category'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection` ADD COLUMN `crowd_category` VARCHAR(128) DEFAULT NULL COMMENT ''人群分类（重点人群：老年人/糖尿病/双感；密接：家庭内/家庭外）'' AFTER `population_type`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

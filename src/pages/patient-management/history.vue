@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS, STOP_TREATMENT_REASON_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { isStopTreatmentArchive } from "@@/utils/followUpVisit"
+import { formatStopTreatmentReason } from "@@/utils/followUpVisitFormat"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   batchDeletePatientsApi,
@@ -29,7 +30,8 @@ const searchForm = reactive({
   diagnosisResult: "",
   populationType: "",
   startTime: "",
-  endTime: ""
+  endTime: "",
+  stopTreatmentReason: ""
 })
 
 function handleSelectionChange(rows: any[]) {
@@ -49,6 +51,7 @@ async function fetchData() {
     if (!params.diagnosisResult) delete params.diagnosisResult
     if (!params.startTime) delete params.startTime
     if (!params.endTime) delete params.endTime
+    if (!params.stopTreatmentReason) delete params.stopTreatmentReason
     const { data } = await getPatientHistoryListApi(params)
     tableData.value = data.records
     total.value = data.total
@@ -62,7 +65,7 @@ function handleSearch() {
   fetchData()
 }
 function handleReset() {
-  Object.assign(searchForm, { name: "", idNumber: "", phone: "", diagnosisResult: "", populationType: "", startTime: "", endTime: "" })
+  Object.assign(searchForm, { name: "", idNumber: "", phone: "", diagnosisResult: "", populationType: "", startTime: "", endTime: "", stopTreatmentReason: "" })
   handleSearch()
 }
 
@@ -82,7 +85,8 @@ async function handleExport() {
       diagnosisResult: searchForm.diagnosisResult || undefined,
       populationType: searchForm.populationType || undefined,
       startTime: searchForm.startTime || undefined,
-      endTime: searchForm.endTime || undefined
+      endTime: searchForm.endTime || undefined,
+      stopTreatmentReason: searchForm.stopTreatmentReason || undefined
     })
     downloadBlob(blob as unknown as Blob, "历史患者信息总表.xlsx")
     ElMessage.success("导出成功")
@@ -154,6 +158,16 @@ async function handleUnarchive(row: Record<string, any>) {
             <el-option label="专病网" value="specialDisease" />
           </el-select>
         </el-form-item>
+        <el-form-item label="停止治疗原因">
+          <el-select v-model="searchForm.stopTreatmentReason" placeholder="全部" clearable style="width:160px">
+            <el-option
+              v-for="item in STOP_TREATMENT_REASON_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="归档时间">
           <el-date-picker v-model="searchForm.startTime" type="date" value-format="YYYY-MM-DD" placeholder="开始日期" style="width:140px" />
           <span style="margin:0 8px">~</span>
@@ -213,6 +227,11 @@ async function handleUnarchive(row: Record<string, any>) {
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
         <el-table-column prop="diagnosisResult" label="病原学结果" />
+        <el-table-column label="停止治疗原因" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ formatStopTreatmentReason(row.stopTreatmentReason, row.stopTreatmentReasonOther) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="archiveRemark" label="备注" min-width="100">
           <template #default="{ row }">
             {{ row.archiveRemark || "-" }}

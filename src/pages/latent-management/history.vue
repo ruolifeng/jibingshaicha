@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import ArchivedLatentRecordsActions from "@@/components/ArchivedLatentRecordsActions.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getPopulationTypeLabel, getPopulationTypeTagType } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, TREATMENT_COMPLETION_STATUS_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import {
   batchDeleteLatentApi,
@@ -23,7 +23,8 @@ const searchForm = reactive({
   phone: "",
   populationType: "",
   startTime: "",
-  endTime: ""
+  endTime: "",
+  treatmentCompletionStatus: ""
 })
 
 function handleSelectionChange(rows: any[]) {
@@ -44,6 +45,7 @@ async function fetchData() {
     if (!params.phone) delete params.phone
     if (!params.startTime) delete params.startTime
     if (!params.endTime) delete params.endTime
+    if (!params.treatmentCompletionStatus) delete params.treatmentCompletionStatus
     const { data } = await getLatentHistoryListApi(params)
     tableData.value = data.records
     total.value = data.total
@@ -58,7 +60,7 @@ function handleSearch() {
 }
 
 function handleReset() {
-  Object.assign(searchForm, { name: "", idNumber: "", phone: "", populationType: "", startTime: "", endTime: "" })
+  Object.assign(searchForm, { name: "", idNumber: "", phone: "", populationType: "", startTime: "", endTime: "", treatmentCompletionStatus: "" })
   handleSearch()
 }
 
@@ -77,7 +79,8 @@ async function handleExport() {
       phone: searchForm.phone || undefined,
       populationType: searchForm.populationType || undefined,
       dateFrom: searchForm.startTime || undefined,
-      dateTo: searchForm.endTime || undefined
+      dateTo: searchForm.endTime || undefined,
+      treatmentCompletionStatus: searchForm.treatmentCompletionStatus || undefined
     })
     downloadBlob(blob as unknown as Blob, "潜伏感染者历史患者信息总表.xlsx")
     ElMessage.success("导出成功")
@@ -142,6 +145,11 @@ function treatmentPhaseLabel(phase?: number) {
             <el-option label="大疫情" value="epidemic" />
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="治疗完成情况">
+          <el-select v-model="searchForm.treatmentCompletionStatus" placeholder="全部" clearable style="width:140px">
+            <el-option v-for="item in TREATMENT_COMPLETION_STATUS_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="归档时间">
@@ -209,6 +217,7 @@ function treatmentPhaseLabel(phase?: number) {
           </template>
         </el-table-column>
         <el-table-column prop="archivedTime" label="归档时间" />
+        <el-table-column prop="treatmentCompletionStatus" label="治疗完成情况" show-overflow-tooltip />
         <el-table-column label="操作" fixed="right" width="320">
           <template #default="{ row }">
             <ArchivedLatentRecordsActions :row="row" />

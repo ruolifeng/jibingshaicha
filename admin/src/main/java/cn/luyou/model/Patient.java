@@ -141,4 +141,12 @@ public class Patient extends BaseEntity {
     /** 最近领药-数量摘要（非数据库字段，列表查询时填充） */
     @TableField(exist = false)
     private String medicationDrugForm;
+
+    /** 停止治疗原因（来自后续随访，非数据库字段） */
+    @TableField(exist = false)
+    private String stopTreatmentReason;
+
+    /** 停止治疗原因-其它（来自后续随访，非数据库字段） */
+    @TableField(exist = false)
+    private String stopTreatmentReasonOther;
 }

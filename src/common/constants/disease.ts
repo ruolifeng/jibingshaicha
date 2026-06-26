@@ -214,6 +214,16 @@ export const SUPERVISION_METHOD_OPTIONS = [
   "其他"
 ]
 
+/** 治疗完成情况选项（督导表） */
+export const TREATMENT_COMPLETION_STATUS_OPTIONS = [
+  "完成治疗",
+  "失败",
+  "死亡",
+  "失访",
+  "不良反应停药",
+  "未评估"
+]
+
 /** 中断用药选项（V5新增） */
 export const INTERRUPT_MEDICATION_OPTIONS = [
   { label: "有", value: "有" },
@@ -611,12 +621,48 @@ export const POPULATION_TYPE_LABEL_MAP: Record<string, { label: string, type: "p
   epidemic: { label: "大疫情", type: "danger" },
   referral: { label: "推介", type: "info" },
   closeContact: { label: "密接", type: "info" },
-  specialDisease: { label: "专病网", type: "warning" }
+  specialDisease: { label: "专病网", type: "warning" },
+  other: { label: "其它", type: "info" }
 }
+
+/** 潜伏感染者手动新增/导入可选数据来源 */
+export const LATENT_MANUAL_POPULATION_TYPE_OPTIONS = [
+  { label: "学生筛查", value: "school" },
+  { label: "重点人群", value: "keyPopulation" },
+  { label: "疫情筛查", value: "regular" },
+  { label: "大疫情", value: "epidemic" },
+  { label: "推介", value: "referral" },
+  { label: "密接", value: "closeContact" },
+  { label: "其它", value: "other" }
+]
+
+/** 潜伏感染者手动新增 — 重点人群子分类（可多选） */
+export const LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS = ["老年人", "糖尿病", "双感"] as const
+
+/** 潜伏感染者手动新增 — 密接类型（单选） */
+export const LATENT_CLOSE_CONTACT_TYPE_OPTIONS = ["家庭内", "家庭外"] as const
 
 /** 获取 populationType 对应的 label */
 export function getPopulationTypeLabel(type: string): string {
   return POPULATION_TYPE_LABEL_MAP[type]?.label ?? type
+}
+
+/** 获取数据来源展示标签（含重点人群/密接细分） */
+export function getLatentPopulationDisplayLabel(populationType: string, crowdCategory?: string | null): string {
+  const base = getPopulationTypeLabel(populationType)
+  if (!crowdCategory) return base
+  if (populationType === "keyPopulation") {
+    return crowdCategory
+      .split(/[、,，/]/)
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => `${base}-${part}`)
+      .join("、")
+  }
+  if (populationType === "closeContact" && LATENT_CLOSE_CONTACT_TYPE_OPTIONS.includes(crowdCategory as typeof LATENT_CLOSE_CONTACT_TYPE_OPTIONS[number])) {
+    return `${base}-${crowdCategory}`
+  }
+  return base
 }
 
 /** 获取 populationType 对应的 tag type */

@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { PatientHeatmapData } from "./apis"
-import type { DashboardSummaryData } from "@/pages/dashboard/apis"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
@@ -14,9 +12,7 @@ import {
   exportWideTableApi,
   getDistrictOptionsApi,
   getDistrictStatisticsApi,
-  getPatientHeatmapApi,
-  getSchoolStatisticsApi,
-  getWorkbenchStatisticsApi
+  getSchoolStatisticsApi
 } from "./apis"
 import QuestionnairePanel from "./components/QuestionnairePanel.vue"
 import WorkbenchStatsPanel from "./components/WorkbenchStatsPanel.vue"
@@ -81,49 +77,10 @@ async function fetchDistrictStatistics() {
 }
 
 // ==================== 我的工作台年度统计 ====================
-const workbenchLoading = ref(false)
-const workbenchSummary = ref<DashboardSummaryData>({
-  pendingTracking: 0,
-  pendingVisit: 0,
-  pendingNotice: 0,
-  upcomingReview: 0
-})
+const workbenchPanelRef = ref<InstanceType<typeof WorkbenchStatsPanel> | null>(null)
 
-async function fetchWorkbenchStatistics() {
-  workbenchLoading.value = true
-  heatmapDistrict.value = undefined
-  const heatmapPromise = canViewPatientHeatmap.value ? fetchPatientHeatmap() : Promise.resolve()
-  try {
-    const { data } = await getWorkbenchStatisticsApi(filterForm.year)
-    workbenchSummary.value = { ...workbenchSummary.value, ...(data || {}) }
-  } catch { /* handled */ } finally {
-    workbenchLoading.value = false
-  }
-  await heatmapPromise
-}
-
-const heatmapLoading = ref(false)
-const heatmapData = ref<PatientHeatmapData>({})
-const heatmapDistrict = ref<string>()
-
-async function fetchPatientHeatmap(district?: string) {
-  if (!canViewPatientHeatmap.value) return
-  heatmapLoading.value = true
-  try {
-    const { data } = await getPatientHeatmapApi(filterForm.year, district)
-    heatmapData.value = data || {}
-    heatmapDistrict.value = district
-  } catch {
-    if (district) {
-      ElMessage.warning("无法查看该区县，请确认您有相应辖区权限")
-    }
-  } finally {
-    heatmapLoading.value = false
-  }
-}
-
-function handleHeatmapDrill(district: string | null) {
-  fetchPatientHeatmap(district || undefined)
+function refreshWorkbenchStatistics() {
+  workbenchPanelRef.value?.refresh()
 }
 
 // ==================== 搜索与重置 ====================
@@ -133,7 +90,7 @@ function handleSearch() {
   } else if (activeTab.value === "district") {
     fetchDistrictStatistics()
   } else if (activeTab.value === "workbench") {
-    fetchWorkbenchStatistics()
+    refreshWorkbenchStatistics()
   }
 }
 
@@ -324,13 +281,12 @@ function handleTabChange(tab: string | number) {
   } else if (tab === "district") {
     fetchDistrictStatistics()
   } else if (tab === "workbench") {
-    fetchWorkbenchStatistics()
+    refreshWorkbenchStatistics()
   }
 }
 
 onMounted(() => {
   loadDistrictOptions()
-  fetchWorkbenchStatistics()
 })
 </script>
 
@@ -339,7 +295,7 @@ onMounted(() => {
     <!-- 筛选条件（问卷 Tab 不需要年份/区县筛选） -->
     <el-card v-if="activeTab !== 'questionnaire'" shadow="never" class="mb-4">
       <el-form :model="filterForm" inline>
-        <el-form-item label="年份">
+        <el-form-item v-if="activeTab !== 'workbench'" label="年份">
           <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">
             <el-option v-for="y in yearOptions" :key="y" :label="y" :value="y" />
           </el-select>
@@ -391,12 +347,8 @@ onMounted(() => {
         <!-- 我的工作台年度统计 -->
         <el-tab-pane label="我的工作台" name="workbench">
           <WorkbenchStatsPanel
-            :summary="workbenchSummary"
-            :loading="workbenchLoading"
+            ref="workbenchPanelRef"
             :show-heatmap="canViewPatientHeatmap"
-            :heatmap="heatmapData"
-            :heatmap-loading="heatmapLoading"
-            @heatmap-drill="handleHeatmapDrill"
           />
         </el-tab-pane>
 

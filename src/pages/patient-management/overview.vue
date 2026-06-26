@@ -1,14 +1,14 @@
 <script lang="ts" setup>
+import { confirmReferralApi, getReferralListApi } from "@@/apis/referral"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
-import { isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass, isPatientTransferLocked, isPatientTransferPending, getPatientTransferStatusLabel } from "@@/utils/patient"
-import { confirmReferralApi, getReferralListApi } from "@@/apis/referral"
-import { useUserStore } from "@/pinia/stores/user"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
+import { useUserStore } from "@/pinia/stores/user"
 import { batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
@@ -27,6 +27,12 @@ const {
   handleSearch,
   handleReset
 } = usePatientList(0, { overviewSearch: true })
+
+watch(() => searchForm.populationType, (val) => {
+  if (val !== "keyPopulation") {
+    searchForm.keyPopulationSubCategories = []
+  }
+})
 
 const detailVisible = ref(false)
 const editVisible = ref(false)
@@ -80,6 +86,9 @@ async function handleExport() {
       diagnosisResult: searchForm.diagnosisResult || undefined,
       populationType: searchForm.populationType || undefined,
       medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
+      crowdCategory: searchForm.keyPopulationSubCategories.length
+        ? searchForm.keyPopulationSubCategories.join(",")
+        : undefined,
       dateFilterBy: "registrationDate",
       ...extractDateRangeParams(searchForm.dateRange)
     })
@@ -240,6 +249,24 @@ async function handleAdminConfirmTransfer(row: any) {
             <el-option label="专病网" value="specialDisease" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="searchForm.populationType === 'keyPopulation'" label="重点人群分类">
+          <el-select
+            v-model="searchForm.keyPopulationSubCategories"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="全部"
+            clearable
+            style="width: 180px"
+          >
+            <el-option
+              v-for="item in LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -346,7 +373,7 @@ async function handleAdminConfirmTransfer(row: any) {
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
-              {{ getPopulationTypeLabel(row.populationType) }}
+              {{ getLatentPopulationDisplayLabel(row.populationType, row.crowdCategory) }}
             </el-tag>
           </template>
         </el-table-column>

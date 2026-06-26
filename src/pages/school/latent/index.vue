@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { getLevel5UsersApi } from "@@/apis/users"
-import PrintSupervision from "@@/components/PrintSupervision.vue"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
+import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
@@ -12,29 +12,31 @@ import {
   CHECK_RESULT_OPTIONS,
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
+  formatLatentNoticeTreatmentPlan,
+  formatLatentSupervisionTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
   INTERRUPT_MEDICATION_OPTIONS,
+  isLatentIndividualPlan,
+  LATENT_TREATMENT_PLAN_OPTIONS,
   MEDICATION_STATUS_OPTIONS,
+  normalizeLatentTreatmentPlan,
   NOTICE_STATUS_MAP,
+  parseLatentNoticeTreatmentPlan,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS,
-  TREATMENT_PHASE_MAP,
-  formatLatentNoticeTreatmentPlan,
-  formatLatentSupervisionTreatmentPlan,
-  isLatentIndividualPlan,
-  LATENT_TREATMENT_PLAN_OPTIONS,
-  normalizeLatentTreatmentPlan,
-  parseLatentNoticeTreatmentPlan
+  TREATMENT_COMPLETION_STATUS_OPTIONS,
+  TREATMENT_PHASE_MAP
 } from "@@/constants/disease"
-import { idCardRule, phoneRule } from "@@/utils/validate"
 import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
+import { idCardRule, phoneRule } from "@@/utils/validate"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   closeCaseApi,
   confirmNoticeApi,
+  exportLatentListApi,
   getCheckListApi,
   getFollowUpListApi,
   getLatentListApi,
@@ -43,9 +45,8 @@ import {
   referralLatentApi,
   saveCheckApi,
   saveFollowUpApi,
-  exportLatentListApi,
-  saveSupervisionApi,
   saveNoticeDraftApi,
+  saveSupervisionApi,
   sendNoticeApi,
   setMedicationStatusApi,
   submitXrayApi,
@@ -468,6 +469,7 @@ const supervisionForm = reactive({
   treatmentPlan: "",
   customPlanDetail: "",
   supervisionRecords: [] as { time: string, content: string, method: string, remark: string }[],
+  treatmentCompletionStatus: "",
   interruptMedication: "",
   interruptCount: null as number | null,
   totalDoses: null as number | null,
@@ -492,6 +494,7 @@ function openSupervisionDialog(row: any) {
   supervisionForm.treatmentPlan = ""
   supervisionForm.customPlanDetail = ""
   supervisionForm.supervisionRecords = [{ time: "", content: "", method: "", remark: "" }]
+  supervisionForm.treatmentCompletionStatus = ""
   supervisionForm.interruptMedication = ""
   supervisionForm.interruptCount = null
   supervisionForm.totalDoses = null
@@ -532,6 +535,7 @@ async function handleSaveSupervision() {
       supervisionRecords: supervisionForm.supervisionRecords.length > 0
         ? JSON.stringify(supervisionForm.supervisionRecords)
         : undefined,
+      treatmentCompletionStatus: supervisionForm.treatmentCompletionStatus || undefined,
       interruptMedication: supervisionForm.interruptMedication || undefined,
       interruptCount: supervisionForm.interruptMedication === "有" ? supervisionForm.interruptCount : undefined,
       totalDoses: supervisionForm.totalDoses || undefined,
@@ -1349,7 +1353,7 @@ watch(
           全疗程规律治疗评价
         </el-divider>
         <el-row :gutter="12">
-          <el-col :span="12">
+          <el-col :span="8">
             <el-form-item label="中断用药">
               <el-radio-group v-model="supervisionForm.interruptMedication">
                 <el-radio v-for="item in INTERRUPT_MEDICATION_OPTIONS" :key="item.value" :value="item.value">
@@ -1358,7 +1362,14 @@ watch(
               </el-radio-group>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="8">
+            <el-form-item label="治疗完成情况">
+              <el-select v-model="supervisionForm.treatmentCompletionStatus" placeholder="请选择" clearable style="width: 100%">
+                <el-option v-for="item in TREATMENT_COMPLETION_STATUS_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="中断次数">
               <el-input-number v-model="supervisionForm.interruptCount" :min="0" :disabled="supervisionForm.interruptMedication !== '有'" style="width: 100%" />
             </el-form-item>
@@ -1468,6 +1479,9 @@ watch(
       <el-descriptions v-if="supervisionDetailData" :column="2" border class="mb-4">
         <el-descriptions-item label="中断用药">
           {{ supervisionDetailData.interruptMedication || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗完成情况">
+          {{ supervisionDetailData.treatmentCompletionStatus || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="中断次数">
           {{ supervisionDetailData.interruptCount ?? "-" }}
@@ -1767,6 +1781,9 @@ watch(
           <el-descriptions-item label="中断用药">
             {{ aggregateSupervision.interruptMedication || "-" }}
           </el-descriptions-item>
+          <el-descriptions-item label="治疗完成情况">
+            {{ aggregateSupervision.treatmentCompletionStatus || "-" }}
+          </el-descriptions-item>
           <el-descriptions-item label="中断次数">
             {{ aggregateSupervision.interruptCount ?? "-" }}
           </el-descriptions-item>
@@ -1837,9 +1854,15 @@ watch(
         </el-form-item>
         <el-form-item label="追踪结果">
           <el-radio-group v-model="trackStatus">
-            <el-radio :value="1">到位</el-radio>
-            <el-radio :value="2">未到位</el-radio>
-            <el-radio :value="3">其他</el-radio>
+            <el-radio :value="1">
+              到位
+            </el-radio>
+            <el-radio :value="2">
+              未到位
+            </el-radio>
+            <el-radio :value="3">
+              其他
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注" required>
@@ -1888,8 +1911,12 @@ watch(
       <el-form :model="xrayForm" label-width="110px">
         <el-form-item label="是否做胸片">
           <el-radio-group v-model="xrayForm.hasChestXray">
-            <el-radio value="是">是</el-radio>
-            <el-radio value="否">否</el-radio>
+            <el-radio value="是">
+              是
+            </el-radio>
+            <el-radio value="否">
+              否
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <template v-if="xrayForm.hasChestXray === '是'">
