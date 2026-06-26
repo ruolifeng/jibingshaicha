@@ -63,8 +63,9 @@ public class StatisticsController {
     @Operation(summary = "患者分布热力图（三级及以上用户）")
     @GetMapping("/patient-heatmap")
     public ResultResponse<PatientDistributionHeatmapVO> patientHeatmap(
-            @RequestParam(required = false) Integer year) {
-        return ResultRes.success(patientService.buildPatientDistributionHeatmap(year));
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String district) {
+        return ResultRes.success(patientService.buildPatientDistributionHeatmap(year, district));
     }
 
     @Operation(summary = "导出学校人群统计Excel")

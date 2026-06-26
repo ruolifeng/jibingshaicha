@@ -316,20 +316,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo);
         applyEntryUnitFilter(wrapper, entryUnit);
-        // 人群分类：按选项匹配对应的独立列
-        if (StrUtil.isNotBlank(crowdCategory)) {
-            switch (crowdCategory) {
-                case "密接"     -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryClose,    "是");
-                case "学生"     -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryStudent,  "是");
-                case "教职工"   -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTeacher,  "是");
-                case "老年人"   -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryElder,    "是");
-                case "糖尿病"   -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是");
-                case "双感"     -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDual,     "是");
-                case "既往结核史" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTbHist,  "是");
-                case "非重点人群" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryNormal,  "是");
-                default -> {}
-            }
-        }
+        applyCrowdCategoryFilter(wrapper, crowdCategory);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
         wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
@@ -346,6 +333,32 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             wrapper.eq(ScreeningKeyPopulation::getId, -1L);
         } else {
             wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
+        }
+    }
+
+    /** 人群分类：支持逗号分隔多选，同时满足所选分类（AND） */
+    private void applyCrowdCategoryFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String crowdCategory) {
+        if (StrUtil.isBlank(crowdCategory)) {
+            return;
+        }
+        for (String category : crowdCategory.split(",")) {
+            if (StrUtil.isNotBlank(category)) {
+                applySingleCrowdCategoryFilter(wrapper, category.trim());
+            }
+        }
+    }
+
+    private void applySingleCrowdCategoryFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String crowdCategory) {
+        switch (crowdCategory) {
+            case "密接" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryClose, "是");
+            case "学生" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryStudent, "是");
+            case "教职工" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTeacher, "是");
+            case "老年人" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryElder, "是");
+            case "糖尿病" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是");
+            case "双感" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDual, "是");
+            case "既往结核史" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTbHist, "是");
+            case "非重点人群" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryNormal, "是");
+            default -> {}
         }
     }
 

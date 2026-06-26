@@ -62,10 +62,11 @@ export interface DashboardSummaryData {
 }
 
 /** 获取首页待处理事项汇总数据 */
-export function getDashboardSummaryApi() {
+export function getDashboardSummaryApi(year?: number | string) {
   return request<ApiResponseData<DashboardSummaryData>>({
     url: "dashboard/summary",
-    method: "get"
+    method: "get",
+    params: year != null && year !== "" ? { year: Number(year) } : {}
   })
 }
 

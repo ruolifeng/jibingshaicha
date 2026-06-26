@@ -359,17 +359,48 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public long countTreatmentSuccessForDashboard(Integer statYear) {
+        // 分母：statYear 年度管理患者；分子：其中任意时间完成疗程者（可跨年，不按 stop_treatment_date 限年度）
         LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear);
-        wrapper.inSql(Patient::getId, buildTreatmentSuccessFollowUpSql(statYear));
+        wrapper.inSql(Patient::getId, TREATMENT_SUCCESS_FOLLOW_UP_SQL);
         return count(wrapper);
     }
 
+    private static final List<String> ZIGONG_DISTRICT_NAMES = List.of(
+            "自流井区", "贡井区", "大安区", "沿滩区", "荣县", "富顺县"
+    );
+
+    private static final Map<String, String> ZIGONG_DISTRICT_ADCODE = Map.of(
+            "自流井区", "510302",
+            "贡井区", "510303",
+            "大安区", "510304",
+            "沿滩区", "510311",
+            "荣县", "510321",
+            "富顺县", "510322"
+    );
+
     @Override
-    public PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear) {
+    public PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName) {
         assertHeatmapRoleAllowed();
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
 
+        Map<String, Map<String, Long>> matrix = buildHeatmapDistrictMatrix(year);
+        long total = matrix.values().stream()
+                .flatMap(m -> m.values().stream())
+                .mapToLong(Long::longValue)
+                .sum();
+
+        if (StrUtil.isBlank(districtName)) {
+            return buildCityLevelHeatmap(year, period, matrix, total);
+        }
+        String resolvedDistrict = resolveDistrictKey(matrix, districtName);
+        if (resolvedDistrict == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "未找到区县：" + districtName);
+        }
+        return buildDistrictLevelHeatmap(year, period, resolvedDistrict, matrix, total);
+    }
+
+    private Map<String, Map<String, Long>> buildHeatmapDistrictMatrix(int year) {
         LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(year);
         wrapper.select(Patient::getDepartmentId);
         List<Patient> patients = list(wrapper);
@@ -378,13 +409,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .collect(Collectors.groupingBy(
                         p -> p.getDepartmentId() == null ? -1L : p.getDepartmentId(),
                         Collectors.counting()));
-        long total = countByDeptId.values().stream().mapToLong(Long::longValue).sum();
 
         Map<Long, Department> deptMap = departmentService.list().stream()
                 .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
         Set<Long> scopeDeptIds = resolveHeatmapScopeDeptIds();
 
-        // district -> (community -> count)，先按辖区部门树预置 0，再填入实际统计
         Map<String, Map<String, Long>> matrix = new LinkedHashMap<>();
         seedHeatmapMatrixFromScope(matrix, deptMap, scopeDeptIds);
         for (Map.Entry<Long, Long> entry : countByDeptId.entrySet()) {
@@ -409,58 +438,152 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             matrix.computeIfAbsent(district, k -> new LinkedHashMap<>())
                     .merge(community, cnt, Long::sum);
         }
+        return matrix;
+    }
 
-        List<String> allDistricts = sortDistrictLabels(matrix.keySet());
-
-        List<String> rowLabels = new ArrayList<>();
-        List<List<Object>> heatData = new ArrayList<>();
+    private PatientDistributionHeatmapVO buildCityLevelHeatmap(int year,
+                                                             StatYearPeriod period,
+                                                             Map<String, Map<String, Long>> matrix,
+                                                             long total) {
+        List<PatientDistributionHeatmapVO.MapRegion> regions = new ArrayList<>();
         int maxCount = 0;
-        for (String district : allDistricts) {
-            List<String> communities = sortCommunityLabels(matrix.get(district).keySet());
-            Map<String, Long> communityCounts = matrix.get(district);
-            List<List<Object>> rowPoints = new ArrayList<>();
-            for (int colIdx = 0; colIdx < communities.size(); colIdx++) {
-                String community = communities.get(colIdx);
-                int count = communityCounts.get(community).intValue();
-                if (count <= 0) {
-                    continue;
-                }
-                maxCount = Math.max(maxCount, count);
-                rowPoints.add(new ArrayList<>(List.of(colIdx, 0, count, district, community)));
-            }
-            if (rowPoints.isEmpty()) {
-                continue;
-            }
-            int rowIdx = rowLabels.size();
-            rowLabels.add(district);
-            for (List<Object> point : rowPoints) {
-                point.set(1, rowIdx);
-                heatData.add(point);
+        for (String district : ZIGONG_DISTRICT_NAMES) {
+            String key = resolveDistrictKey(matrix, district);
+            int value = key != null ? sumDistrictCount(matrix.get(key)) : 0;
+            maxCount = Math.max(maxCount, value);
+            regions.add(PatientDistributionHeatmapVO.MapRegion.builder()
+                    .name(district)
+                    .adcode(ZIGONG_DISTRICT_ADCODE.get(district))
+                    .value(value)
+                    .build());
+        }
+        if (matrix.containsKey("未分配")) {
+            int unassigned = sumDistrictCount(matrix.get("未分配"));
+            if (unassigned > 0) {
+                maxCount = Math.max(maxCount, unassigned);
+                regions.add(PatientDistributionHeatmapVO.MapRegion.builder()
+                        .name("未分配")
+                        .value(unassigned)
+                        .build());
             }
         }
-
-        int maxCols = heatData.stream()
-                .mapToInt(p -> ((Number) p.get(0)).intValue())
-                .max()
-                .orElse(-1) + 1;
-        if (maxCols <= 0) {
-            maxCols = 1;
-        }
-        List<String> colLabels = new ArrayList<>();
-        for (int i = 0; i < maxCols; i++) {
-            colLabels.add("社区" + (i + 1));
-        }
-
         return PatientDistributionHeatmapVO.builder()
                 .managementYear(year)
                 .statPeriodFrom(period.start().toString())
                 .statPeriodTo(period.end().toString())
                 .total((int) Math.min(total, Integer.MAX_VALUE))
                 .maxCount(maxCount)
-                .rowLabels(rowLabels)
-                .colLabels(colLabels)
-                .data(heatData)
+                .mapLevel("city")
+                .regions(regions)
                 .build();
+    }
+
+    private PatientDistributionHeatmapVO buildDistrictLevelHeatmap(int year,
+                                                                     StatYearPeriod period,
+                                                                     String districtName,
+                                                                     Map<String, Map<String, Long>> matrix,
+                                                                     long total) {
+        Map<String, Long> communities = matrix.getOrDefault(districtName, Map.of());
+        List<String> labels = sortCommunityLabels(communities.keySet());
+        List<PatientDistributionHeatmapVO.MapRegion> regions = new ArrayList<>();
+        int maxCount = 0;
+        int districtTotal = 0;
+        for (String label : labels) {
+            int value = communities.getOrDefault(label, 0L).intValue();
+            districtTotal += value;
+            maxCount = Math.max(maxCount, value);
+            regions.add(PatientDistributionHeatmapVO.MapRegion.builder()
+                    .name(label)
+                    .value(value)
+                    .build());
+        }
+        return PatientDistributionHeatmapVO.builder()
+                .managementYear(year)
+                .statPeriodFrom(period.start().toString())
+                .statPeriodTo(period.end().toString())
+                .total(districtTotal)
+                .maxCount(maxCount)
+                .mapLevel("district")
+                .districtName(toCanonicalDistrictName(districtName))
+                .districtAdcode(ZIGONG_DISTRICT_ADCODE.get(toCanonicalDistrictName(districtName)))
+                .regions(regions)
+                .build();
+    }
+
+    private int sumDistrictCount(Map<String, Long> communities) {
+        if (communities == null || communities.isEmpty()) {
+            return 0;
+        }
+        return (int) Math.min(communities.values().stream().mapToLong(Long::longValue).sum(), Integer.MAX_VALUE);
+    }
+
+    private String resolveDistrictKey(Map<String, Map<String, Long>> matrix, String districtName) {
+        if (StrUtil.isBlank(districtName)) {
+            return null;
+        }
+        if (matrix.containsKey(districtName)) {
+            return districtName;
+        }
+        for (String key : matrix.keySet()) {
+            if (districtNamesMatch(key, districtName)) {
+                return key;
+            }
+        }
+        for (String canonical : ZIGONG_DISTRICT_NAMES) {
+            if (districtNamesMatch(canonical, districtName)) {
+                for (String key : matrix.keySet()) {
+                    if (districtNamesMatch(key, canonical)) {
+                        return key;
+                    }
+                }
+                return matrix.containsKey(canonical) ? canonical : null;
+            }
+        }
+        return null;
+    }
+
+    /** 将部门树中的区县名规范为地图 GeoJSON 使用的标准名称 */
+    private String toCanonicalDistrictName(String districtKey) {
+        if (StrUtil.isBlank(districtKey)) {
+            return districtKey;
+        }
+        for (String canonical : ZIGONG_DISTRICT_NAMES) {
+            if (districtNamesMatch(canonical, districtKey)) {
+                return canonical;
+            }
+        }
+        return districtKey;
+    }
+
+    private boolean districtNamesMatch(String a, String b) {
+        if (StrUtil.isBlank(a) || StrUtil.isBlank(b)) {
+            return false;
+        }
+        String na = normalizeDistrictLabel(a);
+        String nb = normalizeDistrictLabel(b);
+        if (na.equals(nb)) {
+            return true;
+        }
+        return stripDistrictAdminSuffix(na).equals(stripDistrictAdminSuffix(nb));
+    }
+
+    private String stripDistrictAdminSuffix(String name) {
+        if (StrUtil.isBlank(name)) {
+            return "";
+        }
+        if (name.endsWith("区") || name.endsWith("县")) {
+            return name.substring(0, name.length() - 1);
+        }
+        return name;
+    }
+
+    private String normalizeDistrictLabel(String name) {
+        if (StrUtil.isBlank(name)) {
+            return "";
+        }
+        return name.trim()
+                .replace("自贡市", "")
+                .replaceAll("\\s+", "");
     }
 
     /** 辖区可见部门 ID（超级管理员为全部部门） */
@@ -582,16 +705,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .apply(REGISTRATION_DATE_SQL_EXPR + " >= {0}", period.start())
                         .apply(REGISTRATION_DATE_SQL_EXPR + " <= {0}", period.end()))
                 .or(w2 -> w2.ge(Patient::getCreateTime, from).le(Patient::getCreateTime, to)));
-    }
-
-    private String buildTreatmentSuccessFollowUpSql(Integer statYear) {
-        StringBuilder sql = new StringBuilder(TREATMENT_SUCCESS_FOLLOW_UP_SQL);
-        if (statYear != null) {
-            StatYearPeriod period = StatYearPeriod.of(statYear);
-            sql.append(" AND stop_treatment_date >= '").append(period.start())
-                    .append("' AND stop_treatment_date <= '").append(period.end()).append("'");
-        }
-        return sql.toString();
     }
 
     /**

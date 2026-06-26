@@ -1,40 +1,41 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, computed } from "vue"
-import { ElMessage, ElMessageBox } from "element-plus"
-import { REFERRAL_CROWD_CATEGORY_OPTIONS, isConfirmedPatientDiagnosis } from "@@/constants/disease"
+import PrintRecommend from "@@/components/PrintRecommend.vue"
+import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
   REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
   referralSelectOptionsWithLegacy
 } from "@@/constants/referral-tracking"
-import { idCardRule, phoneRule } from "@@/utils/validate"
 import { formatDateTime } from "@@/utils/datetime"
+import { downloadBlob } from "@@/utils/download"
 import {
+  getRecommendTime,
   parseTrackingHistory,
   TRACK_STATUS_LABEL,
-  TRACKING_STATUS_MAP,
-  getRecommendTime
+  TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { downloadBlob } from "@@/utils/download"
-import { useUserStore } from "@/pinia/stores/user"
+import { idCardRule, phoneRule } from "@@/utils/validate"
+import { ElMessage, ElMessageBox } from "element-plus"
+import { computed, nextTick, onMounted, reactive, ref } from "vue"
 import { useMessageStore } from "@/pinia/stores/message"
+import { useUserStore } from "@/pinia/stores/user"
 import {
-  getReferralTrackingListApi,
-  getReferralTrackingDetailApi,
-  createReferralTrackingApi,
-  updateReferralTrackingApi,
-  sendRecommendApi,
   confirmRecommendApi,
-  rejectRecommendApi,
-  enableJointTrackingApi,
-  trackReferralApi,
-  saveScreeningInfoApi,
-  saveDiagnosisApi,
+  createReferralTrackingApi,
   deleteReferralTrackingApi,
+  enableJointTrackingApi,
+  exportReferralTrackApi,
   getLevel34UsersApi,
-  exportReferralTrackApi
+  getReferralTrackingDetailApi,
+  getReferralTrackingListApi,
+  rejectRecommendApi,
+  saveDiagnosisApi,
+  saveScreeningInfoApi,
+  sendRecommendApi,
+  trackReferralApi,
+  updateReferralTrackingApi
 } from "../apis/index"
 
 const userStore = useUserStore()
@@ -158,11 +159,15 @@ const createForm = reactive({
   infectionResult: "",
   chestXrayDate: "",
   chestXrayResult: "",
+  recommendUnitName: "",
+  fillUserName: "",
   recommendReason: "",
   receiverUserId: undefined as number | undefined
 })
 const createFormRef = ref()
 const sendingRecommend = ref(false)
+const createPrintVisible = ref(false)
+const printData = ref<Record<string, any> | null>(null)
 
 const createFormRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
@@ -196,11 +201,51 @@ async function openCreateDialog() {
     infectionResult: "",
     chestXrayDate: "",
     chestXrayResult: "",
+    recommendUnitName: resolveRecommendUnitName(),
+    fillUserName: resolveFillUserName(),
     recommendReason: "",
     receiverUserId: undefined
   })
   createDialogVisible.value = true
   nextTick(() => createFormRef.value?.clearValidate())
+}
+
+function resolveFillUserName() {
+  return userStore.realName || userStore.username || ""
+}
+
+function resolveRecommendUnitName() {
+  return userStore.departmentName || userStore.orgName || ""
+}
+
+function resolveReceiverUserName(receiverUserId?: number) {
+  if (!receiverUserId) return ""
+  const receiver = level34Users.value.find(u => Number(u.id) === Number(receiverUserId))
+  return receiver ? formatLevel34UserLabel(receiver) : ""
+}
+
+function buildRecommendPrintData(source: Record<string, any>) {
+  return {
+    ...source,
+    receiverUserName: source.receiverUserName || resolveReceiverUserName(source.receiverUserId),
+    recommendUnitName: source.recommendUnitName || resolveRecommendUnitName(),
+    fillUserName: source.fillUserName || resolveFillUserName()
+  }
+}
+
+function openCreatePrint() {
+  printData.value = buildRecommendPrintData(createForm)
+  createPrintVisible.value = true
+}
+
+function openViewPrint() {
+  if (!viewDetail.value) return
+  printData.value = buildRecommendPrintData({
+    ...viewDetail.value,
+    receiverUserName: viewDetail.value.receiverUserName,
+    recommendSentTime: formatRecommendTime(viewDetail.value)
+  })
+  createPrintVisible.value = true
 }
 
 async function handleSendRecommend() {
@@ -242,7 +287,7 @@ function canEditRecommend(row: any) {
 }
 
 /** 推介列表可见即可删（未追踪、已追踪、已结案等推介后各状态均允许，具体权限由 v-permission 控制） */
-function canDeleteRecommend(row: any) {
+function canDeleteRecommend(_row: any) {
   if (userStore.userRole === 1) return true
   return userStore.userRole >= 2 && userStore.userRole <= 6
 }
@@ -446,15 +491,6 @@ const historyViewList = computed(() =>
   parseTrackingHistory(historyViewRow.value?.trackingHistoryJson)
 )
 
-function openHistoryView(row: any) {
-  historyViewRow.value = row
-  historyViewVisible.value = true
-}
-
-function hasTrackingHistory(row: any) {
-  return parseTrackingHistory(row?.trackingHistoryJson).length > 0
-}
-
 function formatRecommendTime(row: any) {
   const time = getRecommendTime(row)
   return time ? formatDateTime(time) : "-"
@@ -549,7 +585,7 @@ function getRowClass({ row }: { row: any }) {
   }
   return ""
 }
-const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
+const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
   0: { label: "未发送", type: "info" },
   1: { label: "已发送", type: "warning" },
   2: { label: "已接受", type: "success" },
@@ -588,8 +624,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            查询
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -603,8 +643,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后请在本页点击「追踪」开展共同追踪（双方次数合并计算，4 次未到位自动结束）。您发起的推介仍保留在本页，共同追踪开启后您也可参与追踪。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
-        <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">新增推介</el-button>
-        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
+        <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">
+          新增推介
+        </el-button>
+        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">
+          导出
+        </el-button>
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
@@ -682,54 +726,72 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="200">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openViewDialog(row)">查看</el-button>
+            <el-button type="primary" link size="small" @click="openViewDialog(row)">
+              查看
+            </el-button>
             <el-button
               v-if="canEditRecommend(row)"
               type="primary" link size="small"
               @click="openEditDialog(row)"
-            >编辑</el-button>
+            >
+              编辑
+            </el-button>
             <el-button
               v-if="canDeleteRecommend(row)"
               v-permission="'referralManagement:delete'"
               type="danger" link size="small"
               @click="handleDelete(row)"
-            >删除</el-button>
+            >
+              删除
+            </el-button>
             <!-- 补发未发送的推介 -->
             <el-button
               v-if="isCreator(row) && row.recommendStatus === 0 && !row.archived"
               type="primary" link size="small"
               @click="handleSend(row)"
-            >发送推介</el-button>
+            >
+              发送推介
+            </el-button>
             <!-- 接收人：确认/拒绝待接收推介 -->
             <el-button
               v-if="row.recommendStatus === 1 && isReceiver(row)"
               type="success" link size="small"
               @click="handleConfirm(row)"
-            >确认接受</el-button>
+            >
+              确认接受
+            </el-button>
             <el-button
               v-if="row.recommendStatus === 1 && isReceiver(row)"
               type="danger" link size="small"
               @click="openRejectDialog(row)"
-            >拒绝</el-button>
+            >
+              拒绝
+            </el-button>
             <!-- 已确认推介：追踪（合并共同追踪，仅推介模块） -->
             <el-button
               v-if="canOperateRecommendTrack(row) && [0, 2].includes(row.trackingStatus)"
               v-permission="'referralManagement:trackOperate'"
               type="warning" link size="small"
               @click="handleRecommendTrack(row)"
-            >追踪</el-button>
+            >
+              追踪
+            </el-button>
             <el-button
               v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
               v-permission="'referralManagement:xray'"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
-            >录入胸片</el-button>
+            >
+              录入胸片
+            </el-button>
             <el-button
               v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
               v-permission="'referralManagement:diagnosis'"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
-            >录入诊断</el-button>
+            >
+              录入诊断
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -894,6 +956,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="推介单位名称">
+              <el-input v-model="createForm.recommendUnitName" readonly placeholder="系统自动生成" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="填写用户名称">
+              <el-input v-model="createForm.fillUserName" readonly placeholder="系统自动生成" />
+            </el-form-item>
+          </el-col>
           <el-col :span="24">
             <el-form-item label="推介原因" prop="recommendReason">
               <el-input
@@ -907,31 +979,80 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="sendingRecommend" @click="handleSendRecommend">发送推介</el-button>
+        <div class="recommend-dialog-footer">
+          <el-button @click="openCreatePrint">
+            打印 / 保存PDF
+          </el-button>
+          <div class="recommend-dialog-footer__actions">
+            <el-button @click="createDialogVisible = false">
+              取消
+            </el-button>
+            <el-button type="primary" :loading="sendingRecommend" @click="handleSendRecommend">
+              发送推介
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
+
+    <PrintRecommend v-model:visible="createPrintVisible" :data="printData" />
 
     <!-- 查看推介详情 -->
     <el-dialog v-model="viewDialogVisible" title="推介详情" width="760px">
       <div v-loading="viewLoading">
         <template v-if="viewDetail">
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="姓名">{{ viewDetail.name || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="性别">{{ viewDetail.gender || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="出生日期">{{ viewDetail.birthDate || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="年龄">{{ viewDetail.age ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="证件类型">{{ viewDetail.idType || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="证件号">{{ viewDetail.idNumber || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="民族">{{ viewDetail.ethnicity || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="联系电话">{{ viewDetail.phone || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="户籍地址" :span="2">{{ viewDetail.householdAddress || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="现住址" :span="2">{{ viewDetail.currentAddress || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="人群分类">{{ viewDetail.crowdCategory || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="录入者">{{ viewDetail.creatorUserName || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="录入单位" :span="2">{{ viewDetail.entryUnitName || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="推介原因" :span="2">{{ viewDetail.recommendReason || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="推介接收人">{{ viewDetail.receiverUserName || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="姓名">
+              {{ viewDetail.name || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="性别">
+              {{ viewDetail.gender || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="出生日期">
+              {{ viewDetail.birthDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="年龄">
+              {{ viewDetail.age ?? "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="证件类型">
+              {{ viewDetail.idType || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="证件号">
+              {{ viewDetail.idNumber || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="民族">
+              {{ viewDetail.ethnicity || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="联系电话">
+              {{ viewDetail.phone || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="户籍地址" :span="2">
+              {{ viewDetail.householdAddress || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="现住址" :span="2">
+              {{ viewDetail.currentAddress || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="人群分类">
+              {{ viewDetail.crowdCategory || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="录入者">
+              {{ viewDetail.creatorUserName || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="录入单位" :span="2">
+              {{ viewDetail.entryUnitName || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="推介单位名称">
+              {{ viewDetail.recommendUnitName || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="填写用户名称">
+              {{ viewDetail.fillUserName || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="推介原因" :span="2">
+              {{ viewDetail.recommendReason || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="推介接收人">
+              {{ viewDetail.receiverUserName || "-" }}
+            </el-descriptions-item>
             <el-descriptions-item label="推介状态">
               <el-tag
                 v-if="viewDetail.recommendStatus !== null && viewDetail.recommendStatus !== undefined"
@@ -942,18 +1063,30 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               </el-tag>
               <span v-else>-</span>
             </el-descriptions-item>
-            <el-descriptions-item label="推介时间">{{ formatRecommendTime(viewDetail) }}</el-descriptions-item>
+            <el-descriptions-item label="推介时间">
+              {{ formatRecommendTime(viewDetail) }}
+            </el-descriptions-item>
             <el-descriptions-item label="确认/拒绝时间">
               {{ viewDetail.recommendConfirmTime ? formatDateTime(viewDetail.recommendConfirmTime) : "-" }}
             </el-descriptions-item>
             <el-descriptions-item v-if="viewDetail.rejectedReason" label="拒绝原因" :span="2">
               {{ viewDetail.rejectedReason }}
             </el-descriptions-item>
-            <el-descriptions-item label="感染筛查时间">{{ viewDetail.screenDate || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="感染筛查方法">{{ viewDetail.screenMethod || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="感染筛查结果">{{ viewDetail.infectionResult || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="胸片筛查时间">{{ viewDetail.chestXrayDate || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="胸片筛查结果" :span="2">{{ viewDetail.chestXrayResult || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="感染筛查时间">
+              {{ viewDetail.screenDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染筛查方法">
+              {{ viewDetail.screenMethod || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染筛查结果">
+              {{ viewDetail.infectionResult || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片筛查时间">
+              {{ viewDetail.chestXrayDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片筛查结果" :span="2">
+              {{ viewDetail.chestXrayResult || "-" }}
+            </el-descriptions-item>
             <el-descriptions-item label="追踪状态">
               <el-tag
                 :type="TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.type as any"
@@ -991,7 +1124,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-descriptions-item>
           </el-descriptions>
           <div v-if="viewTrackingHistory.length" class="view-tracking-section">
-            <div class="view-tracking-title">{{ viewDetail.jointTracking === 1 ? "共同追踪过程" : "对方追踪过程" }}</div>
+            <div class="view-tracking-title">
+              {{ viewDetail.jointTracking === 1 ? "共同追踪过程" : "对方追踪过程" }}
+            </div>
             <div class="tracking-history">
               <div v-for="item in viewTrackingHistory" :key="item.attempt" class="tracking-history-item">
                 <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
@@ -1006,7 +1141,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </template>
       </div>
       <template #footer>
-        <el-button @click="viewDialogVisible = false">关闭</el-button>
+        <el-button @click="openViewPrint">
+          打印 / 保存PDF
+        </el-button>
+        <el-button @click="viewDialogVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1080,7 +1220,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-divider content-position="left">筛查信息（选填）</el-divider>
+            <el-divider content-position="left">
+              筛查信息（选填）
+            </el-divider>
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染筛查时间">
@@ -1128,6 +1270,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="推介单位名称">
+              <el-input :model-value="editRow?.recommendUnitName || '-'" readonly />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="填写用户名称">
+              <el-input :model-value="editRow?.fillUserName || '-'" readonly />
+            </el-form-item>
+          </el-col>
           <el-col :span="24">
             <el-form-item label="推介原因" prop="recommendReason">
               <el-input v-model="editForm.recommendReason" type="textarea" :rows="3" />
@@ -1136,8 +1288,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingEdit" @click="handleEditSave">保存</el-button>
+        <el-button @click="editDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="savingEdit" @click="handleEditSave">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1149,14 +1305,20 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="handleReject">确认拒绝</el-button>
+        <el-button @click="rejectDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="danger" @click="handleReject">
+          确认拒绝
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- 查看追踪记录弹窗（只读） -->
     <el-dialog v-model="historyViewVisible" title="追踪过程" width="520px">
-      <div v-if="historyViewList.length === 0" class="tracking-history-empty">暂无追踪记录</div>
+      <div v-if="historyViewList.length === 0" class="tracking-history-empty">
+        暂无追踪记录
+      </div>
       <div v-else class="tracking-history">
         <div v-for="item in historyViewList" :key="item.attempt" class="tracking-history-item">
           <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
@@ -1168,7 +1330,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </div>
       </div>
       <template #footer>
-        <el-button @click="historyViewVisible = false">关闭</el-button>
+        <el-button @click="historyViewVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1190,9 +1354,15 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-form-item>
         <el-form-item label="追踪状态">
           <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">到位</el-radio>
-            <el-radio :value="2">未到位</el-radio>
-            <el-radio :value="3">其他</el-radio>
+            <el-radio :value="1">
+              到位
+            </el-radio>
+            <el-radio :value="2">
+              未到位
+            </el-radio>
+            <el-radio :value="3">
+              其他
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注" required>
@@ -1211,8 +1381,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         />
       </el-form>
       <template #footer>
-        <el-button @click="trackDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleTrack">确认</el-button>
+        <el-button @click="trackDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleTrack">
+          确认
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1290,8 +1464,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="screeningDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveScreening">保存</el-button>
+        <el-button @click="screeningDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSaveScreening">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1300,10 +1478,18 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
       <el-form label-width="100px">
         <el-form-item label="诊断结果">
           <el-radio-group v-model="diagnosisResult">
-            <el-radio value="排除">排除</el-radio>
-            <el-radio value="确诊患者">确诊患者</el-radio>
-            <el-radio value="潜伏感染者">潜伏感染者</el-radio>
-            <el-radio value="其他">其他</el-radio>
+            <el-radio value="排除">
+              排除
+            </el-radio>
+            <el-radio value="确诊患者">
+              确诊患者
+            </el-radio>
+            <el-radio value="潜伏感染者">
+              潜伏感染者
+            </el-radio>
+            <el-radio value="其他">
+              其他
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="diagnosisResult === '其他'" label="备注" required>
@@ -1328,8 +1514,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
         />
       </el-form>
       <template #footer>
-        <el-button @click="diagnosisDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveDiagnosis">确认诊断</el-button>
+        <el-button @click="diagnosisDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSaveDiagnosis">
+          确认诊断
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -1382,6 +1572,18 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
   margin-bottom: 8px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.recommend-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.recommend-dialog-footer__actions {
+  display: flex;
+  gap: 8px;
 }
 </style>
 

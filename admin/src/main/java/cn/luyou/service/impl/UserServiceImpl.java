@@ -314,6 +314,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             roleList.add("admin");
         }
         List<String> permissions = permissionService.getEffectivePermissionCodes(user.getRole(), user.getId());
+        String departmentName = null;
+        if (user.getDepartmentId() != null) {
+            var dept = departmentService.getById(user.getDepartmentId());
+            if (dept != null) {
+                departmentName = dept.getName();
+            }
+        }
         return UserInfoVO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -323,6 +330,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .orgName(user.getOrgName())
                 .avatar(user.getAvatar())
                 .departmentId(user.getDepartmentId())
+                .departmentName(departmentName)
                 .roles(roleList)
                 .permissions(permissions)
                 .build();

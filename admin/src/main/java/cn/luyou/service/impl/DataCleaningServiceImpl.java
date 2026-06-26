@@ -2,6 +2,8 @@ package cn.luyou.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.DataCleaningResult;
@@ -10,6 +12,7 @@ import cn.luyou.utils.CloseContactCaseExcelSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
@@ -28,12 +31,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.DirectoryStream;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
@@ -48,6 +53,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Service
 public class DataCleaningServiceImpl implements DataCleaningService {
     private static final String TYPE_SCHOOL = "school";
@@ -55,6 +61,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     private static final String TYPE_CLOSE = "closeContact";
     private static final int MAX_ERROR_PREVIEW = 200;
     private static final long FILE_EXPIRE_MS = 30 * 60 * 1000L;
+    private static final Path RESULT_DIR = Path.of(System.getProperty("java.io.tmpdir"), "disease-cleaning");
     private static final DataFormatter DATA_FORMATTER = new DataFormatter();
     private static final List<String> SCHOOL_HEADER_TOP = List.of(
             "序号", "年份", "市（州）", "县（市、区）", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
@@ -86,17 +93,17 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     public DataCleaningResult clean(String populationType, MultipartFile file) {
         String type = normalizeType(populationType);
         validateExcel(file);
+        byte[] fileBytes = readUploadBytes(file);
 
-        int headRowNumber = resolveHeadRows(type, file);
+        int headRowNumber = resolveHeadRows(type, fileBytes);
         CloseContactColumnLayout closeLayout = TYPE_CLOSE.equals(type)
-                ? resolveCloseContactLayout(file, headRowNumber)
+                ? resolveCloseContactLayout(fileBytes, headRowNumber)
                 : null;
-        ValidationResult validationResult = readAndValidate(type, file, headRowNumber, closeLayout);
+        ValidationResult validationResult = readAndValidate(type, fileBytes, headRowNumber, closeLayout);
         List<RowValidationError> allErrors = validationResult.getErrors();
         String fileId = IdUtil.fastSimpleUUID();
-        File resultFile = markAndWriteResult(type, file, fileId, allErrors, headRowNumber);
-        Long currentUserId = currentUserId();
-        resultFileStore.put(fileId, new CleaningFileMeta(resultFile, currentUserId, System.currentTimeMillis()));
+        File resultFile = markAndWriteResult(type, fileBytes, fileId, allErrors, headRowNumber);
+        persistResultMeta(fileId, resultFile, currentUserId());
 
         List<String> previewErrors = allErrors.stream()
                 .limit(MAX_ERROR_PREVIEW)
@@ -115,10 +122,10 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     @Override
     public DataCleaningResult matchSchool(MultipartFile file) {
         validateExcel(file);
+        byte[] fileBytes = readUploadBytes(file);
         String fileId = IdUtil.fastSimpleUUID();
-        File resultFile = buildSchoolMatchedFile(file, fileId);
-        Long currentUserId = currentUserId();
-        resultFileStore.put(fileId, new CleaningFileMeta(resultFile, currentUserId, System.currentTimeMillis()));
+        File resultFile = buildSchoolMatchedFile(fileBytes, fileId);
+        persistResultMeta(fileId, resultFile, currentUserId());
         int totalCount = countDataRows(resultFile);
         return DataCleaningResult.builder()
                 .totalCount(totalCount)
@@ -132,9 +139,9 @@ public class DataCleaningServiceImpl implements DataCleaningService {
 
     @Override
     public Resource getResultFile(String fileId, Long currentUserId, boolean isSuperAdmin) {
-        CleaningFileMeta meta = resultFileStore.get(fileId);
+        CleaningFileMeta meta = resolveResultMeta(fileId);
         if (meta == null || meta.getFile() == null || !meta.getFile().exists()) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "清洗结果文件不存在或已过期");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "清洗结果文件不存在或已过期，请重新清洗");
         }
         if (isExpired(meta.getCreateAtMs())) {
             deleteMetaFile(fileId, meta);
@@ -164,13 +171,21 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         }
     }
 
-    private int resolveHeadRows(String type, MultipartFile file) {
+    private byte[] readUploadBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel 文件读取失败: " + e.getMessage());
+        }
+    }
+
+    private int resolveHeadRows(String type, byte[] fileBytes) {
         if (TYPE_KEY.equals(type)) {
             return 4;
         }
         if (TYPE_CLOSE.equals(type)) {
             try {
-                return CloseContactCaseExcelSupport.resolveHeadRowNumber(file.getBytes());
+                return CloseContactCaseExcelSupport.resolveHeadRowNumber(fileBytes);
             } catch (IOException e) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
             }
@@ -181,8 +196,8 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     /**
      * 密接 72 列官方模板与旧版（含原患者身份证号 / 无「是否开展预防治疗」列）列位不同。
      */
-    private CloseContactColumnLayout resolveCloseContactLayout(MultipartFile file, int headRowNumber) {
-        try (InputStream inputStream = file.getInputStream();
+    private CloseContactColumnLayout resolveCloseContactLayout(byte[] fileBytes, int headRowNumber) {
+        try (InputStream inputStream = new ByteArrayInputStream(fileBytes);
              Workbook workbook = WorkbookFactory.create(inputStream)) {
             Sheet sheet = workbook.getNumberOfSheets() > 0 ? workbook.getSheetAt(0) : null;
             if (sheet == null) {
@@ -202,14 +217,14 @@ public class DataCleaningServiceImpl implements DataCleaningService {
 
     private ValidationResult readAndValidate(
             String type,
-            MultipartFile file,
+            byte[] fileBytes,
             int headRowNumber,
             CloseContactColumnLayout closeLayout
     ) {
         List<RowValidationError> errors = new ArrayList<>();
         AtomicInteger totalCount = new AtomicInteger(0);
         AtomicInteger rowOffset = new AtomicInteger(0);
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = new ByteArrayInputStream(fileBytes)) {
             EasyExcel.read(inputStream, List.class, new PageReadListener<List<Object>>(rows -> {
                         for (List<Object> row : rows) {
                             int excelRowIndex = headRowNumber + rowOffset.getAndIncrement() + 1;
@@ -363,11 +378,11 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         }
     }
 
-    private File buildSchoolMatchedFile(MultipartFile sourceFile, String fileId) {
+    private File buildSchoolMatchedFile(byte[] sourceBytes, String fileId) {
         try {
-            Path dir = Files.createDirectories(Path.of(System.getProperty("java.io.tmpdir"), "disease-cleaning"));
+            Path dir = Files.createDirectories(RESULT_DIR);
             Path path = dir.resolve("学生筛查数据匹配结果_" + fileId + ".xlsx");
-            try (InputStream inputStream = sourceFile.getInputStream();
+            try (InputStream inputStream = new ByteArrayInputStream(sourceBytes);
                  Workbook source = WorkbookFactory.create(inputStream);
                  Workbook target = new XSSFWorkbook();
                  FileOutputStream outputStream = new FileOutputStream(path.toFile())) {
@@ -647,13 +662,13 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         }
     }
 
-    private File markAndWriteResult(String type, MultipartFile sourceFile, String fileId, List<RowValidationError> errors, int headRowNumber) {
+    private File markAndWriteResult(String type, byte[] sourceBytes, String fileId, List<RowValidationError> errors, int headRowNumber) {
         try {
-            Path dir = Files.createDirectories(Path.of(System.getProperty("java.io.tmpdir"), "disease-cleaning"));
+            Path dir = Files.createDirectories(RESULT_DIR);
             String fileName = "数据清洗结果_" + type + "_" + fileId + ".xlsx";
             Path path = dir.resolve(fileName);
 
-            try (InputStream inputStream = sourceFile.getInputStream();
+            try (InputStream inputStream = new ByteArrayInputStream(sourceBytes);
                  Workbook workbook = WorkbookFactory.create(inputStream);
                  FileOutputStream outputStream = new FileOutputStream(path.toFile())) {
                 Sheet sheet = workbook.getSheetAt(0);
@@ -732,6 +747,61 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         return style;
     }
 
+    private void persistResultMeta(String fileId, File resultFile, Long creatorUserId) {
+        long createAtMs = System.currentTimeMillis();
+        CleaningFileMeta meta = new CleaningFileMeta(resultFile, creatorUserId, createAtMs);
+        resultFileStore.put(fileId, meta);
+        try {
+            Files.createDirectories(RESULT_DIR);
+            JSONObject json = new JSONObject();
+            json.set("fileId", fileId);
+            json.set("filePath", resultFile.getAbsolutePath());
+            json.set("creatorUserId", creatorUserId);
+            json.set("createAtMs", createAtMs);
+            Files.writeString(metaSidecarPath(fileId), json.toString());
+        } catch (IOException e) {
+            log.warn("写入数据清洗结果元数据失败 fileId={}: {}", fileId, e.getMessage());
+        }
+    }
+
+    private CleaningFileMeta resolveResultMeta(String fileId) {
+        CleaningFileMeta cached = resultFileStore.get(fileId);
+        if (cached != null && cached.getFile() != null && cached.getFile().exists()) {
+            return cached;
+        }
+        CleaningFileMeta fromDisk = loadMetaFromDisk(fileId);
+        if (fromDisk != null) {
+            resultFileStore.put(fileId, fromDisk);
+        }
+        return fromDisk;
+    }
+
+    private CleaningFileMeta loadMetaFromDisk(String fileId) {
+        try {
+            Path sidecar = metaSidecarPath(fileId);
+            if (!Files.exists(sidecar)) {
+                return null;
+            }
+            JSONObject json = JSONUtil.parseObj(Files.readString(sidecar));
+            File file = new File(json.getStr("filePath", ""));
+            if (!file.exists()) {
+                return null;
+            }
+            return new CleaningFileMeta(
+                    file,
+                    json.getLong("creatorUserId"),
+                    json.getLong("createAtMs", Files.getLastModifiedTime(file).toMillis())
+            );
+        } catch (IOException e) {
+            log.warn("读取数据清洗结果元数据失败 fileId={}: {}", fileId, e.getMessage());
+        }
+        return null;
+    }
+
+    private Path metaSidecarPath(String fileId) {
+        return RESULT_DIR.resolve(fileId + ".meta.json");
+    }
+
     private Long currentUserId() {
         Long userId = cn.luyou.utils.BaseContext.getCurrentId();
         return userId == null ? -1L : userId;
@@ -751,6 +821,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             if (meta != null && meta.getFile() != null && meta.getFile().exists()) {
                 Files.deleteIfExists(meta.getFile().toPath());
             }
+            Files.deleteIfExists(metaSidecarPath(fileId));
         } catch (IOException ignored) {
         } finally {
             resultFileStore.remove(fileId);
@@ -760,6 +831,22 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     /** 每10分钟清理一次过期清洗结果，避免磁盘与内存堆积 */
     @Scheduled(fixedDelay = 10 * 60 * 1000L, initialDelay = 5 * 60 * 1000L)
     public void cleanExpiredResultFiles() {
+        if (Files.isDirectory(RESULT_DIR)) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(RESULT_DIR)) {
+                for (Path path : stream) {
+                    String name = path.getFileName().toString();
+                    if (name.endsWith(".meta.json")) {
+                        String fileId = name.substring(0, name.length() - ".meta.json".length());
+                        CleaningFileMeta meta = resolveResultMeta(fileId);
+                        if (meta != null && isExpired(meta.getCreateAtMs())) {
+                            deleteMetaFile(fileId, meta);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("清理过期数据清洗结果失败: {}", e.getMessage());
+            }
+        }
         for (Map.Entry<String, CleaningFileMeta> entry : resultFileStore.entrySet()) {
             if (entry.getValue() != null && isExpired(entry.getValue().getCreateAtMs())) {
                 deleteMetaFile(entry.getKey(), entry.getValue());

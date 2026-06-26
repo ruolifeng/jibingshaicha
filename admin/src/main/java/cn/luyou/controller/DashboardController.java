@@ -31,7 +31,8 @@ public class DashboardController {
 
     @Operation(summary = "获取待处理事项汇总")
     @GetMapping("/summary")
-    public ResultResponse<Map<String, Object>> summary() {
+    public ResultResponse<Map<String, Object>> summary(
+            @RequestParam(required = false) Integer year) {
         Map<String, Object> data = new HashMap<>();
 
         // 待追踪：潜伏感染、追踪状态为0（待追踪）、未归档
@@ -43,7 +44,7 @@ public class DashboardController {
         data.put("pendingTracking", pendingTracking);
 
         // 年度统计（周期：上年度 12/1—本年度 11/30）
-        data.putAll(workbenchStatisticsService.buildSummary(null));
+        data.putAll(workbenchStatisticsService.buildSummary(year));
 
         // 待确认通知单：状态为已发送（1）的通知单数
         long pendingNotice = noticeService.count(

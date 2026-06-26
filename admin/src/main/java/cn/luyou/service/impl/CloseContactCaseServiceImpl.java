@@ -12,6 +12,7 @@ import cn.luyou.model.User;
 import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -175,7 +176,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 name, idNumber, district, phone, creatorUsername, diagnosisResult);
         wrapper.orderByDesc(CloseContactCase::getCreateTime);
         applyDepartmentFilter(wrapper);
-        return page(new Page<>(page, size), wrapper);
+        IPage<CloseContactCase> result = page(new Page<>(page, size), wrapper);
+        CloseContactCaseExcelDerivedSupport.applyAll(result.getRecords());
+        return result;
     }
 
     @Override
@@ -232,7 +235,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
         wrapper.orderByDesc(CloseContactCase::getCreateTime);
         applyDepartmentFilter(wrapper);
-        return list(wrapper);
+        List<CloseContactCase> list = list(wrapper);
+        CloseContactCaseExcelDerivedSupport.applyAll(list);
+        return list;
     }
 
     private LambdaQueryWrapper<CloseContactCase> buildQueryWrapper(String name, String idNumber,
@@ -269,7 +274,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
 
     @Override
     public CloseContactCase getAccessibleById(Long id) {
-        return requireAccessibleCase(id);
+        CloseContactCase existing = requireAccessibleCase(id);
+        CloseContactCaseExcelDerivedSupport.apply(existing);
+        return existing;
     }
 
     private CloseContactCase requireAccessibleCase(Long id) {

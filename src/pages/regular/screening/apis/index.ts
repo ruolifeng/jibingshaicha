@@ -76,7 +76,7 @@ export function getScreeningRegularListApi(params: {
   phone?: string
   district?: string
   townshipCommunity?: string
-  crowdCategory?: string
+  crowdCategory?: string // 支持逗号分隔多选，如「老年人,糖尿病」
   screenMethod?: string
   isLatent?: number
   diagnosisFirst?: string

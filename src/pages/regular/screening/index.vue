@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningRegularApi, createScreeningRegularApi, deleteScreeningRegularApi, exportScreeningRegularApi, getScreeningRegularListApi, updateScreeningRegularApi, uploadScreeningRegularApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -19,7 +19,7 @@ const searchForm = reactive({
   townshipCommunity: "",
   phone: "",
   entryUnit: "",
-  crowdCategory: "",
+  crowdCategory: [] as string[],
   screenMethod: "",
   dateRange: [] as string[],
   isLatent: undefined as number | undefined,
@@ -29,13 +29,14 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, entryUnit, ...rest } = searchForm
+    const { dateRange, entryUnit, crowdCategory, ...rest } = searchForm
     const { data } = await getScreeningRegularListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       ...rest,
       ...extractDateRangeParams(dateRange),
-      ...(entryUnit ? { entryUnit } : {})
+      ...(entryUnit ? { entryUnit } : {}),
+      ...(crowdCategory.length > 0 ? { crowdCategory: crowdCategory.join(",") } : {})
     })
     tableData.value = data.records
     total.value = data.total
@@ -56,7 +57,7 @@ function handleReset() {
   searchForm.townshipCommunity = ""
   searchForm.phone = ""
   searchForm.entryUnit = ""
-  searchForm.crowdCategory = ""
+  searchForm.crowdCategory = []
   searchForm.screenMethod = ""
   searchForm.dateRange = []
   searchForm.isLatent = undefined
@@ -278,7 +279,6 @@ async function handleBatchDelete() {
   }
 }
 
-
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
   fetchData,
@@ -320,15 +320,21 @@ watch(
           <el-input v-model="searchForm.entryUnit" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
         <el-form-item label="人群分类">
-          <el-select v-model="searchForm.crowdCategory" placeholder="全部" clearable style="width: 140px">
-            <el-option label="密接" value="密接" />
-            <el-option label="学生" value="学生" />
-            <el-option label="教职工" value="教职工" />
-            <el-option label="老年人" value="老年人" />
-            <el-option label="糖尿病" value="糖尿病" />
-            <el-option label="双感" value="双感" />
-            <el-option label="既往结核史" value="既往结核史" />
-            <el-option label="非重点人群" value="非重点人群" />
+          <el-select
+            v-model="searchForm.crowdCategory"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="全部"
+            clearable
+            style="width: 240px"
+          >
+            <el-option
+              v-for="item in SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="感染筛查方法">

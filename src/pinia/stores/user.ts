@@ -21,6 +21,8 @@ export const useUserStore = defineStore("user", () => {
 
   const orgName = ref<string>("")
 
+  const departmentName = ref<string>("")
+
   const avatar = ref<string>("")
 
   const userId = ref<number>(0)
@@ -45,6 +47,7 @@ export const useUserStore = defineStore("user", () => {
     userRole.value = data.role || 0
     roleName.value = data.roleName || ""
     orgName.value = data.orgName || ""
+    departmentName.value = data.departmentName || ""
     avatar.value = data.avatar || ""
     userId.value = data.id || 0
     permissions.value = data.permissions || []
@@ -90,13 +93,15 @@ export const useUserStore = defineStore("user", () => {
     }
   }
 
-  /** 检查当前用户是否拥有指定权限 */
+  /** 检查当前用户是否拥有指定权限（兼容历史权限码别名） */
   const hasPermission = (code: string) => {
     if (userRole.value === 1) return true
-    return permissions.value.includes(code)
+    if (permissions.value.includes(code)) return true
+    if (code === "dataCleaning" && permissions.value.includes("dataClean")) return true
+    return false
   }
 
-  return { token, roles, username, realName, userRole, roleName, orgName, avatar, userId, permissions, hasPermission, setToken, getInfo, changeRoles, logout, resetToken }
+  return { token, roles, username, realName, userRole, roleName, orgName, departmentName, avatar, userId, permissions, hasPermission, setToken, getInfo, changeRoles, logout, resetToken }
 })
 
 /**

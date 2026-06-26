@@ -5,8 +5,8 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
+import cn.luyou.utils.KeyPopulationScreeningExcelExportSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
-import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,7 +49,7 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String townshipCommunity,
-            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String crowdCategory, // 逗号分隔多选，AND 匹配
             @RequestParam(required = false) String screenMethod,
             @RequestParam(required = false) Integer isLatent,
             @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
@@ -122,6 +122,6 @@ public class ScreeningKeyPopulationController {
                 query, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
         query.orderByDesc(ScreeningKeyPopulation::getCreateTime);
         List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(query);
-        EasyExcel.write(response.getOutputStream(), ScreeningKeyPopulation.class).sheet("筛查数据").doWrite(list);
+        KeyPopulationScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }
 }

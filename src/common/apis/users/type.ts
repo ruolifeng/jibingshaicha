@@ -7,6 +7,7 @@ export interface UserInfo {
   orgName: string
   avatar?: string
   departmentId?: number | null
+  departmentName?: string
   roles: string[]
   permissions: string[]
 }

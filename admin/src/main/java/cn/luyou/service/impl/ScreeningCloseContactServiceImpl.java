@@ -24,6 +24,7 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
@@ -346,6 +347,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             if (!dueDateUpdates.isEmpty()) {
                 updateBatchById(dueDateUpdates, 500);
             }
+            CloseContactCaseExcelDerivedSupport.applyAllScreening(records);
         }
         return result;
     }
@@ -361,6 +363,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 updateById(record);
             }
         }
+        CloseContactCaseExcelDerivedSupport.apply(record);
         return record;
     }
 
