@@ -177,8 +177,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
-                .eq(archived != null, LatentInfection::getArchived, archived)
-                .eq(StrUtil.isNotBlank(diagnosisFirst), LatentInfection::getDiagnosisFirst, diagnosisFirst)
+                .eq(archived != null, LatentInfection::getArchived, archived);
+        ScreeningDiagnosisSupport.applyDiagnosisFirstFilter(
+                wrapper, LatentInfection::getDiagnosisFirst, diagnosisFirst);
+        wrapper
                 // 潜伏感染列表始终排除确诊患者；疑似肺结核保持 diagnosisResult 为空，继续留在待诊断。
                 // 注意：SQL 中 NULL NOT IN (...) 结果为 NULL（即被过滤掉），
                 // 必须显式放行 diagnosisResult 为 NULL 的记录（导入后未录入诊断的待诊断数据）。

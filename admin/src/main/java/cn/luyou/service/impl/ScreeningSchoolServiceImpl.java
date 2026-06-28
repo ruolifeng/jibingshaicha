@@ -296,8 +296,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .like(StrUtil.isNotBlank(schoolName), ScreeningSchool::getSchoolName, schoolName)
                 .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), ScreeningSchool::getPhone, phone)
-                .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
-                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningSchool::getDiagnosisFirst, diagnosisFirst);
+                .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent);
+        ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
+                wrapper, ScreeningSchool::getIsLatent, ScreeningSchool::getDiagnosisFirst, diagnosisFirst);
         applyScreenYearFilter(wrapper, year);
         applyEntryUnitFilter(wrapper, entryUnit);
         screeningScopeHelper.applyDepartmentScope(

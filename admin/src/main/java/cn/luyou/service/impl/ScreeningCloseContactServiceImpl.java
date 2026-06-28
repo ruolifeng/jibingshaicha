@@ -24,6 +24,7 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -298,6 +299,22 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     // ==================== 查询 ====================
 
+    /** 诊断结果筛选：支持统一选项（排除/正常/疑似等）映射为 finalScreeningResult */
+    private void applyFinalScreeningResultFilter(LambdaQueryWrapper<ScreeningCloseContact> wrapper,
+                                                 String finalScreeningResult) {
+        if (StrUtil.isBlank(finalScreeningResult)) {
+            return;
+        }
+        List<String> mapped = ScreeningDiagnosisSupport.resolveCloseContactDiagnosisFilterValues(finalScreeningResult);
+        if (mapped.isEmpty()) {
+            wrapper.eq(ScreeningCloseContact::getFinalScreeningResult, finalScreeningResult);
+        } else if (mapped.size() == 1) {
+            wrapper.eq(ScreeningCloseContact::getFinalScreeningResult, mapped.get(0));
+        } else {
+            wrapper.in(ScreeningCloseContact::getFinalScreeningResult, mapped);
+        }
+    }
+
     @Override
     public IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
                                                    String district, Integer ccStatus, String finalScreeningResult,
@@ -309,9 +326,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningCloseContact::getIdNumber, idNumber)
                 .eq(StrUtil.isNotBlank(district), ScreeningCloseContact::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), ScreeningCloseContact::getPhone, phone)
-                .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus)
-                .eq(StrUtil.isNotBlank(finalScreeningResult), ScreeningCloseContact::getFinalScreeningResult, finalScreeningResult)
-                .ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
+                .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus);
+        applyFinalScreeningResultFilter(wrapper, finalScreeningResult);
+        wrapper.ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
         applyDepartmentScope(wrapper);

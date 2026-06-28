@@ -119,6 +119,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             record.setTrackReason(getStr(params, "trackReason"));
         }
 
+        assertDuplicateAllowed(bizMode, record.getIdNumber(), record.getName(), params);
+
         save(record);
         if ("recommend".equals(bizMode)) {
             sendRecommend(record.getId());
@@ -159,25 +161,112 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> importEpidemic(MultipartFile file) {
-        String batchNo = IdUtil.fastSimpleUUID();
-        List<Map<Integer, Object>> allRows = readExcelRows(file);
+    public boolean existsByIdNumberAndName(String bizMode, String idNumber, String name) {
+        if (StrUtil.isBlank(bizMode) || StrUtil.isBlank(idNumber) || StrUtil.isBlank(name)) {
+            return false;
+        }
+        return lambdaQuery()
+                .eq(ReferralTracking::getBizMode, bizMode)
+                .eq(ReferralTracking::getIdNumber, idNumber.trim())
+                .eq(ReferralTracking::getName, name.trim())
+                .exists();
+    }
 
-        if (allRows.size() < 2) {
-            return Map.of("count", 0, "updated", 0, "batchNo", batchNo);
+    private void assertDuplicateAllowed(String bizMode, String idNumber, String name, Map<String, Object> params) {
+        if (Boolean.TRUE.equals(params.get("confirmDuplicate"))) {
+            return;
+        }
+        if (existsByIdNumberAndName(bizMode, idNumber, name)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "患者信息已经导入过，请确认是否增加新记录");
+        }
+    }
+
+    @Override
+    public Map<String, Object> previewEpidemicImport(MultipartFile file) {
+        List<EpidemicImportRow> rows = parseEpidemicImportRows(file);
+        List<Map<String, String>> duplicates = new ArrayList<>();
+        int newCount = 0;
+        int updateCount = 0;
+
+        for (EpidemicImportRow row : rows) {
+            ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId());
+            if (existingByCard != null) {
+                updateCount++;
+                continue;
+            }
+            if (existsByIdNumberAndName("track", row.idNumber(), row.name())) {
+                duplicates.add(Map.of(
+                        "name", row.name(),
+                        "idNumber", row.idNumber()
+                ));
+            } else {
+                newCount++;
+            }
         }
 
-        int headerRowIndex = resolveHeaderRowIndex(allRows);
-        Map<Integer, Object> headerRow = allRows.get(headerRowIndex);
-        Map<String, Integer> headerIndex = buildHeaderIndex(headerRow);
-        log.info("大疫情表表头解析（第{}行）：{}", headerRowIndex + 1, headerIndex.keySet());
+        return Map.of(
+                "duplicateCount", duplicates.size(),
+                "newCount", newCount,
+                "updateCount", updateCount,
+                "duplicates", duplicates
+        );
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords) {
+        String batchNo = IdUtil.fastSimpleUUID();
+        List<EpidemicImportRow> rows = parseEpidemicImportRows(file);
+        if (rows.isEmpty()) {
+            return Map.of("count", 0, "updated", 0, "skipped", 0, "batchNo", batchNo);
+        }
 
         Long currentUserId = BaseContext.getCurrentId();
         Long currentDeptId = BaseContext.getCurrentDepartmentId();
         int count = 0;
         int updated = 0;
+        int skipped = 0;
 
+        for (EpidemicImportRow row : rows) {
+            ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId());
+            if (existingByCard != null) {
+                if (mergeEpidemicImportFields(existingByCard, row.reportCardTime(), row.currentAddress(),
+                        row.township(), currentUserId, currentDeptId)) {
+                    updateById(existingByCard);
+                    updated++;
+                }
+                continue;
+            }
+
+            if (existsByIdNumberAndName("track", row.idNumber(), row.name())) {
+                if (!addDuplicateRecords) {
+                    skipped++;
+                    continue;
+                }
+            }
+
+            ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, currentDeptId);
+            save(entity);
+            count++;
+        }
+
+        log.info("大疫情导入追踪记录完成，created={}, updated={}, skipped={}, addDuplicateRecords={}, batchNo={}",
+                count, updated, skipped, addDuplicateRecords, batchNo);
+        return Map.of("count", count, "updated", updated, "skipped", skipped, "batchNo", batchNo);
+    }
+
+    private List<EpidemicImportRow> parseEpidemicImportRows(MultipartFile file) {
+        List<Map<Integer, Object>> allRows = readExcelRows(file);
+        if (allRows.size() < 2) {
+            return List.of();
+        }
+
+        int headerRowIndex = resolveHeaderRowIndex(allRows);
+        Map<String, Integer> headerIndex = buildHeaderIndex(allRows.get(headerRowIndex));
+        log.info("大疫情表表头解析（第{}行）：{}", headerRowIndex + 1, headerIndex.keySet());
+
+        List<EpidemicImportRow> rows = new ArrayList<>();
         for (Map<Integer, Object> row : allRows.subList(headerRowIndex + 1, allRows.size())) {
             String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
@@ -196,51 +285,80 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             Object reportCardTimeCell = getReportCardTimeCell(row, headerIndex);
             LocalDateTime reportCardTime = parseDateTimeCell(reportCardTimeCell);
 
-            ReferralTracking existing = findEpidemicRecord(cardId, idNumber, name,
-                    getFieldByHeader(row, headerIndex, "出生日期"),
-                    getFieldByHeader(row, headerIndex, "联系电话", "电话"));
-            if (existing != null) {
-                if (mergeEpidemicImportFields(existing, reportCardTime, currentAddress, township, currentUserId, currentDeptId)) {
-                    updateById(existing);
-                    updated++;
-                }
-                continue;
-            }
-
-            ReferralTracking entity = ReferralTracking.builder()
-                    .bizMode("track")
-                    .sourceType("epidemic")
-                    .cardId(cardId)
-                    .name(name)
-                    .parentName(getFieldByHeader(row, headerIndex, "患儿家长姓名"))
-                    .idNumber(idNumber)
-                    .gender(getFieldByHeader(row, headerIndex, "性别"))
-                    .birthDate(parseDateCell(getFieldCellValue(row, headerIndex, "出生日期")))
-                    .age(parseInt(getFieldByHeader(row, headerIndex, "年龄")))
-                    .workplace(getFieldByHeader(row, headerIndex, "患者工作单位"))
-                    .phone(getFieldByHeader(row, headerIndex, "联系电话", "电话"))
-                    .currentAddress(currentAddress)
-                    .township(township)
-                    .crowdCategory(getFieldByHeader(row, headerIndex, "人群分类"))
-                    .caseCategory(getFieldByHeader(row, headerIndex, "病例分类"))
-                    .diseaseName(getFieldByHeader(row, headerIndex, "疾病名称"))
-                    .reportUnit(getFieldByHeader(row, headerIndex, "报告单位"))
-                    .reportCardTime(reportCardTime)
-                    .epidemicRemark(getFieldByHeader(row, headerIndex, "备注"))
-                    .trackReason("大疫情导入")
-                    .trackingStatus(0)
-                    .notInPlaceCount(0)
-                    .archived(0)
-                    .uploadBatch(batchNo)
-                    .departmentId(currentDeptId)
-                    .creatorId(currentUserId)
-                    .build();
-            save(entity);
-            count++;
+            rows.add(new EpidemicImportRow(
+                    cardId,
+                    name,
+                    idNumber,
+                    getFieldByHeader(row, headerIndex, "患儿家长姓名"),
+                    getFieldByHeader(row, headerIndex, "性别"),
+                    parseDateCell(getFieldCellValue(row, headerIndex, "出生日期")),
+                    parseInt(getFieldByHeader(row, headerIndex, "年龄")),
+                    getFieldByHeader(row, headerIndex, "患者工作单位"),
+                    getFieldByHeader(row, headerIndex, "联系电话", "电话"),
+                    currentAddress,
+                    township,
+                    getFieldByHeader(row, headerIndex, "人群分类"),
+                    getFieldByHeader(row, headerIndex, "病例分类"),
+                    getFieldByHeader(row, headerIndex, "疾病名称"),
+                    getFieldByHeader(row, headerIndex, "报告单位"),
+                    reportCardTime,
+                    getFieldByHeader(row, headerIndex, "备注")
+            ));
         }
+        return rows;
+    }
 
-        log.info("大疫情导入追踪记录完成，created={}, updated={}, batchNo={}", count, updated, batchNo);
-        return Map.of("count", count, "updated", updated, "batchNo", batchNo);
+    private ReferralTracking buildEpidemicEntity(EpidemicImportRow row, String batchNo,
+                                                 Long currentUserId, Long currentDeptId) {
+        return ReferralTracking.builder()
+                .bizMode("track")
+                .sourceType("epidemic")
+                .cardId(row.cardId())
+                .name(row.name())
+                .parentName(row.parentName())
+                .idNumber(row.idNumber())
+                .gender(row.gender())
+                .birthDate(row.birthDate())
+                .age(row.age())
+                .workplace(row.workplace())
+                .phone(row.phone())
+                .currentAddress(row.currentAddress())
+                .township(row.township())
+                .crowdCategory(row.crowdCategory())
+                .caseCategory(row.caseCategory())
+                .diseaseName(row.diseaseName())
+                .reportUnit(row.reportUnit())
+                .reportCardTime(row.reportCardTime())
+                .epidemicRemark(row.epidemicRemark())
+                .trackReason("大疫情导入")
+                .trackingStatus(0)
+                .notInPlaceCount(0)
+                .archived(0)
+                .uploadBatch(batchNo)
+                .departmentId(currentDeptId)
+                .creatorId(currentUserId)
+                .build();
+    }
+
+    private record EpidemicImportRow(
+            String cardId,
+            String name,
+            String idNumber,
+            String parentName,
+            String gender,
+            LocalDate birthDate,
+            Integer age,
+            String workplace,
+            String phone,
+            String currentAddress,
+            String township,
+            String crowdCategory,
+            String caseCategory,
+            String diseaseName,
+            String reportUnit,
+            LocalDateTime reportCardTime,
+            String epidemicRemark
+    ) {
     }
 
     @Override
@@ -274,6 +392,18 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "导出失败");
         }
+    }
+
+    private ReferralTracking findEpidemicRecordByCardId(String cardId) {
+        if (StrUtil.isBlank(cardId)) {
+            return null;
+        }
+        return lambdaQuery()
+                .eq(ReferralTracking::getBizMode, "track")
+                .eq(ReferralTracking::getSourceType, "epidemic")
+                .eq(ReferralTracking::getCardId, cardId)
+                .last("LIMIT 1")
+                .one();
     }
 
     private List<List<String>> buildExportHead(boolean recommendExport) {
@@ -1212,12 +1342,6 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     private String resolveRecommendUnitName(User user) {
         if (user == null) {
             return "";
-        }
-        if (user.getDepartmentId() != null) {
-            Department dept = departmentService.getById(user.getDepartmentId());
-            if (dept != null && StrUtil.isNotBlank(dept.getName())) {
-                return dept.getName();
-            }
         }
         return StrUtil.blankToDefault(user.getOrgName(), "");
     }

@@ -3,6 +3,7 @@ import type { FormInstance, FormRules } from "element-plus"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
+import { SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import {
   CC_FINAL_RESULT_STAT_OPTIONS,
   CC_FINAL_SCREENING_RESULT_OPTIONS,
@@ -97,6 +98,11 @@ const sputumResultSelectOptions = computed(() =>
   selectOptionsWithLegacy(CC_SPUTUM_RESULT_OPTIONS, editForm.value.sputumCheckResult))
 const finalResultSelectOptions = computed(() =>
   selectOptionsWithLegacy(CC_FINAL_SCREENING_RESULT_OPTIONS, editForm.value.finalScreeningResult))
+const followupResultSelectOptions = computed(() => {
+  const legacyValues = [editForm.value.followup6Result, editForm.value.followup12Result, editForm.value.followup24Result]
+    .filter((value): value is string => !!value && !(CC_FINAL_SCREENING_RESULT_OPTIONS as readonly string[]).includes(value))
+  return [...new Set(legacyValues), ...CC_FINAL_SCREENING_RESULT_OPTIONS]
+})
 
 const OTHER_FIELD_WATCH_PAIRS = [
   ["imagingMethod", "imagingMethodOther"],
@@ -277,6 +283,9 @@ function getEmptyEditForm() {
     sputumCheckResultOther: "",
     finalScreeningResult: "",
     finalScreeningResultOther: "",
+    followup6Result: "",
+    followup12Result: "",
+    followup24Result: "",
     hasPreventiveTreatment: "",
     preventivePlan: "",
     treatmentCompleted: "",
@@ -536,9 +545,9 @@ async function handleThreeMonthSubmit() {
             style="width: 240px"
           />
         </el-form-item>
-        <el-form-item label="最终筛查结果">
+        <el-form-item label="诊断结果">
           <el-select v-model="searchForm.finalScreeningResult" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="opt in CC_FINAL_RESULT_STAT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+            <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -903,6 +912,33 @@ async function handleThreeMonthSubmit() {
               <el-col v-if="editForm.finalScreeningResult === SCREENING_FIELD_OTHER" :span="8">
                 <el-form-item label="最终筛查结果-其他" required>
                   <el-input v-model="editForm.finalScreeningResultOther" placeholder="请手工录入" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="随访监测">
+          <el-form :model="editForm" label-width="130px">
+            <el-row :gutter="16">
+              <el-col :span="8">
+                <el-form-item label="6月随访结果">
+                  <el-select v-model="editForm.followup6Result" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in followupResultSelectOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="12月随访结果">
+                  <el-select v-model="editForm.followup12Result" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in followupResultSelectOptions" :key="`12-${opt}`" :label="opt" :value="opt" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="24月随访结果">
+                  <el-select v-model="editForm.followup24Result" placeholder="请选择" style="width:100%" clearable>
+                    <el-option v-for="opt in followupResultSelectOptions" :key="`24-${opt}`" :label="opt" :value="opt" />
+                  </el-select>
                 </el-form-item>
               </el-col>
             </el-row>

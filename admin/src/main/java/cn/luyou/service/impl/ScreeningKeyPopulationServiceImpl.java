@@ -312,9 +312,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .like(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
                 .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
                 .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
-                .eq(StrUtil.isNotBlank(diagnosisFirst), ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst)
                 .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo);
+        ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
+                wrapper, ScreeningKeyPopulation::getIsLatent, ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst);
         applyEntryUnitFilter(wrapper, entryUnit);
         applyCrowdCategoryFilter(wrapper, crowdCategory);
         screeningScopeHelper.applyDepartmentScope(

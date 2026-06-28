@@ -26,7 +26,12 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
                                       String creatorOrEntryUnit);
 
     /** 大疫情表导入（创建 bizMode=track, sourceType=epidemic 记录） */
-    Map<String, Object> importEpidemic(MultipartFile file);
+    Map<String, Object> previewEpidemicImport(MultipartFile file);
+
+    Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords);
+
+    /** 按业务类型 + 证件号 + 姓名判断是否已有记录 */
+    boolean existsByIdNumberAndName(String bizMode, String idNumber, String name);
 
     /** 导出追踪记录 Excel */
     void exportTrack(HttpServletResponse response, String bizMode,
