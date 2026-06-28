@@ -1,37 +1,38 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, computed } from "vue"
-import { ElMessage, ElMessageBox } from "element-plus"
-import { REFERRAL_CROWD_CATEGORY_OPTIONS, isConfirmedPatientDiagnosis } from "@@/constants/disease"
+import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
   REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
   referralSelectOptionsWithLegacy
 } from "@@/constants/referral-tracking"
-import { idCardRule, phoneRule } from "@@/utils/validate"
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import {
+  getRecommendTime,
   parseTrackingHistory,
   TRACK_STATUS_LABEL,
-  TRACKING_STATUS_MAP,
-  getRecommendTime
+  TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
-import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
+import { idCardRule, phoneRule } from "@@/utils/validate"
+import { ElMessage, ElMessageBox } from "element-plus"
+import { computed, nextTick, onMounted, reactive, ref } from "vue"
 import { useUserStore } from "@/pinia/stores/user"
 import {
-  getReferralTrackingListApi,
-  getReferralTrackingDetailApi,
-  createReferralTrackingApi,
-  updateReferralTrackingApi,
-  trackReferralApi,
-  enableJointTrackingApi,
-  saveScreeningInfoApi,
-  saveDiagnosisApi,
   deleteReferralTrackingApi,
+  enableJointTrackingApi,
+  exportReferralTrackApi,
+  getReferralTrackingDetailApi,
+  getReferralTrackingListApi,
   importEpidemicTrackApi,
-  exportReferralTrackApi
+  previewEpidemicTrackImportApi,
+  saveDiagnosisApi,
+  saveScreeningInfoApi,
+  trackReferralApi,
+  updateReferralTrackingApi
 } from "../apis/index"
+import { createReferralWithDuplicateConfirm, isReferralDuplicateCancel } from "../composables/useReferralDuplicateConfirm"
 
 const userStore = useUserStore()
 
@@ -137,9 +138,31 @@ async function handleEpidemicFileChange(uploadFile: any) {
   uploading.value = true
   importResult.value = null
   try {
-    const res = await importEpidemicTrackApi(file)
+    const preview = await previewEpidemicTrackImportApi(file)
+    let addDuplicateRecords = false
+    if ((preview.data?.duplicateCount ?? 0) > 0) {
+      const duplicateNames = (preview.data?.duplicates ?? [])
+        .slice(0, 5)
+        .map(item => `${item.name}（${item.idNumber}）`)
+        .join("、")
+      const more = (preview.data?.duplicateCount ?? 0) > 5 ? ` 等共 ${preview.data?.duplicateCount} 人` : ""
+      try {
+        await ElMessageBox.confirm(
+          `检测到 ${preview.data?.duplicateCount} 条患者信息已导入过（身份证+姓名相同）：${duplicateNames}${more}。\n是否增加新追踪记录？选择「是」将新增记录，原有记录保留。`,
+          "重复患者确认",
+          { confirmButtonText: "是，新增记录", cancelButtonText: "否，跳过重复", type: "warning" }
+        )
+        addDuplicateRecords = true
+      } catch {
+        addDuplicateRecords = false
+      }
+    }
+    const res = await importEpidemicTrackApi(file, addDuplicateRecords)
     importResult.value = res.data
-    ElMessage.success(`导入成功，新建 ${res.data.count} 条，更新 ${res.data.updated ?? 0} 条追踪记录`)
+    const skipped = res.data.skipped ?? 0
+    ElMessage.success(
+      `导入完成：新建 ${res.data.count} 条，更新 ${res.data.updated ?? 0} 条${skipped > 0 ? `，跳过重复 ${skipped} 条` : ""}`
+    )
     importDialogVisible.value = false
     fetchList()
   } catch {
@@ -236,7 +259,7 @@ function isFromRecommend(row: any) {
   return Boolean(row?.recommendConfirmTime || row?.recommendSentTime || row?.recommendStatus === 2)
 }
 
-const RECOMMEND_STATUS_MAP: Record<number, { label: string; type: string }> = {
+const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
   0: { label: "未发送", type: "info" },
   1: { label: "已发送", type: "warning" },
   2: { label: "已接受", type: "success" },
@@ -295,9 +318,17 @@ const createFormRules = {
 
 function openCreateDialog() {
   Object.assign(createForm, {
-    name: "", gender: "", birthDate: "", age: undefined, idType: "居民身份证",
-    idNumber: "", ethnicity: "", phone: "",
-    householdAddress: "", currentAddress: "", crowdCategory: "",
+    name: "",
+    gender: "",
+    birthDate: "",
+    age: undefined,
+    idType: "居民身份证",
+    idNumber: "",
+    ethnicity: "",
+    phone: "",
+    householdAddress: "",
+    currentAddress: "",
+    crowdCategory: "",
     trackReason: ""
   })
   createDialogVisible.value = true
@@ -310,10 +341,16 @@ async function handleCreate() {
   } catch {
     return
   }
-  await createReferralTrackingApi({ ...createForm, bizMode: "track" })
-  ElMessage.success("追踪记录创建成功")
-  createDialogVisible.value = false
-  fetchList()
+  try {
+    await createReferralWithDuplicateConfirm({ ...createForm, bizMode: "track" })
+    ElMessage.success("追踪记录创建成功")
+    createDialogVisible.value = false
+    fetchList()
+  } catch (err) {
+    if (!isReferralDuplicateCancel(err)) {
+      ElMessage.error("创建失败")
+    }
+  }
 }
 
 // ===== 追踪操作 =====
@@ -478,17 +515,27 @@ function getRowClass({ row }: { row: any }) {
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            查询
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card shadow="never" style="margin-top: 16px">
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
-        <el-button v-permission="'referralManagement:create'" type="primary" @click="openCreateDialog">新增追踪</el-button>
-        <el-button v-permission="'referralManagement:epidemicImport'" type="success" @click="openImportDialog">大疫情导入</el-button>
-        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">导出</el-button>
+        <el-button v-permission="'referralManagement:create'" type="primary" @click="openCreateDialog">
+          新增追踪
+        </el-button>
+        <el-button v-permission="'referralManagement:epidemicImport'" type="success" @click="openImportDialog">
+          大疫情导入
+        </el-button>
+        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">
+          导出
+        </el-button>
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
@@ -588,48 +635,62 @@ function getRowClass({ row }: { row: any }) {
         </el-table-column>
         <el-table-column label="操作" fixed="right" width="280">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openViewDialog(row)">查看</el-button>
+            <el-button type="primary" link size="small" @click="openViewDialog(row)">
+              查看
+            </el-button>
             <el-button
               v-if="canOperateTrack(row)"
               v-permission="'referralManagement:edit'"
               type="primary" link size="small"
               @click="openEditDialog(row)"
-            >编辑</el-button>
+            >
+              编辑
+            </el-button>
             <!-- 接收方开启共同追踪 -->
             <el-button
               v-if="canEnableJointTracking(row) && isFromRecommend(row)"
               v-permission="'referralManagement:confirm'"
               type="success" link size="small"
               @click="handleEnableJointTracking(row)"
-            >共同追踪</el-button>
+            >
+              共同追踪
+            </el-button>
             <!-- 追踪：待追踪或未到位 -->
             <el-button
               v-if="canOperateTrack(row) && [0, 2].includes(row.trackingStatus) && !row.archived"
               v-permission="'referralManagement:trackOperate'"
               type="warning" link size="small"
               @click="openTrackDialog(row)"
-            >追踪</el-button>
+            >
+              追踪
+            </el-button>
             <!-- 筛查信息：已到位 -->
             <el-button
               v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
               v-permission="'referralManagement:xray'"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
-            >录入胸片</el-button>
+            >
+              录入胸片
+            </el-button>
             <!-- 诊断：已到位 -->
             <el-button
               v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
               v-permission="'referralManagement:diagnosis'"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
-            >录入诊断</el-button>
+            >
+              录入诊断
+            </el-button>
             <!-- 删除 -->
             <el-button
               v-if="canOperateTrack(row)"
               v-permission="'referralManagement:delete'"
               type="danger" link size="small"
               @click="handleDelete(row)"
-            >删除</el-button>
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -655,13 +716,21 @@ function getRowClass({ row }: { row: any }) {
                 {{ isEpidemicRow(viewDetail) ? "大疫情导入" : "手动录入" }}
               </el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="录入者">{{ viewDetail.creatorUserName || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="录入单位" :span="2">{{ viewDetail.entryUnitName || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="录入者">
+              {{ viewDetail.creatorUserName || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="录入单位" :span="2">
+              {{ viewDetail.entryUnitName || "-" }}
+            </el-descriptions-item>
             <template v-if="isFromRecommend(viewDetail)">
               <el-descriptions-item label="推介来源" :span="2">
-                <el-tag type="success" size="small">推介确认转入</el-tag>
+                <el-tag type="success" size="small">
+                  推介确认转入
+                </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="推介接收人">{{ viewDetail.receiverUserName || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="推介接收人">
+                {{ viewDetail.receiverUserName || "-" }}
+              </el-descriptions-item>
               <el-descriptions-item label="推介状态">
                 <el-tag
                   v-if="viewDetail.recommendStatus !== null && viewDetail.recommendStatus !== undefined"
@@ -691,30 +760,70 @@ function getRowClass({ row }: { row: any }) {
               </el-descriptions-item>
             </template>
             <template v-if="isEpidemicRow(viewDetail)">
-              <el-descriptions-item label="卡片ID">{{ viewDetail.cardId || "-" }}</el-descriptions-item>
-              <el-descriptions-item label="患儿家长姓名">{{ viewDetail.parentName || "-" }}</el-descriptions-item>
-              <el-descriptions-item label="工作单位">{{ viewDetail.workplace || "-" }}</el-descriptions-item>
-              <el-descriptions-item label="乡镇">{{ viewDetail.township || "-" }}</el-descriptions-item>
-              <el-descriptions-item label="病例分类">{{ viewDetail.caseCategory || "-" }}</el-descriptions-item>
-              <el-descriptions-item label="疾病名称">{{ viewDetail.diseaseName || "-" }}</el-descriptions-item>
-              <el-descriptions-item label="报告单位">{{ viewDetail.reportUnit || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="卡片ID">
+                {{ viewDetail.cardId || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="患儿家长姓名">
+                {{ viewDetail.parentName || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="工作单位">
+                {{ viewDetail.workplace || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="乡镇">
+                {{ viewDetail.township || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="病例分类">
+                {{ viewDetail.caseCategory || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="疾病名称">
+                {{ viewDetail.diseaseName || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item label="报告单位">
+                {{ viewDetail.reportUnit || "-" }}
+              </el-descriptions-item>
               <el-descriptions-item label="报告卡录入时间">
                 {{ viewDetail.reportCardTime ? formatDateTime(viewDetail.reportCardTime) : "-" }}
               </el-descriptions-item>
-              <el-descriptions-item label="备注" :span="2">{{ viewDetail.epidemicRemark || "-" }}</el-descriptions-item>
+              <el-descriptions-item label="备注" :span="2">
+                {{ viewDetail.epidemicRemark || "-" }}
+              </el-descriptions-item>
             </template>
-            <el-descriptions-item label="患者姓名">{{ viewDetail.name || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="性别">{{ viewDetail.gender || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="出生日期">{{ viewDetail.birthDate || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="年龄">{{ viewDetail.age ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="证件类型">{{ viewDetail.idType || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="有效证件号">{{ viewDetail.idNumber || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="民族">{{ viewDetail.ethnicity || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="联系电话">{{ viewDetail.phone || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="户籍地址" :span="2">{{ viewDetail.householdAddress || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="现住详细地址" :span="2">{{ viewDetail.currentAddress || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="人群分类">{{ viewDetail.crowdCategory || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="追踪原因">{{ viewDetail.trackReason || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="患者姓名">
+              {{ viewDetail.name || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="性别">
+              {{ viewDetail.gender || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="出生日期">
+              {{ viewDetail.birthDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="年龄">
+              {{ viewDetail.age ?? "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="证件类型">
+              {{ viewDetail.idType || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="有效证件号">
+              {{ viewDetail.idNumber || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="民族">
+              {{ viewDetail.ethnicity || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="联系电话">
+              {{ viewDetail.phone || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="户籍地址" :span="2">
+              {{ viewDetail.householdAddress || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="现住详细地址" :span="2">
+              {{ viewDetail.currentAddress || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="人群分类">
+              {{ viewDetail.crowdCategory || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="追踪原因">
+              {{ viewDetail.trackReason || "-" }}
+            </el-descriptions-item>
             <el-descriptions-item label="追踪状态">
               <el-tag :type="TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.type as any" size="small">
                 {{ TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.label }}
@@ -745,18 +854,38 @@ function getRowClass({ row }: { row: any }) {
             <el-descriptions-item label="诊断时间">
               {{ viewDetail.diagnosisTime ? formatDateTime(viewDetail.diagnosisTime) : "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="是否感染筛查">{{ viewDetail.hasInfectionScreen || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="筛查日期">{{ viewDetail.screenDate || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="筛查方法">{{ viewDetail.screenMethod || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="筛查结果">{{ viewDetail.screenResult || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="感染筛查结果">{{ viewDetail.infectionResult || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="是否胸片检查">{{ viewDetail.hasChestXray || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="胸片检查日期">{{ viewDetail.chestXrayDate || "-" }}</el-descriptions-item>
-            <el-descriptions-item label="胸片检查结果" :span="2">{{ viewDetail.chestXrayResult || "-" }}</el-descriptions-item>
+            <el-descriptions-item label="是否感染筛查">
+              {{ viewDetail.hasInfectionScreen || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="筛查日期">
+              {{ viewDetail.screenDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="筛查方法">
+              {{ viewDetail.screenMethod || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="筛查结果">
+              {{ viewDetail.screenResult || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染筛查结果">
+              {{ viewDetail.infectionResult || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="是否胸片检查">
+              {{ viewDetail.hasChestXray || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片检查日期">
+              {{ viewDetail.chestXrayDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片检查结果" :span="2">
+              {{ viewDetail.chestXrayResult || "-" }}
+            </el-descriptions-item>
           </el-descriptions>
           <div class="view-tracking-section">
-            <div class="view-tracking-title">追踪过程</div>
-            <div v-if="viewTrackingHistory.length === 0" class="tracking-history-empty">暂无追踪记录</div>
+            <div class="view-tracking-title">
+              追踪过程
+            </div>
+            <div v-if="viewTrackingHistory.length === 0" class="tracking-history-empty">
+              暂无追踪记录
+            </div>
             <div v-else class="tracking-history">
               <div v-for="item in viewTrackingHistory" :key="item.attempt" class="tracking-history-item">
                 <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
@@ -771,7 +900,9 @@ function getRowClass({ row }: { row: any }) {
         </template>
       </div>
       <template #footer>
-        <el-button @click="viewDialogVisible = false">关闭</el-button>
+        <el-button @click="viewDialogVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -799,7 +930,9 @@ function getRowClass({ row }: { row: any }) {
           <div style="font-size: 16px; color: #606266">
             拖拽大疫情表文件到此处，或 <span style="color: #409eff">点击上传</span>
           </div>
-          <div style="font-size: 12px; color: #909399; margin-top: 8px">支持 .xlsx / .xls 格式</div>
+          <div style="font-size: 12px; color: #909399; margin-top: 8px">
+            支持 .xlsx / .xls 格式
+          </div>
         </div>
       </el-upload>
       <div v-if="uploading" style="text-align: center; margin-top: 16px; color: #606266">
@@ -812,7 +945,9 @@ function getRowClass({ row }: { row: any }) {
         :sub-title="`批次号：${importResult.batchNo}`"
       />
       <template #footer>
-        <el-button @click="importDialogVisible = false">关闭</el-button>
+        <el-button @click="importDialogVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -821,21 +956,57 @@ function getRowClass({ row }: { row: any }) {
       <el-form :model="editForm" label-width="120px">
         <el-row :gutter="16">
           <template v-if="isEpidemicRow(editRow)">
-            <el-col :span="12"><el-form-item label="卡片ID"><el-input v-model="editForm.cardId" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="患儿家长姓名"><el-input v-model="editForm.parentName" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="工作单位"><el-input v-model="editForm.workplace" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="乡镇"><el-input v-model="editForm.township" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="病例分类"><el-input v-model="editForm.caseCategory" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="疾病名称"><el-input v-model="editForm.diseaseName" /></el-form-item></el-col>
-            <el-col :span="12"><el-form-item label="报告单位"><el-input v-model="editForm.reportUnit" /></el-form-item></el-col>
+            <el-col :span="12">
+              <el-form-item label="卡片ID">
+                <el-input v-model="editForm.cardId" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="患儿家长姓名">
+                <el-input v-model="editForm.parentName" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="工作单位">
+                <el-input v-model="editForm.workplace" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="乡镇">
+                <el-input v-model="editForm.township" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="病例分类">
+                <el-input v-model="editForm.caseCategory" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="疾病名称">
+                <el-input v-model="editForm.diseaseName" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="报告单位">
+                <el-input v-model="editForm.reportUnit" />
+              </el-form-item>
+            </el-col>
             <el-col :span="12">
               <el-form-item label="报告卡录入时间">
                 <el-date-picker v-model="editForm.reportCardTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
               </el-form-item>
             </el-col>
-            <el-col :span="24"><el-form-item label="备注"><el-input v-model="editForm.epidemicRemark" type="textarea" :rows="2" /></el-form-item></el-col>
+            <el-col :span="24">
+              <el-form-item label="备注">
+                <el-input v-model="editForm.epidemicRemark" type="textarea" :rows="2" />
+              </el-form-item>
+            </el-col>
           </template>
-          <el-col :span="12"><el-form-item label="患者姓名"><el-input v-model="editForm.name" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="患者姓名">
+              <el-input v-model="editForm.name" />
+            </el-form-item>
+          </el-col>
           <el-col :span="12">
             <el-form-item label="性别">
               <el-select v-model="editForm.gender" style="width: 100%">
@@ -848,19 +1019,45 @@ function getRowClass({ row }: { row: any }) {
               <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="年龄"><el-input-number v-model="editForm.age" :min="0" :max="150" style="width: 100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="有效证件号"><el-input v-model="editForm.idNumber" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="联系电话"><el-input v-model="editForm.phone" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="现住详细地址"><el-input v-model="editForm.currentAddress" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="人群分类"><el-input v-model="editForm.crowdCategory" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="年龄">
+              <el-input-number v-model="editForm.age" :min="0" :max="150" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="有效证件号">
+              <el-input v-model="editForm.idNumber" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="联系电话">
+              <el-input v-model="editForm.phone" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="现住详细地址">
+              <el-input v-model="editForm.currentAddress" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="人群分类">
+              <el-input v-model="editForm.crowdCategory" />
+            </el-form-item>
+          </el-col>
           <el-col v-if="!isEpidemicRow(editRow)" :span="24">
-            <el-form-item label="追踪原因"><el-input v-model="editForm.trackReason" type="textarea" :rows="2" /></el-form-item>
+            <el-form-item label="追踪原因">
+              <el-input v-model="editForm.trackReason" type="textarea" :rows="2" />
+            </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleEditSave">保存</el-button>
+        <el-button @click="editDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleEditSave">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -946,8 +1143,12 @@ function getRowClass({ row }: { row: any }) {
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">确认创建</el-button>
+        <el-button @click="createDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleCreate">
+          确认创建
+        </el-button>
       </template>
     </el-dialog>
 
@@ -968,9 +1169,15 @@ function getRowClass({ row }: { row: any }) {
         </el-form-item>
         <el-form-item label="追踪状态">
           <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">到位</el-radio>
-            <el-radio :value="2">未到位</el-radio>
-            <el-radio :value="3">其他</el-radio>
+            <el-radio :value="1">
+              到位
+            </el-radio>
+            <el-radio :value="2">
+              未到位
+            </el-radio>
+            <el-radio :value="3">
+              其他
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注" required>
@@ -989,8 +1196,12 @@ function getRowClass({ row }: { row: any }) {
         />
       </el-form>
       <template #footer>
-        <el-button @click="trackDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleTrack">确认</el-button>
+        <el-button @click="trackDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleTrack">
+          确认
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1068,8 +1279,12 @@ function getRowClass({ row }: { row: any }) {
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="screeningDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveScreening">保存</el-button>
+        <el-button @click="screeningDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSaveScreening">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -1078,10 +1293,18 @@ function getRowClass({ row }: { row: any }) {
       <el-form label-width="100px">
         <el-form-item label="诊断结果">
           <el-radio-group v-model="diagnosisResult">
-            <el-radio value="排除">排除</el-radio>
-            <el-radio value="确诊患者">确诊患者</el-radio>
-            <el-radio value="潜伏感染者">潜伏感染者</el-radio>
-            <el-radio value="其他">其他</el-radio>
+            <el-radio value="排除">
+              排除
+            </el-radio>
+            <el-radio value="确诊患者">
+              确诊患者
+            </el-radio>
+            <el-radio value="潜伏感染者">
+              潜伏感染者
+            </el-radio>
+            <el-radio value="其他">
+              其他
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="diagnosisResult === '其他'" label="备注" required>
@@ -1106,8 +1329,12 @@ function getRowClass({ row }: { row: any }) {
         />
       </el-form>
       <template #footer>
-        <el-button @click="diagnosisDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveDiagnosis">确认诊断</el-button>
+        <el-button @click="diagnosisDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSaveDiagnosis">
+          确认诊断
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
@@ -240,35 +240,10 @@ async function handleBatchDelete() {
   }
 }
 
-/** 感染筛查结果是否为阳性（阳性才需要填写诊断结果） */
-const POSITIVE_RESULTS = ["PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"]
-const isEditInfectionPositive = computed(() => POSITIVE_RESULTS.includes(editForm.value.infectionResult))
-
-/**
- * 是否显示诊断结果字段：感染阴性 + 胸片正常时直接结束流程，无需诊断。
- * 感染阳性，或感染阴性但胸片异常/未查时，才需要填写诊断结果。
- */
-const isEditDiagnosisRequired = computed(() => {
-  if (isEditInfectionPositive.value) return true
-  const xrayResult = editForm.value.chestXrayResult
-  // 胸片正常则流程结束，无需诊断
-  return xrayResult && xrayResult !== "正常"
-})
-
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
   fetchData,
   { immediate: true }
-)
-
-// 感染筛查结果或胸片结果变化时，若不满足诊断条件则清空诊断结果
-watch(
-  [() => editForm.value.infectionResult, () => editForm.value.chestXrayResult],
-  () => {
-    if (!isEditDiagnosisRequired.value) {
-      editForm.value.diagnosisFirst = ""
-    }
-  }
 )
 </script>
 
@@ -633,24 +608,20 @@ watch(
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="isEditDiagnosisRequired" :span="24">
+          <el-col :span="24">
             <el-form-item label="痰涂片结果">
               <el-input v-model="editForm.sputumSmearResult" />
             </el-form-item>
           </el-col>
-          <el-col v-if="isEditDiagnosisRequired" :span="24">
+          <el-col :span="24">
             <el-form-item label="分子生物学结果">
               <el-input v-model="editForm.molecularBiologyResult" />
             </el-form-item>
           </el-col>
-          <el-col v-if="isEditDiagnosisRequired" :span="24">
+          <el-col :span="24">
             <el-form-item label="诊断结果">
               <el-select v-model="editForm.diagnosisFirst" style="width:100%" clearable>
-                <el-option label="排除" value="排除" />
-                <el-option label="疑似肺结核" value="疑似肺结核" />
-                <el-option label="潜伏感染者" value="潜伏感染者" />
-                <el-option label="确诊患者" value="确诊患者" />
-                <el-option label="其他" value="其他" />
+                <el-option v-for="item in SCREENING_DIAGNOSIS_EDIT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
           </el-col>

@@ -23,7 +23,6 @@ import { useMessageStore } from "@/pinia/stores/message"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   confirmRecommendApi,
-  createReferralTrackingApi,
   deleteReferralTrackingApi,
   enableJointTrackingApi,
   exportReferralTrackApi,
@@ -37,6 +36,7 @@ import {
   trackReferralApi,
   updateReferralTrackingApi
 } from "../apis/index"
+import { createReferralWithDuplicateConfirm, isReferralDuplicateCancel } from "../composables/useReferralDuplicateConfirm"
 
 const userStore = useUserStore()
 const messageStore = useMessageStore()
@@ -215,7 +215,7 @@ function resolveFillUserName() {
 }
 
 function resolveRecommendUnitName() {
-  return userStore.departmentName || userStore.orgName || ""
+  return userStore.orgName || ""
 }
 
 function resolveReceiverUserName(receiverUserId?: number) {
@@ -256,10 +256,14 @@ async function handleSendRecommend() {
   }
   sendingRecommend.value = true
   try {
-    await createReferralTrackingApi({ ...createForm, bizMode: "recommend" })
+    await createReferralWithDuplicateConfirm({ ...createForm, bizMode: "recommend" })
     ElMessage.success("推介通知单已发送")
     createDialogVisible.value = false
     fetchList()
+  } catch (err) {
+    if (!isReferralDuplicateCancel(err)) {
+      ElMessage.error("发送失败")
+    }
   } finally {
     sendingRecommend.value = false
   }

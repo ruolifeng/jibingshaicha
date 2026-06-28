@@ -105,12 +105,23 @@ export const SUSPECTED_DIAGNOSIS_TO_REFERRAL: Record<string, string> = {
 
 /** 筛查管理列表 — 诊断结果搜索选项 */
 export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
+  { label: "排除", value: "排除" },
+  { label: "正常", value: "正常" },
+  { label: "疑似肺结核", value: "疑似肺结核" },
   { label: "确诊患者", value: "确诊患者" },
   { label: "潜伏感染者", value: "潜伏感染者" }
 ]
 
+/** 筛查管理编辑 — 诊断结果选项（含「其他」兼容历史数据） */
+export const SCREENING_DIAGNOSIS_EDIT_OPTIONS = [
+  ...SCREENING_DIAGNOSIS_SEARCH_OPTIONS,
+  { label: "其他", value: "其他" }
+]
+/** 终态正常类诊断值列表（供后端筛选等使用） */
+export const NORMAL_TERMINAL_DIAGNOSIS_VALUES = ["排除", "正常", "其它", "其他"]
+
 /** 终态正常类诊断（排除/正常/其它），展示为「正常」 */
-export const NORMAL_TERMINAL_DIAGNOSIS = new Set(["排除", "正常", "其它", "其他"])
+export const NORMAL_TERMINAL_DIAGNOSIS = new Set(NORMAL_TERMINAL_DIAGNOSIS_VALUES)
 
 /** 筛查列表「待确诊/判定结果」列展示文案 */
 export function getScreeningLatentStatusLabel(row: {

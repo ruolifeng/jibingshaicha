@@ -1,7 +1,10 @@
 package cn.luyou.utils;
 
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -104,5 +107,56 @@ public final class ScreeningDiagnosisSupport {
             return diagnosis;
         }
         return "其它".equals(diagnosis.trim()) ? "其他" : diagnosis.trim();
+    }
+
+    /**
+     * 筛查列表诊断结果筛选：「正常」匹配终态正常类诊断或未进入待诊断流程的记录。
+     */
+    public static <T> void applyScreeningDiagnosisFilter(LambdaQueryWrapper<T> wrapper,
+                                                         SFunction<T, Integer> isLatentColumn,
+                                                         SFunction<T, String> diagnosisColumn,
+                                                         String diagnosisFirst) {
+        if (StrUtil.isBlank(diagnosisFirst)) {
+            return;
+        }
+        if ("正常".equals(diagnosisFirst)) {
+            wrapper.and(w -> w.eq(isLatentColumn, 0)
+                    .or()
+                    .in(diagnosisColumn, NORMAL_TERMINAL_DIAGNOSIS));
+            return;
+        }
+        wrapper.eq(diagnosisColumn, diagnosisFirst);
+    }
+
+    /**
+     * 潜伏/待诊断列表诊断结果筛选：「正常」匹配终态正常类诊断。
+     */
+    public static <T> void applyDiagnosisFirstFilter(LambdaQueryWrapper<T> wrapper,
+                                                     SFunction<T, String> diagnosisColumn,
+                                                     String diagnosisFirst) {
+        if (StrUtil.isBlank(diagnosisFirst)) {
+            return;
+        }
+        if ("正常".equals(diagnosisFirst)) {
+            wrapper.in(diagnosisColumn, NORMAL_TERMINAL_DIAGNOSIS);
+            return;
+        }
+        wrapper.eq(diagnosisColumn, diagnosisFirst);
+    }
+
+    /**
+     * 密接筛查诊断结果筛选：将统一诊断选项映射为 finalScreeningResult 存储值。
+     */
+    public static List<String> resolveCloseContactDiagnosisFilterValues(String diagnosisResult) {
+        if (StrUtil.isBlank(diagnosisResult)) {
+            return List.of();
+        }
+        return switch (diagnosisResult) {
+            case "排除", "正常" -> List.of("未发现异常");
+            case "疑似肺结核" -> List.of("疑似肺结核");
+            case "确诊患者" -> List.of("活动性肺结核");
+            case "潜伏感染者" -> List.of("潜伏感染者");
+            default -> List.of(diagnosisResult);
+        };
     }
 }

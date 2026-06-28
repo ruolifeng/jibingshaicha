@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningRegularApi, createScreeningRegularApi, deleteScreeningRegularApi, exportScreeningRegularApi, getScreeningRegularListApi, updateScreeningRegularApi, uploadScreeningRegularApi } from "./apis"
@@ -654,7 +654,11 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="筛查方法">
-              <el-input v-model="editForm.screenMethod" />
+              <el-select v-model="editForm.screenMethod" style="width:100%" clearable>
+                <el-option label="PPD" value="PPD" />
+                <el-option label="IGRA" value="IGRA" />
+                <el-option label="EC" value="EC" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -706,7 +710,9 @@ watch(
           </el-col>
           <el-col :span="24">
             <el-form-item label="首次诊断结果">
-              <el-input v-model="editForm.diagnosisFirst" />
+              <el-select v-model="editForm.diagnosisFirst" style="width:100%" clearable>
+                <el-option v-for="item in SCREENING_DIAGNOSIS_EDIT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>

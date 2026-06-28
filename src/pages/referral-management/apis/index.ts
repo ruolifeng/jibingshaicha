@@ -103,13 +103,39 @@ export function deleteReferralTrackingApi(id: number) {
   })
 }
 
-/** 大疫情表导入（追踪模块） */
-export function importEpidemicTrackApi(file: File) {
+/** 检查推介/追踪是否已有相同证件号+姓名记录 */
+export function checkReferralDuplicateApi(params: { bizMode: string, idNumber: string, name: string }) {
+  return request<ApiResponseData<{ exists: boolean }>>({
+    url: "referral-tracking/check-duplicate",
+    method: "get",
+    params
+  })
+}
+
+/** 大疫情表导入预览（检测重复患者） */
+export function previewEpidemicTrackImportApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ count: number, updated?: number, batchNo: string }>>({
+  return request<ApiResponseData<{
+    duplicateCount: number
+    newCount: number
+    updateCount: number
+    duplicates: { name: string, idNumber: string }[]
+  }>>({
+    url: "referral-tracking/import-epidemic/preview",
+    method: "post",
+    data: formData
+  })
+}
+
+/** 大疫情表导入（追踪模块） */
+export function importEpidemicTrackApi(file: File, addDuplicateRecords = false) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<{ count: number, updated?: number, skipped?: number, batchNo: string }>>({
     url: "referral-tracking/import-epidemic",
     method: "post",
+    params: { addDuplicateRecords },
     data: formData
   })
 }

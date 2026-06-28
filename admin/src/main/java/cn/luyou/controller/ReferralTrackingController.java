@@ -54,12 +54,32 @@ public class ReferralTrackingController {
         return ResultRes.success(referralTrackingService.getDetail(id));
     }
 
+    @OperationLog(type = "import", module = "referral", action = "预览大疫情导入")
+    @Operation(summary = "大疫情表导入预览（检测重复患者）")
+    @PostMapping("/import-epidemic/preview")
+    public ResultResponse<Map<String, Object>> previewEpidemicImport(@RequestParam("file") MultipartFile file) {
+        userService.checkPermissionCode("referralManagement:epidemicImport");
+        return ResultRes.success(referralTrackingService.previewEpidemicImport(file));
+    }
+
     @OperationLog(type = "import", module = "referral", action = "大疫情导入追踪记录")
     @Operation(summary = "大疫情表导入（追踪模块）")
     @PostMapping("/import-epidemic")
-    public ResultResponse<Map<String, Object>> importEpidemic(@RequestParam("file") MultipartFile file) {
+    public ResultResponse<Map<String, Object>> importEpidemic(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "addDuplicateRecords", defaultValue = "false") boolean addDuplicateRecords) {
         userService.checkPermissionCode("referralManagement:epidemicImport");
-        return ResultRes.success(referralTrackingService.importEpidemic(file));
+        return ResultRes.success(referralTrackingService.importEpidemic(file, addDuplicateRecords));
+    }
+
+    @Operation(summary = "检查推介/追踪记录是否已存在（证件号+姓名）")
+    @GetMapping("/check-duplicate")
+    public ResultResponse<Map<String, Object>> checkDuplicate(
+            @RequestParam String bizMode,
+            @RequestParam String idNumber,
+            @RequestParam String name) {
+        boolean exists = referralTrackingService.existsByIdNumberAndName(bizMode, idNumber, name);
+        return ResultRes.success(Map.of("exists", exists));
     }
 
     @OperationLog(type = "export", module = "referral", action = "导出追踪记录")
