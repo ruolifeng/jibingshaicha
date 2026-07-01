@@ -8,6 +8,7 @@ import {
 } from "@@/apis/referral"
 import DepartmentUserSelect from "@@/components/DepartmentUserSelect.vue"
 import { getPopulationTypeLabel } from "@@/constants/disease"
+import { formatReferralDisplay } from "@@/utils/referralTracking"
 
 interface Props {
   /** 是否显示弹窗 */
@@ -209,9 +210,9 @@ watch(visible, (val: boolean) => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="confirmedTime" label="接收时间">
+        <el-table-column label="接收时间">
           <template #default="{ row }">
-            {{ row.confirmedTime || "—" }}
+            {{ formatReferralDisplay(row) }}
           </template>
         </el-table-column>
         <el-table-column prop="rejectedTime" label="拒绝时间">

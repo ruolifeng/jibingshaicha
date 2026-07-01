@@ -55,7 +55,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     void enableJointTracking(Long id);
 
     /** 追踪操作（更新 trackingStatus，处理未到位次数上限） */
-    void track(Long id, Integer status, String remark);
+    void track(Long id, Integer status, String remark, LocalDate actualArrivalDate);
 
     /** 保存到位后的感染筛查+胸片信息 */
     void saveScreening(Long id, Map<String, Object> params);

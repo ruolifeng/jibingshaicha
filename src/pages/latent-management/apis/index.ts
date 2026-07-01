@@ -72,7 +72,7 @@ export function downloadLatentTemplateApi() {
 }
 
 /** 追踪操作 */
-export function trackLatentApi(data: { id: number, status: number, remark?: string }) {
+export function trackLatentApi(data: { id: number, status: number, remark?: string, actualArrivalDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/track",
     method: "post",
@@ -81,7 +81,7 @@ export function trackLatentApi(data: { id: number, status: number, remark?: stri
 }
 
 /** 转诊操作 */
-export function referralLatentApi(data: { id: number, result: string, remark?: string }) {
+export function referralLatentApi(data: { id: number, result: string, remark?: string, actualReferralDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/referral",
     method: "post",

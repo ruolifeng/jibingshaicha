@@ -93,6 +93,7 @@ export interface SentReferralVO {
   status: number
   sentTime: string
   confirmedTime: string | null
+  actualReferralDate?: string | null
   rejectedTime: string | null
   rejectReason: string | null
   referralReason: string | null
@@ -116,6 +117,7 @@ export interface ReferralDetailVO {
   status: number
   sentTime: string
   confirmedTime: string | null
+  actualReferralDate?: string | null
   rejectedTime: string | null
   rejectReason: string | null
   referralReason: string | null
@@ -130,10 +132,11 @@ export function getReferralDetailApi(id: number) {
 }
 
 /** 在消息页确认接收转诊 */
-export function confirmReferralFromMessageApi(referralId: number) {
+export function confirmReferralFromMessageApi(referralId: number, actualReferralDate?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/confirm/${referralId}`,
-    method: "post"
+    method: "post",
+    data: actualReferralDate ? { actualReferralDate } : undefined
   })
 }
 

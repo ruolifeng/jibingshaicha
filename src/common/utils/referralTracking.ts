@@ -1,3 +1,5 @@
+import { formatDateTime } from "@@/utils/datetime"
+
 /** 推介/追踪单次记录 */
 export interface TrackingHistoryItem {
   attempt: number
@@ -12,7 +14,7 @@ export const TRACK_STATUS_LABEL: Record<number, string> = {
   3: "其他"
 }
 
-export const TRACKING_STATUS_MAP: Record<number, { label: string; type: string }> = {
+export const TRACKING_STATUS_MAP: Record<number, { label: string, type: string }> = {
   0: { label: "待追踪", type: "info" },
   1: { label: "到位", type: "success" },
   2: { label: "未到位", type: "warning" },
@@ -31,6 +33,28 @@ export function parseTrackingHistory(json?: string): TrackingHistoryItem[] {
 }
 
 /** 推介时间：已发送取发送时间，否则取创建时间 */
-export function getRecommendTime(row: { recommendSentTime?: string; createTime?: string }) {
+export function getRecommendTime(row: { recommendSentTime?: string, createTime?: string }) {
   return row.recommendSentTime || row.createTime
+}
+
+/** 展示到位时间：优先真实到位日期，否则回退系统记录时间 */
+export function formatArrivalDisplay(row: { actualArrivalDate?: string, arrivalTime?: string }) {
+  if (row.actualArrivalDate) {
+    return formatDateTime(row.actualArrivalDate, "YYYY-MM-DD")
+  }
+  if (row.arrivalTime) {
+    return formatDateTime(row.arrivalTime)
+  }
+  return "-"
+}
+
+/** 展示转诊/接收时间：优先真实转诊日期，否则回退系统记录时间 */
+export function formatReferralDisplay(row: { actualReferralDate?: string | null, confirmedTime?: string | null }) {
+  if (row.actualReferralDate) {
+    return formatDateTime(row.actualReferralDate, "YYYY-MM-DD")
+  }
+  if (row.confirmedTime) {
+    return formatDateTime(row.confirmedTime)
+  }
+  return "—"
 }

@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -91,10 +92,13 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void confirm(Long id) {
+    public void confirm(Long id, LocalDate actualReferralDate) {
         Referral referral = getById(id);
         if (referral == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "转出记录不存在");
+        }
+        if (actualReferralDate == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择转诊时间");
         }
         if (referral.getStatus() == 2) {
             repairTransferIfNeeded(referral);
@@ -115,6 +119,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         referral.setTargetBizId(targetBizId);
         referral.setStatus(2);
         referral.setConfirmedTime(LocalDateTime.now());
+        referral.setActualReferralDate(actualReferralDate);
         updateById(referral);
 
         syncReceiverTransferMessage(referral, true);
@@ -224,6 +229,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         vo.setStatus(referral.getStatus());
         vo.setSentTime(referral.getSentTime());
         vo.setConfirmedTime(referral.getConfirmedTime());
+        vo.setActualReferralDate(referral.getActualReferralDate());
         vo.setRejectedTime(referral.getRejectedTime());
         vo.setRejectReason(referral.getRejectReason());
         vo.setReferralReason(referral.getReferralReason());
@@ -290,6 +296,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
             vo.setStatus(r.getStatus());
             vo.setSentTime(r.getSentTime());
             vo.setConfirmedTime(r.getConfirmedTime());
+            vo.setActualReferralDate(r.getActualReferralDate());
             vo.setRejectedTime(r.getRejectedTime());
             vo.setRejectReason(r.getRejectReason());
             vo.setReferralReason(r.getReferralReason());

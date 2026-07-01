@@ -1,7 +1,9 @@
 <script lang="ts" setup>
+import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
+import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
@@ -104,13 +106,8 @@ function getRowClass({ row }: { row: any }) {
 // ==================== 追踪弹窗 ====================
 const trackDialogVisible = ref(false)
 const trackingRow = ref<any>(null)
-const trackForm = reactive({ status: 1, remark: "" })
 const historyViewVisible = ref(false)
 const historyViewRow = ref<any>(null)
-
-const trackHistory = computed(() =>
-  parseTrackingHistory(trackingRow.value?.trackingHistoryJson)
-)
 
 function hasTrackingHistory(row: any) {
   return parseTrackingHistory(row?.trackingHistoryJson).length > 0 || !!row?.trackingRemark?.trim()
@@ -123,20 +120,19 @@ function openHistoryView(row: any) {
 
 function openTrackDialog(row: any) {
   trackingRow.value = row
-  trackForm.status = 1
-  trackForm.remark = ""
   trackDialogVisible.value = true
 }
 
-async function handleTrack() {
-  if (!trackForm.remark.trim()) {
-    ElMessage.warning("请填写追踪备注")
-    return
-  }
+async function handleTrack(payload: TrackConfirmPayload) {
   if (submitting.value) return
   submitting.value = true
   try {
-    await trackSuspectedApi({ id: trackingRow.value.id, status: trackForm.status, remark: trackForm.remark })
+    await trackSuspectedApi({
+      id: trackingRow.value.id,
+      status: payload.status,
+      remark: payload.remark,
+      actualArrivalDate: payload.actualArrivalDate
+    })
     ElMessage.success("操作成功")
     trackDialogVisible.value = false
     fetchData()
@@ -430,42 +426,13 @@ watch(
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="school" :data="screeningDetailData" />
 
     <!-- 追踪弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
-      <el-form label-width="80px">
-        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
-          <TrackingHistoryPanel :history-json="trackingRow?.trackingHistoryJson" />
-        </el-form-item>
-        <el-form-item label="追踪状态">
-          <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">
-              到位
-            </el-radio>
-            <el-radio :value="2">
-              未到位
-            </el-radio>
-            <el-radio :value="3">
-              其他
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="备注" required>
-          <el-input v-model="trackForm.remark" type="textarea" :rows="3" placeholder="请填写本次追踪备注" />
-        </el-form-item>
-        <el-alert v-if="trackForm.status === 2 && trackingRow" :closable="false" class="mb-4">
-          <template #default>
-            当前已未到位 {{ trackingRow.notInPlaceCount }} 次，最多 3 次后自动归档
-          </template>
-        </el-alert>
-      </el-form>
-      <template #footer>
-        <el-button @click="trackDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleTrack">
-          确认
-        </el-button>
-      </template>
-    </el-dialog>
+    <TrackingOperationDialog
+      v-model="trackDialogVisible"
+      :history-json="trackingRow?.trackingHistoryJson"
+      :not-in-place-count="trackingRow?.notInPlaceCount ?? 0"
+      :loading="submitting"
+      @confirm="handleTrack"
+    />
 
     <!-- 查看追踪记录 -->
     <el-dialog v-model="historyViewVisible" title="追踪记录" width="520px">
@@ -550,7 +517,6 @@ watch(
       module-type="suspected"
       :subject-name="tierCareRow.name || ''"
     />
-
   </div>
 </template>
 

@@ -8,6 +8,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
 
+import java.time.LocalDate;
+
 public interface ReferralService extends IService<Referral> {
 
     /** 发起分级诊疗推送 */
@@ -17,7 +19,7 @@ public interface ReferralService extends IService<Referral> {
     ReferralDetailVO detail(Long id);
 
     /** 接收方确认接收 */
-    void confirm(Long id);
+    void confirm(Long id, LocalDate actualReferralDate);
 
     /** 接收方拒绝 */
     void reject(Long id, String rejectReason);

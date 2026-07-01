@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import PrintRecommend from "@@/components/PrintRecommend.vue"
+import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
@@ -10,6 +12,7 @@ import {
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import {
+  formatArrivalDisplay,
   getRecommendTime,
   parseTrackingHistory,
   TRACK_STATUS_LABEL,
@@ -433,17 +436,10 @@ async function handleReject() {
 // ===== 追踪操作 =====
 const trackDialogVisible = ref(false)
 const trackRow = ref<any>(null)
-const trackForm = reactive({ status: undefined as number | undefined, remark: "" })
-
-const trackHistory = computed(() =>
-  parseTrackingHistory(trackRow.value?.trackingHistoryJson)
-)
-
-const nextAttemptNo = computed(() => trackHistory.value.length + 1)
+const trackSubmitting = ref(false)
 
 function openTrackDialog(row: any) {
   trackRow.value = row
-  Object.assign(trackForm, { status: undefined, remark: "" })
   trackDialogVisible.value = true
 }
 
@@ -465,27 +461,25 @@ async function handleRecommendTrack(row: any) {
   openTrackDialog(row)
 }
 
-async function handleTrack() {
-  if (!trackForm.status) {
-    ElMessage.warning("请选择追踪状态")
-    return
+async function handleTrack(payload: TrackConfirmPayload) {
+  if (trackSubmitting.value) return
+  trackSubmitting.value = true
+  try {
+    const willForceEnd = payload.status === 2
+      && (trackRow.value?.notInPlaceCount ?? 0) >= RECOMMEND_FORCE_END_THRESHOLD - 1
+    await trackReferralApi(trackRow.value.id, payload.status, payload.remark, payload.actualArrivalDate)
+    if (willForceEnd) {
+      ElMessage.warning(`已记录第 ${RECOMMEND_FORCE_END_THRESHOLD} 次未到位，追踪已强制结束`)
+    } else if (payload.status === 1) {
+      ElMessage.success("已确认到位")
+    } else {
+      ElMessage.success("追踪记录已保存")
+    }
+    trackDialogVisible.value = false
+    fetchList()
+  } finally {
+    trackSubmitting.value = false
   }
-  if (!trackForm.remark.trim()) {
-    ElMessage.warning("请填写追踪备注")
-    return
-  }
-  const willForceEnd = trackForm.status === 2
-    && (trackRow.value?.notInPlaceCount ?? 0) >= RECOMMEND_FORCE_END_THRESHOLD - 1
-  await trackReferralApi(trackRow.value.id, trackForm.status, trackForm.remark)
-  if (willForceEnd) {
-    ElMessage.warning(`已记录第 ${RECOMMEND_FORCE_END_THRESHOLD} 次未到位，追踪已强制结束`)
-  } else if (trackForm.status === 1) {
-    ElMessage.success("已确认到位")
-  } else {
-    ElMessage.success("追踪记录已保存")
-  }
-  trackDialogVisible.value = false
-  fetchList()
 }
 
 // ===== 查看追踪记录（只读） =====
@@ -702,9 +696,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             {{ formatRecommendTime(row) }}
           </template>
         </el-table-column>
-        <el-table-column label="到位时间" min-width="160">
+        <el-table-column label="到位时间" min-width="120">
           <template #default="{ row }">
-            {{ row.arrivalTime ? formatDateTime(row.arrivalTime) : "-" }}
+            {{ formatArrivalDisplay(row) }}
           </template>
         </el-table-column>
         <el-table-column label="追踪过程" min-width="240" show-overflow-tooltip>
@@ -1100,7 +1094,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="到位时间">
-              {{ viewDetail.arrivalTime ? formatDateTime(viewDetail.arrivalTime) : "-" }}
+              {{ formatArrivalDisplay(viewDetail) }}
             </el-descriptions-item>
             <el-descriptions-item label="诊断结果">
               <el-tag
@@ -1341,58 +1335,14 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
     </el-dialog>
 
     <!-- 追踪操作弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
-      <el-form label-width="100px">
-        <!-- 已有追踪记录 -->
-        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
-          <div class="tracking-history">
-            <div v-for="item in trackHistory" :key="item.attempt" class="tracking-history-item">
-              <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
-              <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
-                {{ TRACK_STATUS_LABEL[item.status] }}
-              </el-tag>
-              <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-              <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
-            </div>
-          </div>
-        </el-form-item>
-        <el-form-item label="追踪状态">
-          <el-radio-group v-model="trackForm.status">
-            <el-radio :value="1">
-              到位
-            </el-radio>
-            <el-radio :value="2">
-              未到位
-            </el-radio>
-            <el-radio :value="3">
-              其他
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="备注" required>
-          <el-input
-            v-model="trackForm.remark"
-            type="textarea"
-            :rows="3"
-            placeholder="请填写本次追踪备注"
-          />
-        </el-form-item>
-        <el-alert
-          v-if="trackForm.status === 2 && trackRow"
-          :title="`第 ${nextAttemptNo} 次追踪，当前已未到位 ${trackRow.notInPlaceCount ?? 0} 次，${RECOMMEND_FORCE_END_THRESHOLD} 次未到位将自动结束追踪`"
-          type="warning"
-          :closable="false"
-        />
-      </el-form>
-      <template #footer>
-        <el-button @click="trackDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" @click="handleTrack">
-          确认
-        </el-button>
-      </template>
-    </el-dialog>
+    <TrackingOperationDialog
+      v-model="trackDialogVisible"
+      :history-json="trackRow?.trackingHistoryJson"
+      :not-in-place-count="trackRow?.notInPlaceCount ?? 0"
+      :force-end-threshold="RECOMMEND_FORCE_END_THRESHOLD"
+      :loading="trackSubmitting"
+      @confirm="handleTrack"
+    />
 
     <!-- 录入筛查信息弹窗 -->
     <el-dialog v-model="screeningDialogVisible" title="录入筛查信息" width="600px">

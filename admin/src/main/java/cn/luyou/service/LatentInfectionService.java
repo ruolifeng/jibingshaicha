@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -22,7 +23,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                       String dateFilterBy, String creatorName, String crowdCategory);
 
     /** 追踪操作 */
-    void track(Long id, Integer status, String remark);
+    void track(Long id, Integer status, String remark, LocalDate actualArrivalDate);
 
     /**
      * 录入胸片检查与首次诊断结果（V4 追踪到位后新增步骤）
@@ -55,7 +56,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     int importXrayBatch(MultipartFile file, String populationType);
 
     /** 转诊操作（V4 新增 suspected 疑似肺结核） */
-    void referral(Long id, String result, String remark);
+    void referral(Long id, String result, String remark, LocalDate actualReferralDate);
 
     /** 设置服药状态（进入预防治疗管理） */
     void setMedicationStatus(Long id, Integer medicationStatus);

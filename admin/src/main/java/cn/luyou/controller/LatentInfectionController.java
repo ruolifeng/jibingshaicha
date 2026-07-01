@@ -16,9 +16,11 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import cn.hutool.core.util.StrUtil;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -129,7 +131,8 @@ public class LatentInfectionController {
         Long id = Long.valueOf(body.get("id").toString());
         Integer status = Integer.valueOf(body.get("status").toString());
         String remark = body.getOrDefault("remark", "").toString();
-        latentInfectionService.track(id, status, remark);
+        LocalDate actualArrivalDate = parseDate(body.get("actualArrivalDate"));
+        latentInfectionService.track(id, status, remark, actualArrivalDate);
         return ResultRes.success(null);
     }
 
@@ -194,8 +197,20 @@ public class LatentInfectionController {
         Long id = Long.valueOf(body.get("id").toString());
         String result = body.get("result").toString();
         String remark = body.getOrDefault("remark", "").toString();
-        latentInfectionService.referral(id, result, remark);
+        LocalDate actualReferralDate = parseDate(body.get("actualReferralDate"));
+        latentInfectionService.referral(id, result, remark, actualReferralDate);
         return ResultRes.success(null);
+    }
+
+    private LocalDate parseDate(Object val) {
+        if (val == null || StrUtil.isBlank(val.toString())) {
+            return null;
+        }
+        String text = val.toString().trim();
+        if (text.length() >= 10) {
+            text = text.substring(0, 10);
+        }
+        return LocalDate.parse(text);
     }
 
     // ==================== 预防治疗管理 ====================
