@@ -16,6 +16,7 @@ export interface SentReferralVO {
   status: number
   sentTime: string
   confirmedTime: string | null
+  actualReferralDate?: string | null
   rejectedTime: string | null
   rejectReason: string | null
   referralReason: string | null
@@ -31,6 +32,7 @@ export interface ReferralRecord {
   status: number
   sentTime: string
   confirmedTime: string | null
+  actualReferralDate?: string | null
   rejectedTime: string | null
   rejectReason: string | null
   referralReason: string | null
@@ -59,10 +61,11 @@ export function sendReferralApi(data: SendReferralParams) {
 }
 
 /** 接收方确认接收 */
-export function confirmReferralApi(id: number) {
+export function confirmReferralApi(id: number, actualReferralDate?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/confirm/${id}`,
-    method: "post"
+    method: "post",
+    data: actualReferralDate ? { actualReferralDate } : undefined
   })
 }
 

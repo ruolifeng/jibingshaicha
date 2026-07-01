@@ -92,8 +92,10 @@ public class ReferralTracking extends BaseEntity {
     private Integer trackingStatus;
     private Integer notInPlaceCount;
     private String trackingRemark;
-    /** 到位时间（追踪状态变为到位时记录） */
+    /** 到位时间（追踪状态变为到位时记录，系统时间） */
     private LocalDateTime arrivalTime;
+    /** 真实到位时间（手动录入，日期精度） */
+    private LocalDate actualArrivalDate;
     /** 追踪过程记录 JSON：[{attempt,status,trackTime,reason}] */
     private String trackingHistoryJson;
 

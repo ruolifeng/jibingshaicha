@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -54,6 +55,8 @@ public class Referral implements Serializable {
 
     private LocalDateTime sentTime;
     private LocalDateTime confirmedTime;
+    /** 真实转诊时间（手动录入，日期精度） */
+    private LocalDate actualReferralDate;
     private LocalDateTime rejectedTime;
 
     /** 拒绝原因 */

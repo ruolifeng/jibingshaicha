@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import cn.hutool.core.util.StrUtil;
+import java.time.LocalDate;
 import java.util.Map;
 
 @Tag(name = "推介追踪管理")
@@ -161,8 +163,20 @@ public class ReferralTrackingController {
         }
         Integer status = Integer.valueOf(body.get("status").toString());
         String remark = body.getOrDefault("remark", "").toString();
-        referralTrackingService.track(id, status, remark);
+        LocalDate actualArrivalDate = parseDate(body.get("actualArrivalDate"));
+        referralTrackingService.track(id, status, remark, actualArrivalDate);
         return ResultRes.success(null);
+    }
+
+    private LocalDate parseDate(Object val) {
+        if (val == null || StrUtil.isBlank(val.toString())) {
+            return null;
+        }
+        String text = val.toString().trim();
+        if (text.length() >= 10) {
+            text = text.substring(0, 10);
+        }
+        return LocalDate.parse(text);
     }
 
     @OperationLog(type = "update", module = "referral", action = "保存筛查信息")

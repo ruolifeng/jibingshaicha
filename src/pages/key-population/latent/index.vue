@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import { getLevel5UsersApi } from "@@/apis/users"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
@@ -7,6 +8,7 @@ import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
+import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import {
   CHECK_PERIOD_OPTIONS,
@@ -32,6 +34,7 @@ import {
 import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule, phoneRule } from "@@/utils/validate"
+import dayjs from "dayjs"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -169,14 +172,8 @@ function getStageInfo(row: any): { label: string, type: "danger" | "warning" | "
 // ==================== 追踪弹窗 ====================
 const trackDialogVisible = ref(false)
 const trackRow = ref<any>(null)
-const trackStatus = ref<1 | 2 | 3>(1)
-const trackRemark = ref("")
 const historyViewVisible = ref(false)
 const historyViewRow = ref<any>(null)
-
-const trackHistory = computed(() =>
-  parseTrackingHistory(trackRow.value?.trackingHistoryJson)
-)
 
 function hasTrackingHistory(row: any) {
   return parseTrackingHistory(row?.trackingHistoryJson).length > 0 || !!row?.trackingRemark?.trim()
@@ -189,20 +186,19 @@ function openHistoryView(row: any) {
 
 function openTrackDialog(row: any) {
   trackRow.value = row
-  trackStatus.value = 1
-  trackRemark.value = ""
   trackDialogVisible.value = true
 }
 
-async function handleTrack() {
-  if (!trackRemark.value.trim()) {
-    ElMessage.warning("请填写追踪备注")
-    return
-  }
+async function handleTrack(payload: TrackConfirmPayload) {
   if (submitting.value) return
   submitting.value = true
   try {
-    await trackLatentApi({ id: trackRow.value.id, status: trackStatus.value, remark: trackRemark.value })
+    await trackLatentApi({
+      id: trackRow.value.id,
+      status: payload.status,
+      remark: payload.remark,
+      actualArrivalDate: payload.actualArrivalDate
+    })
     ElMessage.success("追踪操作已保存")
     trackDialogVisible.value = false
     fetchData()
@@ -252,6 +248,7 @@ const referralDialogVisible = ref(false)
 const referralRow = ref<any>(null)
 const referralResultValue = ref("")
 const referralRemark = ref("")
+const actualReferralDate = ref("")
 
 const REFERRAL_OPTIONS = [
   { label: "排除", value: "excluded" },
@@ -265,6 +262,7 @@ function openReferralDialog(row: any) {
   referralRow.value = row
   referralResultValue.value = ""
   referralRemark.value = ""
+  actualReferralDate.value = dayjs().format("YYYY-MM-DD")
   referralDialogVisible.value = true
 }
 
@@ -273,10 +271,19 @@ async function handleReferral() {
     ElMessage.warning("请选择诊断结果")
     return
   }
+  if (!actualReferralDate.value) {
+    ElMessage.warning("请选择转诊时间")
+    return
+  }
   if (submitting.value) return
   submitting.value = true
   try {
-    await referralLatentApi({ id: referralRow.value.id, result: referralResultValue.value, remark: referralRemark.value })
+    await referralLatentApi({
+      id: referralRow.value.id,
+      result: referralResultValue.value,
+      remark: referralRemark.value,
+      actualReferralDate: actualReferralDate.value
+    })
     ElMessage.success("诊断操作成功")
     referralDialogVisible.value = false
     fetchData()
@@ -1751,45 +1758,13 @@ watch(
     </el-dialog>
 
     <!-- 追踪弹窗 -->
-    <el-dialog v-model="trackDialogVisible" title="追踪操作" width="520px">
-      <el-form label-width="90px">
-        <el-form-item v-if="trackHistory.length > 0" label="追踪记录">
-          <TrackingHistoryPanel :history-json="trackRow?.trackingHistoryJson" />
-        </el-form-item>
-        <el-form-item label="追踪结果">
-          <el-radio-group v-model="trackStatus">
-            <el-radio :value="1">
-              到位
-            </el-radio>
-            <el-radio :value="2">
-              未到位
-            </el-radio>
-            <el-radio :value="3">
-              其他
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="备注" required>
-          <el-input v-model="trackRemark" type="textarea" :rows="3" placeholder="请填写本次追踪备注" />
-        </el-form-item>
-        <el-alert
-          v-if="trackRow && trackRow.notInPlaceCount >= 2 && trackStatus === 2"
-          title="注意：已连续未到位 2 次，再次未到位将强制终止追踪流程"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="mb-3"
-        />
-      </el-form>
-      <template #footer>
-        <el-button @click="trackDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleTrack">
-          确认
-        </el-button>
-      </template>
-    </el-dialog>
+    <TrackingOperationDialog
+      v-model="trackDialogVisible"
+      :history-json="trackRow?.trackingHistoryJson"
+      :not-in-place-count="trackRow?.notInPlaceCount ?? 0"
+      :loading="submitting"
+      @confirm="handleTrack"
+    />
 
     <!-- 查看追踪记录 -->
     <el-dialog v-model="historyViewVisible" title="追踪记录" width="520px">
@@ -1863,6 +1838,15 @@ watch(
         </el-form-item>
         <el-form-item v-if="referralResultValue === 'other' || referralResultValue === 'excluded'" label="备注原因">
           <el-input v-model="referralRemark" type="textarea" :rows="3" placeholder="请填写备注原因" />
+        </el-form-item>
+        <el-form-item label="转诊时间" required>
+          <el-date-picker
+            v-model="actualReferralDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="请选择患者真实转诊日期"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-alert
           v-if="referralResultValue === 'confirmed'"

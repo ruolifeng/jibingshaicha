@@ -10,9 +10,11 @@ import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -33,9 +35,22 @@ public class ReferralController {
 
     @Operation(summary = "接收方确认接收")
     @PostMapping("/confirm/{id}")
-    public ResultResponse<Void> confirm(@PathVariable Long id) {
-        referralService.confirm(id);
+    public ResultResponse<Void> confirm(@PathVariable Long id,
+                                        @RequestBody(required = false) Map<String, String> body) {
+        LocalDate actualReferralDate = parseDate(body != null ? body.get("actualReferralDate") : null);
+        referralService.confirm(id, actualReferralDate);
         return ResultRes.success(null);
+    }
+
+    private LocalDate parseDate(Object val) {
+        if (val == null || StrUtil.isBlank(val.toString())) {
+            return null;
+        }
+        String text = val.toString().trim();
+        if (text.length() >= 10) {
+            text = text.substring(0, 10);
+        }
+        return LocalDate.parse(text);
     }
 
     @Operation(summary = "接收方拒绝")

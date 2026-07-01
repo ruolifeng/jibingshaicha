@@ -2,6 +2,7 @@ package cn.luyou.model.vo;
 
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /** 已发送分级诊疗列表 VO */
@@ -27,6 +28,8 @@ public class SentReferralVO {
 
     private LocalDateTime sentTime;
     private LocalDateTime confirmedTime;
+    /** 真实转诊时间（手动录入） */
+    private LocalDate actualReferralDate;
     private LocalDateTime rejectedTime;
     private String rejectReason;
     /** 转诊原因（发送方填写） */

@@ -451,7 +451,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
                     r.getDiagnosisResult(), r.getDiagnosisRemark(), formatRecommendTime(r),
                     latestTrackTime,
-                    r.getArrivalTime() != null ? r.getArrivalTime().toString() : "",
+                    formatArrivalTime(r),
                     historyDetail, failureReasons
             );
         }
@@ -467,9 +467,17 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 r.getDiagnosisResult(), r.getDiagnosisRemark(),
                 r.getCreateTime() != null ? r.getCreateTime().toString() : "",
                 latestTrackTime,
-                r.getArrivalTime() != null ? r.getArrivalTime().toString() : "",
+                formatArrivalTime(r),
                 historyDetail, failureReasons
         );
+    }
+
+    /** 列表/导出展示：优先真实到位日期，否则回退系统到位时间 */
+    private String formatArrivalTime(ReferralTracking r) {
+        if (r.getActualArrivalDate() != null) {
+            return r.getActualArrivalDate().toString();
+        }
+        return r.getArrivalTime() != null ? r.getArrivalTime().toString() : "";
     }
 
     private String formatRecommendTime(ReferralTracking r) {
@@ -789,7 +797,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void track(Long id, Integer status, String remark) {
+    public void track(Long id, Integer status, String remark, LocalDate actualArrivalDate) {
         ReferralTracking record = getAndCheckExist(id);
         if (record.getRecommendSentTime() != null
                 && !Integer.valueOf(2).equals(record.getRecommendStatus())) {
@@ -817,17 +825,21 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (StrUtil.isBlank(remark)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写追踪备注");
         }
+        if (Integer.valueOf(1).equals(status) && actualArrivalDate == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择到位时间");
+        }
 
         LocalDateTime now = LocalDateTime.now();
         List<Map<String, Object>> history = parseTrackingHistory(record.getTrackingHistoryJson());
 
         switch (status) {
             case 1 -> {
-                // 到位：记录到位时间与备注
+                // 到位：记录系统到位时间与手动录入的真实到位日期
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("attempt", history.size() + 1);
                 entry.put("status", 1);
                 entry.put("trackTime", now.toString());
+                entry.put("actualArrivalDate", actualArrivalDate.toString());
                 entry.put("reason", remark);
                 history.add(entry);
 
@@ -835,6 +847,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         .eq(ReferralTracking::getId, id)
                         .set(ReferralTracking::getTrackingStatus, 1)
                         .set(ReferralTracking::getArrivalTime, now)
+                        .set(ReferralTracking::getActualArrivalDate, actualArrivalDate)
                         .set(ReferralTracking::getTrackingRemark, remark)
                         .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
                         .update();

@@ -1,13 +1,17 @@
 <script lang="ts" setup>
 import type { ReferralDetailVO, SentNoticeVO, SentReferralVO } from "./apis"
-import { getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import ConfirmReferralDialog from "@@/components/ConfirmReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getNoticeDetailApi } from "@/pages/school/latent/apis"
+import { getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { formatReferralDisplay } from "@@/utils/referralTracking"
+import { useRouter } from "vue-router"
 import {
   confirmRecommendApi,
   getReferralTrackingDetailApi,
   rejectRecommendApi
 } from "@/pages/referral-management/apis"
+import { getNoticeDetailApi } from "@/pages/school/latent/apis"
+import { useMessageStore } from "@/pinia/stores/message"
 import {
   confirmNoticeFromMessageApi,
   confirmReferralFromMessageApi,
@@ -20,8 +24,6 @@ import {
   rejectReferralFromMessageApi,
   remindNoticeApi
 } from "./apis"
-import { useRouter } from "vue-router"
-import { useMessageStore } from "@/pinia/stores/message"
 
 defineOptions({ name: "Message" })
 
@@ -150,18 +152,33 @@ function openRejectDialog(row: any) {
   rejectDialogVisible.value = true
 }
 
-async function handleConfirmReferral(row: any) {
+const confirmReferralDialogVisible = ref(false)
+const confirmReferralRow = ref<any>(null)
+const confirmReferralLoading = ref(false)
+
+function openConfirmReferralDialog(row: any) {
   if (!row.bizId) {
     ElMessage.warning("转出记录编号缺失")
     return
   }
+  confirmReferralRow.value = row
+  confirmReferralDialogVisible.value = true
+}
+
+async function handleConfirmReferral(actualReferralDate: string) {
+  const row = confirmReferralRow.value
+  if (!row?.bizId) return
+  confirmReferralLoading.value = true
   try {
-    await confirmReferralFromMessageApi(row.bizId)
+    await confirmReferralFromMessageApi(row.bizId, actualReferralDate)
     await markMessageReadApi(row.id)
     ElMessage.success("已确认接收转出信息")
+    confirmReferralDialogVisible.value = false
     await fetchData()
     await messageStore.fetchUnreadCount()
-  } catch { /* handled */ }
+  } catch { /* handled */ } finally {
+    confirmReferralLoading.value = false
+  }
 }
 
 async function handleRejectReferral() {
@@ -432,7 +449,7 @@ const activeTab = ref("received")
                     查看详情
                   </el-button>
                   <template v-if="row.type === 'referral_receive'">
-                    <el-button type="success" size="small" @click="handleConfirmReferral(row)">
+                    <el-button type="success" size="small" @click="openConfirmReferralDialog(row)">
                       确认接收
                     </el-button>
                     <el-button type="danger" size="small" @click="openRejectDialog(row)">
@@ -496,9 +513,9 @@ const activeTab = ref("received")
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="confirmedTime" label="接收时间">
+            <el-table-column label="接收时间">
               <template #default="{ row }">
-                {{ row.confirmedTime || "—" }}
+                {{ formatReferralDisplay(row) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" fixed="right">
@@ -558,9 +575,9 @@ const activeTab = ref("received")
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="confirmedTime" label="接收时间">
+            <el-table-column label="接收时间">
               <template #default="{ row }">
-                {{ row.confirmedTime || "—" }}
+                {{ formatReferralDisplay(row) }}
               </template>
             </el-table-column>
             <el-table-column prop="rejectReason" label="拒绝原因">
@@ -584,6 +601,14 @@ const activeTab = ref("received")
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <!-- 确认接收转出弹窗 -->
+    <ConfirmReferralDialog
+      v-model="confirmReferralDialogVisible"
+      :subject-name="confirmReferralRow?.title"
+      :loading="confirmReferralLoading"
+      @confirm="handleConfirmReferral"
+    />
 
     <!-- 拒绝转出弹窗 -->
     <el-dialog v-model="rejectDialogVisible" title="拒绝" width="400px" append-to-body>
@@ -635,7 +660,7 @@ const activeTab = ref("received")
             {{ referralDetailData.sentTime || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="接收时间">
-            {{ referralDetailData.confirmedTime || "-" }}
+            {{ formatReferralDisplay(referralDetailData) }}
           </el-descriptions-item>
           <el-descriptions-item v-if="referralDetailData.referralReason" label="转出原因" :span="2">
             {{ referralDetailData.referralReason }}
@@ -693,7 +718,9 @@ const activeTab = ref("received")
         </el-descriptions>
       </div>
       <template #footer>
-        <el-button @click="referralTrackingDetailVisible = false">关闭</el-button>
+        <el-button @click="referralTrackingDetailVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 

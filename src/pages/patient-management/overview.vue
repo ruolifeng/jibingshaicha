@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { confirmReferralApi, getReferralListApi } from "@@/apis/referral"
+import ConfirmReferralDialog from "@@/components/ConfirmReferralDialog.vue"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
@@ -168,6 +169,10 @@ async function handleImport(uploadFile: any) {
   }
 }
 
+const confirmTransferDialogVisible = ref(false)
+const confirmTransferPending = ref<{ id: number, name: string } | null>(null)
+const confirmTransferLoading = ref(false)
+
 async function handleAdminConfirmTransfer(row: any) {
   if (!isPatientTransferPending(row)) return
   try {
@@ -182,11 +187,25 @@ async function handleAdminConfirmTransfer(row: any) {
       "代确认接收转出",
       { type: "warning" }
     )
-    await confirmReferralApi(pending.id)
-    ElMessage.success("已代接收方确认转出")
-    fetchData()
+    confirmTransferPending.value = { id: pending.id, name: row.name }
+    confirmTransferDialogVisible.value = true
   } catch (err: any) {
     if (err !== "cancel") ElMessage.error("代确认失败")
+  }
+}
+
+async function submitAdminConfirmTransfer(actualReferralDate: string) {
+  if (!confirmTransferPending.value) return
+  confirmTransferLoading.value = true
+  try {
+    await confirmReferralApi(confirmTransferPending.value.id, actualReferralDate)
+    ElMessage.success("已代接收方确认转出")
+    confirmTransferDialogVisible.value = false
+    fetchData()
+  } catch {
+    ElMessage.error("代确认失败")
+  } finally {
+    confirmTransferLoading.value = false
   }
 }
 </script>
@@ -458,6 +477,13 @@ async function handleAdminConfirmTransfer(row: any) {
       :population-type="referralRow.populationType"
       :subject-name="referralRow.name || ''"
       @success="fetchData"
+    />
+
+    <ConfirmReferralDialog
+      v-model="confirmTransferDialogVisible"
+      :subject-name="confirmTransferPending?.name"
+      :loading="confirmTransferLoading"
+      @confirm="submitAdminConfirmTransfer"
     />
 
     <el-dialog v-model="importDialogVisible" title="批量导入在管患者" width="600px">

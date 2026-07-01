@@ -19,7 +19,7 @@ export function getSuspectedListApi(params: {
 }
 
 /** 追踪操作 */
-export function trackSuspectedApi(data: { id: number, status: number, remark?: string }) {
+export function trackSuspectedApi(data: { id: number, status: number, remark?: string, actualArrivalDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/track",
     method: "post",
@@ -28,7 +28,7 @@ export function trackSuspectedApi(data: { id: number, status: number, remark?: s
 }
 
 /** 转诊操作 */
-export function referralSuspectedApi(data: { id: number, result: string, remark?: string }) {
+export function referralSuspectedApi(data: { id: number, result: string, remark?: string, actualReferralDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/referral",
     method: "post",

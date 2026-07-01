@@ -69,11 +69,11 @@ export function enableJointTrackingApi(id: number) {
 }
 
 /** 追踪操作（status: 1到位 2未到位 3其他） */
-export function trackReferralApi(id: number, status: number, remark?: string) {
+export function trackReferralApi(id: number, status: number, remark?: string, actualArrivalDate?: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/track`,
     method: "post",
-    data: { status, remark }
+    data: { status, remark, actualArrivalDate }
   })
 }
 

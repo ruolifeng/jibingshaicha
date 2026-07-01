@@ -48,6 +48,8 @@ public class LatentInfection extends BaseEntity {
     private String trackingRemark;
     /** 追踪历史 JSON（每次追踪的状态、时间、备注） */
     private String trackingHistoryJson;
+    /** 真实到位时间（手动录入，日期精度） */
+    private LocalDate actualArrivalDate;
     /** 备注 */
     private String remark;
 
@@ -68,6 +70,8 @@ public class LatentInfection extends BaseEntity {
     /** 转诊结果：excluded/other/confirmed/suspected/latent */
     private String referralResult;
     private String referralRemark;
+    /** 真实转诊时间（手动录入，日期精度） */
+    private LocalDate actualReferralDate;
     private String diagnosisResult;
     /** 治疗阶段：0未开始 1预防治疗中 2已结案 */
     private Integer treatmentPhase;

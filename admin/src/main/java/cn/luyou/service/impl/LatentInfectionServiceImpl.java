@@ -598,7 +598,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void track(Long id, Integer status, String remark) {
+    public void track(Long id, Integer status, String remark, LocalDate actualArrivalDate) {
         LatentInfection entity = getById(id);
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
@@ -619,6 +619,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (StrUtil.isBlank(remark)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写追踪备注");
         }
+        if (Integer.valueOf(1).equals(status) && actualArrivalDate == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择到位时间");
+        }
 
         LocalDateTime now = LocalDateTime.now();
         List<Map<String, Object>> history = parseTrackingHistory(entity.getTrackingHistoryJson());
@@ -628,10 +631,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         entry.put("status", status);
         entry.put("trackTime", now.toString());
         entry.put("reason", remark);
+        if (Integer.valueOf(1).equals(status)) {
+            entry.put("actualArrivalDate", actualArrivalDate.toString());
+        }
         history.add(entry);
 
         switch (status) {
-            case 1 -> entity.setTrackingStatus(1); // 到位
+            case 1 -> {
+                entity.setTrackingStatus(1);
+                entity.setActualArrivalDate(actualArrivalDate);
+            }
             case 2 -> {
                 // 未到位
                 int count = (entity.getNotInPlaceCount() == null ? 0 : entity.getNotInPlaceCount()) + 1;
@@ -902,7 +911,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void referral(Long id, String result, String remark) {
+    public void referral(Long id, String result, String remark, LocalDate actualReferralDate) {
         LatentInfection entity = getById(id);
         if (entity == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
@@ -917,6 +926,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (StrUtil.isNotBlank(entity.getReferralResult())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已完成转诊，不可重复操作");
         }
+        if (actualReferralDate == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择转诊时间");
+        }
 
         // 胸片诊断为确诊患者/疑似肺结核时，不允许转诊为潜伏感染者
         if ("latent".equals(result) &&
@@ -924,6 +936,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片诊断结果为「" + entity.getDiagnosisFirst() + "」，不可转诊为潜伏感染者，请选择正确的转诊结果");
         }
 
+        entity.setActualReferralDate(actualReferralDate);
         applyReferralOutcome(entity, result, remark);
     }
 
