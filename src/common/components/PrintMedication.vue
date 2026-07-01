@@ -1,13 +1,13 @@
 <script lang="ts" setup>
-import { printElement } from "@@/utils/print"
+import type { MedicationDayMark, MedicationRecordsMap } from "@@/utils/medicationRecords"
 import {
   countMedicationMarkedDays,
   formatMedicationDayMark,
   getMedicationDayMark,
-  getMedicationRecordYears,
-  type MedicationDayMark,
-  type MedicationRecordsMap
+  getMedicationRecordYears
+
 } from "@@/utils/medicationRecords"
+import { printElement } from "@@/utils/print"
 
 /** 肺结核患者治疗记录卡打印组件（12个月服药情况表） */
 const props = defineProps<{
@@ -19,6 +19,7 @@ const props = defineProps<{
     managementMethod: string
     supervisor: string
     sputumResult: string
+    startTreatmentDate: string
     stopDate: string
     dayMarks: MedicationRecordsMap
   }
@@ -123,14 +124,26 @@ function handlePrint() {
             </td>
           </tr>
           <tr>
+            <th>现住址</th>
+            <td colspan="7">
+              {{ patientData?.currentAddress || "——" }}
+            </td>
+          </tr>
+          <tr>
+            <th>开始治疗日期</th>
+            <td>{{ medicationData.startTreatmentDate || "——" }}</td>
             <th>管理方式</th>
             <td>{{ medicationData.managementMethod }}</td>
             <th>督导人员</th>
             <td>{{ medicationData.supervisor }}</td>
             <th>治疗前痰菌检查</th>
             <td>{{ medicationData.sputumResult }}</td>
+          </tr>
+          <tr>
             <th>停止完成时间</th>
-            <td>{{ medicationData.stopDate || "——" }}</td>
+            <td colspan="7">
+              {{ medicationData.stopDate || "——" }}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -165,7 +178,7 @@ function handlePrint() {
               :class="{
                 'td-invalid': !cell.valid,
                 'td-mark-x': cell.valid && cell.mark === 'x',
-                'td-mark-circled': cell.valid && cell.mark === 'circled'
+                'td-mark-circled': cell.valid && cell.mark === 'circled',
               }"
             >
               <template v-if="cell.valid && cell.mark">
@@ -270,13 +283,7 @@ function handlePrint() {
   }
 
   .td-invalid {
-    background: repeating-linear-gradient(
-      45deg,
-      #e8e8e8,
-      #e8e8e8 2px,
-      #f5f5f5 2px,
-      #f5f5f5 8px
-    );
+    background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 2px, #f5f5f5 2px, #f5f5f5 8px);
   }
 
   .td-mark-x,

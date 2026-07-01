@@ -2,6 +2,7 @@
 import { getLevel5UsersApi } from "@@/apis/users"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
+import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
@@ -331,6 +332,7 @@ function openNoticeDialog(row: any) {
 }
 
 function resetNoticeFormFromRow(row: any) {
+  const parsedPlan = parseLatentNoticeTreatmentPlan(row.preventivePlan || "")
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "",
     gender: row.gender || "",
@@ -346,8 +348,8 @@ function resetNoticeFormFromRow(row: any) {
     infectionResultValue: row.screenResult || row.infectionResult || "",
     chestXrayDate: row.chestXrayDate || "",
     chestXrayResult: row.chestXrayResult || "",
-    treatmentPlan: "",
-    customPlanDetail: "",
+    treatmentPlan: parsedPlan.treatmentPlan,
+    customPlanDetail: parsedPlan.customPlanDetail,
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
     receiverOrgId: undefined
@@ -380,7 +382,10 @@ async function loadNoticeDraft(row: any) {
       issuedTime: notice.issuedTime || getNowDateStr(),
       receiverOrgId: notice.receiverOrgId || undefined
     })
-    const parsed = parseLatentNoticeTreatmentPlan(notice.treatmentPlan, notice.customPlanDetail)
+    const parsed = parseLatentNoticeTreatmentPlan(
+      notice.treatmentPlan || row.preventivePlan,
+      notice.customPlanDetail
+    )
     noticeForm.treatmentPlan = parsed.treatmentPlan
     noticeForm.customPlanDetail = parsed.customPlanDetail
   } catch { /* ignore */ }
@@ -868,15 +873,11 @@ watch(
               <el-button v-if="!row.noticeSent" v-permission="'keyPopulation:latent:sendNotice'" type="primary" size="small" @click="openNoticeDialog(row)">
                 填写通知单
               </el-button>
-              <el-button
+              <NoticeSentStatusButton
                 v-if="row.noticeSent"
                 v-permission="'keyPopulation:latent:sendNotice'"
-                type="success"
-                size="small"
-                disabled
-              >
-                已发送通知单
-              </el-button>
+                :link="false"
+              />
               <el-button
                 v-if="!row.supervisionCompleted"
                 v-permission="'keyPopulation:latent:supervision'"

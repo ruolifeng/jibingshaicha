@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { MedicationRecordsMap } from "@@/utils/medicationRecords"
 /** 服药管理弹窗（含每日服药日历 + 治疗记录卡打印） */
 import MedicationCalendar from "@@/components/MedicationCalendar.vue"
 import PrintMedication from "@@/components/PrintMedication.vue"
@@ -8,11 +9,23 @@ import {
   SUPERVISOR_OPTIONS
 } from "@@/constants/disease"
 import {
+  applyMedicationFormDefaults,
+  MEDICATION_LOCKED_MANAGEMENT_METHOD,
+  medicationSelectOptions,
+  syncStartTreatmentDateFromMarks
+} from "@@/utils/medicationManagement"
+import {
+  getEarliestMedicationMarkedDate,
+
   parseMedicationRecords,
-  serializeMedicationRecords,
-  type MedicationRecordsMap
+  serializeMedicationRecords
 } from "@@/utils/medicationRecords"
-import { completeMedicationApi, getMedicationApi, saveMedicationApi } from "@/pages/school/patient/apis"
+import {
+  completeMedicationApi,
+  getFirstVisitApi,
+  getMedicationApi,
+  saveMedicationApi
+} from "@/pages/school/patient/apis"
 
 const props = defineProps<{
   visible: boolean
@@ -27,9 +40,10 @@ const emit = defineEmits<{
 }>()
 
 const medicationForm = reactive({
-  managementMethod: "",
+  managementMethod: MEDICATION_LOCKED_MANAGEMENT_METHOD,
   supervisor: "",
   sputumResult: "",
+  startTreatmentDate: "",
   stopDate: "",
   dayMarks: {} as MedicationRecordsMap
 })
@@ -38,12 +52,22 @@ const saving = ref(false)
 const draftSaving = ref(false)
 const printVisible = ref(false)
 const formId = ref<number | undefined>(undefined)
+const startTreatmentDateManual = ref(false)
+
+const supervisorOptions = computed(() =>
+  medicationSelectOptions(SUPERVISOR_OPTIONS, medicationForm.supervisor)
+)
+const sputumResultOptions = computed(() =>
+  medicationSelectOptions(SPUTUM_RESULT_OPTIONS, medicationForm.sputumResult)
+)
 
 function resetForm() {
   formId.value = undefined
-  medicationForm.managementMethod = ""
+  startTreatmentDateManual.value = false
+  medicationForm.managementMethod = MEDICATION_LOCKED_MANAGEMENT_METHOD
   medicationForm.supervisor = ""
   medicationForm.sputumResult = ""
+  medicationForm.startTreatmentDate = ""
   medicationForm.stopDate = ""
   medicationForm.dayMarks = {}
 }
@@ -51,18 +75,37 @@ function resetForm() {
 async function loadMedication() {
   if (!props.patientRow) return
   resetForm()
+  let saved: Record<string, any> | null = null
   try {
     const { data } = await getMedicationApi(props.patientRow.id)
     if (data) {
+      saved = data
       formId.value = data.id
-      medicationForm.managementMethod = data.managementMethod || ""
-      medicationForm.supervisor = data.supervisor || ""
-      medicationForm.sputumResult = data.sputumResult || ""
-      medicationForm.stopDate = data.stopDate || ""
       medicationForm.dayMarks = parseMedicationRecords(data.medicationRecords)
+      if (data.startTreatmentDate) {
+        medicationForm.startTreatmentDate = data.startTreatmentDate
+        const earliest = getEarliestMedicationMarkedDate(medicationForm.dayMarks)
+        startTreatmentDateManual.value = !earliest || data.startTreatmentDate !== earliest
+      }
     }
   } catch { /* 首次填写 */ }
+
+  let firstVisit: Record<string, any> | null = null
+  try {
+    const { data } = await getFirstVisitApi(props.patientRow.id)
+    firstVisit = data
+  } catch { /* 无首次随访 */ }
+
+  applyMedicationFormDefaults(medicationForm, { saved, firstVisit })
 }
+
+watch(
+  () => medicationForm.dayMarks,
+  () => {
+    syncStartTreatmentDateFromMarks(medicationForm, startTreatmentDateManual.value)
+  },
+  { deep: true }
+)
 
 watch(
   () => props.visible,
@@ -80,9 +123,10 @@ function buildSaveData() {
     ...(formId.value ? { id: formId.value } : {}),
     patientId: props.patientRow!.id,
     populationType: props.patientRow!.populationType,
-    managementMethod: medicationForm.managementMethod,
+    managementMethod: MEDICATION_LOCKED_MANAGEMENT_METHOD,
     supervisor: medicationForm.supervisor,
     sputumResult: medicationForm.sputumResult,
+    startTreatmentDate: medicationForm.startTreatmentDate || null,
     stopDate: medicationForm.stopDate,
     medicationRecords: serializeMedicationRecords(medicationForm.dayMarks)
   }
@@ -120,12 +164,16 @@ async function handleSave() {
     saving.value = false
   }
 }
+
+function handleStartTreatmentDateChange() {
+  startTreatmentDateManual.value = true
+}
 </script>
 
 <template>
   <el-dialog
     :model-value="visible"
-    :title="`${readOnly ? '查看服药管理' : '服药管理'}${patientRow?.name ? ' — ' + patientRow.name : ''}`"
+    :title="`${readOnly ? '查看服药管理' : '服药管理'}${patientRow?.name ? ` — ${patientRow.name}` : ''}`"
     width="700px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
@@ -137,19 +185,59 @@ async function handleSave() {
           :disabled="readOnly"
         />
       </el-form-item>
+      <el-form-item label="开始治疗日期">
+        <el-date-picker
+          v-model="medicationForm.startTreatmentDate"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="首次标记服药日后自动生成"
+          style="width: 100%"
+          :disabled="readOnly"
+          @change="handleStartTreatmentDateChange"
+        />
+      </el-form-item>
       <el-form-item label="管理方式">
-        <el-select v-model="medicationForm.managementMethod" placeholder="请选择" style="width: 100%" :disabled="readOnly">
-          <el-option v-for="item in MANAGEMENT_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+        <el-select
+          v-model="medicationForm.managementMethod"
+          style="width: 100%"
+          disabled
+        >
+          <el-option
+            v-for="item in MANAGEMENT_METHOD_OPTIONS"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="督导人员">
-        <el-select v-model="medicationForm.supervisor" placeholder="请选择" style="width: 100%" :disabled="readOnly">
-          <el-option v-for="item in SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" />
+        <el-select
+          v-model="medicationForm.supervisor"
+          placeholder="来自首次随访，可修改"
+          style="width: 100%"
+          :disabled="readOnly"
+        >
+          <el-option
+            v-for="item in supervisorOptions"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="治疗前痰菌检查">
-        <el-select v-model="medicationForm.sputumResult" placeholder="请选择" style="width: 100%" :disabled="readOnly">
-          <el-option v-for="item in SPUTUM_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+        <el-select
+          v-model="medicationForm.sputumResult"
+          placeholder="来自首次随访痰菌情况，可修改"
+          style="width: 100%"
+          :disabled="readOnly"
+        >
+          <el-option
+            v-for="item in sputumResultOptions"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="停止完成时间">

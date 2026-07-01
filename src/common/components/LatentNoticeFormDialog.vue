@@ -10,7 +10,7 @@ import {
   parseLatentNoticeTreatmentPlan
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
-import { saveNoticeDraftApi, sendNoticeApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
+import { getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/latent-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -65,6 +65,7 @@ function getNowDateStr() {
 }
 
 function resetFormFromRow(row: Record<string, any>) {
+  const parsedPlan = parseLatentNoticeTreatmentPlan(row.preventivePlan || "")
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "",
     gender: row.gender || "",
@@ -80,8 +81,8 @@ function resetFormFromRow(row: Record<string, any>) {
     infectionResultValue: row.screenResult || row.infectionResult || row.infectionResultValue || "",
     chestXrayDate: row.chestXrayDate || "",
     chestXrayResult: row.chestXrayResult || "",
-    treatmentPlan: "",
-    customPlanDetail: "",
+    treatmentPlan: parsedPlan.treatmentPlan,
+    customPlanDetail: parsedPlan.customPlanDetail,
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
     receiverOrgId: userStore.userRole === 6 ? userStore.userId : undefined
@@ -108,7 +109,10 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     issuedTime: notice.issuedTime || getNowDateStr(),
     receiverOrgId: notice.receiverOrgId || undefined
   })
-  const parsed = parseLatentNoticeTreatmentPlan(notice.treatmentPlan, notice.customPlanDetail)
+  const parsed = parseLatentNoticeTreatmentPlan(
+    notice.treatmentPlan || row.preventivePlan,
+    notice.customPlanDetail
+  )
   noticeForm.treatmentPlan = parsed.treatmentPlan
   noticeForm.customPlanDetail = parsed.customPlanDetail
 }

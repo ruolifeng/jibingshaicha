@@ -7,6 +7,31 @@ import { ElMessage } from "element-plus"
  * 避免 window.open 被浏览器拦截，也避免 el-dialog 定位/overflow 干扰。
  */
 
+const IMAGE_LOAD_TIMEOUT_MS = 15_000
+const PRINT_ATTACHMENT_CSS = `
+  .print-attachments { margin-top: 12px; }
+  .print-attachments__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .print-attachments__item {
+    margin: 0;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .print-attachments__item img {
+    width: 100%;
+    max-width: 180px;
+    max-height: 140px;
+    object-fit: contain;
+    border: 1px solid #ddd;
+    display: block;
+    margin: 0 auto;
+  }
+`
+
 /** 收集当前文档中所有 <style> 标签的文本内容 */
 function collectInlineStyles(): string {
   return Array.from(document.querySelectorAll("style"))
@@ -34,6 +59,7 @@ function buildPrintDocument(title: string, bodyHtml: string, extraCss = ""): str
     @media print {
       body { padding: 0; }
     }
+    ${PRINT_ATTACHMENT_CSS}
     ${extraCss}
   </style>
 </head>
@@ -50,13 +76,87 @@ function createPrintFrame(title: string): HTMLIFrameElement {
     top: "-10000px",
     left: "0",
     width: "900px",
-    height: "700px",
+    height: "1200px",
     border: "0",
     opacity: "0",
     pointerEvents: "none"
   })
   document.body.appendChild(iframe)
   return iframe
+}
+
+function imageToDataUrl(img: HTMLImageElement): string | null {
+  if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return null
+  try {
+    const canvas = document.createElement("canvas")
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0)
+    const isPng = /\.png(\?|$)/i.test(img.currentSrc || img.src)
+    return canvas.toDataURL(isPng ? "image/png" : "image/jpeg", 0.92)
+  } catch (error) {
+    console.warn("[print] 图片转 dataURL 失败", img.currentSrc || img.src, error)
+    return null
+  }
+}
+
+/** 将预览区已加载的图片嵌入克隆节点，避免 iframe 内重复拉取导致后几张未就绪 */
+function embedLoadedImages(sourceRoot: HTMLElement, targetRoot: HTMLElement) {
+  const sourceImgs = Array.from(sourceRoot.querySelectorAll("img"))
+  const targetImgs = Array.from(targetRoot.querySelectorAll("img"))
+  targetImgs.forEach((targetImg, index) => {
+    const sourceImg = sourceImgs[index]
+    if (!(sourceImg instanceof HTMLImageElement)) return
+    const dataUrl = imageToDataUrl(sourceImg)
+    if (dataUrl) targetImg.setAttribute("src", dataUrl)
+  })
+}
+
+function waitOneImage(img: HTMLImageElement, timeoutMs: number): Promise<void> {
+  if (img.complete && img.naturalWidth > 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    const finish = () => resolve()
+    img.addEventListener("load", finish, { once: true })
+    img.addEventListener("error", finish, { once: true })
+    setTimeout(finish, timeoutMs)
+  })
+}
+
+async function embedImageViaFetch(img: HTMLImageElement): Promise<void> {
+  const src = img.getAttribute("src")
+  if (!src || src.startsWith("data:")) return
+  try {
+    const response = await fetch(src, { credentials: "include" })
+    if (!response.ok) return
+    const blob = await response.blob()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+    img.setAttribute("src", dataUrl)
+    await waitOneImage(img, IMAGE_LOAD_TIMEOUT_MS)
+  } catch (error) {
+    console.warn("[print] 拉取图片失败", src, error)
+  }
+}
+
+/** 确保 iframe 内所有图片已内嵌或加载完成后再打印 */
+async function ensurePrintImagesReady(doc: Document) {
+  const images = Array.from(doc.querySelectorAll("img"))
+  await Promise.all(images.map(async (img) => {
+    if (img.src.startsWith("data:") && img.complete && img.naturalWidth > 0) return
+    const dataUrl = imageToDataUrl(img)
+    if (dataUrl) {
+      img.setAttribute("src", dataUrl)
+      return
+    }
+    await embedImageViaFetch(img)
+    await waitOneImage(img, IMAGE_LOAD_TIMEOUT_MS)
+  }))
 }
 
 /**
@@ -79,6 +179,7 @@ export function printHtml(bodyHtml: string, title = "打印", extraCss = "") {
 
   let printed = false
   let cleaned = false
+  let preparing = false
 
   const cleanup = () => {
     if (cleaned) return
@@ -103,16 +204,29 @@ export function printHtml(bodyHtml: string, title = "打印", extraCss = "") {
     cleanup()
   }
 
-  // 等待 iframe 内样式渲染完成后再触发打印
-  const schedulePrint = () => setTimeout(doPrint, 300)
-  if (doc.readyState === "complete") {
-    schedulePrint()
-  } else {
-    win.onload = schedulePrint
-    setTimeout(doPrint, 1000)
+  const schedulePrint = async () => {
+    if (preparing || printed) return
+    preparing = true
+    try {
+      await ensurePrintImagesReady(doc)
+      doPrint()
+    } catch (error) {
+      console.error("[printHtml] 图片准备失败", error)
+      ElMessage.warning("部分图片可能未加载完成，正在尝试打印")
+      doPrint()
+    } finally {
+      preparing = false
+    }
   }
 
-  // 部分浏览器不触发 onafterprint，延迟清理 iframe
+  if (doc.readyState === "complete") {
+    void schedulePrint()
+  } else {
+    win.onload = () => {
+      void schedulePrint()
+    }
+  }
+
   setTimeout(cleanup, 60_000)
 }
 
@@ -133,5 +247,6 @@ export function printElement(elementId: string, title = "打印", extraCss = "")
 
   const clone = el.cloneNode(true) as HTMLElement
   clone.removeAttribute("id")
+  embedLoadedImages(el, clone)
   printHtml(clone.outerHTML, title, extraCss)
 }

@@ -656,6 +656,7 @@ CREATE TABLE IF NOT EXISTS `medication_management` (
     `management_method`       VARCHAR(32)  DEFAULT NULL COMMENT '管理方式',
     `supervisor`              VARCHAR(32)  DEFAULT NULL COMMENT '督导人员',
     `sputum_result`           VARCHAR(32)  DEFAULT NULL COMMENT '治疗前痰菌检查结果',
+    `start_treatment_date`    DATE         DEFAULT NULL COMMENT '开始治疗日期',
     `medication_records`      JSON         DEFAULT NULL COMMENT '每日服药记录（JSON：{日期:是否服药}）',
     `stop_date`               DATE         DEFAULT NULL COMMENT '停止完成时间',
     `create_time`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,

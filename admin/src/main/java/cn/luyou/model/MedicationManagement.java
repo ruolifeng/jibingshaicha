@@ -22,6 +22,8 @@ public class MedicationManagement extends BaseEntity {
     private String managementMethod;
     private String supervisor;
     private String sputumResult;
+    /** 开始治疗日期（治疗记录卡，首次标记服药日自动生成，可手改） */
+    private LocalDate startTreatmentDate;
     /** 每日服药记录（JSON） */
     private String medicationRecords;
     private LocalDate stopDate;

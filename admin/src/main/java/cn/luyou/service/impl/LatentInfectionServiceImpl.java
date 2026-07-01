@@ -503,11 +503,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (s == null) return;
                 latent.setBirthDate(s.getBirthDate());
                 latent.setEthnicity(s.getEthnicity());
-                latent.setCurrentAddress(s.getCurrentAddress());
+                if (StrUtil.isNotBlank(s.getPhone())) {
+                    latent.setPhone(s.getPhone());
+                }
+                if (StrUtil.isNotBlank(s.getCurrentAddress())) {
+                    latent.setCurrentAddress(s.getCurrentAddress());
+                }
                 latent.setHouseholdAddress(s.getHouseholdAddress());
                 latent.setScreenDate(s.getScreenDate());
                 latent.setScreenMethod(s.getScreenMethod());
                 latent.setScreenResult(s.getScreenResult());
+                if (StrUtil.isNotBlank(s.getPreventivePlan())) {
+                    latent.setPreventivePlan(s.getPreventivePlan());
+                }
                 // 学校人群通知单人群分类默认“学生”
                 latent.setCrowdCategory("学生");
             }
@@ -516,11 +524,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (k == null) return;
                 latent.setBirthDate(k.getBirthDate());
                 latent.setEthnicity(k.getEthnicity());
-                latent.setCurrentAddress(k.getCurrentAddress());
+                if (StrUtil.isNotBlank(k.getPhone())) {
+                    latent.setPhone(k.getPhone());
+                }
+                if (StrUtil.isNotBlank(k.getCurrentAddress())) {
+                    latent.setCurrentAddress(k.getCurrentAddress());
+                }
                 latent.setHouseholdAddress(k.getHouseholdAddress());
                 latent.setScreenDate(k.getScreenDate());
                 latent.setScreenMethod(k.getScreenMethod());
                 latent.setScreenResult(k.getScreenResult());
+                if (StrUtil.isNotBlank(k.getPreventivePlan())) {
+                    latent.setPreventivePlan(k.getPreventivePlan());
+                }
                 latent.setCrowdCategory(resolveKeyPopulationCrowdCategory(k));
             }
             case "closeContact" -> {
@@ -528,8 +544,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (c == null) return;
                 // ScreeningCloseContact 无独立 birthDate 字段，通知单出生日期留空由前端手填
                 latent.setEthnicity(c.getEthnicity());
-                latent.setCurrentAddress(c.getCurrentAddress());
+                if (StrUtil.isNotBlank(c.getPhone())) {
+                    latent.setPhone(c.getPhone());
+                }
+                if (StrUtil.isNotBlank(c.getCurrentAddress())) {
+                    latent.setCurrentAddress(c.getCurrentAddress());
+                }
                 latent.setHouseholdAddress(c.getHouseholdAddress());
+                if (StrUtil.isNotBlank(c.getPreventivePlan())) {
+                    latent.setPreventivePlan(c.getPreventivePlan());
+                }
                 latent.setCrowdCategory("密接");
                 Integer round = latent.getActiveRound() == null ? 1 : latent.getActiveRound();
                 switch (round) {

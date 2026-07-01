@@ -6,6 +6,7 @@ import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
+import { resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import {
   getFirstVisitDetailApi,
@@ -22,6 +23,7 @@ const firstVisitDetailVisible = ref(false)
 const firstVisitDetailData = ref<Record<string, any> | null>(null)
 const followUpListVisible = ref(false)
 const followUpListData = ref<any[]>([])
+const followUpFirstVisitNextDate = ref("")
 const followUpDetailVisible = ref(false)
 const followUpDetailData = ref<Record<string, any> | null>(null)
 const followUpPrintVisible = ref(false)
@@ -47,8 +49,12 @@ async function viewFirstVisit() {
 
 async function viewFollowUpList() {
   try {
-    const { data } = await getFollowUpVisitListApi(props.row.id)
-    followUpListData.value = data || []
+    const [followUpRes, firstVisitRes] = await Promise.all([
+      getFollowUpVisitListApi(props.row.id),
+      getFirstVisitDetailApi(props.row.id).catch(() => ({ data: null }))
+    ])
+    followUpListData.value = followUpRes.data || []
+    followUpFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
     followUpListVisible.value = true
   } catch { /* handled */ }
 }
@@ -124,7 +130,12 @@ function viewNotice() {
           </template>
         </el-table-column>
         <el-table-column prop="missedDoses" label="漏服次数" />
-        <el-table-column prop="nextVisitDate" label="下次随访" />
+        <el-table-column label="下次随访">
+          <template #default="{ $index }">
+            {{ resolveFollowUpListNextVisitDate(followUpListData, $index, followUpFirstVisitNextDate) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
         <el-table-column label="操作" fixed="right">
           <template #default="{ row: record }">
             <el-button type="primary" link size="small" @click="viewFollowUpDetail(record)">

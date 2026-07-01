@@ -1,12 +1,14 @@
 <script lang="ts" setup>
+import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import {
-  isNoticeReceiveOverdue,
-  isPatientTransferLocked,
   getPatientTransferStatusLabel,
+  isNoticeReceiveOverdue,
+  isNoticeSent,
+  isPatientTransferLocked,
   resolveMedicationManagementUnit,
   resolveNoticeConfirmedDisplayTime,
   resolveNoticeSentDisplayTime
@@ -176,18 +178,7 @@ function getNoticeRowClass({ row }: { row: any }) {
                   填写通知单
                 </el-button>
               </template>
-              <template v-else-if="row.noticeStatus === 1 || row.noticeStatus === 2">
-                <el-button
-                  v-permission="'patientManagement:notice:fill'"
-                  type="primary"
-                  link
-                  size="small"
-                  :disabled="row.archived === 1"
-                  @click="openNotice(row)"
-                >
-                  发送通知单
-                </el-button>
-              </template>
+              <NoticeSentStatusButton v-else-if="isNoticeSent(row)" />
               <el-button v-permission="'patientManagement:referral'" type="info" link size="small" @click="openReferral(row)">
                 转出
               </el-button>

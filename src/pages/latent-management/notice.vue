@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import LatentNoticeDetailDialog from "@@/components/LatentNoticeDetailDialog.vue"
 import LatentNoticeFormDialog from "@@/components/LatentNoticeFormDialog.vue"
+import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { TRACKING_STATUS_MAP, getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
+import { isNoticeSent } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
-  getLatentAggregateListApi,
-  closeCaseApi
+  closeCaseApi,
+  getLatentAggregateListApi
 } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -144,8 +146,12 @@ async function handleCloseCase(row: any) {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleSearch">
+            搜索
+          </el-button>
+          <el-button @click="handleReset">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -193,7 +199,7 @@ async function handleCloseCase(row: any) {
         <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row }">
             <el-button
-              v-if="!row.noticeSent"
+              v-if="!isNoticeSent(row)"
               v-permission="'latentManagement:notice'"
               type="success"
               link
@@ -203,16 +209,7 @@ async function handleCloseCase(row: any) {
             >
               {{ row.noticeStatus === 0 ? "继续填写" : "发送通知单" }}
             </el-button>
-            <el-button
-              v-if="row.noticeSent"
-              v-permission="'latentManagement:notice'"
-              type="primary"
-              link
-              size="small"
-              @click="viewNotice(row)"
-            >
-              查看通知单
-            </el-button>
+            <NoticeSentStatusButton v-else />
             <el-button
               v-permission="'latentManagement:referral'"
               type="info"
@@ -223,9 +220,13 @@ async function handleCloseCase(row: any) {
             >
               转出
             </el-button>
-            <el-button v-permission="'latentManagement:close'" type="danger" link size="small"
+            <el-button
+              v-permission="'latentManagement:close'" type="danger" link size="small"
               :disabled="row.archived === 1"
-              @click="handleCloseCase(row)">归档</el-button>
+              @click="handleCloseCase(row)"
+            >
+              归档
+            </el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -28,7 +28,6 @@ const images = computed(() => parseAttachmentUrls(props.urls).filter(isImageAtta
 <style lang="scss" scoped>
 .print-attachments {
   margin-top: 12px;
-  page-break-inside: avoid;
 
   &__title {
     font-size: 13px;
@@ -38,21 +37,25 @@ const images = computed(() => parseAttachmentUrls(props.urls).filter(isImageAtta
   }
 
   &__grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
   }
 
   &__item {
     margin: 0;
     text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
 
     img {
-      width: 180px;
+      width: 100%;
+      max-width: 180px;
       max-height: 140px;
       object-fit: contain;
       border: 1px solid #ddd;
       display: block;
+      margin: 0 auto;
     }
 
     figcaption {
