@@ -2,6 +2,7 @@
 import { getLevel5UsersApi } from "@@/apis/users"
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
+import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PrintSupervision from "@@/components/PrintSupervision.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 /**
@@ -620,14 +621,7 @@ async function handleSaveFollowupInput() {
             >
               发送通知单
             </el-button>
-            <el-button
-              v-else
-              type="success"
-              size="small"
-              disabled
-            >
-              已发送通知单
-            </el-button>
+            <NoticeSentStatusButton v-else :link="false" />
 
             <!-- 查看通知单 -->
             <el-button type="info" size="small" @click="viewNotice(row)">

@@ -128,6 +128,15 @@ export function getFollowUpDraftApi(patientId: number) {
   })
 }
 
+/** 患者结案全程管理统计（实际访视/服药次数） */
+export function getFollowUpCaseClosureStatsApi(patientId: number, includeCurrentFollowUp = true) {
+  return request<ApiResponseData<{ actualVisitCount: number, actualDoseCount: number }>>({
+    url: `patient/follow-up/case-closure-stats/${patientId}`,
+    method: "get",
+    params: { includeCurrentFollowUp }
+  })
+}
+
 /** 后续随访列表 */
 export function getFollowUpListApi(patientId: number) {
   return request<ApiResponseData<any[]>>({

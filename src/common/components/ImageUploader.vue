@@ -12,10 +12,10 @@
  *   - 也兼容直接传入 string[] 数组
  *   - 空值（null/""/[]）均合法
  */
-import type { UploadFile, UploadFiles, UploadProps, UploadRequestOptions } from "element-plus"
-import { Plus, ZoomIn } from "@element-plus/icons-vue"
-import { getToken } from "@@/utils/cache/cookies"
+import type { UploadFile, UploadFiles, UploadProps, UploadRawFile, UploadRequestOptions } from "element-plus"
 import { parseAttachmentUrls, parseUploadApiResponse, uploadAttachmentFile } from "@@/utils/attachment"
+import { getToken } from "@@/utils/cache/cookies"
+import { Plus, ZoomIn } from "@element-plus/icons-vue"
 
 interface Props {
   /** v-model 绑定值：可以是 JSON 字符串或 string[] */
@@ -48,7 +48,7 @@ function handleHttpUpload(options: UploadRequestOptions) {
   return uploadAttachmentFile(options)
 }
 
-type LocalFile = { name: string, url: string, uid: number }
+interface LocalFile { name: string, url: string, uid: number }
 
 /** 内部维护的 fileList，结构对齐 el-upload */
 const fileList = ref<LocalFile[]>([])
@@ -85,8 +85,27 @@ watch(
   () => props.modelValue,
   (v) => {
     const urls = parseAttachmentUrls(v)
-    const current = fileList.value.map(f => f.url).filter(Boolean)
-    if (sameUrlList(urls, current)) return
+    const pendingFiles = fileList.value.filter(f => !isPersistedUrl(f.url))
+    const persistedFiles = fileList.value.filter(f => isPersistedUrl(f.url))
+    const persistedUrls = persistedFiles.map(f => f.url)
+
+    if (pendingFiles.length > 0) {
+      if (sameUrlList(urls, persistedUrls)) return
+      fileList.value = [
+        ...urls.map((url, idx) => {
+          const existing = persistedFiles.find(f => f.url === url)
+          return existing || {
+            name: url.split("/").pop()?.split("?")[0] || `图片${idx + 1}`,
+            url,
+            uid: Date.now() + idx
+          }
+        }),
+        ...pendingFiles
+      ]
+      return
+    }
+
+    if (sameUrlList(urls, persistedUrls)) return
     fileList.value = urls.map((url, idx) => ({
       name: url.split("/").pop()?.split("?")[0] || `图片${idx + 1}`,
       url,
@@ -113,8 +132,10 @@ function refreshDisplayFiles(uploadFiles: UploadFiles) {
 
 // ==================== 上传 hooks ====================
 
-const beforeUpload: UploadProps["beforeUpload"] = (file) => {
-  if (!file.type.startsWith("image/")) {
+const beforeUpload = ((file: UploadRawFile, uploadFiles?: UploadFiles) => {
+  const isImage = file.type.startsWith("image/")
+    || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)$/i.test(file.name)
+  if (!isImage) {
     ElMessage.error("仅支持图片格式")
     return false
   }
@@ -122,13 +143,18 @@ const beforeUpload: UploadProps["beforeUpload"] = (file) => {
     ElMessage.error(`图片大小不能超过 ${props.maxSizeMB}MB`)
     return false
   }
-  // onStart 会先把当前文件加入列表并生成 blob 预览，仅统计已落库的服务端 URL
-  if (uploadedCount() >= props.max) {
-    ElMessage.warning(`最多上传 ${props.max} 张图片`)
+  const persisted = uploadedCount()
+  const batch = uploadFiles ?? []
+  const indexInBatch = batch.findIndex(f => f.uid === file.uid)
+  const batchIndex = indexInBatch >= 0 ? indexInBatch : batch.length
+  if (persisted + batchIndex + 1 > props.max) {
+    if (batchIndex === 0 && persisted >= props.max) {
+      ElMessage.warning(`最多上传 ${props.max} 张图片`)
+    }
     return false
   }
   return true
-}
+}) as UploadProps["beforeUpload"]
 
 const onExceed: UploadProps["onExceed"] = () => {
   ElMessage.warning(`最多上传 ${props.max} 张图片`)
@@ -140,11 +166,12 @@ const onSuccess: UploadProps["onSuccess"] = (response, uploadFile, uploadFiles) 
     uploadFile.url = result.url
     uploadFile.status = "success"
     refreshDisplayFiles(uploadFiles)
-    emitChange(true)
+    emitChange()
     return
   }
   uploadFile.status = "fail"
   refreshDisplayFiles(uploadFiles)
+  emitChange()
   ElMessage.error(result.msg || "上传失败")
 }
 
@@ -154,6 +181,7 @@ const onChange: UploadProps["onChange"] = (_uploadFile, uploadFiles) => {
 
 const onError: UploadProps["onError"] = (_error, _uploadFile, uploadFiles) => {
   refreshDisplayFiles(uploadFiles)
+  emitChange()
   ElMessage.error("图片上传失败，请重试")
 }
 
@@ -196,7 +224,9 @@ const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
       :disabled="disabled"
     >
       <template #default>
-        <el-icon v-if="canUpload"><Plus /></el-icon>
+        <el-icon v-if="canUpload">
+          <Plus />
+        </el-icon>
       </template>
       <template #file="{ file }">
         <div class="upload-thumb">

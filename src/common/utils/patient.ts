@@ -1,4 +1,4 @@
-import { PATIENT_TYPE_OPTIONS } from "@@/constants/disease"
+import { PATHOGEN_RESULT_OPTIONS, PATIENT_TYPE_OPTIONS } from "@@/constants/disease"
 import {
   EPIDEMIC_REPORT_HEADERS,
   PRIORITY_DETAIL_FIELDS,
@@ -225,6 +225,40 @@ function resolveFieldFromPatient(row: Record<string, any> | null | undefined, la
   if (!row) return ""
   if (label === "病原学结果" || label === "诊断结果") return row.diagnosisResult || ""
   return ""
+}
+
+/** 解析患者病原学结果（与在管总览列表「病原学结果」列口径一致） */
+export function resolvePatientPathogenResult(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  const fields = resolveImportFields(row)
+  return resolvePriorityFieldValue(fields, row, "病原学结果")
+}
+
+/** 将病原学结果映射为通知单「痰涂片」选项 */
+export function mapPathogenResultToNoticeSputumSmear(pathogenResult?: string | null): string {
+  if (!pathogenResult) return ""
+  const normalized = pathogenResult.trim()
+  if (!normalized) return ""
+  if ((PATHOGEN_RESULT_OPTIONS as readonly string[]).includes(normalized)) return normalized
+  if (normalized.includes("阳性")) return "阳性"
+  if (normalized.includes("阴性")) return "阴性"
+  if (normalized.includes("未出")) return "未出结果"
+  if (normalized.includes("未做") || normalized.includes("未查")) return "未做"
+  if (normalized.includes("未知")) return "未知"
+  return ""
+}
+
+/** 从患者记录解析通知单「痰涂片」默认值 */
+export function resolveNoticeSputumSmearFromPatient(row: Record<string, any> | null | undefined): string {
+  return mapPathogenResultToNoticeSputumSmear(resolvePatientPathogenResult(row))
+}
+
+/** 通知单是否已发送（含待接收、已确认；兼容潜伏感染者 noticeSent 字段） */
+export function isNoticeSent(row: Record<string, any> | null | undefined): boolean {
+  if (!row) return false
+  if (row.noticeSent === true) return true
+  const status = Number(row.noticeStatus)
+  return status === 1 || status === 2
 }
 
 /** 手动新增/编辑表单：从 patient 记录解析病案扩展字段 */

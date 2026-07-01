@@ -122,4 +122,7 @@ public class LatentInfection extends BaseEntity {
     /** 感染检查结果 */
     @TableField(exist = false)
     private String screenResult;
+    /** 预防性治疗方案（通知单展示，来自筛查表） */
+    @TableField(exist = false)
+    private String preventivePlan;
 }

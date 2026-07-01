@@ -79,9 +79,14 @@ export function getAttachmentLabel(url: string, index = 0): string {
   return fileName || `附件${index + 1}`
 }
 
-/** 判断是否为图片附件（用于预览） */
+/** 判断是否为图片附件（用于预览/打印） */
 export function isImageAttachment(url: string): boolean {
   const lower = url.toLowerCase()
-  return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(lower)
-    || lower.includes("image/")
+  const imageExt = /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)(\?|$)/i
+  if (imageExt.test(lower) || lower.includes("image/")) return true
+  try {
+    const name = new URL(url, window.location.origin).searchParams.get("name")
+    if (name && imageExt.test(name.toLowerCase())) return true
+  } catch { /* ignore */ }
+  return false
 }

@@ -25,8 +25,8 @@ import {
   STOP_TREATMENT_YES_NO_OPTIONS,
   YES_NO_OPTIONS
 } from "@@/constants/disease"
-import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, shouldArchiveOnStopTreatment, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
-import { getFollowUpDraftApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
+import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
+import { getFollowUpCaseClosureStatsApi, getFollowUpDraftApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import ImageUploader from "./ImageUploader.vue"
 
@@ -82,6 +82,8 @@ const dialogTitle = computed(() => {
 const submitting = ref(false)
 const draftSaving = ref(false)
 const draftId = ref<number | null>(null)
+
+const caseClosureStatsAutoFilled = computed(() => form.stopTreatment === "是")
 
 interface FollowUpForm {
   visitDate: string
@@ -184,12 +186,28 @@ function clearStopTreatmentFields() {
   form.stopTreatmentReasonOther = ""
 }
 
+async function refreshCaseClosureStats() {
+  if (!props.patientId || form.stopTreatment !== "是") return
+  try {
+    const includeCurrent = shouldIncludeCurrentFollowUpInStats(
+      isEditMode.value ? props.initialData : draftId.value ? { id: draftId.value, status: 0 } : null
+    )
+    const { data } = await getFollowUpCaseClosureStatsApi(props.patientId, includeCurrent)
+    if (data) {
+      form.actualVisitCount = data.actualVisitCount ?? 0
+      form.actualDoseCount = data.actualDoseCount ?? 0
+    }
+  } catch { /* handled */ }
+}
+
 watch(
   () => form.stopTreatment,
   (val) => {
     if (val !== "是") {
       clearStopTreatmentFields()
+      return
     }
+    refreshCaseClosureStats()
   }
 )
 
@@ -236,6 +254,10 @@ async function initForm() {
     loadInitialData()
   } else {
     await loadDraft()
+  }
+  // 只读查看已归档记录时保留已保存值，可编辑场景下才重新统计
+  if (form.stopTreatment === "是" && !formLocked.value) {
+    await refreshCaseClosureStats()
   }
 }
 
@@ -605,6 +627,14 @@ async function handleSave() {
       <el-divider content-position="left">
         全程管理情况
       </el-divider>
+      <el-alert
+        v-if="caseClosureStatsAutoFilled"
+        type="info"
+        :closable="false"
+        show-icon
+        class="mb-3"
+        title="实际访视次数 = 首次随访 + 后续随访；实际服药次数 = 服药管理中已标记天数，系统自动统计"
+      />
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="应访视次数">
@@ -622,6 +652,7 @@ async function handleSave() {
             <el-input-number
               v-model="form.actualVisitCount"
               :min="0"
+              :disabled="caseClosureStatsAutoFilled || formLocked"
               controls-position="right"
               placeholder="次"
               class="follow-up-input-number"
@@ -644,6 +675,7 @@ async function handleSave() {
             <el-input-number
               v-model="form.actualDoseCount"
               :min="0"
+              :disabled="caseClosureStatsAutoFilled || formLocked"
               controls-position="right"
               placeholder="次"
               class="follow-up-input-number"

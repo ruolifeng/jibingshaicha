@@ -3,14 +3,13 @@ import { getLevel5UsersApi } from "@@/apis/users"
 import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
-import MedicationCalendar from "@@/components/MedicationCalendar.vue"
+import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
+import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
-import PrintMedication from "@@/components/PrintMedication.vue"
 import PrintNotice from "@@/components/PrintNotice.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { parseMedicationRecords, serializeMedicationRecords, type MedicationRecordsMap } from "@@/utils/medicationRecords"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
@@ -18,40 +17,36 @@ import {
   DRUG_RESISTANCE_OPTIONS,
   EDUCATION_ITEMS,
   FIRST_VISIT_SUPERVISOR_OPTIONS,
-  MANAGEMENT_METHOD_OPTIONS,
   MEDICATION_USAGE_OPTIONS,
   NOTICE_STATUS_MAP,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
   PATIENT_TYPE_OPTIONS,
-  SPUTUM_RESULT_OPTIONS,
   SPUTUM_STATUS_OPTIONS,
-  SUPERVISOR_OPTIONS,
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
   VISIT_METHOD_OPTIONS,
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
-import { followUpFormatters } from "@@/utils/followUpVisitFormat"
-import { ArrowDown } from "@element-plus/icons-vue"
 import { applyFirstVisitChemotherapyDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
+import { followUpFormatters } from "@@/utils/followUpVisitFormat"
+import { isNoticeSent, resolveNoticeSputumSmearFromPatient } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule } from "@@/utils/validate"
+import { ArrowDown } from "@element-plus/icons-vue"
 import { confirmNoticeApi, getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import {
-  completeMedicationApi,
+  exportPatientListApi,
   getFirstVisitApi,
   getFollowUpListApi,
-  getMedicationApi,
   getPatientListApi,
-  exportPatientListApi,
   importEpidemicApi,
   saveFirstVisitApi,
-  saveFirstVisitDraftApi,
-  saveMedicationApi
+  saveFirstVisitDraftApi
 } from "./apis"
 
 const userStore = useUserStore()
@@ -232,7 +227,7 @@ function openNoticeDialog(row: any) {
           managementMethod: notice.managementMethod || "",
           treatmentPlan: notice.treatmentPlan || "",
           customPlanDetail: notice.customPlanDetail || "",
-          sputumSmear: notice.sputumSmear || "",
+          sputumSmear: notice.sputumSmear || resolveNoticeSputumSmearFromPatient(noticeRow.value),
           sputumCulture: notice.sputumCulture || "",
           molecularTest: notice.molecularTest || "",
           pathologyTest: notice.pathologyTest || "",
@@ -263,7 +258,7 @@ function openNoticeDialog(row: any) {
       managementMethod: "",
       treatmentPlan: "",
       customPlanDetail: "",
-      sputumSmear: "",
+      sputumSmear: resolveNoticeSputumSmearFromPatient(row),
       sputumCulture: "",
       molecularTest: "",
       pathologyTest: "",
@@ -511,11 +506,18 @@ function openFollowUpDialog(row: any) {
 // ==================== 后续随访列表查看 ====================
 const followUpListVisible = ref(false)
 const followUpListData = ref<any[]>([])
+const followUpListPatientName = ref("")
+const followUpFirstVisitNextDate = ref("")
 
 async function viewFollowUpList(row: any) {
   try {
-    const { data } = await getFollowUpListApi(row.id)
-    followUpListData.value = data || []
+    followUpListPatientName.value = row.name || ""
+    const [followUpRes, firstVisitRes] = await Promise.all([
+      getFollowUpListApi(row.id),
+      getFirstVisitApi(row.id).catch(() => ({ data: null }))
+    ])
+    followUpListData.value = followUpRes.data || []
+    followUpFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
     followUpListVisible.value = true
   } catch { /* handled */ }
 }
@@ -523,62 +525,10 @@ async function viewFollowUpList(row: any) {
 // ==================== 服药管理 ====================
 const medicationDialogVisible = ref(false)
 const medicationRow = ref<any>(null)
-const medicationForm = reactive({
-  managementMethod: "",
-  supervisor: "",
-  sputumResult: "",
-  stopDate: "",
-  dayMarks: {} as MedicationRecordsMap
-})
 
 function openMedicationDialog(row: any) {
   medicationRow.value = row
-  medicationForm.managementMethod = ""
-  medicationForm.supervisor = ""
-  medicationForm.sputumResult = ""
-  medicationForm.stopDate = ""
-  medicationForm.dayMarks = {}
-  getMedicationApi(row.id).then(({ data }) => {
-    if (data) {
-      medicationForm.managementMethod = data.managementMethod || ""
-      medicationForm.supervisor = data.supervisor || ""
-      medicationForm.sputumResult = data.sputumResult || ""
-      medicationForm.stopDate = data.stopDate || ""
-      medicationForm.dayMarks = parseMedicationRecords(data.medicationRecords)
-    }
-  }).catch(() => { /* 首次填写 */ })
   medicationDialogVisible.value = true
-}
-
-const printMedicationVisible = ref(false)
-
-function handlePrintMedication() {
-  printMedicationVisible.value = true
-}
-
-async function handleSaveMedication() {
-  try {
-    const saveData: Record<string, any> = {
-      patientId: medicationRow.value.id,
-      populationType: "school",
-      managementMethod: medicationForm.managementMethod,
-      supervisor: medicationForm.supervisor,
-      sputumResult: medicationForm.sputumResult,
-      stopDate: medicationForm.stopDate,
-      medicationRecords: serializeMedicationRecords(medicationForm.dayMarks)
-    }
-    if (medicationForm.stopDate) {
-      await completeMedicationApi(saveData)
-      ElMessage.success("服药管理完成，患者已归档")
-      medicationDialogVisible.value = false
-      fetchData()
-    } else {
-      await saveMedicationApi(saveData)
-      ElMessage.success("服药管理保存成功")
-      medicationDialogVisible.value = false
-      fetchData()
-    }
-  } catch { /* handled */ }
 }
 
 // ==================== 筛查详情查看 ====================
@@ -778,24 +728,22 @@ watch(
                 查看详情
               </el-button>
               <!-- 通知单操作：未填写或已确认时可填写，草稿时可填写/发送，已发送(待确认)时不可操作 -->
-              <template v-if="row.noticeStatus === null || row.noticeStatus === undefined">
+              <template v-if="!isNoticeSent(row)">
                 <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
                   填写通知单
                 </el-button>
-              </template>
-              <template v-else-if="row.noticeStatus === 0">
-                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
-                  填写通知单
-                </el-button>
-                <el-button v-permission="'patient:sendNotice'" type="success" link size="small" @click="openNoticeDialog(row)">
+                <el-button
+                  v-if="row.noticeStatus === 0"
+                  v-permission="'patient:sendNotice'"
+                  type="success"
+                  link
+                  size="small"
+                  @click="openNoticeDialog(row)"
+                >
                   发送通知单
                 </el-button>
               </template>
-              <template v-else-if="row.noticeStatus === 2">
-                <el-button v-permission="'patient:sendNotice'" type="primary" link size="small" @click="openNoticeDialog(row)">
-                  发送通知单
-                </el-button>
-              </template>
+              <NoticeSentStatusButton v-else />
               <el-button v-permission="'patient:firstVisit'" type="success" link size="small" :disabled="!!row.hasFirstVisit" @click="openFirstVisitDialog(row)">
                 填写首次随访
               </el-button>
@@ -1359,61 +1307,34 @@ watch(
     />
 
     <!-- 后续随访记录列表（患者随访汇总表） -->
-    <el-dialog v-model="followUpListVisible" title="患者随访汇总表" width="800px">
+    <el-dialog v-model="followUpListVisible" :title="`${followUpListPatientName} - 随访记录`" width="900px">
       <el-table :data="followUpListData" border stripe>
-        <el-table-column prop="visitSeq" label="随访次数" />
-        <el-table-column prop="visitDate" label="随访时间" />
+        <el-table-column prop="visitSeq" label="第几次" />
+        <el-table-column prop="visitDate" label="随访日期" />
+        <el-table-column prop="treatmentMonth" label="治疗月序" />
         <el-table-column label="随访方式">
           <template #default="{ row }">
             {{ followUpFormatters.visitMethod(row.visitMethod, row.visitMethodOther) }}
           </template>
         </el-table-column>
-        <el-table-column prop="visitSituation" label="随访情况" show-overflow-tooltip />
-        <el-table-column prop="remarks" label="备注" show-overflow-tooltip />
-        <el-table-column prop="createTime" label="填写时间" />
+        <el-table-column prop="missedDoses" label="漏服次数" />
+        <el-table-column label="下次随访">
+          <template #default="{ $index }">
+            {{ resolveFollowUpListNextVisitDate(followUpListData, $index, followUpFirstVisitNextDate) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
       </el-table>
+      <el-empty v-if="!followUpListData.length" description="暂无随访记录" />
     </el-dialog>
 
     <!-- 服药管理弹窗 -->
-    <el-dialog v-model="medicationDialogVisible" title="服药管理" width="700px">
-      <el-form :model="medicationForm" label-width="130px">
-        <el-form-item label="每日服药记录">
-          <MedicationCalendar v-model="medicationForm.dayMarks" />
-        </el-form-item>
-        <el-form-item label="管理方式">
-          <el-select v-model="medicationForm.managementMethod" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in MANAGEMENT_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="督导人员">
-          <el-select v-model="medicationForm.supervisor" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="治疗前痰菌检查">
-          <el-select v-model="medicationForm.sputumResult" placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in SPUTUM_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="停止完成时间">
-          <el-date-picker v-model="medicationForm.stopDate" type="date" placeholder="填写后患者将归档" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-alert v-if="medicationForm.stopDate" type="warning" :closable="false">
-          填写停止完成时间后，该患者将从患者管理列表移除，放入历史患者。
-        </el-alert>
-      </el-form>
-      <template #footer>
-        <el-button @click="medicationDialogVisible = false">
-          取消
-        </el-button>
-        <el-button @click="handlePrintMedication">
-          打印治疗记录卡
-        </el-button>
-        <el-button type="primary" @click="handleSaveMedication">
-          {{ medicationForm.stopDate ? "完成并归档" : "保存" }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <PatientMedicationDialog
+      v-if="medicationRow"
+      v-model:visible="medicationDialogVisible"
+      :patient-row="medicationRow"
+      @success="fetchData"
+    />
 
     <!-- 筛查详情弹窗 -->
     <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="school" :data="screeningDetailData" />
@@ -1423,13 +1344,6 @@ watch(
 
     <!-- 打印首次随访表 -->
     <PrintFirstVisit v-model:visible="printVisitVisible" :visit-data="printVisitData" :patient-name="printPatientName" />
-
-    <!-- 打印治疗记录卡（12个月服药表） -->
-    <PrintMedication
-      v-model:visible="printMedicationVisible"
-      :patient-data="medicationRow"
-      :medication-data="medicationForm"
-    />
 
     <!-- 转诊弹窗 -->
     <ReferralDialog
@@ -1458,7 +1372,6 @@ watch(
   gap: 8px;
   flex-wrap: nowrap;
 }
-
 </style>
 
 <style lang="scss">

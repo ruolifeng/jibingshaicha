@@ -86,6 +86,14 @@ export function countMedicationMarkedDays(marks: MedicationRecordsMap, year?: nu
   }).length
 }
 
+/** 获取最早有标记的服药日期（YYYY-MM-DD） */
+export function getEarliestMedicationMarkedDate(marks: MedicationRecordsMap): string {
+  return Object.entries(marks)
+    .filter(([, mark]) => mark === "x" || mark === "circled")
+    .map(([date]) => date)
+    .sort()[0] || ""
+}
+
 /** 从标记记录中提取年份列表 */
 export function getMedicationRecordYears(marks: MedicationRecordsMap): number[] {
   const years = new Set<number>()

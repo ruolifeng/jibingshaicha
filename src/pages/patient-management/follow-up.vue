@@ -4,11 +4,11 @@ import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { canEditFollowUpVisit } from "@@/utils/followUpVisit"
+import { canEditFollowUpVisit, resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
-import { isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
-import { exportPatientFollowUpVisitsApi, getFollowUpVisitListApi } from "./apis"
+import { exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
@@ -55,6 +55,7 @@ function openFollowUp(row: any) {
 
 const historyVisible = ref(false)
 const historyList = ref<any[]>([])
+const historyFirstVisitNextDate = ref("")
 const historyPatientName = ref("")
 const historyPatient = ref<any>(null)
 const historyDialogTitle = computed(() => `${historyPatientName.value} - 随访记录`)
@@ -69,18 +70,25 @@ const printVisible = ref(false)
 const printData = ref<Record<string, any> | null>(null)
 const printPatientName = ref("")
 
+async function loadFollowUpHistory(patientId: number) {
+  const [followUpRes, firstVisitRes] = await Promise.all([
+    getFollowUpVisitListApi(patientId),
+    getFirstVisitDetailApi(patientId).catch(() => ({ data: null }))
+  ])
+  historyList.value = followUpRes.data || []
+  historyFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
+}
+
 async function viewHistory(row: any) {
   historyPatient.value = row
   historyPatientName.value = row.name
-  const { data } = await getFollowUpVisitListApi(row.id)
-  historyList.value = data || []
+  await loadFollowUpHistory(row.id)
   historyVisible.value = true
 }
 
 async function refreshHistoryList() {
   if (!historyPatient.value) return
-  const { data } = await getFollowUpVisitListApi(historyPatient.value.id)
-  historyList.value = data || []
+  await loadFollowUpHistory(historyPatient.value.id)
 }
 
 function openEdit(record: Record<string, any>) {
@@ -270,7 +278,11 @@ function openPrint(row: Record<string, any>) {
           </template>
         </el-table-column>
         <el-table-column prop="missedDoses" label="漏服次数" />
-        <el-table-column prop="nextVisitDate" label="下次随访" />
+        <el-table-column label="下次随访">
+          <template #default="{ $index }">
+            {{ resolveFollowUpListNextVisitDate(historyList, $index, historyFirstVisitNextDate) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
         <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">

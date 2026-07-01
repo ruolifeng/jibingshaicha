@@ -3,6 +3,19 @@ import { resolveFirstTreatmentPlan } from "@@/utils/patient"
 /** 五级用户（role=6）已完成后续随访的可编辑天数 */
 export const FOLLOW_UP_EDIT_DAYS_LEVEL5 = 10
 
+export interface FollowUpCaseClosureStats {
+  actualVisitCount: number
+  actualDoseCount: number
+}
+
+/** 草稿转完成或新建时，当前随访尚未计入已完成列表 */
+export function shouldIncludeCurrentFollowUpInStats(
+  initialData?: { id?: number, status?: number } | null
+): boolean {
+  if (!initialData?.id) return true
+  return initialData.status !== 1
+}
+
 /** 后续随访化疗方案：关联病案「首次治疗方案」预填，已有值则不覆盖 */
 export function applyFollowUpChemotherapyDefault(
   form: { chemotherapyPlan?: string },
@@ -44,4 +57,24 @@ export function canEditFollowUpVisit(
   const deadline = new Date(created)
   deadline.setDate(deadline.getDate() + FOLLOW_UP_EDIT_DAYS_LEVEL5)
   return Date.now() <= deadline.getTime()
+}
+
+/**
+ * 后续随访「查看记录」列表中的「下次随访」展示值（不含首次随访本身）：
+ * - 第 1 次后续随访：取首次随访填写的下次随访时间
+ * - 第 N 次（N>1）：取上一次后续随访记录中填写的下次随访时间
+ */
+export function resolveFollowUpListNextVisitDate(
+  list: Array<{ nextVisitDate?: string | null }>,
+  index: number,
+  firstVisitNextDate?: string | null
+): string {
+  if (index === 0) {
+    const fromFirstVisit = firstVisitNextDate?.trim()
+    if (fromFirstVisit) return fromFirstVisit
+    return list[0]?.nextVisitDate?.trim() || ""
+  }
+  const fromPrevious = list[index - 1]?.nextVisitDate?.trim()
+  if (fromPrevious) return fromPrevious
+  return list[index]?.nextVisitDate?.trim() || ""
 }

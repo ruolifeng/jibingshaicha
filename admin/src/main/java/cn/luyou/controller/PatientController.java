@@ -10,6 +10,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.FollowUpCaseClosureSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
@@ -423,6 +424,20 @@ public class PatientController {
         return !visit.getCreateTime().plusDays(FOLLOW_UP_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
     }
 
+    @Operation(summary = "患者结案全程管理统计（实际访视/服药次数）")
+    @GetMapping("/follow-up/case-closure-stats/{patientId}")
+    public ResultResponse<Map<String, Integer>> getFollowUpCaseClosureStats(
+            @PathVariable Long patientId,
+            @RequestParam(defaultValue = "true") boolean includeCurrentFollowUp) {
+        patientService.assertPatientOperable(patientId);
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("actualVisitCount", FollowUpCaseClosureSupport.computeActualVisitCount(
+                firstVisitService, followUpVisitService, patientId, includeCurrentFollowUp));
+        stats.put("actualDoseCount", FollowUpCaseClosureSupport.computeActualDoseCount(
+                medicationManagementService, patientId));
+        return ResultRes.success(stats);
+    }
+
     @Operation(summary = "查询后续随访草稿")
     @GetMapping("/follow-up/draft/{patientId}")
     public ResultResponse<FollowUpVisit> getFollowUpDraft(@PathVariable Long patientId) {
@@ -472,8 +487,17 @@ public class PatientController {
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
         validateFollowUpVisitMethod(followUpVisit);
         validateStopTreatmentOnSave(followUpVisit);
+        FollowUpVisit existingForStats = followUpVisit.getId() != null
+                ? followUpVisitService.getById(followUpVisit.getId())
+                : null;
+        FollowUpCaseClosureSupport.applyCaseClosureStats(
+                followUpVisit,
+                firstVisitService,
+                followUpVisitService,
+                medicationManagementService,
+                FollowUpCaseClosureSupport.shouldIncludeCurrentFollowUp(existingForStats));
         if (followUpVisit.getId() != null) {
-            FollowUpVisit existing = followUpVisitService.getById(followUpVisit.getId());
+            FollowUpVisit existing = existingForStats;
             if (existing != null) {
                 if (Integer.valueOf(1).equals(existing.getStatus())) {
                     assertFollowUpEditable(existing);
