@@ -17,3 +17,12 @@ export function extractDateRangeParams(dateRange?: string[] | null) {
     dateTo: dateTo || undefined
   }
 }
+
+/** 用户录入时间（create_time）区间 */
+export function extractCreateTimeRangeParams(dateRange?: string[] | null) {
+  const [createTimeFrom, createTimeTo] = dateRange ?? []
+  return {
+    createTimeFrom: createTimeFrom || undefined,
+    createTimeTo: createTimeTo || undefined
+  }
+}

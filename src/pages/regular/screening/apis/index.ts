@@ -83,6 +83,8 @@ export function getScreeningRegularListApi(params: {
   entryUnit?: string
   dateFrom?: string
   dateTo?: string
+  createTimeFrom?: string
+  createTimeTo?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "screening/key-population/list",

@@ -3,7 +3,7 @@ import type { FormInstance, FormRules } from "element-plus"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
-import { SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { isSuspectedTbDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, SUSPECTED_TB_DIAGNOSIS } from "@@/constants/disease"
 import {
   CC_FINAL_RESULT_STAT_OPTIONS,
   CC_FINAL_SCREENING_RESULT_OPTIONS,
@@ -68,7 +68,7 @@ function tagType(t: string): TagType {
 const CC_STATUS_MAP: Record<number, { label: string, type: string }> = {
   0: { label: "待处理", type: "info" },
   1: { label: "活动性肺结核-结案", type: "danger" },
-  9: { label: "疑似肺结核-结案", type: "warning" },
+  9: { label: "疑似结核-结案", type: "warning" },
   2: { label: "潜伏感染-管理中", type: "warning" },
   3: { label: "潜伏感染-已归档", type: "info" },
   4: { label: "随访监测中", type: "warning" },
@@ -446,7 +446,7 @@ function hasFollowupData(row: any, month: number): boolean {
 function getFollowupTag(result: string): string {
   if (!result) return "info"
   if (result.includes("活动性肺结核")) return "danger"
-  if (result.includes("疑似肺结核")) return "warning"
+  if (isSuspectedTbDiagnosis(result)) return "warning"
   if (result.includes("潜伏感染者")) return "warning"
   if (result.includes("未发现异常")) return "success"
   return "info"
@@ -896,7 +896,7 @@ async function handleThreeMonthSubmit() {
                       <span
                         :class="{
                           'text-red-600 font-medium': opt === '活动性肺结核',
-                          'text-yellow-600 font-medium': opt === '疑似肺结核',
+                          'text-yellow-600 font-medium': opt === SUSPECTED_TB_DIAGNOSIS,
                         }"
                       >{{ opt }}</span>
                     </el-option>
@@ -904,7 +904,7 @@ async function handleThreeMonthSubmit() {
                   <div v-if="editForm.finalScreeningResult === '活动性肺结核'" class="text-xs text-red-500 mt-1">
                     结案流程
                   </div>
-                  <div v-else-if="editForm.finalScreeningResult === '疑似肺结核'" class="text-xs text-yellow-600 mt-1">
+                  <div v-else-if="isSuspectedTbDiagnosis(editForm.finalScreeningResult)" class="text-xs text-yellow-600 mt-1">
                     结案流程
                   </div>
                 </el-form-item>

@@ -58,3 +58,15 @@ export function formatReferralDisplay(row: { actualReferralDate?: string | null,
   }
   return "—"
 }
+
+/** 推介追踪诊断结果展示；选择「其他」时附带备注 */
+export function formatReferralDiagnosisDisplay(row: {
+  diagnosisResult?: string | null
+  diagnosisRemark?: string | null
+}) {
+  if (!row.diagnosisResult) return ""
+  if (row.diagnosisResult === "其他" && row.diagnosisRemark) {
+    return `${row.diagnosisResult}：${row.diagnosisRemark}`
+  }
+  return row.diagnosisResult
+}

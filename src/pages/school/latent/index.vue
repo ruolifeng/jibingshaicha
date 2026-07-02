@@ -15,6 +15,7 @@ import {
   CHECK_RESULT_OPTIONS,
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
+  DIAGNOSIS_RESULT_OPTIONS,
   formatLatentNoticeTreatmentPlan,
   formatLatentSupervisionTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
@@ -25,6 +26,7 @@ import {
   normalizeLatentTreatmentPlan,
   NOTICE_STATUS_MAP,
   parseLatentNoticeTreatmentPlan,
+  REFERRAL_RESULT_OPTIONS,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS,
@@ -248,13 +250,7 @@ const referralResultValue = ref("")
 const referralRemark = ref("")
 const actualReferralDate = ref("")
 
-const REFERRAL_OPTIONS = [
-  { label: "排除", value: "excluded" },
-  { label: "其他", value: "other" },
-  { label: "疑似肺结核", value: "suspected" },
-  { label: "确诊患者", value: "confirmed" },
-  { label: "潜伏感染者", value: "latent" }
-]
+const REFERRAL_OPTIONS = REFERRAL_RESULT_OPTIONS
 
 function openReferralDialog(row: any) {
   referralRow.value = row
@@ -1907,11 +1903,12 @@ watch(
         </template>
         <el-form-item label="首次诊断结果">
           <el-select v-model="xrayForm.diagnosisFirst" style="width: 100%" placeholder="请选择诊断结果">
-            <el-option label="排除" value="排除" />
-            <el-option label="疑似肺结核" value="疑似肺结核" />
-            <el-option label="潜伏感染者" value="潜伏感染者" />
-            <el-option label="确诊患者" value="确诊患者" />
-            <el-option label="其他" value="其他" />
+            <el-option
+              v-for="item in DIAGNOSIS_RESULT_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
       </el-form>

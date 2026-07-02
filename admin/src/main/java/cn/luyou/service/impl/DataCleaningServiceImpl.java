@@ -276,8 +276,8 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             validateOption(result, excelRowIndex, name, row, 22, "感染筛查方法仅支持：PPD/EC/IGRA", "PPD", "EC", "IGRA");
             validateOption(result, excelRowIndex, name, row, 25, "是否进行胸片检查仅支持：是/否", "是", "否");
             validateOption(result, excelRowIndex, name, row, 27, "胸片结果仅支持：正常/异常/未查", "正常", "异常", "未查");
-            validateOption(result, excelRowIndex, name, row, 30, "诊断结果仅支持：排除/疑似肺结核/潜伏感染者/确诊患者/其他",
-                    "排除", "疑似肺结核", "潜伏感染者", "确诊患者", "其他");
+            validateOption(result, excelRowIndex, name, row, 30, "诊断结果仅支持：排除/疑似结核/潜伏感染者/确诊患者/其他",
+                    "排除", "疑似结核", "疑似肺结核", "潜伏感染者", "确诊患者", "其他");
         } else if (TYPE_KEY.equals(type)) {
             idCard = getCellString(row, 9);
             phone = getCellString(row, 11);

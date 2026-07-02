@@ -32,7 +32,7 @@ function handlePrint() {
       <h2 class="print-title">
         {{ title }}
       </h2>
-      <table class="notice-table">
+      <table class="notice-table" border="1" cellspacing="0" cellpadding="0">
         <tbody>
           <tr>
             <th>姓名</th>
@@ -130,7 +130,9 @@ function handlePrint() {
           </tr>
           <tr v-if="noticeData?.confirmedTime">
             <th>接收时间</th>
-            <td colspan="3">{{ formatNoticeSentTime(noticeData?.confirmedTime) }}</td>
+            <td colspan="3">
+              {{ formatNoticeSentTime(noticeData?.confirmedTime) }}
+            </td>
           </tr>
           <tr v-if="isPatient">
             <th>备注</th>

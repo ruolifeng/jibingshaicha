@@ -3,6 +3,7 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
+import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -20,17 +21,19 @@ const searchForm = reactive({
   entryUnit: "",
   year: "" as string,
   isLatent: undefined as number | undefined,
-  diagnosisFirst: "" as string
+  diagnosisFirst: "" as string,
+  entryTimeRange: [] as string[]
 })
 
 async function fetchData() {
   loading.value = true
   try {
-    const { entryUnit, year, ...rest } = searchForm
+    const { entryUnit, year, entryTimeRange, ...rest } = searchForm
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       ...rest,
+      ...extractCreateTimeRangeParams(entryTimeRange),
       ...(year ? { year } : {}),
       ...(entryUnit ? { entryUnit } : {})
     })
@@ -56,6 +59,7 @@ function handleReset() {
   searchForm.year = ""
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
+  searchForm.entryTimeRange = []
   handleSearch()
 }
 
@@ -291,6 +295,16 @@ watch(
             <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="录入时间">
+          <el-date-picker
+            v-model="searchForm.entryTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -420,7 +434,7 @@ watch(
 
     <!-- 编辑弹窗 -->
     <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="900px" :close-on-click-modal="false">
-      <el-form :model="editForm" label-width="120px" class="edit-form">
+      <el-form :model="editForm" label-width="150px" class="edit-form">
         <el-divider content-position="left">
           基本信息
         </el-divider>
@@ -544,7 +558,7 @@ watch(
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行感染筛">
+            <el-form-item label="是否进行感染筛查">
               <el-select v-model="editForm.hasInfectionScreen" style="width:100%" clearable>
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
@@ -800,6 +814,10 @@ watch(
 }
 .edit-form {
   padding: 0 8px;
+
+  :deep(.el-form-item__label) {
+    white-space: nowrap;
+  }
 }
 </style>
 

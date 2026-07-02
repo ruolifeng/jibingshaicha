@@ -32,6 +32,8 @@ export function canEditMedicationPickup(
 export interface MedicationPickupDrugItem {
   name: string
   dosage: string
+  quantity?: number | null
+  quantityUnit?: string
 }
 
 export function parseMedicationPickupDrugs(drugsJson?: string | unknown[] | null): MedicationPickupDrugItem[] {
@@ -42,7 +44,9 @@ export function parseMedicationPickupDrugs(drugsJson?: string | unknown[] | null
     return parsed
       .map((item: any) => ({
         name: String(item?.name ?? "").trim(),
-        dosage: String(item?.dosage ?? "").trim()
+        dosage: String(item?.dosage ?? "").trim(),
+        quantity: item?.quantity != null ? Number(item.quantity) : null,
+        quantityUnit: String(item?.quantityUnit ?? "").trim()
       }))
       .filter(item => item.name || item.dosage)
   } catch {
@@ -54,4 +58,21 @@ export function formatMedicationPickupDrugs(drugsJson?: string | null): string {
   return parseMedicationPickupDrugs(drugsJson)
     .map(item => `${item.name}${item.dosage ? `（${item.dosage}）` : ""}`)
     .join("；")
+}
+
+/** 格式化各药品领取数量；兼容旧数据仅有一条顶层 quantity */
+export function formatMedicationPickupQuantities(
+  drugsJson?: string | null,
+  legacyQuantity?: number | string | null,
+  legacyQuantityUnit?: string | null
+): string {
+  const drugs = parseMedicationPickupDrugs(drugsJson)
+  const parts = drugs
+    .filter(item => item.quantity != null && item.quantity > 0)
+    .map(item => `${item.name}${item.quantity}${item.quantityUnit || ""}`)
+  if (parts.length) return parts.join("；")
+  if (legacyQuantity != null && legacyQuantity !== "") {
+    return `${legacyQuantity}${legacyQuantityUnit || ""}`
+  }
+  return ""
 }

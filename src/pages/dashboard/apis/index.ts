@@ -34,9 +34,9 @@ export interface DashboardSummaryData {
   /** 统计周期起止（上年度 12/1—本年度 11/30） */
   statPeriodFrom?: string
   statPeriodTo?: string
-  /** 病原学阳性人数 */
+  /** 病原学阳性人数（在管总览+历史患者中「病原学结果阳性」口径） */
   pathogenPositiveCount?: number
-  /** 病原学阳性率（%，保留 1 位小数） */
+  /** 病原学阳性率（病原学结果阳性人数 / 年度管理患者数，%，保留 1 位小数） */
   pathogenPositiveRate?: number
   /** 推介人数（已发送） */
   recommendCount?: number
@@ -70,9 +70,14 @@ export function getDashboardSummaryApi(year?: number | string) {
   })
 }
 
+export interface DashboardBatchOption {
+  value: string
+  label: string
+}
+
 /** 获取所有上传批次（任务）列表 */
 export function getDashboardBatchesApi() {
-  return request<ApiResponseData<string[]>>({
+  return request<ApiResponseData<DashboardBatchOption[]>>({
     url: "dashboard/batches",
     method: "get"
   })

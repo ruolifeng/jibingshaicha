@@ -119,6 +119,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         m.put("其它", "other");
         m.put("正常", "excluded");
         m.put("确诊患者", "confirmed");
+        m.put(ScreeningDiagnosisSupport.SUSPECTED_TB_DIAGNOSIS, "suspected");
         m.put("疑似肺结核", "suspected");
         m.put("潜伏感染者", "latent");
         DIAGNOSIS_TO_REFERRAL = java.util.Collections.unmodifiableMap(m);
@@ -762,7 +763,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     /** 内部：写诊断字段 + 回写筛查表 + 触发转诊映射 */
     private void doSaveDiagnosis(LatentInfection entity, Map<String, Object> data) {
-        String diagnosisFirst = data.getOrDefault("diagnosisFirst", "").toString();
+        String diagnosisFirst = ScreeningDiagnosisSupport.normalizeDiagnosis(
+                data.getOrDefault("diagnosisFirst", "").toString());
         if (StrUtil.isBlank(diagnosisFirst)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
         }
@@ -932,7 +934,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         // 胸片诊断为确诊患者/疑似肺结核时，不允许转诊为潜伏感染者
         if ("latent".equals(result) &&
-                ("确诊患者".equals(entity.getDiagnosisFirst()) || "疑似肺结核".equals(entity.getDiagnosisFirst()))) {
+                ("确诊患者".equals(entity.getDiagnosisFirst())
+                        || ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(entity.getDiagnosisFirst()))) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片诊断结果为「" + entity.getDiagnosisFirst() + "」，不可转诊为潜伏感染者，请选择正确的转诊结果");
         }
 

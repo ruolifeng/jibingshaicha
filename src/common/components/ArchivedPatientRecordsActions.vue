@@ -6,17 +6,21 @@ import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
-import { resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
+import { canEditFollowUpVisit, resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import {
+  deleteFollowUpVisitApi,
   getFirstVisitDetailApi,
   getFollowUpVisitListApi,
   getMedicationDetailApi
 } from "@/pages/patient-management/apis"
+import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
   row: Record<string, any>
 }>()
+
+const userStore = useUserStore()
 
 const detailVisible = ref(false)
 const firstVisitDetailVisible = ref(false)
@@ -67,6 +71,29 @@ function viewFollowUpDetail(record: Record<string, any>) {
 function printFollowUp(record: Record<string, any>) {
   followUpPrintData.value = record
   followUpPrintVisible.value = true
+}
+
+async function refreshFollowUpList() {
+  const [followUpRes, firstVisitRes] = await Promise.all([
+    getFollowUpVisitListApi(props.row.id),
+    getFirstVisitDetailApi(props.row.id).catch(() => ({ data: null }))
+  ])
+  followUpListData.value = followUpRes.data || []
+  followUpFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
+}
+
+async function handleDeleteFollowUp(record: Record<string, any>) {
+  if (!record.id) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除第 ${record.visitSeq} 次后续随访记录？删除后不可恢复。`,
+      "删除确认",
+      { type: "warning" }
+    )
+    await deleteFollowUpVisitApi(record.id)
+    ElMessage.success("随访记录已删除")
+    await refreshFollowUpList()
+  } catch { /* cancel or handled */ }
 }
 
 async function viewMedication() {
@@ -136,10 +163,20 @@ function viewNotice() {
           </template>
         </el-table-column>
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" width="220">
           <template #default="{ row: record }">
             <el-button type="primary" link size="small" @click="viewFollowUpDetail(record)">
               查看详情
+            </el-button>
+            <el-button
+              v-if="canEditFollowUpVisit(userStore.userRole, record)"
+              v-permission="'patientManagement:followUp:edit'"
+              type="danger"
+              link
+              size="small"
+              @click="handleDeleteFollowUp(record)"
+            >
+              删除
             </el-button>
             <el-button type="info" link size="small" @click="printFollowUp(record)">
               打印
@@ -154,6 +191,8 @@ function viewNotice() {
       v-model:visible="followUpDetailVisible"
       :visit-data="followUpDetailData"
       :patient-name="row.name"
+      :follow-up-list="followUpListData"
+      :first-visit-next-date="followUpFirstVisitNextDate"
     />
 
     <PrintFollowUp
@@ -161,6 +200,8 @@ function viewNotice() {
       :visible="followUpPrintVisible"
       :visit-data="followUpPrintData"
       :patient-name="row.name"
+      :follow-up-list="followUpListData"
+      :first-visit-next-date="followUpFirstVisitNextDate"
       @update:visible="followUpPrintVisible = $event"
     />
 

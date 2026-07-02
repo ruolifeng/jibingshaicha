@@ -377,7 +377,7 @@ onMounted(() => {
             <el-table-column prop="ecPositive" label="EC阳性人数" />
             <el-table-column prop="igraPositive" label="IGRA阳性人数" />
             <el-table-column prop="igraNegative" label="IGRA阴性人数" />
-            <el-table-column prop="tbPatientCount" label="肺结核/疑似肺结核患者人数" />
+            <el-table-column prop="tbPatientCount" label="肺结核/疑似结核患者人数" />
             <el-table-column prop="remark" label="备注" />
           </el-table>
         </el-tab-pane>
@@ -405,7 +405,7 @@ onMounted(() => {
             <el-table-column prop="ecPositive" label="EC阳性人数" />
             <el-table-column prop="igraPositive" label="IGRA阳性人数" />
             <el-table-column prop="igraNegative" label="IGRA阴性人数" />
-            <el-table-column prop="tbPatientCount" label="肺结核/疑似肺结核患者人数" />
+            <el-table-column prop="tbPatientCount" label="肺结核/疑似结核患者人数" />
             <el-table-column prop="remark" label="备注" />
           </el-table>
         </el-tab-pane>

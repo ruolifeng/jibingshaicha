@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
+import type { DashboardBatchOption, DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import {
   Bell,
@@ -34,7 +34,7 @@ const summary = ref<DashboardSummaryData>({
   pendingNotice: 0,
   upcomingReview: 0
 })
-const batches = ref<string[]>([])
+const batches = ref<DashboardBatchOption[]>([])
 const selectedBatch = ref<string>("")
 const taskStats = ref<TaskStatsData>({
   school: { screeningTotal: 0, latentCount: 0, latentRatio: 0, patientCount: 0, patientRatio: 0 },
@@ -102,6 +102,11 @@ watch(selectedStatYear, () => {
 })
 
 const managementYear = computed(() => summary.value.managementYear ?? getCurrentStatYear())
+
+const selectedBatchLabel = computed(() => {
+  if (!selectedBatch.value) return ""
+  return batches.value.find(b => b.value === selectedBatch.value)?.label || selectedBatch.value
+})
 
 // ===== 统计卡片配置 =====
 const statCards = [
@@ -206,7 +211,7 @@ const noticeMaxSent = computed(() =>
           class="batch-select"
           :prefix-icon="List"
         >
-          <el-option v-for="b in batches" :key="b" :label="b" :value="b" />
+          <el-option v-for="b in batches" :key="b.value" :label="b.label" :value="b.value" />
         </el-select>
         <el-button :icon="Refresh" circle :loading="taskLoading" @click="fetchAll" />
       </div>
@@ -294,7 +299,7 @@ const noticeMaxSent = computed(() =>
     <!-- ===== 三类人群数据 ===== -->
     <div class="section-label" style="margin-top: 32px">
       <span class="label-bar" />人群筛查数据统计
-      <span v-if="selectedBatch" class="batch-tag">{{ selectedBatch }}</span>
+      <span v-if="selectedBatch" class="batch-tag">{{ selectedBatchLabel }}</span>
     </div>
     <el-row :gutter="20" v-loading="taskLoading" class="pop-row">
       <el-col v-for="pc in popCards" :key="pc.key" :xs="24" :sm="8">
@@ -643,7 +648,7 @@ const noticeMaxSent = computed(() =>
   }
 
   .batch-select {
-    width: 200px;
+    width: 280px;
   }
 }
 

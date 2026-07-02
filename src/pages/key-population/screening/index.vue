@@ -3,7 +3,7 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -22,6 +22,7 @@ const searchForm = reactive({
   crowdCategory: [] as string[],
   screenMethod: "",
   dateRange: [] as string[],
+  entryTimeRange: [] as string[],
   isLatent: undefined as number | undefined,
   diagnosisFirst: "" as string
 })
@@ -29,12 +30,13 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, entryUnit, crowdCategory, ...rest } = searchForm
+    const { dateRange, entryTimeRange, entryUnit, crowdCategory, ...rest } = searchForm
     const { data } = await getScreeningKeyPopulationListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       ...rest,
       ...extractDateRangeParams(dateRange),
+      ...extractCreateTimeRangeParams(entryTimeRange),
       ...(entryUnit ? { entryUnit } : {}),
       ...(crowdCategory.length > 0 ? { crowdCategory: crowdCategory.join(",") } : {})
     })
@@ -60,6 +62,7 @@ function handleReset() {
   searchForm.crowdCategory = []
   searchForm.screenMethod = ""
   searchForm.dateRange = []
+  searchForm.entryTimeRange = []
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
   handleSearch()
@@ -355,6 +358,16 @@ watch(
             <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="录入时间">
+          <el-date-picker
+            v-model="searchForm.entryTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -416,47 +429,59 @@ watch(
         <el-table-column prop="householdAddress" label="户籍地址" show-overflow-tooltip />
         <el-table-column prop="townshipCommunity" label="乡镇/社区" />
         <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
-        <!-- V4 人群分类：各列独立 -->
-        <el-table-column label="人群分类">
-          <template #default="{ row }">
-            <span v-if="row.crowdCategoryClose === '是'" class="mr-1"><el-tag size="small">密接</el-tag></span>
-            <span v-if="row.crowdCategoryStudent === '是'" class="mr-1"><el-tag size="small">学生</el-tag></span>
-            <span v-if="row.crowdCategoryTeacher === '是'" class="mr-1"><el-tag size="small">教职工</el-tag></span>
-            <span v-if="row.crowdCategoryElder === '是'" class="mr-1"><el-tag size="small">老年人</el-tag></span>
-            <span v-if="row.crowdCategoryDiabetes === '是'" class="mr-1"><el-tag size="small">糖尿病</el-tag></span>
-            <span v-if="row.crowdCategoryDual === '是'" class="mr-1"><el-tag size="small">双感</el-tag></span>
-            <span v-if="row.crowdCategoryTbHist === '是'" class="mr-1"><el-tag size="small">既往结核</el-tag></span>
-            <span v-if="row.crowdCategoryNormal === '是'" class="mr-1"><el-tag size="small">非重点</el-tag></span>
-          </template>
+        <!-- 人群分类：与模板「人群分类（可多选）」分组一致 -->
+        <el-table-column label="人群分类（可多选）">
+          <el-table-column prop="crowdCategoryClose" label="密接" width="60" />
+          <el-table-column prop="crowdCategoryStudent" label="学生" width="60" />
+          <el-table-column prop="crowdCategoryTeacher" label="教职工" width="70" />
+          <el-table-column prop="crowdCategoryElder" label="老年人" width="70" />
+          <el-table-column prop="crowdCategoryDiabetes" label="糖尿病" width="70" />
+          <el-table-column prop="crowdCategoryDual" label="双感" width="60" />
+          <el-table-column prop="crowdCategoryTbHist" label="既往结核史" min-width="90" />
+          <el-table-column prop="crowdCategoryNormal" label="非重点人群" min-width="90" />
         </el-table-column>
-        <el-table-column prop="hasSuspiciousSymptoms" label="可疑症状" />
-        <el-table-column prop="cough" label="咳嗽咳痰" />
-        <el-table-column prop="hemoptysis" label="咯血或血痰" />
-        <el-table-column prop="fever" label="发热" />
-        <el-table-column prop="chestPain" label="胸痛" />
-        <el-table-column prop="nightSweats" label="夜间盗汗" />
-        <el-table-column prop="appetiteLoss" label="食欲不振" />
-        <el-table-column prop="fatigue" label="乏力" />
-        <el-table-column prop="weightLoss" label="体重减轻" />
-        <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
-        <el-table-column prop="screenDate" label="感染筛查日期" />
-        <el-table-column prop="screenMethod" label="筛查方法" />
-        <el-table-column label="筛查结果">
-          <template #default="{ row }">
-            {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
-          </template>
+        <el-table-column label="症状筛查">
+          <el-table-column label="可疑症状">
+            <el-table-column prop="hasSuspiciousSymptoms" label="是否有可疑症状" min-width="110" />
+            <el-table-column prop="cough" label="咳嗽咳痰" min-width="80" />
+            <el-table-column prop="hemoptysis" label="咯血或血痰" min-width="90" />
+            <el-table-column prop="fever" label="发热" width="60" />
+            <el-table-column prop="chestPain" label="胸痛" width="60" />
+            <el-table-column prop="nightSweats" label="夜间盗汗" min-width="80" />
+            <el-table-column prop="appetiteLoss" label="食欲不振" min-width="80" />
+            <el-table-column prop="fatigue" label="乏力" width="60" />
+            <el-table-column prop="weightLoss" label="体重减轻" min-width="80" />
+          </el-table-column>
         </el-table-column>
-        <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
-        <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" min-width="90" />
-        <el-table-column prop="diagnosisFirst" label="首次诊断结果" />
-        <!-- 预防性治疗情况（督导表归档后同步） -->
-        <el-table-column prop="preventivePlan" label="预防性治疗方案" />
-        <el-table-column prop="preventiveStartDate" label="治疗开始时间" />
-        <el-table-column prop="preventiveEndDate" label="治疗完成时间" />
-        <el-table-column prop="preventiveResult" label="治疗结果" />
-        <el-table-column prop="preventiveManager" label="随访管理人员" show-overflow-tooltip />
+        <el-table-column label="重点人群感染筛查情况">
+          <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
+          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" />
+          <el-table-column prop="screenMethod" label="感染筛查方法" min-width="100" />
+          <el-table-column label="结果（PPD：mmXmm；EC及IGRA：阳性/阴性）" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="infectionResult" label="感染筛查结果" min-width="110" />
+        </el-table-column>
+        <el-table-column label="重点人群胸片检查">
+          <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
+          <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
+          <el-table-column prop="chestXrayResult" label="胸片结果" min-width="90" />
+        </el-table-column>
+        <el-table-column label="诊断结果">
+          <el-table-column prop="diagnosisFirst" label="首次" min-width="90" />
+          <el-table-column prop="diagnosisHalfYear" label="半年后" min-width="90" />
+          <el-table-column prop="diagnosisOneYear" label="一年后" min-width="90" />
+        </el-table-column>
+        <el-table-column label="潜伏感染者管理情况">
+          <el-table-column prop="hasPreventiveTreatment" label="是否进行预防性治疗" min-width="130" />
+          <el-table-column prop="preventivePlan" label="预防性治疗方案" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="preventiveStartDate" label="预防性治疗开始时间（年月日）" min-width="150" />
+          <el-table-column prop="preventiveEndDate" label="预防性治疗完成时间（年月日）" min-width="150" />
+          <el-table-column prop="preventiveResult" label="预防性治疗结果" min-width="110" />
+          <el-table-column prop="preventiveManager" label="预防性治疗期间随访管理人员" min-width="150" show-overflow-tooltip />
+        </el-table-column>
         <el-table-column label="待确诊" fixed="right" min-width="90">
           <template #default="{ row }">
             <el-tag :type="getScreeningLatentStatusTagType(row)" size="small">
@@ -499,7 +524,7 @@ watch(
 
     <!-- 编辑弹窗 -->
     <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false" @closed="editFormRef?.resetFields()">
-      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="120px" class="edit-form">
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="150px" class="edit-form">
         <el-divider content-position="left">
           基本信息
         </el-divider>
@@ -640,7 +665,7 @@ watch(
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行感染筛" prop="hasInfectionScreen">
+            <el-form-item label="是否进行感染筛查" prop="hasInfectionScreen">
               <el-select v-model="editForm.hasInfectionScreen" style="width:100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
@@ -896,6 +921,10 @@ watch(
 }
 .edit-form {
   padding: 0 8px;
+
+  :deep(.el-form-item__label) {
+    white-space: nowrap;
+  }
 }
 </style>
 

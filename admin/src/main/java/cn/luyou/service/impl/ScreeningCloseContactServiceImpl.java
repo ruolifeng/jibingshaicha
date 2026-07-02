@@ -1,6 +1,5 @@
 package cn.luyou.service.impl;
 
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
@@ -25,6 +24,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -57,7 +57,7 @@ import java.util.stream.Collectors;
  *
  * 分类规则（AD列 = final_screening_result）：
  *  - 活动性肺结核  → ccStatus=1，标红结案（不进入患者管理）
- *  - 疑似肺结核    → ccStatus=9，标黄结案
+ *  - 疑似结核    → ccStatus=9，标黄结案
  *  - 潜伏感染者    → ccStatus=2，进入密接潜伏感染专属流程
  *  - 未做          → ccStatus=4，进入6/12/24月随访监测
  *  - 未发现异常    → ccStatus=6，进入3月复查流程
@@ -83,8 +83,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     /** 活动性肺结核的最终筛查结果标识（模板中的文字） */
     private static final String RESULT_ACTIVE_TB = "活动性肺结核";
-    /** 疑似肺结核 */
-    private static final String RESULT_SUSPECTED_TB = "疑似肺结核";
+    /** 疑似结核 */
+    private static final String RESULT_SUSPECTED_TB = ScreeningDiagnosisSupport.SUSPECTED_TB_DIAGNOSIS;
     /** 潜伏感染者 */
     private static final String RESULT_LATENT = "潜伏感染者";
     /** 未做 */
@@ -97,7 +97,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ImportResult uploadAndParse(MultipartFile file) {
-        String batchId = IdUtil.fastSimpleUUID();
+        String batchId = UploadBatchSupport.newBatchId("密接筛查");
         List<ScreeningCloseContact> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
         byte[] fileBytes;
@@ -208,7 +208,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
         // 初次筛查（若已有则保留，以防覆盖旧数据）
         if (StrUtil.isNotBlank(incoming.getFinalScreeningResult())) {
-            existing.setFinalScreeningResult(incoming.getFinalScreeningResult());
+            existing.setFinalScreeningResult(
+                    ScreeningDiagnosisSupport.normalizeDiagnosis(incoming.getFinalScreeningResult()));
             existing.setInfectionCheckResult(incoming.getInfectionCheckResult());
             existing.setImagingResult(incoming.getImagingResult());
             existing.setSputumCheckResult(incoming.getSputumCheckResult());
@@ -262,7 +263,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             data.setCcStatus(1);
             return;
         }
-        if (RESULT_SUSPECTED_TB.equals(result)) {
+        if (ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(result)) {
             data.setCcStatus(9);
             return;
         }
@@ -416,6 +417,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     public void createScreening(ScreeningCloseContact data) {
         validateContactBasicInfo(data);
         validateFirstScreenInfo(data);
+        if (StrUtil.isNotBlank(data.getFinalScreeningResult())) {
+            data.setFinalScreeningResult(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getFinalScreeningResult()));
+        }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
@@ -433,6 +437,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         }
         validateContactBasicInfo(data);
         validateFirstScreenInfo(data);
+        if (StrUtil.isNotBlank(data.getFinalScreeningResult())) {
+            data.setFinalScreeningResult(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getFinalScreeningResult()));
+        }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         } else if (existing.getRegistrationDate() != null) {

@@ -111,19 +111,35 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
         if (pickup.getPickupTime() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择领取时间");
         }
-        if (pickup.getQuantity() == null) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写领取数量");
-        }
-        if (pickup.getQuantity().signum() <= 0) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "领取数量必须大于 0");
-        }
-        if (StrUtil.isBlank(pickup.getQuantityUnit())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择领取数量单位");
-        }
         if (StrUtil.isBlank(pickup.getDispensingUnit())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写发药单位");
         }
         validateDrugsJson(pickup.getDrugs());
+        syncLegacyQuantityFields(pickup);
+    }
+
+    /** 兼容旧字段：将第一种药品的领取数量同步到顶层 quantity 字段 */
+    private void syncLegacyQuantityFields(MedicationPickup pickup) {
+        if (StrUtil.isBlank(pickup.getDrugs())) {
+            return;
+        }
+        try {
+            JSONArray array = JSONUtil.parseArray(pickup.getDrugs());
+            if (array.isEmpty()) {
+                return;
+            }
+            JSONObject first = array.getJSONObject(0);
+            if (first == null) {
+                return;
+            }
+            Object quantity = first.get("quantity");
+            if (quantity != null) {
+                pickup.setQuantity(new java.math.BigDecimal(quantity.toString()));
+            }
+            pickup.setQuantityUnit(first.getStr("quantityUnit"));
+        } catch (Exception ignored) {
+            // 已在 validateDrugsJson 中校验格式
+        }
     }
 
     private void validateDrugsJson(String drugsJson) {
@@ -149,6 +165,22 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
             }
             if (StrUtil.isBlank(item.getStr("dosage"))) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写药品用量");
+            }
+            Object quantity = item.get("quantity");
+            if (quantity == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写第 " + (i + 1) + " 种药品的领取数量");
+            }
+            java.math.BigDecimal quantityValue;
+            try {
+                quantityValue = new java.math.BigDecimal(quantity.toString());
+            } catch (Exception e) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "第 " + (i + 1) + " 种药品的领取数量格式有误");
+            }
+            if (quantityValue.signum() <= 0) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "第 " + (i + 1) + " 种药品的领取数量必须大于 0");
+            }
+            if (StrUtil.isBlank(item.getStr("quantityUnit"))) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择第 " + (i + 1) + " 种药品的领取数量单位");
             }
         }
     }

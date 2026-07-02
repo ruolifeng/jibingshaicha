@@ -8,7 +8,7 @@ import { canEditFollowUpVisit, resolveFollowUpListNextVisitDate } from "@@/utils
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
-import { exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
+import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
@@ -110,6 +110,21 @@ function openPrint(row: Record<string, any>) {
   printData.value = row
   printPatientName.value = historyPatientName.value
   printVisible.value = true
+}
+
+async function handleDelete(record: Record<string, any>) {
+  if (!historyPatient.value || !record.id) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除第 ${record.visitSeq} 次后续随访记录？删除后不可恢复。`,
+      "删除确认",
+      { type: "warning" }
+    )
+    await deleteFollowUpVisitApi(record.id)
+    ElMessage.success("随访记录已删除")
+    await refreshHistoryList()
+    fetchData()
+  } catch { /* cancel or handled */ }
 }
 </script>
 
@@ -284,7 +299,7 @@ function openPrint(row: Record<string, any>) {
           </template>
         </el-table-column>
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
-        <el-table-column label="操作" fixed="right" width="200">
+        <el-table-column label="操作" fixed="right" width="250">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">
               查看详情
@@ -299,6 +314,16 @@ function openPrint(row: Record<string, any>) {
             >
               修改
             </el-button>
+            <el-button
+              v-if="canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
+              v-permission="'patientManagement:followUp:edit'"
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
             <el-button type="info" link size="small" @click="openPrint(row)">
               打印
             </el-button>
@@ -312,6 +337,8 @@ function openPrint(row: Record<string, any>) {
       v-model:visible="detailVisible"
       :visit-data="detailData"
       :patient-name="historyPatientName"
+      :follow-up-list="historyList"
+      :first-visit-next-date="historyFirstVisitNextDate"
     />
 
     <PrintFollowUp
@@ -319,6 +346,8 @@ function openPrint(row: Record<string, any>) {
       :visible="printVisible"
       :visit-data="printData"
       :patient-name="printPatientName"
+      :follow-up-list="historyList"
+      :first-visit-next-date="historyFirstVisitNextDate"
       @update:visible="printVisible = $event"
     />
   </div>

@@ -12,6 +12,9 @@ import java.util.Set;
  */
 public final class ScreeningDiagnosisSupport {
 
+    public static final String SUSPECTED_TB_DIAGNOSIS = "疑似结核";
+    private static final String LEGACY_SUSPECTED_TB_DIAGNOSIS = "疑似肺结核";
+
     private static final Set<String> POSITIVE_KEYWORDS = Set.of(
             "PPD+", "PPD++", "PPD+++", "EC阳性", "IGRA阳性"
     );
@@ -23,7 +26,7 @@ public final class ScreeningDiagnosisSupport {
 
     /** 需进入后续流程的诊断 */
     private static final Set<String> ACTIONABLE_DIAGNOSIS = Set.of(
-            "疑似肺结核", "潜伏感染者", "确诊患者"
+            SUSPECTED_TB_DIAGNOSIS, LEGACY_SUSPECTED_TB_DIAGNOSIS, "潜伏感染者", "确诊患者"
     );
 
     private ScreeningDiagnosisSupport() {
@@ -101,12 +104,24 @@ public final class ScreeningDiagnosisSupport {
         return isActionableDiagnosis(diagnosisFirst);
     }
 
-    /** 统一「其它」与「其他」 */
+    public static boolean isSuspectedTbDiagnosis(String diagnosis) {
+        if (StrUtil.isBlank(diagnosis)) {
+            return false;
+        }
+        String trimmed = diagnosis.trim();
+        return SUSPECTED_TB_DIAGNOSIS.equals(trimmed) || LEGACY_SUSPECTED_TB_DIAGNOSIS.equals(trimmed);
+    }
+
+    /** 统一「其它」与「其他」，并将历史「疑似肺结核」规范为「疑似结核」 */
     public static String normalizeDiagnosis(String diagnosis) {
         if (StrUtil.isBlank(diagnosis)) {
             return diagnosis;
         }
-        return "其它".equals(diagnosis.trim()) ? "其他" : diagnosis.trim();
+        String trimmed = diagnosis.trim();
+        if (isSuspectedTbDiagnosis(trimmed)) {
+            return SUSPECTED_TB_DIAGNOSIS;
+        }
+        return "其它".equals(trimmed) ? "其他" : trimmed;
     }
 
     /**
@@ -125,6 +140,10 @@ public final class ScreeningDiagnosisSupport {
                     .in(diagnosisColumn, NORMAL_TERMINAL_DIAGNOSIS));
             return;
         }
+        if (isSuspectedTbDiagnosis(diagnosisFirst)) {
+            wrapper.in(diagnosisColumn, SUSPECTED_TB_DIAGNOSIS, LEGACY_SUSPECTED_TB_DIAGNOSIS);
+            return;
+        }
         wrapper.eq(diagnosisColumn, diagnosisFirst);
     }
 
@@ -141,6 +160,10 @@ public final class ScreeningDiagnosisSupport {
             wrapper.in(diagnosisColumn, NORMAL_TERMINAL_DIAGNOSIS);
             return;
         }
+        if (isSuspectedTbDiagnosis(diagnosisFirst)) {
+            wrapper.in(diagnosisColumn, SUSPECTED_TB_DIAGNOSIS, LEGACY_SUSPECTED_TB_DIAGNOSIS);
+            return;
+        }
         wrapper.eq(diagnosisColumn, diagnosisFirst);
     }
 
@@ -153,7 +176,7 @@ public final class ScreeningDiagnosisSupport {
         }
         return switch (diagnosisResult) {
             case "排除", "正常" -> List.of("未发现异常");
-            case "疑似肺结核" -> List.of("疑似肺结核");
+            case "疑似结核", "疑似肺结核" -> List.of(SUSPECTED_TB_DIAGNOSIS, LEGACY_SUSPECTED_TB_DIAGNOSIS);
             case "确诊患者" -> List.of("活动性肺结核");
             case "潜伏感染者" -> List.of("潜伏感染者");
             default -> List.of(diagnosisResult);

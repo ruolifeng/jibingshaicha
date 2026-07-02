@@ -172,7 +172,7 @@ export function saveCheckApi(data: Record<string, any>) {
 
 /**
  * 手动录入胸片检查与首次诊断结果（追踪到位后）
- * diagnosisFirst 取值：排除/疑似肺结核/潜伏感染者/确诊患者/其他
+ * diagnosisFirst 取值：排除/疑似结核/潜伏感染者/确诊患者/其他
  */
 export function submitXrayApi(data: {
   id: number

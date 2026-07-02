@@ -101,7 +101,7 @@ function handlePrint() {
         肺结核患者治疗记录卡
       </h2>
 
-      <table class="info-table">
+      <table class="info-table" border="1" cellspacing="0" cellpadding="0">
         <tbody>
           <tr>
             <th>姓名</th>
@@ -148,7 +148,7 @@ function handlePrint() {
         </tbody>
       </table>
 
-      <table class="med-table">
+      <table class="med-table" border="1" cellspacing="0" cellpadding="0">
         <thead>
           <tr>
             <th class="th-month">

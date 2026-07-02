@@ -78,3 +78,21 @@ export function resolveFollowUpListNextVisitDate(
   if (fromPrevious) return fromPrevious
   return list[index]?.nextVisitDate?.trim() || ""
 }
+
+/** 单条后续随访记录的「下次随访」展示值（与列表列逻辑一致） */
+export function resolveFollowUpRecordNextVisitDate(
+  visit: { visitSeq?: number | null, nextVisitDate?: string | null },
+  list: Array<{ nextVisitDate?: string | null }>,
+  firstVisitNextDate?: string | null
+): string {
+  const index = visit.visitSeq != null ? Math.max(visit.visitSeq - 1, 0) : 0
+  return resolveFollowUpListNextVisitDate(list, index, firstVisitNextDate)
+}
+
+/** 新建后续随访时，「下次随访时间」默认值（关联首次随访或上一次后续随访） */
+export function resolveFollowUpFormDefaultNextVisitDate(
+  completedList: Array<{ nextVisitDate?: string | null }>,
+  firstVisitNextDate?: string | null
+): string {
+  return resolveFollowUpListNextVisitDate(completedList, completedList.length, firstVisitNextDate)
+}

@@ -41,7 +41,9 @@ import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.PatientAddressRegionParser;
 import cn.luyou.utils.StatYearPeriod;
+import cn.luyou.utils.ZigongTownshipCatalog;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -90,6 +92,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private static final String EPIDEMIC_JSON_REGISTRATION_DATE = "$.\"登记日期\"";
     private static final String EPIDEMIC_JSON_PATHOGEN_RESULT = "$.\"病原学结果\"";
     private static final String EPIDEMIC_JSON_DIAGNOSIS_RESULT = "$.\"诊断结果\"";
+    private static final String[] PATHOGEN_RESULT_POSITIVE_VALUES = {
+            "阳性", "病原学阳性", "病原学结果阳性"
+    };
     private static final String EPIDEMIC_JSON_MEDICATION_UNIT = "$.\"服药管理单位\"";
     /** 后续随访中停止治疗原因为「完成疗程」的患者（去重） */
     private static final String TREATMENT_SUCCESS_FOLLOW_UP_SQL =
@@ -359,7 +364,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     public long countPathogenPositivePatientsForDashboard(Integer statYear) {
         LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear);
-        applyPathogenPositiveFilter(wrapper);
+        applyPathogenResultPositiveFilter(wrapper);
         return count(wrapper);
     }
 
@@ -406,45 +411,115 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         return buildDistrictLevelHeatmap(year, period, resolvedDistrict, matrix, total);
     }
 
+    private static final String HEATMAP_UNASSIGNED_DISTRICT = "未分配";
+    private static final String HEATMAP_UNPARSED_TOWNSHIP = "未识别乡镇";
+
     private Map<String, Map<String, Long>> buildHeatmapDistrictMatrix(int year) {
         LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(year);
-        wrapper.select(Patient::getDepartmentId);
+        wrapper.select(Patient::getCurrentAddress, Patient::getEpidemicData);
         List<Patient> patients = list(wrapper);
 
-        Map<Long, Long> countByDeptId = patients.stream()
-                .collect(Collectors.groupingBy(
-                        p -> p.getDepartmentId() == null ? -1L : p.getDepartmentId(),
-                        Collectors.counting()));
-
-        Map<Long, Department> deptMap = departmentService.list().stream()
-                .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
-        Set<Long> scopeDeptIds = resolveHeatmapScopeDeptIds();
-
         Map<String, Map<String, Long>> matrix = new LinkedHashMap<>();
-        seedHeatmapMatrixFromScope(matrix, deptMap, scopeDeptIds);
-        for (Map.Entry<Long, Long> entry : countByDeptId.entrySet()) {
-            long deptId = entry.getKey();
-            long cnt = entry.getValue();
-            String district;
-            String community;
-            if (deptId < 0) {
-                district = "未分配";
-                community = "—";
-            } else {
-                Department dept = deptMap.get(deptId);
-                if (dept == null) {
-                    district = "未分配";
-                    community = "—";
-                } else {
-                    Department districtDept = resolveDistrictDept(dept, deptMap);
-                    district = districtDept != null ? districtDept.getName() : "未分配";
-                    community = resolveCommunityLabel(dept);
-                }
-            }
+        seedHeatmapMatrixFromTownshipCatalog(matrix);
+
+        for (Patient patient : patients) {
+            String address = resolvePatientHeatmapAddress(patient);
+            PatientAddressRegionParser.ParsedRegion region = PatientAddressRegionParser.parse(address);
+            String district = canonicalHeatmapDistrict(region.county());
+            String township = canonicalHeatmapTownship(district, region.township());
+
             matrix.computeIfAbsent(district, k -> new LinkedHashMap<>())
-                    .merge(community, cnt, Long::sum);
+                    .merge(township, 1L, Long::sum);
         }
         return matrix;
+    }
+
+    /** 热力图现住址：优先主表现住址，其次 epidemic_data 中的现住址字段 */
+    private String resolvePatientHeatmapAddress(Patient patient) {
+        if (patient == null) {
+            return "";
+        }
+        if (StrUtil.isNotBlank(patient.getCurrentAddress())) {
+            return normalizeSpecialDiseaseCurrentAddress(patient.getCurrentAddress().trim());
+        }
+        if (StrUtil.isBlank(patient.getEpidemicData())) {
+            return "";
+        }
+        try {
+            JSONObject json = JSONUtil.parseObj(patient.getEpidemicData());
+            for (String key : List.of("现住址", "现地址", "现地址详细", "现详细住址", "现住详细地址", "现住地址")) {
+                String value = json.getStr(key);
+                if (StrUtil.isNotBlank(value)) {
+                    return normalizeSpecialDiseaseCurrentAddress(value.trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // 忽略非法 JSON
+        }
+        return "";
+    }
+
+    private String canonicalHeatmapDistrict(String parsedCounty) {
+        if (StrUtil.isBlank(parsedCounty)) {
+            return HEATMAP_UNASSIGNED_DISTRICT;
+        }
+        for (String canonical : ZIGONG_DISTRICT_NAMES) {
+            if (districtNamesMatch(canonical, parsedCounty)) {
+                return canonical;
+            }
+        }
+        return HEATMAP_UNASSIGNED_DISTRICT;
+    }
+
+    private String canonicalHeatmapTownship(String district, String parsedTownship) {
+        if (HEATMAP_UNASSIGNED_DISTRICT.equals(district)) {
+            return "—";
+        }
+        if (StrUtil.isBlank(parsedTownship)) {
+            return HEATMAP_UNPARSED_TOWNSHIP;
+        }
+        for (String township : ZigongTownshipCatalog.getTownships(district)) {
+            if (townshipNamesMatch(township, parsedTownship)) {
+                return township;
+            }
+        }
+        return parsedTownship.trim();
+    }
+
+    private boolean townshipNamesMatch(String a, String b) {
+        if (StrUtil.isBlank(a) || StrUtil.isBlank(b)) {
+            return false;
+        }
+        String na = normalizeTownshipLabel(a);
+        String nb = normalizeTownshipLabel(b);
+        if (na.equals(nb)) {
+            return true;
+        }
+        return na.contains(nb) || nb.contains(na);
+    }
+
+    private String normalizeTownshipLabel(String name) {
+        return name.trim()
+                .replace("街道办事处", "街道")
+                .replace("民族乡", "乡");
+    }
+
+    /** 预置自贡各区县乡镇格子（无患者时地图仍展示完整边界） */
+    private void seedHeatmapMatrixFromTownshipCatalog(Map<String, Map<String, Long>> matrix) {
+        for (String district : ZIGONG_DISTRICT_NAMES) {
+            Map<String, Long> communities = matrix.computeIfAbsent(district, k -> new LinkedHashMap<>());
+            for (String township : ZigongTownshipCatalog.getTownships(district)) {
+                communities.putIfAbsent(township, 0L);
+            }
+        }
+    }
+
+    /** 下钻区县时补全乡镇格子 */
+    private void enrichDistrictCommunitiesFromCatalog(String districtName, Map<String, Long> communities) {
+        String canonical = toCanonicalDistrictName(districtName);
+        for (String township : ZigongTownshipCatalog.getTownships(canonical)) {
+            communities.putIfAbsent(township, 0L);
+        }
     }
 
     private PatientDistributionHeatmapVO buildCityLevelHeatmap(int year,
@@ -491,7 +566,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                      long total) {
         Map<String, Long> communities = new LinkedHashMap<>(matrix.getOrDefault(districtName, Map.of()));
         if (communities.isEmpty()) {
-            enrichDistrictCommunitiesFromScope(districtName, communities);
+            enrichDistrictCommunitiesFromCatalog(districtName, communities);
         }
         List<String> labels = sortCommunityLabels(communities.keySet());
         List<PatientDistributionHeatmapVO.MapRegion> regions = new ArrayList<>();
@@ -596,67 +671,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .replaceAll("\\s+", "");
     }
 
-    /** 辖区可见部门 ID（超级管理员为全部部门） */
-    private Set<Long> resolveHeatmapScopeDeptIds() {
-        if (BaseContext.isSuperAdmin()) {
-            return departmentService.list().stream()
-                    .map(Department::getId)
-                    .collect(Collectors.toSet());
-        }
-        Long deptId = BaseContext.getCurrentDepartmentId();
-        if (deptId == null) {
-            return Set.of();
-        }
-        return new HashSet<>(departmentService.getDescendantIds(deptId));
-    }
-
-    /** 按辖区部门树预置区县×社区格子（患者数为 0 的社区不渲染，但保证排序稳定） */
-    private void seedHeatmapMatrixFromScope(Map<String, Map<String, Long>> matrix,
-                                            Map<Long, Department> deptMap,
-                                            Set<Long> scopeDeptIds) {
-        List<Department> scoped = deptMap.values().stream()
-                .filter(d -> scopeDeptIds.contains(d.getId()))
-                .sorted((a, b) -> StrUtil.compare(a.getName(), b.getName(), true))
-                .toList();
-        for (Department dept : scoped) {
-            if (dept.getLevel() != null && dept.getLevel() == 2) {
-                String district = dept.getName();
-                matrix.computeIfAbsent(district, k -> new LinkedHashMap<>())
-                        .putIfAbsent("区县本级", 0L);
-            }
-            if (dept.getLevel() != null && dept.getLevel() == 3) {
-                Department districtDept = resolveDistrictDept(dept, deptMap);
-                if (districtDept == null) {
-                    continue;
-                }
-                matrix.computeIfAbsent(districtDept.getName(), k -> new LinkedHashMap<>())
-                        .putIfAbsent(dept.getName(), 0L);
-            }
-        }
-    }
-
-    /** 下钻区县时，从辖区部门树补全乡镇/社区格子（无患者时仍展示地图） */
-    private void enrichDistrictCommunitiesFromScope(String districtName, Map<String, Long> communities) {
-        Map<Long, Department> deptMap = departmentService.list().stream()
-                .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
-        Set<Long> scopeDeptIds = resolveHeatmapScopeDeptIds();
-        for (Department dept : deptMap.values()) {
-            if (!scopeDeptIds.contains(dept.getId())) {
-                continue;
-            }
-            if (dept.getLevel() != null && dept.getLevel() == 2
-                    && districtNamesMatch(dept.getName(), districtName)) {
-                communities.putIfAbsent("区县本级", 0L);
-            }
-            if (dept.getLevel() != null && dept.getLevel() == 3) {
-                Department districtDept = resolveDistrictDept(dept, deptMap);
-                if (districtDept != null && districtNamesMatch(districtDept.getName(), districtName)) {
-                    communities.putIfAbsent(dept.getName(), 0L);
-                }
-            }
-        }
-    }
-
     private List<String> sortDistrictLabels(Set<String> districts) {
         List<String> sorted = districts.stream()
                 .filter(d -> !"未分配".equals(d))
@@ -670,11 +684,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private List<String> sortCommunityLabels(Set<String> communities) {
         List<String> sorted = communities.stream()
-                .filter(c -> !"—".equals(c) && !"区县本级".equals(c))
+                .filter(c -> !"—".equals(c)
+                        && !HEATMAP_UNPARSED_TOWNSHIP.equals(c))
                 .sorted(String::compareTo)
                 .collect(Collectors.toCollection(ArrayList::new));
-        if (communities.contains("区县本级")) {
-            sorted.add(0, "区县本级");
+        if (communities.contains(HEATMAP_UNPARSED_TOWNSHIP)) {
+            sorted.add(HEATMAP_UNPARSED_TOWNSHIP);
         }
         if (communities.contains("—")) {
             sorted.add("—");
@@ -691,30 +706,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (role == null || role > 4) {
             throw new ServiceException(StatusEnum.FORBIDDEN, "仅三级及以上用户可查看患者分布热力图");
         }
-    }
-
-    private Department resolveDistrictDept(Department dept, Map<Long, Department> deptMap) {
-        Department current = dept;
-        while (current != null) {
-            if (current.getLevel() != null && current.getLevel() == 2) {
-                return current;
-            }
-            if (current.getParentId() == null) {
-                return current.getLevel() != null && current.getLevel() == 1 ? current : null;
-            }
-            current = deptMap.get(current.getParentId());
-        }
-        return null;
-    }
-
-    private String resolveCommunityLabel(Department dept) {
-        if (dept.getLevel() != null && dept.getLevel() == 3) {
-            return dept.getName();
-        }
-        if (dept.getLevel() != null && dept.getLevel() == 2) {
-            return "区县本级";
-        }
-        return dept.getName();
     }
 
     private LambdaQueryWrapper<Patient> buildManagedPatientDashboardWrapper(Integer statYear) {
@@ -751,6 +742,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             applyPathogenPositiveFilter(wrapper);
             return;
         }
+        if ("病原学结果阳性".equals(diagnosisResult)) {
+            applyPathogenResultPositiveFilter(wrapper);
+            return;
+        }
         if ("阴性".equals(diagnosisResult)) {
             applyPathogenValueFilter(wrapper, "阴性", "病原学阴性");
             return;
@@ -758,9 +753,29 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         applyPathogenValueFilter(wrapper, diagnosisResult);
     }
 
-    /** 病原学阳性：与在管总览/历史患者列表中「病原学结果」筛选口径一致 */
+    /** 病原学阳性（列表筛选项「阳性」）：兼容主表与 epidemic_data 中「病原学结果」「诊断结果」 */
     private void applyPathogenPositiveFilter(LambdaQueryWrapper<Patient> wrapper) {
         applyPathogenValueFilter(wrapper, "阳性", "病原学阳性");
+    }
+
+    /**
+     * 病原学结果阳性（工作台统计 / 列表筛选项「病原学结果阳性」）：
+     * 仅以主表 diagnosisResult 与 epidemic_data「病原学结果」为准，不含「诊断结果」字段。
+     */
+    private void applyPathogenResultPositiveFilter(LambdaQueryWrapper<Patient> wrapper) {
+        applyPathogenResultFieldFilter(wrapper, PATHOGEN_RESULT_POSITIVE_VALUES);
+    }
+
+    private void applyPathogenResultFieldFilter(LambdaQueryWrapper<Patient> wrapper, String... values) {
+        if (values == null || values.length == 0) {
+            return;
+        }
+        String inClause = Arrays.stream(values)
+                .map(v -> "'" + v.replace("'", "''") + "'")
+                .collect(Collectors.joining(", "));
+        wrapper.and(w -> w.in(Patient::getDiagnosisResult, (Object[]) values)
+                .or().apply("JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                        + EPIDEMIC_JSON_PATHOGEN_RESULT + "')) IN (" + inClause + ")"));
     }
 
     private void applyPathogenValueFilter(LambdaQueryWrapper<Patient> wrapper, String... values) {
@@ -828,13 +843,42 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             MedicationPickup latest = list.get(list.size() - 1);
             p.setMedicationPickTime(latest.getPickupTime() != null ? latest.getPickupTime().toString() : null);
             p.setMedicationChemotherapy(formatDrugNames(latest.getDrugs()));
-            if (latest.getQuantity() != null && StrUtil.isNotBlank(latest.getQuantityUnit())) {
-                p.setMedicationDrugForm(latest.getQuantity().stripTrailingZeros().toPlainString()
-                        + latest.getQuantityUnit());
-            } else {
-                p.setMedicationDrugForm(null);
-            }
+            p.setMedicationDrugForm(formatDrugQuantities(latest.getDrugs(), latest.getQuantity(), latest.getQuantityUnit()));
         });
+    }
+
+    private String formatDrugQuantities(String drugsJson, java.math.BigDecimal legacyQuantity, String legacyUnit) {
+        if (StrUtil.isNotBlank(drugsJson)) {
+            try {
+                JSONArray array = JSONUtil.parseArray(drugsJson);
+                String joined = array.stream()
+                        .map(item -> {
+                            if (!(item instanceof JSONObject obj)) {
+                                return null;
+                            }
+                            Object quantity = obj.get("quantity");
+                            if (quantity == null) {
+                                return null;
+                            }
+                            String name = obj.getStr("name");
+                            String unit = obj.getStr("quantityUnit");
+                            return (StrUtil.isNotBlank(name) ? name : "药品")
+                                    + new java.math.BigDecimal(quantity.toString()).stripTrailingZeros().toPlainString()
+                                    + (StrUtil.isNotBlank(unit) ? unit : "");
+                        })
+                        .filter(StrUtil::isNotBlank)
+                        .collect(Collectors.joining("；"));
+                if (StrUtil.isNotBlank(joined)) {
+                    return joined;
+                }
+            } catch (Exception ignored) {
+                // fallback to legacy fields
+            }
+        }
+        if (legacyQuantity != null && StrUtil.isNotBlank(legacyUnit)) {
+            return legacyQuantity.stripTrailingZeros().toPlainString() + legacyUnit;
+        }
+        return null;
     }
 
     private String formatDrugNames(String drugsJson) {

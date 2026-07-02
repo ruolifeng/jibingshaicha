@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { formatMedicationPickupDrugs } from "@@/utils/medicationPickup"
+import { formatMedicationPickupDrugs, formatMedicationPickupQuantities } from "@@/utils/medicationPickup"
 
 defineProps<{
   visible: boolean
@@ -31,7 +31,7 @@ const emit = defineEmits<{
         {{ formatMedicationPickupDrugs(record.drugs) || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="领取数量">
-        {{ record.quantity != null ? `${record.quantity}${record.quantityUnit || ""}` : "-" }}
+        {{ formatMedicationPickupQuantities(record.drugs, record.quantity, record.quantityUnit) || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="发药单位">
         {{ record.dispensingUnit || "-" }}

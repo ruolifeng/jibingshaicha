@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import PrintRecommend from "@@/components/PrintRecommend.vue"
+import ReferralDiagnosisDialog from "@@/components/ReferralDiagnosisDialog.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import {
@@ -13,6 +14,7 @@ import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import {
   formatArrivalDisplay,
+  formatReferralDiagnosisDisplay,
   getRecommendTime,
   parseTrackingHistory,
   TRACK_STATUS_LABEL,
@@ -33,7 +35,6 @@ import {
   getReferralTrackingDetailApi,
   getReferralTrackingListApi,
   rejectRecommendApi,
-  saveDiagnosisApi,
   saveScreeningInfoApi,
   sendRecommendApi,
   trackReferralApi,
@@ -536,31 +537,10 @@ async function handleSaveScreening() {
 // ===== 诊断 =====
 const diagnosisDialogVisible = ref(false)
 const diagnosisRow = ref<any>(null)
-const diagnosisResult = ref("")
-const diagnosisRemark = ref("")
 
 function openDiagnosisDialog(row: any) {
   diagnosisRow.value = row
-  diagnosisResult.value = ""
-  diagnosisRemark.value = ""
   diagnosisDialogVisible.value = true
-}
-
-async function handleSaveDiagnosis() {
-  if (!diagnosisResult.value) {
-    ElMessage.warning("请选择诊断结果")
-    return
-  }
-  if (diagnosisResult.value === "其他" && !diagnosisRemark.value.trim()) {
-    ElMessage.warning("选择其他时请填写备注")
-    return
-  }
-  await saveDiagnosisApi(diagnosisRow.value.id, diagnosisResult.value, diagnosisRemark.value.trim() || undefined)
-  ElMessage.success(
-    diagnosisResult.value === "确诊患者" ? "诊断结果已保存，该记录已标红结案" : "诊断结果已保存"
-  )
-  diagnosisDialogVisible.value = false
-  fetchList()
 }
 
 // ===== 删除 =====
@@ -679,14 +659,14 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="诊断结果" width="120">
+        <el-table-column label="诊断结果" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag
               v-if="row.diagnosisResult"
               :type="row.archived && isConfirmedPatientDiagnosis(row) ? 'danger' : 'info'"
               size="small"
             >
-              {{ row.diagnosisResult }}{{ row.archived && isConfirmedPatientDiagnosis(row) ? "（结案）" : "" }}
+              {{ formatReferralDiagnosisDisplay(row) }}{{ row.archived && isConfirmedPatientDiagnosis(row) ? "（结案）" : "" }}
             </el-tag>
             <span v-else>-</span>
           </template>
@@ -1102,7 +1082,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
                 :type="viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? 'danger' : 'info'"
                 size="small"
               >
-                {{ viewDetail.diagnosisResult }}{{ viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? "（结案）" : "" }}
+                {{ formatReferralDiagnosisDisplay(viewDetail) }}{{ viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? "（结案）" : "" }}
               </el-tag>
               <span v-else>-</span>
             </el-descriptions-item>
@@ -1427,55 +1407,11 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
       </template>
     </el-dialog>
 
-    <!-- 录入诊断弹窗 -->
-    <el-dialog v-model="diagnosisDialogVisible" title="录入诊断结果" width="420px">
-      <el-form label-width="100px">
-        <el-form-item label="诊断结果">
-          <el-radio-group v-model="diagnosisResult">
-            <el-radio value="排除">
-              排除
-            </el-radio>
-            <el-radio value="确诊患者">
-              确诊患者
-            </el-radio>
-            <el-radio value="潜伏感染者">
-              潜伏感染者
-            </el-radio>
-            <el-radio value="其他">
-              其他
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="diagnosisResult === '其他'" label="备注" required>
-          <el-input
-            v-model="diagnosisRemark"
-            type="textarea"
-            :rows="3"
-            maxlength="500"
-            show-word-limit
-            placeholder="请输入其他诊断结果说明"
-          />
-        </el-form-item>
-        <el-alert
-          v-if="diagnosisResult === '确诊患者'"
-          title="确诊患者将标红结案，不进入【患者管理】模块"
-          type="warning" :closable="false" style="margin-top: 8px"
-        />
-        <el-alert
-          v-if="diagnosisResult === '潜伏感染者'"
-          title="潜伏感染者将自动进入【潜伏感染者管理】模块（populationType=referral）"
-          type="info" :closable="false" style="margin-top: 8px"
-        />
-      </el-form>
-      <template #footer>
-        <el-button @click="diagnosisDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" @click="handleSaveDiagnosis">
-          确认诊断
-        </el-button>
-      </template>
-    </el-dialog>
+    <ReferralDiagnosisDialog
+      v-model:visible="diagnosisDialogVisible"
+      :record-id="diagnosisRow?.id"
+      @success="fetchList"
+    />
   </div>
 </template>
 

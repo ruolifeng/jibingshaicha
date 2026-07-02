@@ -25,8 +25,8 @@ import {
   STOP_TREATMENT_YES_NO_OPTIONS,
   YES_NO_OPTIONS
 } from "@@/constants/disease"
-import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
-import { getFollowUpCaseClosureStatsApi, getFollowUpDraftApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
+import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, resolveFollowUpFormDefaultNextVisitDate, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
+import { getFirstVisitApi, getFollowUpCaseClosureStatsApi, getFollowUpDraftApi, getFollowUpListApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import ImageUploader from "./ImageUploader.vue"
 
@@ -229,6 +229,23 @@ watch(
   }
 )
 
+async function applyNextVisitDateLinkage() {
+  if (!props.patientId || isEditMode.value) return
+  try {
+    const [firstVisitRes, listRes] = await Promise.all([
+      getFirstVisitApi(props.patientId).catch(() => ({ data: null })),
+      getFollowUpListApi(props.patientId).catch(() => ({ data: [] }))
+    ])
+    const completedList = (listRes.data || []).filter((item: { status?: number }) => item.status === 1)
+    const firstVisitNextDate = firstVisitRes.data?.nextVisitDate || ""
+
+    if (!form.nextVisitDate) {
+      const linked = resolveFollowUpFormDefaultNextVisitDate(completedList, firstVisitNextDate)
+      if (linked) form.nextVisitDate = linked
+    }
+  } catch { /* handled */ }
+}
+
 async function loadDraft() {
   if (!props.patientId) return
   draftId.value = null
@@ -241,6 +258,7 @@ async function loadDraft() {
     }
   } catch { /* 无草稿 */ }
   applyFollowUpChemotherapyDefault(form, props.patientRow)
+  await applyNextVisitDateLinkage()
 }
 
 function loadInitialData() {

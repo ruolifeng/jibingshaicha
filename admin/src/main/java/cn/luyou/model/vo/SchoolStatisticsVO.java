@@ -63,7 +63,7 @@ public class SchoolStatisticsVO {
     @ExcelProperty("IGRA阴性人数")
     private Long igraNegative;
 
-    @ExcelProperty("肺结核/疑似肺结核患者人数")
+    @ExcelProperty("肺结核/疑似结核患者人数")
     private Long tbPatientCount;
 
     @ExcelProperty("备注")

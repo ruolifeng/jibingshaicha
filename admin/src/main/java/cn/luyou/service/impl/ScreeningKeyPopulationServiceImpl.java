@@ -1,6 +1,5 @@
 package cn.luyou.service.impl;
 
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
@@ -29,6 +28,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -47,6 +47,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -76,7 +77,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     @Override
     public ImportResult uploadAndParse(MultipartFile file, String sourceType) {
         final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
-        String batchId = IdUtil.fastSimpleUUID();
+        String batchId = UploadBatchSupport.newBatchId("重点人群筛查");
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
         AtomicInteger rowNum = new AtomicInteger(5); // 数据从第5行开始
@@ -128,6 +129,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         List<ScreeningKeyPopulation> toUpdate = new ArrayList<>();
 
         for (ScreeningKeyPopulation d : dataList) {
+            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
+                d.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(d.getDiagnosisFirst()));
+            }
             if (StrUtil.isBlank(d.getIdNumber())) {
                 toInsert.add(d);
                 continue;
@@ -145,7 +149,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 if (StrUtil.isNotBlank(d.getHasChestXray())) existing.setHasChestXray(d.getHasChestXray());
                 if (d.getChestXrayDate() != null) existing.setChestXrayDate(d.getChestXrayDate());
                 if (StrUtil.isNotBlank(d.getChestXrayResult())) existing.setChestXrayResult(d.getChestXrayResult());
-                if (StrUtil.isNotBlank(d.getDiagnosisFirst())) existing.setDiagnosisFirst(d.getDiagnosisFirst());
+                if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
+                    existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(d.getDiagnosisFirst()));
+                }
                 if (StrUtil.isNotBlank(d.getRemark())) existing.setRemark(d.getRemark());
                 existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
                 toUpdate.add(existing);
@@ -183,7 +189,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
+                            .diagnosisFirst(latentDiagnosisFirst(d))
                             .departmentId(d.getDepartmentId())
                             .creatorId(BaseContext.getCurrentId())
                             .build();
@@ -213,7 +219,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                             .hasChestXray(d.getHasChestXray())
                             .chestXrayDate(d.getChestXrayDate())
                             .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(d.getDiagnosisFirst())
+                            .diagnosisFirst(latentDiagnosisFirst(d))
                             .departmentId(d.getDepartmentId())
                             .creatorId(BaseContext.getCurrentId())
                             .build();
@@ -266,7 +272,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                         .hasChestXray(d.getHasChestXray())
                         .chestXrayDate(d.getChestXrayDate())
                         .chestXrayResult(d.getChestXrayResult())
-                        .diagnosisFirst(d.getDiagnosisFirst())
+                        .diagnosisFirst(latentDiagnosisFirst(d))
                         .departmentId(d.getDepartmentId())
                         .creatorId(BaseContext.getCurrentId())
                         .build();
@@ -286,9 +292,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .set(LatentInfection::getHasChestXray, d.getHasChestXray())
                     .set(LatentInfection::getChestXrayDate, d.getChestXrayDate())
                     .set(LatentInfection::getChestXrayResult, d.getChestXrayResult())
-                    .set(LatentInfection::getDiagnosisFirst, d.getDiagnosisFirst());
+                    .set(LatentInfection::getDiagnosisFirst, latentDiagnosisFirst(d));
             update.update();
-            latent.setDiagnosisFirst(d.getDiagnosisFirst());
+            latent.setDiagnosisFirst(latentDiagnosisFirst(d));
             latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
     }
@@ -298,9 +304,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent,
                                                     String sourceType, String diagnosisFirst,
-                                                    String dateFrom, String dateTo, String entryUnit) {
+                                                    String dateFrom, String dateTo, String entryUnit,
+                                                    String createTimeFrom, String createTimeTo) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         // sourceType 为空时默认只查 keyPopulation（向后兼容），传 regular 时查常规
         String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
@@ -313,7 +322,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
                 .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
                 .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
-                .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo);
+                .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo)
+                .ge(createFrom != null, ScreeningKeyPopulation::getCreateTime, createFrom)
+                .le(createTo != null, ScreeningKeyPopulation::getCreateTime, createTo);
         ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
                 wrapper, ScreeningKeyPopulation::getIsLatent, ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst);
         applyEntryUnitFilter(wrapper, entryUnit);
@@ -373,15 +384,19 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
+        if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
+            data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+        }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
 
         if (data.getIsLatent() == 1) {
             // diagnosisResult 不在此预填，由"待诊断"页面诊断后由 referral 流程写入
+            String popType = StrUtil.isBlank(data.getSourceType()) ? "keyPopulation" : data.getSourceType();
             LatentInfection latent = LatentInfection.builder()
                     .screeningId(data.getId())
-                    .populationType("keyPopulation")
+                    .populationType(popType)
                     .name(data.getName())
                     .idNumber(data.getIdNumber())
                     .gender(data.getGender())
@@ -394,13 +409,20 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .hasChestXray(data.getHasChestXray())
                     .chestXrayDate(data.getChestXrayDate())
                     .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(data.getDiagnosisFirst())
+                    .diagnosisFirst(latentDiagnosisFirst(data))
                     .departmentId(data.getDepartmentId())
                     .creatorId(BaseContext.getCurrentId())
                     .build();
             latentInfectionService.save(latent);
             latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
+    }
+
+    private String latentDiagnosisFirst(ScreeningKeyPopulation data) {
+        if (data == null) {
+            return null;
+        }
+        return ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst());
     }
 
     private boolean shouldMarkLatent(ScreeningKeyPopulation data) {
@@ -427,6 +449,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         ScreeningKeyPopulation existing = getById(data.getId());
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
+        }
+        if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
+            data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         if (StrUtil.isBlank(data.getSourceType())) {

@@ -55,26 +55,43 @@ export const TRACKING_STATUS_MAP: Record<number, string> = {
   4: "强制结束"
 }
 
+/** 疑似结核诊断结果（筛查/待诊断统一口径） */
+export const SUSPECTED_TB_DIAGNOSIS = "疑似结核"
+
+/** 是否为疑似结核诊断（兼容历史「疑似肺结核」） */
+export function isSuspectedTbDiagnosis(diagnosis?: string | null): boolean {
+  const value = diagnosis?.trim()
+  return value === SUSPECTED_TB_DIAGNOSIS || value === "疑似肺结核"
+}
+
 /**
  * 诊断结果选项（V4新增，追踪到位后录入）
- * 排除/疑似肺结核 → 归档；确诊患者 → 结案（不进入患者管理）；潜伏感染者 → 潜伏感染管理；其他 → 备注归档
+ * 排除/疑似结核 → 归档；确诊患者 → 结案（不进入患者管理）；潜伏感染者 → 潜伏感染管理；其他 → 备注归档
  */
 export const DIAGNOSIS_RESULT_OPTIONS = [
   { label: "排除", value: "排除" },
-  { label: "疑似肺结核", value: "疑似肺结核" },
+  { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
   { label: "潜伏感染者", value: "潜伏感染者" },
   { label: "确诊患者", value: "确诊患者" },
   { label: "其他", value: "其他" }
 ]
 
+/** 推介追踪 — 录入诊断结果选项（追踪到位后） */
+export const REFERRAL_TRACKING_DIAGNOSIS_OPTIONS = [
+  { label: "排除", value: "排除" },
+  { label: "确诊患者", value: "确诊患者" },
+  { label: "潜伏感染者", value: "潜伏感染者" },
+  { label: "其他", value: "其他" }
+] as const
+
 /**
  * 转诊结果选项（前端驱动转诊弹窗，基于 diagnosisFirst 自动映射）
- * V4 新增 suspected（疑似肺结核）
+ * V4 新增 suspected（疑似结核）
  */
 export const REFERRAL_RESULT_OPTIONS = [
   { label: "排除", value: "excluded" },
   { label: "其他", value: "other" },
-  { label: "疑似肺结核", value: "suspected" },
+  { label: SUSPECTED_TB_DIAGNOSIS, value: "suspected" },
   { label: "确诊患者", value: "confirmed" },
   { label: "潜伏感染者", value: "latent" }
 ]
@@ -107,7 +124,7 @@ export const SUSPECTED_DIAGNOSIS_TO_REFERRAL: Record<string, string> = {
 export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
   { label: "排除", value: "排除" },
   { label: "正常", value: "正常" },
-  { label: "疑似肺结核", value: "疑似肺结核" },
+  { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
   { label: "确诊患者", value: "确诊患者" },
   { label: "潜伏感染者", value: "潜伏感染者" }
 ]
@@ -131,7 +148,7 @@ export function getScreeningLatentStatusLabel(row: {
   if (row.isLatent !== 1) return "正常"
   const diagnosis = row.diagnosisFirst?.trim()
   if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "正常"
-  if (diagnosis === "疑似肺结核") return "待诊断"
+  if (isSuspectedTbDiagnosis(diagnosis)) return "待诊断"
   if (diagnosis === "确诊患者") return "已确诊患者"
   if (diagnosis === "潜伏感染者") return "已确诊潜伏感染者"
   return "待诊断"
@@ -147,7 +164,7 @@ export function getScreeningLatentStatusTagType(row: {
   if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "success"
   if (diagnosis === "潜伏感染者") return "warning"
   if (diagnosis === "确诊患者") return "danger"
-  if (diagnosis === "疑似肺结核") return "warning"
+  if (isSuspectedTbDiagnosis(diagnosis)) return "warning"
   return "warning"
 }
 
@@ -173,7 +190,7 @@ export function getSuspectedConfirmDiagnosisLabel(row: {
   const draft = row.diagnosisFirst || row.screeningDiagnosisFirst
   if (draft) {
     if (NORMAL_TERMINAL_DIAGNOSIS.has(draft)) return "正常"
-    if (draft === "疑似肺结核") return "疑似肺结核"
+    if (isSuspectedTbDiagnosis(draft)) return SUSPECTED_TB_DIAGNOSIS
     if (draft === "确诊患者") return "确诊患者"
     const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === draft)
     if (matched) return matched.label
@@ -414,7 +431,7 @@ export function applyPatientNoticeTreatmentPlan(
 export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导", "全程管理", "未管理"]
 
 /** 病原学/病理学检查结果 */
-export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "未做", "未知"]
+export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "病原学结果阳性", "未做", "未知"]
 
 /** 感染检查方法 */
 export const INFECTION_METHOD_OPTIONS = ["PPD", "EC", "IGRA"]
@@ -480,7 +497,7 @@ export const MEDICATION_PICKUP_DRUG_OPTIONS = [
 ]
 
 /** 领药记录 — 领取数量单位 */
-export const MEDICATION_PICKUP_UNIT_OPTIONS = ["盒", "瓶", "支", "板", "袋", "包"]
+export const MEDICATION_PICKUP_UNIT_OPTIONS = ["盒", "瓶", "支", "板", "袋", "包", "颗", "粒", "片"]
 
 /** 首次随访督导人员 */
 export const FIRST_VISIT_SUPERVISOR_OPTIONS = ["医生", "家属", "自服药", "其他"]

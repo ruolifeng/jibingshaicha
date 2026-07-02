@@ -4,7 +4,9 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
+import cn.luyou.utils.UploadBatchSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -67,40 +70,117 @@ public class DashboardController {
 
     @Operation(summary = "获取所有上传批次（任务）列表")
     @GetMapping("/batches")
-    public ResultResponse<List<String>> batches() {
-        Set<String> batchSet = new LinkedHashSet<>();
+    public ResultResponse<List<Map<String, String>>> batches() {
+        Map<String, UploadBatchSupport.BatchMeta> metaMap = new LinkedHashMap<>();
 
-        screeningSchoolService.listObjs(
-                new LambdaQueryWrapper<ScreeningSchool>()
-                        .select(ScreeningSchool::getUploadBatch)
-                        .isNotNull(ScreeningSchool::getUploadBatch)
-                        .groupBy(ScreeningSchool::getUploadBatch)
-        ).stream()
-                .map(Object::toString)
-                .filter(StringUtils::hasText)
-                .forEach(batchSet::add);
+        mergeSchoolBatchMeta(metaMap);
+        mergeKeyPopulationBatchMeta(metaMap);
+        mergeCloseContactBatchMeta(metaMap);
 
-        screeningKeyPopulationService.listObjs(
-                new LambdaQueryWrapper<ScreeningKeyPopulation>()
-                        .select(ScreeningKeyPopulation::getUploadBatch)
-                        .isNotNull(ScreeningKeyPopulation::getUploadBatch)
-                        .groupBy(ScreeningKeyPopulation::getUploadBatch)
-        ).stream()
-                .map(Object::toString)
-                .filter(StringUtils::hasText)
-                .forEach(batchSet::add);
+        List<Map<String, String>> result = metaMap.entrySet().stream()
+                        .sorted(Comparator
+                                .comparing((Map.Entry<String, UploadBatchSupport.BatchMeta> e) ->
+                                        e.getValue().getUploadTime() != null
+                                                ? e.getValue().getUploadTime()
+                                                : LocalDateTime.MIN)
+                                .reversed())
+                .map(entry -> {
+                    Map<String, String> item = new LinkedHashMap<>();
+                    item.put("value", entry.getKey());
+                    item.put("label", entry.getValue().toLabel(entry.getKey()));
+                    return item;
+                })
+                .collect(Collectors.toList());
 
-        closeContactService.listObjs(
-                new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .select(ScreeningCloseContact::getUploadBatch)
-                        .isNotNull(ScreeningCloseContact::getUploadBatch)
-                        .groupBy(ScreeningCloseContact::getUploadBatch)
-        ).stream()
-                .map(Object::toString)
-                .filter(StringUtils::hasText)
-                .forEach(batchSet::add);
+        return ResultRes.success(result);
+    }
 
-        return ResultRes.success(new ArrayList<>(batchSet));
+    private void mergeSchoolBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
+        List<Map<String, Object>> rows = screeningSchoolService.listMaps(
+                new QueryWrapper<ScreeningSchool>()
+                        .select("upload_batch AS uploadBatch",
+                                "MIN(create_time) AS minTime",
+                                "MIN(year) AS yearVal",
+                                "COUNT(*) AS cnt")
+                        .isNotNull("upload_batch")
+                        .ne("upload_batch", "")
+                        .groupBy("upload_batch"));
+        mergeBatchRows(metaMap, "学校筛查", rows);
+    }
+
+    private void mergeKeyPopulationBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
+        List<Map<String, Object>> rows = screeningKeyPopulationService.listMaps(
+                new QueryWrapper<ScreeningKeyPopulation>()
+                        .select("upload_batch AS uploadBatch",
+                                "MIN(create_time) AS minTime",
+                                "MIN(year) AS yearVal",
+                                "COUNT(*) AS cnt")
+                        .isNotNull("upload_batch")
+                        .ne("upload_batch", "")
+                        .groupBy("upload_batch"));
+        mergeBatchRows(metaMap, "重点人群筛查", rows);
+    }
+
+    private void mergeCloseContactBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
+        List<Map<String, Object>> rows = closeContactService.listMaps(
+                new QueryWrapper<ScreeningCloseContact>()
+                        .select("upload_batch AS uploadBatch",
+                                "MIN(create_time) AS minTime",
+                                "MIN(year) AS yearVal",
+                                "COUNT(*) AS cnt")
+                        .isNotNull("upload_batch")
+                        .ne("upload_batch", "")
+                        .groupBy("upload_batch"));
+        mergeBatchRows(metaMap, "密接筛查", rows);
+    }
+
+    private void mergeBatchRows(
+            Map<String, UploadBatchSupport.BatchMeta> metaMap,
+            String populationLabel,
+            List<Map<String, Object>> rows) {
+        if (rows == null) {
+            return;
+        }
+        for (Map<String, Object> row : rows) {
+            Object batchObj = row.get("uploadBatch");
+            if (batchObj == null) {
+                batchObj = row.get("upload_batch");
+            }
+            if (batchObj == null) {
+                continue;
+            }
+            String batch = batchObj.toString().trim();
+            if (!StringUtils.hasText(batch)) {
+                continue;
+            }
+            UploadBatchSupport.BatchMeta meta = metaMap.computeIfAbsent(batch, key -> new UploadBatchSupport.BatchMeta());
+            meta.merge(
+                    populationLabel,
+                    row.get("yearVal") != null ? row.get("yearVal").toString() : null,
+                    parseDateTime(row.get("minTime")),
+                    row.get("cnt") != null ? Long.parseLong(row.get("cnt").toString()) : 0L
+            );
+        }
+    }
+
+    private LocalDateTime parseDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime time) {
+            return time;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        if (value instanceof java.util.Date date) {
+            return new java.sql.Timestamp(date.getTime()).toLocalDateTime();
+        }
+        try {
+            return LocalDateTime.parse(value.toString().replace(" ", "T"));
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     @Operation(summary = "按任务（上传批次）获取三类人群数据统计")
