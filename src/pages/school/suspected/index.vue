@@ -456,7 +456,7 @@ watch(
     <!-- 录入胸片结果弹窗（V13 拆分） -->
     <el-dialog v-model="xrayDialogVisible" title="录入胸片检查结果" width="520px">
       <el-alert type="info" :closable="false" class="mb-4" description="以下数据已自动从初始导入记录填充，请确认无误后点击确认。如有需要可修改后再提交。" />
-      <el-form :model="xrayForm" label-width="110px">
+      <el-form :model="xrayForm" label-width="150px" class="xray-form">
         <el-form-item label="是否进行胸片检查">
           <el-radio-group v-model="xrayForm.hasChestXray">
             <el-radio value="是">
@@ -529,6 +529,11 @@ watch(
 }
 .mt-1 {
   margin-top: 4px;
+}
+.xray-form {
+  :deep(.el-form-item__label) {
+    white-space: nowrap;
+  }
 }
 </style>
 

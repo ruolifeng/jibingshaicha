@@ -75,7 +75,7 @@ function handlePrint() {
           编号：{{ visitData?.formNo || "" }}
         </div>
       </div>
-      <table class="visit-table">
+      <table class="visit-table" border="1" cellspacing="0" cellpadding="0">
         <tbody>
           <!-- 基本信息 -->
           <tr class="section-header">

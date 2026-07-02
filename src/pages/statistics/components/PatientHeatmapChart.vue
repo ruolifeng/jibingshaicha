@@ -3,8 +3,8 @@ import type { GeoJsonFeatureCollection } from "@@/utils/zigong-map"
 import type { PatientHeatmapData } from "../apis"
 import {
   buildMapSeriesData,
-  buildTownshipGeoJson,
   findDistrictFeature,
+  loadDistrictTownshipGeo,
   loadZigongCityGeo,
   normalizeDistrictName
 } from "@@/utils/zigong-map"
@@ -46,12 +46,16 @@ function getMapName() {
     : "zigong-city"
 }
 
-function buildSeriesData() {
+async function buildSeriesData() {
   if (!cityGeo) return []
   if (props.heatmap.mapLevel === "district") {
     const districtFeature = findDistrictFeature(cityGeo, props.heatmap.districtName || "")
     if (!districtFeature) return []
-    const townshipGeo = buildTownshipGeoJson(districtFeature, props.heatmap.regions ?? [])
+    const townshipGeo = await loadDistrictTownshipGeo(
+      districtFeature,
+      props.heatmap.districtAdcode,
+      props.heatmap.regions ?? []
+    )
     echarts.registerMap(getMapName(), townshipGeo as any)
     return buildMapSeriesData(props.heatmap.regions, townshipGeo.features)
   }
@@ -70,6 +74,11 @@ function bindMapClick() {
   clickBound = true
 }
 
+function formatMapLabel(name: string, isDistrict: boolean) {
+  if (!isDistrict) return name
+  return name.length > 6 ? `${name.slice(0, 6)}\n${name.slice(6)}` : name
+}
+
 async function renderChart() {
   if (!chartRef.value) return
   const token = ++renderToken
@@ -82,7 +91,7 @@ async function renderChart() {
       chart = echarts.init(chartRef.value)
     }
 
-    const seriesData = buildSeriesData()
+    const seriesData = await buildSeriesData()
     const maxCount = Math.max(props.heatmap.maxCount ?? 0, 1)
     const isDistrict = props.heatmap.mapLevel === "district"
     const hasData = seriesData.some(item => item.value > 0)
@@ -127,8 +136,9 @@ async function renderChart() {
         scaleLimit: { min: 0.8, max: 4 },
         label: {
           show: true,
-          fontSize: isDistrict ? 10 : 12,
-          color: "#303133"
+          fontSize: isDistrict ? 11 : 12,
+          color: "#303133",
+          formatter: (params: any) => formatMapLabel(params.name as string, isDistrict)
         },
         emphasis: {
           label: { show: true, fontWeight: "bold" },
@@ -232,7 +242,8 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="heatmap.statPeriodFrom && heatmap.statPeriodTo" class="heatmap-tip">
       统计周期：{{ heatmap.statPeriodFrom }} 至 {{ heatmap.statPeriodTo }}
-      · {{ heatmap.mapLevel === "city" ? "点击区县下钻查看乡镇分布" : "展示乡镇/社区患者分布" }}
+      · 按现住址解析县/乡镇统计在管及历史患者
+      · {{ heatmap.mapLevel === "city" ? "点击区县下钻查看乡镇分布" : "展示乡镇患者分布" }}
     </div>
     <el-alert v-if="mapError" :title="mapError" type="error" :closable="false" show-icon class="heatmap-error" />
     <div ref="chartRef" class="heatmap-chart" />

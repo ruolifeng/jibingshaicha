@@ -3,13 +3,19 @@ import { ElMessage } from "element-plus"
 /**
  * 打印工具（iframe 方式）
  *
- * 将目标元素的 HTML 连同当前页面的样式写入隐藏 iframe 并触发打印，
+ * 将目标元素的 HTML 写入隐藏 iframe，并注入自包含的打印样式后触发打印，
  * 避免 window.open 被浏览器拦截，也避免 el-dialog 定位/overflow 干扰。
  */
 
 const IMAGE_LOAD_TIMEOUT_MS = 15_000
 const PRINT_ATTACHMENT_CSS = `
   .print-attachments { margin-top: 12px; }
+  .print-attachments__title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1a3a6b;
+  }
   .print-attachments__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -30,21 +36,200 @@ const PRINT_ATTACHMENT_CSS = `
     display: block;
     margin: 0 auto;
   }
+  .print-attachments__item figcaption {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #606266;
+  }
 `
 
-/** 收集当前文档中所有 <style> 标签的文本内容 */
-function collectInlineStyles(): string {
-  return Array.from(document.querySelectorAll("style"))
-    .map(s => s.textContent ?? "")
-    .join("\n")
-}
-
-/** 收集当前文档中所有外联样式表的 <link> 标签 HTML */
-function collectLinkTags(): string {
-  return Array.from(document.querySelectorAll<HTMLLinkElement>("link[rel='stylesheet']"))
-    .map(l => `<link rel="stylesheet" href="${l.href}">`)
-    .join("\n")
-}
+/** 打印表单通用样式（iframe 内无法依赖 Vue scoped，需显式写入） */
+const PRINT_FORM_CSS = `
+  .print-area { padding: 8px; }
+  .print-header { position: relative; margin-bottom: 16px; }
+  .print-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0 0 8px;
+  }
+  .print-subtitle {
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: #606266;
+  }
+  .print-form-no {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 14px;
+  }
+  .visit-table,
+  .notice-table,
+  .info-table,
+  .sup-table,
+  .form-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #333;
+  }
+  .visit-table th,
+  .visit-table td,
+  .notice-table th,
+  .notice-table td,
+  .info-table th,
+  .info-table td,
+  .sup-table th,
+  .sup-table td,
+  .form-table th,
+  .form-table td {
+    border: 1px solid #333;
+    padding: 7px 10px;
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  .visit-table th,
+  .notice-table th,
+  .info-table th,
+  .sup-table th,
+  .form-table th {
+    background: #f5f7fa;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .info-table th {
+    background: #f0f0f0;
+  }
+  .visit-table th { width: 100px; }
+  .notice-table th { width: 120px; }
+  .sup-table th { width: 130px; vertical-align: top; }
+  .form-table th { width: 110px; vertical-align: top; }
+  .visit-table .section-header td,
+  .sup-table .section-header td {
+    background: #e8f0fe;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 5px 10px;
+    color: #1a3a6b;
+  }
+  .visit-table .empty-cell,
+  .sup-table .empty-cell {
+    text-align: center;
+    color: #999;
+  }
+  .print-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #303133;
+  }
+  .med-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #333;
+    font-size: 12px;
+    table-layout: fixed;
+  }
+  .med-table th,
+  .med-table td {
+    border: 1px solid #333;
+    text-align: center;
+    padding: 0;
+    height: 24px;
+    line-height: 24px;
+    vertical-align: middle;
+  }
+  .med-table .th-month {
+    width: 52px;
+    background: #f0f0f0;
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1.3;
+    padding: 3px 2px;
+  }
+  .med-table .th-day {
+    background: #f0f0f0;
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .med-table .td-month {
+    background: #f0f0f0;
+    font-weight: 600;
+  }
+  .med-table .td-invalid {
+    background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 2px, #f5f5f5 2px, #f5f5f5 8px);
+  }
+  .med-table .td-mark-x,
+  .med-table .td-mark-circled {
+    color: #000;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  .med-table .td-mark-circled {
+    font-size: 15px;
+  }
+  @media print {
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .visit-table,
+    .notice-table,
+    .info-table,
+    .sup-table,
+    .form-table,
+    .med-table,
+    .visit-table th,
+    .visit-table td,
+    .notice-table th,
+    .notice-table td,
+    .info-table th,
+    .info-table td,
+    .sup-table th,
+    .sup-table td,
+    .form-table th,
+    .form-table td,
+    .med-table th,
+    .med-table td {
+      border: 1px solid #000 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .visit-table th,
+    .notice-table th,
+    .sup-table th,
+    .form-table th {
+      background: #f5f7fa !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .info-table th {
+      background: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .visit-table .section-header td,
+    .sup-table .section-header td {
+      background: #e8f0fe !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .med-table .th-month,
+    .med-table .th-day,
+    .med-table .td-month {
+      background: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .med-table .td-invalid {
+      background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 2px, #f5f5f5 2px, #f5f5f5 8px) !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+`
 
 function buildPrintDocument(title: string, bodyHtml: string, extraCss = ""): string {
   return `<!DOCTYPE html>
@@ -52,14 +237,13 @@ function buildPrintDocument(title: string, bodyHtml: string, extraCss = ""): str
 <head>
   <meta charset="utf-8" />
   <title>${title}</title>
-  ${collectLinkTags()}
   <style>
-    ${collectInlineStyles()}
     body { margin: 0; padding: 20px; background: #fff; color: #303133; }
     @media print {
       body { padding: 0; }
     }
     ${PRINT_ATTACHMENT_CSS}
+    ${PRINT_FORM_CSS}
     ${extraCss}
   </style>
 </head>

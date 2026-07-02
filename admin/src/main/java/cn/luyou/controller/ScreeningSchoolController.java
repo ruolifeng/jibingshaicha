@@ -50,9 +50,12 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String diagnosisFirst,
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String year,
-            @RequestParam(required = false) String entryUnit) {
+            @RequestParam(required = false) String entryUnit,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo) {
         IPage<ScreeningSchool> result = screeningSchoolService.queryPage(
-                page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit);
+                page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
+                createTimeFrom, createTimeTo);
         return ResultRes.success(result);
     }
 

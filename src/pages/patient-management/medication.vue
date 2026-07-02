@@ -6,10 +6,11 @@ import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIO
 import {
   canEditMedicationPickup,
   formatMedicationPickupDrugs,
+  formatMedicationPickupQuantities,
   PATIENT_MEDICATION_PAGE_PERMISSIONS,
   PATIENT_MEDICATION_PICKUP_PERMISSIONS
 } from "@@/utils/medicationPickup"
-import { resolveRegistrationNo, isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { getMedicationPickupListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
@@ -262,9 +263,9 @@ function viewDetail(record: Record<string, any>) {
             {{ formatMedicationPickupDrugs(row.drugs) }}
           </template>
         </el-table-column>
-        <el-table-column label="领取数量" width="100">
+        <el-table-column label="领取数量" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.quantity != null ? `${row.quantity}${row.quantityUnit || ""}` : "-" }}
+            {{ formatMedicationPickupQuantities(row.drugs, row.quantity, row.quantityUnit) || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="dispensingUnit" label="发药单位" min-width="120" show-overflow-tooltip />

@@ -130,7 +130,7 @@ public interface PatientService extends IService<Patient> {
     long countManagedPatientsForDashboard(Integer statYear);
 
     /**
-     * 首页统计：在管总览 + 历史患者中病原学阳性人数（与列表一致的数据权限）。
+     * 首页统计：在管总览 + 历史患者中「病原学结果阳性」人数（与列表筛选项「病原学结果阳性」口径一致）。
      */
     long countPathogenPositivePatientsForDashboard(Integer statYear);
 

@@ -78,7 +78,7 @@ export const CC_SPUTUM_RESULT_OPTIONS = [
 export const CC_FINAL_SCREENING_RESULT_OPTIONS = [
   "未发现异常",
   "活动性肺结核",
-  "疑似肺结核",
+  "疑似结核",
   "潜伏感染者",
   "未做",
   SCREENING_FIELD_OTHER
@@ -86,9 +86,10 @@ export const CC_FINAL_SCREENING_RESULT_OPTIONS = [
 
 export type FinalResultTagType = "primary" | "success" | "info" | "warning" | "danger"
 
-/** 最终筛查结果 — 展示标签颜色（活动性肺结核标红、疑似肺结核标黄） */
+/** 最终筛查结果 — 展示标签颜色（活动性肺结核标红、疑似结核标黄） */
 export const CC_FINAL_RESULT_TAG_MAP: Record<string, FinalResultTagType> = {
   活动性肺结核: "danger",
+  疑似结核: "warning",
   疑似肺结核: "warning",
   潜伏感染者: "warning",
   未发现异常: "success",
@@ -98,7 +99,7 @@ export const CC_FINAL_RESULT_TAG_MAP: Record<string, FinalResultTagType> = {
 /** 首页统计卡片展示的最终筛查结果 */
 export const CC_FINAL_RESULT_STAT_OPTIONS: { label: string, value: string, type: FinalResultTagType }[] = [
   { label: "活动性肺结核", value: "活动性肺结核", type: "danger" },
-  { label: "疑似肺结核", value: "疑似肺结核", type: "warning" },
+  { label: "疑似结核", value: "疑似结核", type: "warning" },
   { label: "潜伏感染者", value: "潜伏感染者", type: "warning" },
   { label: "未发现异常", value: "未发现异常", type: "success" },
   { label: "未做", value: "未做", type: "info" }

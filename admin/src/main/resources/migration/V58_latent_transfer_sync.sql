@@ -23,8 +23,14 @@ PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-UPDATE `latent_infection`
-SET `archived` = 0,
-    `archived_time` = NULL
-WHERE `archive_remark` = '已转出'
-  AND `archived` = 1;
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'archive_remark'
+);
+SET @ddl = IF(@col_exists > 0,
+    'UPDATE `latent_infection` SET `archived` = 0, `archived_time` = NULL WHERE `archive_remark` = ''已转出'' AND `archived` = 1',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

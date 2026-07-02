@@ -673,7 +673,7 @@ CREATE TABLE IF NOT EXISTS `medication_pickup` (
     `patient_id`        BIGINT       NOT NULL COMMENT '关联患者ID',
     `population_type`   VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `pickup_seq`        INT          DEFAULT NULL COMMENT '第几次领药',
-    `drugs`             JSON         DEFAULT NULL COMMENT '药品及用量 [{name,dosage}]',
+    `drugs`             JSON         DEFAULT NULL COMMENT '药品及用量 [{name,dosage,quantity,quantityUnit}]',
     `quantity`          DECIMAL(10, 2) DEFAULT NULL COMMENT '领取数量',
     `quantity_unit`     VARCHAR(16)  DEFAULT NULL COMMENT '领取数量单位',
     `pickup_time`       DATE         DEFAULT NULL COMMENT '领取时间',

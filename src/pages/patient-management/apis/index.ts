@@ -176,6 +176,11 @@ export function getFollowUpVisitListApi(patientId: number) {
   return request<ApiResponseData<any[]>>({ url: `patient/follow-up/list/${patientId}`, method: "get" })
 }
 
+/** 删除单条后续随访记录 */
+export function deleteFollowUpVisitApi(id: number) {
+  return request<ApiResponseData<null>>({ url: `patient/follow-up/${id}`, method: "delete" })
+}
+
 /** 保存服药管理 */
 export function saveMedicationApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "patient/medication/save", method: "post", data })

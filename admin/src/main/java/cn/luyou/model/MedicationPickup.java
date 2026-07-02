@@ -23,11 +23,11 @@ public class MedicationPickup extends BaseEntity {
     private String populationType;
     /** 第几次领药（后端自动累加） */
     private Integer pickupSeq;
-    /** 药品及用量 JSON：[{name,dosage}] */
+    /** 药品及用量 JSON：[{name,dosage,quantity,quantityUnit}] */
     private String drugs;
     /** 领取数量 */
     private BigDecimal quantity;
-    /** 领取数量单位（盒、瓶等） */
+    /** 领取数量单位（盒、瓶、片等） */
     private String quantityUnit;
     /** 领取时间 */
     private LocalDate pickupTime;

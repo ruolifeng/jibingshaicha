@@ -42,7 +42,7 @@ function handlePrint() {
         结核病潜伏感染者预防性治疗督导表
       </h2>
 
-      <table class="sup-table">
+      <table class="sup-table" border="1" cellspacing="0" cellpadding="0">
         <tbody>
           <tr class="section-header">
             <td colspan="4">

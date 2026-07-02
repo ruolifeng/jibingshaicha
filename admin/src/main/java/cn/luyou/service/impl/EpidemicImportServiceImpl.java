@@ -248,7 +248,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
 
         switch (diagnosisResult) {
             case "排除", "其他" -> entity.setArchived(1);
-            case "疑似肺结核" -> {
+            case "疑似结核", "疑似肺结核" -> {
                 // 保留在待诊断列表，不自动分流
             }
             case "潜伏感染者" -> {

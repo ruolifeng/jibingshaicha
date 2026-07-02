@@ -8,6 +8,7 @@ import cn.luyou.model.vo.SchoolStatisticsVO;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.StatisticsService;
+import cn.luyou.utils.ScreeningDiagnosisSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -125,7 +126,13 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .filter(latentMap::containsKey)
                 .filter(id -> {
                     String diag = latentMap.get(id).getDiagnosisFirst();
-                    return StrUtil.isNotBlank(diag) && diag.contains("肺结核");
+                    if (StrUtil.isBlank(diag)) {
+                        return false;
+                    }
+                    String trimmed = diag.trim();
+                    return "确诊患者".equals(trimmed)
+                            || ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(trimmed)
+                            || trimmed.contains("肺结核");
                 })
                 .count();
     }

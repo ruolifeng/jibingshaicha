@@ -5,24 +5,26 @@ import { MEDICATION_PICKUP_EDIT_DAYS_LEVEL5, parseMedicationPickupDrugs } from "
 import { saveMedicationPickupApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
-const CUSTOM_DRUG_VALUE = "__custom__"
-
-interface DrugRow {
-  selectValue: string
-  customName: string
-  dosage: string
-}
-
 const props = defineProps<{
   visible: boolean
   patientRow: Record<string, any> | null
   initialData?: Record<string, any> | null
 }>()
-
 const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
   (e: "success"): void
 }>()
+const CUSTOM_DRUG_VALUE = "__custom__"
+let drugRowIdSeed = 0
+
+interface DrugRow {
+  id: number
+  selectValue: string
+  customName: string
+  dosage: string
+  quantity: number | null
+  quantityUnit: string
+}
 
 const userStore = useUserStore()
 const formRef = ref<FormInstance>()
@@ -43,8 +45,6 @@ const dialogTitle = computed(() => {
 
 const pickupForm = reactive({
   pickupTime: "",
-  quantity: null as number | null,
-  quantityUnit: "",
   dispensingUnit: "",
   remarks: "",
   drugRows: [] as DrugRow[]
@@ -52,19 +52,15 @@ const pickupForm = reactive({
 
 const rules: FormRules = {
   pickupTime: [{ required: true, message: "请选择领取时间", trigger: "change" }],
-  quantity: [{ required: true, message: "请填写领取数量", trigger: "blur" }],
-  quantityUnit: [{ required: true, message: "请选择领取数量单位", trigger: "change" }],
   dispensingUnit: [{ required: true, message: "请填写发药单位", trigger: "blur" }]
 }
 
 function createEmptyDrugRow(): DrugRow {
-  return { selectValue: "", customName: "", dosage: "" }
+  return { id: ++drugRowIdSeed, selectValue: "", customName: "", dosage: "", quantity: null, quantityUnit: "" }
 }
 
 function resetForm() {
   pickupForm.pickupTime = ""
-  pickupForm.quantity = null
-  pickupForm.quantityUnit = ""
   pickupForm.dispensingUnit = userStore.orgName || ""
   pickupForm.remarks = ""
   pickupForm.drugRows = [createEmptyDrugRow()]
@@ -81,7 +77,9 @@ function buildDrugsPayload() {
   return pickupForm.drugRows
     .map(row => ({
       name: resolveDrugName(row),
-      dosage: row.dosage.trim()
+      dosage: row.dosage.trim(),
+      quantity: row.quantity,
+      quantityUnit: row.quantityUnit
     }))
     .filter(item => item.name && item.dosage)
 }
@@ -102,6 +100,14 @@ function validateDrugRows(): boolean {
       ElMessage.warning(`请填写第 ${i + 1} 种药品用量`)
       return false
     }
+    if (row.quantity == null || row.quantity <= 0) {
+      ElMessage.warning(`请填写第 ${i + 1} 种药品的领取数量`)
+      return false
+    }
+    if (!row.quantityUnit) {
+      ElMessage.warning(`请选择第 ${i + 1} 种药品的领取数量单位`)
+      return false
+    }
   }
   return true
 }
@@ -109,16 +115,19 @@ function validateDrugRows(): boolean {
 function fillFromInitial(data: Record<string, any>) {
   resetForm()
   pickupForm.pickupTime = data.pickupTime || ""
-  pickupForm.quantity = data.quantity != null ? Number(data.quantity) : null
-  pickupForm.quantityUnit = data.quantityUnit || ""
   pickupForm.dispensingUnit = data.dispensingUnit || userStore.orgName || ""
   pickupForm.remarks = data.remarks || ""
+  const legacyQuantity = data.quantity != null ? Number(data.quantity) : null
+  const legacyQuantityUnit = data.quantityUnit || ""
   const drugs = parseMedicationPickupDrugs(data.drugs)
   pickupForm.drugRows = drugs.length
-    ? drugs.map(item => ({
+    ? drugs.map((item, index) => ({
+        id: ++drugRowIdSeed,
         selectValue: MEDICATION_PICKUP_DRUG_OPTIONS.includes(item.name) ? item.name : CUSTOM_DRUG_VALUE,
         customName: MEDICATION_PICKUP_DRUG_OPTIONS.includes(item.name) ? "" : item.name,
-        dosage: item.dosage
+        dosage: item.dosage,
+        quantity: item.quantity ?? (index === 0 ? legacyQuantity : null),
+        quantityUnit: item.quantityUnit || (index === 0 ? legacyQuantityUnit : "")
       }))
     : [createEmptyDrugRow()]
 }
@@ -147,15 +156,17 @@ async function handleSave() {
 
   saving.value = true
   try {
+    const drugs = buildDrugsPayload()
+    const firstDrug = drugs[0]
     await saveMedicationPickupApi({
       id: props.initialData?.id,
       patientId: props.patientRow.id,
       pickupTime: pickupForm.pickupTime,
-      quantity: pickupForm.quantity,
-      quantityUnit: pickupForm.quantityUnit,
+      quantity: firstDrug?.quantity ?? null,
+      quantityUnit: firstDrug?.quantityUnit ?? "",
       dispensingUnit: pickupForm.dispensingUnit.trim(),
       remarks: pickupForm.remarks.trim(),
-      drugs: JSON.stringify(buildDrugsPayload())
+      drugs: JSON.stringify(drugs)
     })
     ElMessage.success(isEditMode.value ? "领药记录已更新" : "领药记录已保存")
     close()
@@ -206,7 +217,7 @@ function removeDrugRow(index: number) {
         一、结核药品名称及用量
       </el-divider>
 
-      <div v-for="(row, index) in pickupForm.drugRows" :key="index" class="drug-row">
+      <div v-for="(row, index) in pickupForm.drugRows" :key="row.id" class="drug-row">
         <el-form-item :label="`药品 ${index + 1}`" required>
           <div class="drug-row-content">
             <el-select
@@ -255,21 +266,19 @@ function removeDrugRow(index: number) {
       <el-divider content-position="left">
         二、领取数量
       </el-divider>
-      <el-form-item label="领取数量" required>
-        <div class="quantity-row">
-          <el-form-item prop="quantity" label-width="0" style="margin-bottom: 0">
+      <div v-for="(row, index) in pickupForm.drugRows" :key="`quantity-${row.id}`">
+        <el-form-item :label="resolveDrugName(row) || `药品 ${index + 1}`" required>
+          <div class="quantity-row">
             <el-input-number
-              v-model="pickupForm.quantity"
+              v-model="row.quantity"
               :min="0.01"
               :precision="2"
               :step="1"
               controls-position="right"
               style="width: 160px"
             />
-          </el-form-item>
-          <el-form-item prop="quantityUnit" label-width="0" style="margin-bottom: 0">
             <el-select
-              v-model="pickupForm.quantityUnit"
+              v-model="row.quantityUnit"
               placeholder="单位"
               style="width: 120px"
             >
@@ -280,9 +289,9 @@ function removeDrugRow(index: number) {
                 :value="item"
               />
             </el-select>
-          </el-form-item>
-        </div>
-      </el-form-item>
+          </div>
+        </el-form-item>
+      </div>
 
       <el-divider content-position="left">
         三、领取时间

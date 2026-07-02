@@ -32,7 +32,7 @@ function val(key: string) {
       <h2 class="print-title">
         推介记录
       </h2>
-      <table class="form-table">
+      <table class="form-table" border="1" cellspacing="0" cellpadding="0">
         <tbody>
           <tr>
             <th>姓名</th>

@@ -621,6 +621,64 @@ public class PatientController {
         return ResultRes.success(list);
     }
 
+    @Operation(summary = "删除单条后续随访记录")
+    @DeleteMapping("/follow-up/{id}")
+    public ResultResponse<Void> deleteFollowUp(@PathVariable Long id) {
+        FollowUpVisit existing = followUpVisitService.getById(id);
+        if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "后续随访记录不存在");
+        }
+        patientService.assertPatientOperable(existing.getPatientId());
+        assertFollowUpEditable(existing);
+        assertFollowUpEditPermission(existing);
+        Long patientId = existing.getPatientId();
+        boolean shouldTryUnarchive = "是".equals(existing.getStopTreatment())
+                && PatientService.shouldArchiveOnStopTreatment(existing.getStopTreatment(), existing.getStopTreatmentReason());
+        followUpVisitService.removeById(id);
+        renumberFollowUpSeq(patientId);
+        if (shouldTryUnarchive) {
+            restorePatientArchiveIfNoStopTreatmentFollowUp(patientId);
+        }
+        return ResultRes.success(null);
+    }
+
+    private void renumberFollowUpSeq(Long patientId) {
+        List<FollowUpVisit> list = followUpVisitService.lambdaQuery()
+                .eq(FollowUpVisit::getPatientId, patientId)
+                .eq(FollowUpVisit::getStatus, 1)
+                .orderByAsc(FollowUpVisit::getCreateTime)
+                .list();
+        for (int i = 0; i < list.size(); i++) {
+            int newSeq = i + 1;
+            FollowUpVisit visit = list.get(i);
+            if (!Integer.valueOf(newSeq).equals(visit.getVisitSeq())) {
+                visit.setVisitSeq(newSeq);
+                followUpVisitService.updateById(visit);
+            }
+        }
+    }
+
+    /** 删除停止治疗随访后，若已无其它需归档的停止治疗记录，则解除停止治疗归档 */
+    private void restorePatientArchiveIfNoStopTreatmentFollowUp(Long patientId) {
+        Patient patient = patientService.getById(patientId);
+        if (patient == null || !Integer.valueOf(1).equals(patient.getArchived())) {
+            return;
+        }
+        if (!PatientService.isStopTreatmentArchiveRemark(patient.getArchiveRemark())) {
+            return;
+        }
+        boolean hasArchivingStopTreatment = followUpVisitService.lambdaQuery()
+                .eq(FollowUpVisit::getPatientId, patientId)
+                .eq(FollowUpVisit::getStatus, 1)
+                .eq(FollowUpVisit::getStopTreatment, "是")
+                .list()
+                .stream()
+                .anyMatch(v -> PatientService.shouldArchiveOnStopTreatment(v.getStopTreatment(), v.getStopTreatmentReason()));
+        if (!hasArchivingStopTreatment) {
+            patientService.unarchivePatientFromStopTreatment(patientId);
+        }
+    }
+
     // ==================== 服药管理 ====================
 
     @Operation(summary = "保存服药管理")

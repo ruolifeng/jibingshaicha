@@ -1,6 +1,5 @@
 package cn.luyou.service.impl;
 
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
@@ -28,7 +27,9 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -45,6 +46,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -76,7 +78,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
-        String batchId = IdUtil.fastSimpleUUID();
+        String batchId = UploadBatchSupport.newBatchId("学校筛查");
         List<ScreeningSchool> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
 
@@ -289,14 +291,19 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     @Override
     public IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
-                                             String phone, String year, String entryUnit) {
+                                             String phone, String year, String entryUnit,
+                                             String createTimeFrom, String createTimeTo) {
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningSchool::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningSchool::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(schoolName), ScreeningSchool::getSchoolName, schoolName)
                 .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), ScreeningSchool::getPhone, phone)
-                .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent);
+                .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
+                .ge(createFrom != null, ScreeningSchool::getCreateTime, createFrom)
+                .le(createTo != null, ScreeningSchool::getCreateTime, createTo);
         ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
                 wrapper, ScreeningSchool::getIsLatent, ScreeningSchool::getDiagnosisFirst, diagnosisFirst);
         applyScreenYearFilter(wrapper, year);
@@ -349,6 +356,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
+        if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
+            data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+        }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         save(data);
@@ -389,9 +399,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 data.getDiagnosisFirst());
     }
 
-    /** 诊断结果写入潜伏表；疑似肺结核由分流逻辑保留在待诊断，不再归档。 */
+    /** 诊断结果写入潜伏表；疑似结核由分流逻辑保留在待诊断，不再归档。 */
     private String latentDiagnosisFirst(ScreeningSchool data) {
-        return data == null ? null : data.getDiagnosisFirst();
+        if (data == null) {
+            return null;
+        }
+        return ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst());
     }
 
     /** 增量导入：按证件号匹配时，用最新 Excel 行覆盖筛查表字段。 */
@@ -424,7 +437,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         if (StrUtil.isNotBlank(incoming.getChestXrayResult())) existing.setChestXrayResult(incoming.getChestXrayResult());
         if (StrUtil.isNotBlank(incoming.getSputumSmearResult())) existing.setSputumSmearResult(incoming.getSputumSmearResult());
         if (StrUtil.isNotBlank(incoming.getMolecularBiologyResult())) existing.setMolecularBiologyResult(incoming.getMolecularBiologyResult());
-        if (StrUtil.isNotBlank(incoming.getDiagnosisFirst())) existing.setDiagnosisFirst(incoming.getDiagnosisFirst());
+        if (StrUtil.isNotBlank(incoming.getDiagnosisFirst())) {
+            existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(incoming.getDiagnosisFirst()));
+        }
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
     }
 
@@ -498,7 +513,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         data.setChestXrayResult(field(row, headerIndex, "胸片结果", "胸部DR", "胸片检查结果"));
         data.setSputumSmearResult(field(row, headerIndex, "痰涂片结果", "痰涂片"));
         data.setMolecularBiologyResult(field(row, headerIndex, "分子生物学结果", "分子生物学"));
-        data.setDiagnosisFirst(field(row, headerIndex, "诊断结果", "诊断"));
+        data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(
+                field(row, headerIndex, "诊断结果", "诊断")));
         data.setRemark(field(row, headerIndex, "备注"));
         return data;
     }
@@ -631,6 +647,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }
         // 根据感染筛查结果与诊断结果重新计算潜伏判定
+        if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
+            data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+        }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         if (data.getDepartmentId() == null) {
             data.setDepartmentId(existing.getDepartmentId());
