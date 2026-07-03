@@ -76,7 +76,9 @@ function bindMapClick() {
 
 function formatMapLabel(name: string, isDistrict: boolean) {
   if (!isDistrict) return name
-  return name.length > 6 ? `${name.slice(0, 6)}\n${name.slice(6)}` : name
+  if (name.length <= 5) return name
+  const mid = Math.ceil(name.length / 2)
+  return `${name.slice(0, mid)}\n${name.slice(mid)}`
 }
 
 async function renderChart() {
@@ -117,6 +119,14 @@ async function renderChart() {
           return `${params.name}<br/>患者数：<strong>${val}</strong> 例`
         }
       },
+      toolbox: {
+        show: true,
+        right: 16,
+        top: 8,
+        feature: {
+          restore: { title: "重置视图" }
+        }
+      },
       visualMap: {
         min: 0,
         max: maxCount,
@@ -133,15 +143,25 @@ async function renderChart() {
         type: "map",
         map: getMapName(),
         roam: true,
-        scaleLimit: { min: 0.8, max: 4 },
+        scaleLimit: { min: 0.6, max: 6 },
+        layoutCenter: ["50%", isDistrict ? "52%" : "50%"],
+        layoutSize: isDistrict ? "92%" : "88%",
         label: {
-          show: true,
-          fontSize: isDistrict ? 11 : 12,
+          show: !isDistrict,
+          fontSize: isDistrict ? 9 : 11,
+          lineHeight: 12,
           color: "#303133",
           formatter: (params: any) => formatMapLabel(params.name as string, isDistrict)
         },
+        labelLayout: {
+          hideOverlap: true
+        },
         emphasis: {
-          label: { show: true, fontWeight: "bold" },
+          label: {
+            show: true,
+            fontSize: isDistrict ? 10 : 12,
+            fontWeight: "bold"
+          },
           itemStyle: { areaColor: "#ffd666", borderColor: "#333" }
         },
         itemStyle: {
@@ -244,6 +264,7 @@ onBeforeUnmount(() => {
       统计周期：{{ heatmap.statPeriodFrom }} 至 {{ heatmap.statPeriodTo }}
       · 按现住址解析县/乡镇统计在管及历史患者
       · {{ heatmap.mapLevel === "city" ? "点击区县下钻查看乡镇分布" : "展示乡镇患者分布" }}
+      · 支持滚轮缩放与拖拽平移
     </div>
     <el-alert v-if="mapError" :title="mapError" type="error" :closable="false" show-icon class="heatmap-error" />
     <div ref="chartRef" class="heatmap-chart" />

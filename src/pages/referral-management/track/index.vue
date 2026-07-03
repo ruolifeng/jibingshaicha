@@ -4,6 +4,7 @@ import ReferralDiagnosisDialog from "@@/components/ReferralDiagnosisDialog.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
+import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
@@ -675,6 +676,7 @@ function getRowClass({ row }: { row: any }) {
         :total="total || 0"
         :page-size="paginationData.pageSize || 20"
         :current-page="paginationData.currentPage || 1"
+        :page-sizes="[...PAGE_SIZE_OPTIONS]"
         @size-change="(val: number) => { paginationData.pageSize = val; fetchList() }"
         @current-change="(val: number) => { paginationData.currentPage = val; fetchList() }"
       />

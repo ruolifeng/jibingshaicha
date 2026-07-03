@@ -471,7 +471,7 @@ const activeTab = ref("received")
             <el-pagination
               v-model:current-page="paginationData.currentPage"
               v-model:page-size="paginationData.pageSize"
-              :page-sizes="[10, 20, 50]"
+              :page-sizes="paginationData.pageSizes"
               :total="total"
               layout="total, sizes, prev, pager, next, jumper"
               @current-change="handleCurrentChange"
@@ -532,7 +532,7 @@ const activeTab = ref("received")
             <el-pagination
               v-model:current-page="sentPagination.currentPage"
               v-model:page-size="sentPagination.pageSize"
-              :page-sizes="[10, 20, 50]"
+              :page-sizes="sentPagination.pageSizes"
               :total="sentTotal"
               layout="total, sizes, prev, pager, next, jumper"
               @current-change="sentHandleCurrentChange"
@@ -591,7 +591,7 @@ const activeTab = ref("received")
             <el-pagination
               v-model:current-page="referralPagination.currentPage"
               v-model:page-size="referralPagination.pageSize"
-              :page-sizes="[10, 20, 50]"
+              :page-sizes="referralPagination.pageSizes"
               :total="referralTotal"
               layout="total, sizes, prev, pager, next, jumper"
               @current-change="referralHandleCurrentChange"

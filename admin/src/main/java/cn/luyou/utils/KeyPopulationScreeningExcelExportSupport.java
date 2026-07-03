@@ -27,6 +27,7 @@ public final class KeyPopulationScreeningExcelExportSupport {
         }
         EasyExcel.write(outputStream, KeyPopulationScreeningExcelExportRow.class)
                 .head(KeyPopulationScreeningExcelHeaders.asEasyExcelHead())
+                .registerWriteHandler(new ExcelFirstHeadRowCenterHandler())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
                 .sheet(KeyPopulationScreeningExcelHeaders.SHEET_NAME)
                 .doWrite(rows);
@@ -35,6 +36,7 @@ public final class KeyPopulationScreeningExcelExportSupport {
     public static void writeTemplate(OutputStream outputStream) {
         EasyExcel.write(outputStream, KeyPopulationScreeningExcelExportRow.class)
                 .head(KeyPopulationScreeningExcelHeaders.asEasyExcelHead())
+                .registerWriteHandler(new ExcelFirstHeadRowCenterHandler())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
                 .sheet(KeyPopulationScreeningExcelHeaders.SHEET_NAME)
                 .doWrite(Collections.emptyList());

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { DashboardBatchOption, DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
+import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
 import { DASHBOARD_ADMIN_TITLE, DASHBOARD_ADMIN_WELCOME } from "@@/constants/app"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import {
@@ -8,7 +8,6 @@ import {
   Connection,
   DataAnalysis,
   FirstAidKit,
-  List,
   Refresh,
   School,
   Search,
@@ -16,7 +15,6 @@ import {
   WarningFilled
 } from "@element-plus/icons-vue"
 import {
-  getDashboardBatchesApi,
   getDashboardMessageStatsApi,
   getDashboardSummaryApi,
   getDashboardTaskStatsApi
@@ -35,8 +33,6 @@ const summary = ref<DashboardSummaryData>({
   pendingNotice: 0,
   upcomingReview: 0
 })
-const batches = ref<DashboardBatchOption[]>([])
-const selectedBatch = ref<string>("")
 const taskStats = ref<TaskStatsData>({
   school: { screeningTotal: 0, latentCount: 0, latentRatio: 0, patientCount: 0, patientRatio: 0 },
   keyPopulation: { screeningTotal: 0, latentCount: 0, latentRatio: 0, patientCount: 0, patientRatio: 0 },
@@ -64,15 +60,12 @@ async function fetchYearSummary() {
 
 async function fetchAll() {
   summaryLoading.value = true
-  taskLoading.value = true
   try {
-    const [summaryRes, batchRes, msgRes] = await Promise.all([
+    const [summaryRes, msgRes] = await Promise.all([
       getDashboardSummaryApi(selectedStatYear.value),
-      getDashboardBatchesApi(),
       getDashboardMessageStatsApi()
     ])
     summary.value = { ...summary.value, ...(summaryRes.data || {}) }
-    batches.value = batchRes.data || []
     messageStats.value = msgRes.data || messageStats.value
   } catch { /* handled globally */ } finally {
     summaryLoading.value = false
@@ -83,7 +76,7 @@ async function fetchAll() {
 async function fetchTaskStats() {
   taskLoading.value = true
   try {
-    const { data } = await getDashboardTaskStatsApi(selectedBatch.value || undefined)
+    const { data } = await getDashboardTaskStatsApi(selectedStatYear.value)
     if (data) taskStats.value = data
   } catch { /* handled globally */ } finally {
     taskLoading.value = false
@@ -94,20 +87,12 @@ onMounted(() => {
   fetchAll()
 })
 
-watch(selectedBatch, () => {
+watch(selectedStatYear, () => {
+  fetchYearSummary()
   fetchTaskStats()
 })
 
-watch(selectedStatYear, () => {
-  fetchYearSummary()
-})
-
 const managementYear = computed(() => summary.value.managementYear ?? getCurrentStatYear())
-
-const selectedBatchLabel = computed(() => {
-  if (!selectedBatch.value) return ""
-  return batches.value.find(b => b.value === selectedBatch.value)?.label || selectedBatch.value
-})
 
 // ===== 统计卡片配置 =====
 const statCards = [
@@ -205,16 +190,7 @@ const noticeMaxSent = computed(() =>
         >
           <el-option v-for="y in yearOptions" :key="y" :label="`${y}年度`" :value="y" />
         </el-select>
-        <el-select
-          v-model="selectedBatch"
-          placeholder="全部任务"
-          clearable
-          class="batch-select"
-          :prefix-icon="List"
-        >
-          <el-option v-for="b in batches" :key="b.value" :label="b.label" :value="b.value" />
-        </el-select>
-        <el-button :icon="Refresh" circle :loading="taskLoading" @click="fetchAll" />
+        <el-button :icon="Refresh" circle :loading="summaryLoading || taskLoading" @click="fetchAll" />
       </div>
     </div>
 
@@ -300,7 +276,7 @@ const noticeMaxSent = computed(() =>
     <!-- ===== 三类人群数据 ===== -->
     <div class="section-label" style="margin-top: 32px">
       <span class="label-bar" />人群筛查数据统计
-      <span v-if="selectedBatch" class="batch-tag">{{ selectedBatchLabel }}</span>
+      <span class="batch-tag">{{ selectedStatYear }}年度</span>
     </div>
     <el-row :gutter="20" v-loading="taskLoading" class="pop-row">
       <el-col v-for="pc in popCards" :key="pc.key" :xs="24" :sm="8">
@@ -627,8 +603,7 @@ const noticeMaxSent = computed(() =>
   align-items: center;
   gap: 12px;
 
-  .year-select,
-  .batch-select {
+  .year-select {
     width: 140px;
 
     :deep(.el-input__wrapper) {
@@ -646,10 +621,6 @@ const noticeMaxSent = computed(() =>
     :deep(.el-input__prefix-inner) {
       color: rgba(255, 255, 255, 0.8);
     }
-  }
-
-  .batch-select {
-    width: 280px;
   }
 }
 

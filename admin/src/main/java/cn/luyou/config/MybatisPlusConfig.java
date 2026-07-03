@@ -20,8 +20,10 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        // 分页插件（MySQL）
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.MYSQL);
+        // 与前端 PAGE_SIZE_OPTIONS 最大项一致，避免选择 1000 条时被默认 500 截断
+        pagination.setMaxLimit(1000L);
+        interceptor.addInnerInterceptor(pagination);
         return interceptor;
     }
 }

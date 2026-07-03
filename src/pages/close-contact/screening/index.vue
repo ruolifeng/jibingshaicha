@@ -684,7 +684,7 @@ async function handleThreeMonthSubmit() {
         <el-pagination
           v-model:current-page="paginationData.currentPage"
           v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-sizes="paginationData.pageSizes"
           :total="total"
           layout="total, sizes, prev, pager, next, jumper"
           @current-change="handleCurrentChange"

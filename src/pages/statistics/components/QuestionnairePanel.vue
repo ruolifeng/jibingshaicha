@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import QRCode from "qrcode"
 import type { QuestionnaireConfig, QuestionnaireField, QuestionnaireFieldGroup } from "@/common/constants/questionnaire"
+import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
+import QRCode from "qrcode"
 import { FIELD_TYPE_LABELS, FIELD_TYPE_OPTIONS, QUESTIONNAIRE_CODE, SCREENING_FIELD_KEYS } from "@/common/constants/questionnaire"
 import {
   exportQuestionnaireSubmissionsApi,
@@ -506,8 +507,9 @@ onMounted(async () => {
         <el-pagination
           v-model:current-page="submissionQuery.page"
           v-model:page-size="submissionQuery.size"
+          :page-sizes="[...PAGE_SIZE_OPTIONS]"
           :total="submissionTotal"
-          layout="total, prev, pager, next"
+          layout="total, sizes, prev, pager, next"
           @current-change="loadSubmissions"
           @size-change="loadSubmissions"
         />
@@ -577,10 +579,18 @@ onMounted(async () => {
 </template>
 
 <style lang="scss" scoped>
-.mb-3 { margin-bottom: 12px; }
-.mb-4 { margin-bottom: 16px; }
-.mt-3 { margin-top: 12px; }
-.mr-2 { margin-right: 8px; }
+.mb-3 {
+  margin-bottom: 12px;
+}
+.mb-4 {
+  margin-bottom: 16px;
+}
+.mt-3 {
+  margin-top: 12px;
+}
+.mr-2 {
+  margin-right: 8px;
+}
 
 .card-header {
   display: flex;

@@ -1,3 +1,5 @@
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
+
 interface PaginationData {
   total?: number
   currentPage?: number
@@ -10,8 +12,8 @@ interface PaginationData {
 const DEFAULT_PAGINATION_DATA = {
   total: 0,
   currentPage: 1,
-  pageSizes: [10, 20, 50],
-  pageSize: 10,
+  pageSizes: [...PAGE_SIZE_OPTIONS],
+  pageSize: DEFAULT_PAGE_SIZE,
   layout: "total, sizes, prev, pager, next, jumper"
 }
 

@@ -83,12 +83,12 @@ export function getDashboardBatchesApi() {
   })
 }
 
-/** 按任务批次获取三类人群统计数据 */
-export function getDashboardTaskStatsApi(batch?: string) {
+/** 按年度获取三类人群统计数据 */
+export function getDashboardTaskStatsApi(year?: number | string) {
   return request<ApiResponseData<TaskStatsData>>({
     url: "dashboard/task-stats",
     method: "get",
-    params: batch ? { batch } : {}
+    params: year != null && year !== "" ? { year: Number(year) } : {}
   })
 }
 

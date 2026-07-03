@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { OperationLogItem } from "./apis/operation-log"
 import { usePagination } from "@@/composables/usePagination"
 import {
   OP_LOG_MODULE_OPTIONS,
@@ -7,7 +8,6 @@ import {
   ROLE_MAP
 } from "@@/constants/disease"
 import { Download } from "@element-plus/icons-vue"
-import type { OperationLogItem } from "./apis/operation-log"
 import { exportOperationLogApi, getOperationLogListApi } from "./apis/operation-log"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
@@ -189,13 +189,17 @@ watch(
           <template #default="{ row }">
             <div>
               <div>{{ row.realName || "-" }}</div>
-              <div class="text-xs text-gray-400">{{ row.userName }}</div>
+              <div class="text-xs text-gray-400">
+                {{ row.userName }}
+              </div>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="角色">
           <template #default="{ row }">
-            <el-tag size="small">{{ ROLE_MAP[row.role] || "-" }}</el-tag>
+            <el-tag size="small">
+              {{ ROLE_MAP[row.role] || "-" }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="类型">
@@ -236,7 +240,7 @@ watch(
           v-model:current-page="paginationData.currentPage"
           v-model:page-size="paginationData.pageSize"
           :total="total"
-          :page-sizes="[20, 50, 100, 200]"
+          :page-sizes="paginationData.pageSizes"
           layout="total, sizes, prev, pager, next, jumper"
           background
           @current-change="handleCurrentChange"

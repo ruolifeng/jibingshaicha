@@ -79,6 +79,22 @@ export function findDistrictFeature(geo: GeoJsonFeatureCollection, districtName:
   return geo.features.find(f => districtNamesMatch(f.properties.name, districtName))
 }
 
+/** 乡镇 GeoJSON 中「区县本级」等为占位面，不参与地图展示 */
+export function isDistrictLevelPlaceholderName(name: string) {
+  const normalized = name.trim()
+  return normalized === "区县本级"
+    || normalized === "区县本县"
+    || normalized === "区县级"
+    || normalized.includes("本级")
+}
+
+export function filterTownshipGeoFeatures(geo: GeoJsonFeatureCollection): GeoJsonFeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: geo.features.filter(feature => !isDistrictLevelPlaceholderName(feature.properties.name))
+  }
+}
+
 /** 加载区县下乡镇 GeoJSON：优先本地边界文件，否则在区县真实轮廓内生成 Voronoi 乡镇面 */
 export async function loadDistrictTownshipGeo(
   districtFeature: GeoJsonFeature,
@@ -90,7 +106,7 @@ export async function loadDistrictTownshipGeo(
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}geo/townships/${adcode}.json`)
       if (res.ok) {
-        const bundled = await res.json() as GeoJsonFeatureCollection
+        const bundled = filterTownshipGeoFeatures(await res.json() as GeoJsonFeatureCollection)
         if (bundled?.features?.length) {
           return ensureRegionCoverage(bundled, districtFeature, regions)
         }

@@ -1,4 +1,5 @@
 import type { App } from "vue"
+import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import VXETable from "vxe-table" // https://vxetable.cn/#/start/install
 
 // 全局默认参数
@@ -38,7 +39,7 @@ VXETable.setConfig({
     perfect: false,
     pageSize: 10,
     pagerCount: 7,
-    pageSizes: [10, 20, 50],
+    pageSizes: [...PAGE_SIZE_OPTIONS],
     layouts: ["Total", "PrevJump", "PrevPage", "Number", "NextPage", "NextJump", "Sizes", "FullJump"]
   },
   modal: {

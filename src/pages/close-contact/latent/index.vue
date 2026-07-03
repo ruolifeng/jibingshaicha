@@ -684,7 +684,7 @@ async function handleSaveFollowupInput() {
       <div class="mt-4 flex justify-end">
         <el-pagination
           v-model:current-page="paginationData.currentPage" v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper"
+          :page-sizes="paginationData.pageSizes" :total="total" layout="total, sizes, prev, pager, next, jumper"
           @current-change="handleCurrentChange" @size-change="handleSizeChange"
         />
       </div>
