@@ -54,7 +54,8 @@ async function buildSeriesData() {
     const townshipGeo = await loadDistrictTownshipGeo(
       districtFeature,
       props.heatmap.districtAdcode,
-      props.heatmap.regions ?? []
+      props.heatmap.regions ?? [],
+      props.heatmap.districtName || undefined
     )
     echarts.registerMap(getMapName(), townshipGeo as any)
     return buildMapSeriesData(props.heatmap.regions, townshipGeo.features)

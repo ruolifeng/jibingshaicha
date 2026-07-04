@@ -565,9 +565,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                      Map<String, Map<String, Long>> matrix,
                                                                      long total) {
         Map<String, Long> communities = new LinkedHashMap<>(matrix.getOrDefault(districtName, Map.of()));
-        if (communities.isEmpty()) {
-            enrichDistrictCommunitiesFromCatalog(districtName, communities);
-        }
+        enrichDistrictCommunitiesFromCatalog(districtName, communities);
         List<String> labels = sortCommunityLabels(communities.keySet());
         List<PatientDistributionHeatmapVO.MapRegion> regions = new ArrayList<>();
         int maxCount = 0;

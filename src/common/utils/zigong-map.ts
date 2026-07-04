@@ -31,6 +31,9 @@ type Polygon = Ring[]
 type MultiPolygon = Polygon[]
 
 let cityGeoCache: GeoJsonFeatureCollection | null = null
+let townshipCentroidsCache: Record<string, Record<string, [number, number]>> | null = null
+
+const EXCLUDED_TOWNSHIP_NAMES = new Set(["区县本级", "—", "未识别乡镇"])
 
 export async function loadZigongCityGeo(): Promise<GeoJsonFeatureCollection> {
   if (cityGeoCache) return cityGeoCache
@@ -40,6 +43,51 @@ export async function loadZigongCityGeo(): Promise<GeoJsonFeatureCollection> {
   }
   cityGeoCache = await res.json()
   return cityGeoCache!
+}
+
+async function loadTownshipCentroids() {
+  if (townshipCentroidsCache) return townshipCentroidsCache
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}geo/township-centroids.json`)
+    if (res.ok) {
+      townshipCentroidsCache = await res.json()
+      return townshipCentroidsCache!
+    }
+  } catch {
+    // 无中心点文件时使用随机采样兜底
+  }
+  townshipCentroidsCache = {}
+  return townshipCentroidsCache
+}
+
+function resolveDistrictCentroids(
+  districtName: string | undefined,
+  centroids: Record<string, Record<string, [number, number]>>
+) {
+  if (!districtName) return {}
+  for (const [name, points] of Object.entries(centroids)) {
+    if (districtNamesMatch(name, districtName)) {
+      return points
+    }
+  }
+  return {}
+}
+
+function isValidTownshipFeature(feature: GeoJsonFeature) {
+  const name = feature.properties.name?.trim()
+  return !!name && !EXCLUDED_TOWNSHIP_NAMES.has(name)
+}
+
+function syncBundledGeoWithRegions(
+  bundled: GeoJsonFeatureCollection,
+  regions: Array<{ name: string, value?: number }>
+) {
+  void regions
+  const features = bundled.features.filter(isValidTownshipFeature)
+  return {
+    type: "FeatureCollection" as const,
+    features
+  }
 }
 
 export function normalizeDistrictName(name: string) {
@@ -99,37 +147,46 @@ export function filterTownshipGeoFeatures(geo: GeoJsonFeatureCollection): GeoJso
 export async function loadDistrictTownshipGeo(
   districtFeature: GeoJsonFeature,
   districtAdcode: string | undefined,
-  regions: Array<{ name: string, value?: number }>
+  regions: Array<{ name: string, value?: number }>,
+  districtName?: string
 ): Promise<GeoJsonFeatureCollection> {
   const adcode = districtAdcode || String(districtFeature.properties.adcode ?? "")
+  const resolvedDistrictName = districtName || districtFeature.properties.name
+  const centroids = await loadTownshipCentroids()
+  const districtCentroids = resolveDistrictCentroids(resolvedDistrictName, centroids)
+
   if (adcode) {
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}geo/townships/${adcode}.json`)
       if (res.ok) {
         const bundled = filterTownshipGeoFeatures(await res.json() as GeoJsonFeatureCollection)
         if (bundled?.features?.length) {
-          return ensureRegionCoverage(bundled, districtFeature, regions)
+          const synced = syncBundledGeoWithRegions(bundled, regions)
+          return ensureRegionCoverage(synced, districtFeature, regions, districtCentroids)
         }
       }
     } catch {
       // 使用 Voronoi 兜底
     }
   }
-  return buildTownshipVoronoiGeoJson(districtFeature, regions)
+  return buildTownshipVoronoiGeoJson(districtFeature, regions, districtCentroids)
 }
 
 function ensureRegionCoverage(
   bundled: GeoJsonFeatureCollection,
   districtFeature: GeoJsonFeature,
-  regions: Array<{ name: string, value?: number }>
+  regions: Array<{ name: string, value?: number }>,
+  districtCentroids: Record<string, [number, number]>
 ) {
-  const missing = (regions ?? []).filter(region =>
-    !bundled.features.some(feature => townshipNamesMatch(feature.properties.name, region.name))
-  )
+  const missing = (regions ?? []).filter((region) => {
+    const name = region.name?.trim()
+    if (!name || EXCLUDED_TOWNSHIP_NAMES.has(name)) return false
+    return !bundled.features.some(feature => townshipNamesMatch(feature.properties.name, name))
+  })
   if (!missing.length) {
     return bundled
   }
-  const generated = buildTownshipVoronoiGeoJson(districtFeature, missing)
+  const generated = buildTownshipVoronoiGeoJson(districtFeature, missing, districtCentroids)
   return {
     type: "FeatureCollection" as const,
     features: [...bundled.features, ...generated.features]
@@ -139,11 +196,12 @@ function ensureRegionCoverage(
 /** 在区县真实边界内按 Voronoi 划分乡镇面（替代矩形网格） */
 export function buildTownshipVoronoiGeoJson(
   districtFeature: GeoJsonFeature,
-  regions: Array<{ name: string, value?: number }>
+  regions: Array<{ name: string, value?: number }>,
+  districtCentroids: Record<string, [number, number]> = {}
 ): GeoJsonFeatureCollection {
   const labels = (regions ?? [])
     .map(region => region.name?.trim())
-    .filter((name): name is string => !!name && name !== "—")
+    .filter((name): name is string => !!name && !EXCLUDED_TOWNSHIP_NAMES.has(name))
 
   if (!labels.length) {
     return { type: "FeatureCollection", features: [] }
@@ -153,7 +211,7 @@ export function buildTownshipVoronoiGeoJson(
   const { minX, minY, maxX, maxY } = getFeatureBBox(districtFeature)
   const seeds = labels.map((name, index) => ({
     name,
-    point: samplePointInMultiPolygon(districtPolygons, hashSeed(name, index), minX, minY, maxX, maxY)
+    point: resolveSeedPoint(name, index, districtCentroids, districtPolygons, minX, minY, maxX, maxY)
   }))
 
   const delaunay = Delaunay.from(seeds, d => d.point[0], d => d.point[1])
@@ -221,6 +279,26 @@ function hashSeed(name: string, index: number) {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0
   }
   return hash
+}
+
+function resolveSeedPoint(
+  name: string,
+  index: number,
+  districtCentroids: Record<string, [number, number]>,
+  districtPolygons: MultiPolygon,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number
+): Position {
+  const preset = districtCentroids[name]
+  if (preset?.length === 2) {
+    const point: Position = [preset[0], preset[1]]
+    if (pointInMultiPolygon(point, districtPolygons)) {
+      return point
+    }
+  }
+  return samplePointInMultiPolygon(districtPolygons, hashSeed(name, index), minX, minY, maxX, maxY)
 }
 
 function samplePointInMultiPolygon(
