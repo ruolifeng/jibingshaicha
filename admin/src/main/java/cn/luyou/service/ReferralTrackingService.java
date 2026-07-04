@@ -73,7 +73,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     long countRecommendArrivedForDashboard(Integer statYear);
 
     /**
-     * 首页追踪统计（追踪模块，统计周期：上年度12月1日—本年度11月30日）。
+     * 首页追踪统计（追踪模块，统计周期：自然年 1/1—12/31）。
      */
     Map<String, Object> getTrackDashboardStats(Integer statYear);
 }

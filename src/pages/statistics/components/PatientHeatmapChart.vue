@@ -54,7 +54,8 @@ async function buildSeriesData() {
     const townshipGeo = await loadDistrictTownshipGeo(
       districtFeature,
       props.heatmap.districtAdcode,
-      props.heatmap.regions ?? []
+      props.heatmap.regions ?? [],
+      props.heatmap.districtName || undefined
     )
     echarts.registerMap(getMapName(), townshipGeo as any)
     return buildMapSeriesData(props.heatmap.regions, townshipGeo.features)
@@ -136,9 +137,12 @@ async function renderChart() {
         scaleLimit: { min: 0.8, max: 4 },
         label: {
           show: true,
-          fontSize: isDistrict ? 11 : 12,
+          fontSize: isDistrict ? 10 : 12,
           color: "#303133",
           formatter: (params: any) => formatMapLabel(params.name as string, isDistrict)
+        },
+        labelLayout: {
+          hideOverlap: false
         },
         emphasis: {
           label: { show: true, fontWeight: "bold" },

@@ -125,7 +125,7 @@ public interface PatientService extends IService<Patient> {
     /**
      * 首页统计：在管总览 + 历史患者总数（与列表查询一致的数据权限）。
      *
-     * @param statYear 统计年度，周期为上年度 12/1—本年度 11/30；为 null 时不限年度
+     * @param statYear 统计年度（自然年 1/1—12/31）；为 null 时不限年度
      */
     long countManagedPatientsForDashboard(Integer statYear);
 

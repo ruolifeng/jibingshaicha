@@ -31,7 +31,7 @@ export interface DashboardSummaryData {
   upcomingReview: number
   /** 统计年度（用于「某某年度管理患者数」展示） */
   managementYear?: number
-  /** 统计周期起止（上年度 12/1—本年度 11/30） */
+  /** 统计周期起止（自然年 1/1—12/31） */
   statPeriodFrom?: string
   statPeriodTo?: string
   /** 病原学阳性人数（在管总览+历史患者中「病原学结果阳性」口径） */
@@ -46,7 +46,7 @@ export interface DashboardSummaryData {
   recommendArrivalRate?: number
   /** 追踪统计年度（周期结束日所在自然年） */
   trackingStatYear?: number
-  /** 追踪统计周期起止（上年度12/1—本年度11/30） */
+  /** 追踪统计周期起止（自然年 1/1—12/31） */
   trackingPeriodFrom?: string
   trackingPeriodTo?: string
   /** 追踪人数 */

@@ -46,7 +46,7 @@ public class DashboardController {
         );
         data.put("pendingTracking", pendingTracking);
 
-        // 年度统计（周期：上年度 12/1—本年度 11/30）
+        // 年度统计（周期：自然年 1/1—12/31）
         data.putAll(workbenchStatisticsService.buildSummary(year));
 
         // 待确认通知单：状态为已发送（1）的通知单数

@@ -1,5 +1,7 @@
 /**
- * 预生成自贡各区县乡镇 GeoJSON（基于区县真实轮廓 + Voronoi），输出到 public/geo/townships/
+ * 预生成自贡各区县乡镇 GeoJSON（区县真实轮廓 + 乡镇中心点 Voronoi）
+ * 乡镇名录：admin/src/main/resources/geo/zigong-townships.json
+ * 中心坐标：public/geo/township-centroids.json
  * 运行：node admin/scripts/generate-township-geo.mjs
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -11,6 +13,8 @@ import polygonClipping from "polygon-clipping"
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(__dirname, "..", "..")
 const cityGeoPath = join(rootDir, "public", "geo", "zigong-city.json")
+const catalogPath = join(rootDir, "admin", "src", "main", "resources", "geo", "zigong-townships.json")
+const centroidsPath = join(rootDir, "public", "geo", "township-centroids.json")
 const outputDir = join(rootDir, "public", "geo", "townships")
 
 const DISTRICT_ADCODES = {
@@ -23,8 +27,8 @@ const DISTRICT_ADCODES = {
 }
 
 const cityGeo = JSON.parse(readFileSync(cityGeoPath, "utf8"))
-const streetsRes = await fetch("https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/streets.json")
-const streets = await streetsRes.json()
+const catalog = JSON.parse(readFileSync(catalogPath, "utf8"))
+const centroids = JSON.parse(readFileSync(centroidsPath, "utf8"))
 
 mkdirSync(outputDir, { recursive: true })
 
@@ -34,28 +38,36 @@ for (const [districtName, adcode] of Object.entries(DISTRICT_ADCODES)) {
     console.warn(`skip ${districtName}: feature not found`)
     continue
   }
-  const labels = streets
-    .filter(item => item.areaCode === adcode)
-    .map(item => item.name)
-  labels.unshift("区县本级")
 
-  const geo = buildTownshipVoronoiGeoJson(districtFeature, labels.map(name => ({ name })))
+  const labels = catalog[districtName] ?? []
+  if (!labels.length) {
+    console.warn(`skip ${districtName}: empty catalog`)
+    continue
+  }
+
+  const geo = buildTownshipVoronoiGeoJson(
+    districtFeature,
+    labels.map(name => ({ name })),
+    centroids[districtName] ?? {}
+  )
   const outPath = join(outputDir, `${adcode}.json`)
   writeFileSync(outPath, `${JSON.stringify(geo)}\n`, "utf8")
   console.log(`generated ${outPath} (${geo.features.length} features)`)
 }
 
-function buildTownshipVoronoiGeoJson(districtFeature, regions) {
+function buildTownshipVoronoiGeoJson(districtFeature, regions, districtCentroids) {
   const labels = regions.map(r => r.name).filter(Boolean)
   const districtPolygons = featureToMultiPolygon(districtFeature)
   const { minX, minY, maxX, maxY } = getFeatureBBox(districtFeature)
   const seeds = labels.map((name, index) => ({
     name,
-    point: samplePointInMultiPolygon(districtPolygons, hashSeed(name, index), minX, minY, maxX, maxY)
+    point: resolveSeedPoint(name, index, districtCentroids, districtPolygons, minX, minY, maxX, maxY)
   }))
+
   const delaunay = Delaunay.from(seeds, d => d.point[0], d => d.point[1])
   const voronoi = delaunay.voronoi([minX, minY, maxX, maxY])
   const features = []
+
   for (let i = 0; i < seeds.length; i++) {
     const cell = voronoi.cellPolygon(i)
     if (!cell || cell.length < 4) continue
@@ -72,7 +84,19 @@ function buildTownshipVoronoiGeoJson(districtFeature, regions) {
       }
     })
   }
+
   return { type: "FeatureCollection", features }
+}
+
+function resolveSeedPoint(name, index, districtCentroids, districtPolygons, minX, minY, maxX, maxY) {
+  const preset = districtCentroids?.[name]
+  if (preset?.length === 2) {
+    const point = [preset[0], preset[1]]
+    if (pointInMultiPolygon(point, districtPolygons)) {
+      return point
+    }
+  }
+  return samplePointInMultiPolygon(districtPolygons, hashSeed(name, index), minX, minY, maxX, maxY)
 }
 
 function featureToMultiPolygon(feature) {
