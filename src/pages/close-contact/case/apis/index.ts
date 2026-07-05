@@ -33,6 +33,8 @@ export function getCloseContactCaseListApi(params: {
   phone?: string
   creatorUsername?: string
   diagnosisResult?: string
+  createTimeFrom?: string
+  createTimeTo?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "close-contact/case/list",
@@ -50,6 +52,8 @@ export function exportCloseContactCaseApi(params?: {
   phone?: string
   creatorUsername?: string
   diagnosisResult?: string
+  createTimeFrom?: string
+  createTimeTo?: string
   exportType?: "latent" | "confirmed"
 }) {
   const query: Record<string, string> = {}
@@ -60,6 +64,8 @@ export function exportCloseContactCaseApi(params?: {
   if (params?.phone) query.phone = params.phone
   if (params?.creatorUsername) query.creatorUsername = params.creatorUsername
   if (params?.diagnosisResult) query.diagnosisResult = params.diagnosisResult
+  if (params?.createTimeFrom) query.createTimeFrom = params.createTimeFrom
+  if (params?.createTimeTo) query.createTimeTo = params.createTimeTo
   if (params?.exportType) query.exportType = params.exportType
   return request<Blob>({
     url: "close-contact/case/export",

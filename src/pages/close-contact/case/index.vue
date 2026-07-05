@@ -2,6 +2,7 @@
 import { usePagination } from "@@/composables/usePagination"
 import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { downloadBlob } from "@@/utils/download"
+import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
 import {
   batchDeleteCloseContactCaseApi,
   createCloseContactCaseApi,
@@ -26,7 +27,8 @@ const searchForm = reactive({
   district: "",
   phone: "",
   creatorUsername: "",
-  diagnosisResult: ""
+  diagnosisResult: "",
+  entryTimeRange: [] as string[]
 })
 
 const previewColumns = CLOSE_CONTACT_CASE_COLUMNS
@@ -34,15 +36,18 @@ const previewColumns = CLOSE_CONTACT_CASE_COLUMNS
 async function fetchData() {
   loading.value = true
   try {
+    const { entryTimeRange, ...rest } = searchForm
     const res = await getCloseContactCaseListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined,
-      district: searchForm.district || undefined,
-      phone: searchForm.phone || undefined,
-      creatorUsername: searchForm.creatorUsername || undefined,
-      diagnosisResult: searchForm.diagnosisResult || undefined
+      ...rest,
+      name: rest.name || undefined,
+      idNumber: rest.idNumber || undefined,
+      district: rest.district || undefined,
+      phone: rest.phone || undefined,
+      creatorUsername: rest.creatorUsername || undefined,
+      diagnosisResult: rest.diagnosisResult || undefined,
+      ...extractCreateTimeRangeParams(entryTimeRange)
     })
     tableData.value = res.data.records
     total.value = res.data.total
@@ -65,6 +70,7 @@ function handleReset() {
   searchForm.phone = ""
   searchForm.creatorUsername = ""
   searchForm.diagnosisResult = ""
+  searchForm.entryTimeRange = []
   handleSearch()
 }
 
@@ -111,13 +117,15 @@ function getSelectedRows() {
 }
 
 function buildExportParams(exportType?: "latent" | "confirmed") {
+  const { entryTimeRange, ...rest } = searchForm
   return {
-    name: searchForm.name || undefined,
-    idNumber: searchForm.idNumber || undefined,
-    district: searchForm.district || undefined,
-    phone: searchForm.phone || undefined,
-    creatorUsername: searchForm.creatorUsername || undefined,
-    diagnosisResult: searchForm.diagnosisResult || undefined,
+    name: rest.name || undefined,
+    idNumber: rest.idNumber || undefined,
+    district: rest.district || undefined,
+    phone: rest.phone || undefined,
+    creatorUsername: rest.creatorUsername || undefined,
+    diagnosisResult: rest.diagnosisResult || undefined,
+    ...extractCreateTimeRangeParams(entryTimeRange),
     exportType
   }
 }
@@ -318,6 +326,16 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable style="width: 150px">
             <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="录入时间">
+          <el-date-picker
+            v-model="searchForm.entryTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">

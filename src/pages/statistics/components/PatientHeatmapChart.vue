@@ -66,8 +66,9 @@ async function buildSeriesData() {
 function bindMapClick() {
   if (!chart || clickBound) return
   chart.on("click", (params: any) => {
-    if (params.componentType !== "series" || params.seriesType !== "map") return
     if (props.heatmap.mapLevel !== "city") return
+    if (params.componentType === "series" && params.seriesType !== "map") return
+    if (params.componentType !== "series" && params.componentType !== "geo") return
     const name = normalizeDistrictName(params.name as string)
     if (!name || name === "未分配") return
     emit("drill", name)
@@ -75,9 +76,41 @@ function bindMapClick() {
   clickBound = true
 }
 
-function formatMapLabel(name: string, isDistrict: boolean) {
-  if (!isDistrict) return name
-  return name.length > 6 ? `${name.slice(0, 6)}\n${name.slice(6)}` : name
+function formatMapLabel(name: string | undefined, isTownshipView: boolean) {
+  const text = (name || "").trim()
+  if (!text) return ""
+  if (!isTownshipView) return text
+  return text.length > 6 ? `${text.slice(0, 6)}\n${text.slice(6)}` : text
+}
+
+/** 地图区域名称样式（白描边，深浅底色均可读） */
+function buildMapLabelOptions(isTownshipView: boolean) {
+  return {
+    show: true,
+    fontSize: isTownshipView ? 11 : 13,
+    fontWeight: 500 as const,
+    color: "#1d1d1f",
+    textBorderColor: "#fff",
+    textBorderWidth: 2,
+    formatter: (params: unknown) => {
+      const name = typeof params === "string" ? params : (params as { name?: string })?.name
+      return formatMapLabel(name, isTownshipView)
+    }
+  }
+}
+
+function buildMapEmphasisLabel(isTownshipView: boolean) {
+  return {
+    show: true,
+    fontWeight: "bold" as const,
+    color: "#1d1d1f",
+    textBorderColor: "#fff",
+    textBorderWidth: 2,
+    formatter: (params: unknown) => {
+      const name = typeof params === "string" ? params : (params as { name?: string })?.name
+      return formatMapLabel(name, isTownshipView)
+    }
+  }
 }
 
 async function renderChart() {
@@ -94,14 +127,17 @@ async function renderChart() {
 
     const seriesData = await buildSeriesData()
     const maxCount = Math.max(props.heatmap.maxCount ?? 0, 1)
-    const isDistrict = props.heatmap.mapLevel === "district"
+    const isTownshipView = props.heatmap.mapLevel === "district"
     const hasData = seriesData.some(item => item.value > 0)
+    const mapName = getMapName()
+    const mapLabel = buildMapLabelOptions(isTownshipView)
+    const emphasisLabel = buildMapEmphasisLabel(isTownshipView)
 
     if (!seriesData.length) {
       chart.clear()
       chart.setOption({
         title: {
-          text: isDistrict ? "暂无该区县乡镇数据" : "暂无地图数据",
+          text: isTownshipView ? "暂无该区县乡镇数据" : "暂无地图数据",
           left: "center",
           top: "middle",
           textStyle: { color: "#909399", fontSize: 14, fontWeight: "normal" }
@@ -129,36 +165,38 @@ async function renderChart() {
           color: ["#e8f4ff", "#66b1ff", "#409eff", "#1a56a8"]
         }
       },
-      series: [{
-        name: "患者数",
-        type: "map",
-        map: getMapName(),
+      geo: {
+        map: mapName,
         roam: true,
         scaleLimit: { min: 0.8, max: 4 },
-        label: {
-          show: true,
-          fontSize: isDistrict ? 10 : 12,
-          color: "#303133",
-          formatter: (params: any) => formatMapLabel(params.name as string, isDistrict)
-        },
+        label: mapLabel,
         labelLayout: {
           hideOverlap: false
         },
         emphasis: {
-          label: { show: true, fontWeight: "bold" },
+          label: emphasisLabel,
           itemStyle: { areaColor: "#ffd666", borderColor: "#333" }
         },
         itemStyle: {
           borderColor: "#fff",
           borderWidth: 1
-        },
-        data: seriesData
+        }
+      },
+      series: [{
+        name: "患者数",
+        type: "map",
+        geoIndex: 0,
+        data: seriesData,
+        emphasis: {
+          label: emphasisLabel,
+          itemStyle: { areaColor: "#ffd666", borderColor: "#333" }
+        }
       }]
     }, true)
 
     bindMapClick()
 
-    if (!hasData && !isDistrict) {
+    if (!hasData && !isTownshipView) {
       chart.setOption({
         title: {
           subtext: "当前年度暂无患者分布数据，可点击区县查看下级",

@@ -14,7 +14,7 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                       String district, String phone, String creatorUsername,
-                                      String diagnosisResult);
+                                      String diagnosisResult, String createTimeFrom, String createTimeTo);
 
     void createCase(CloseContactCase data);
 
@@ -26,7 +26,7 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                          String phone, String creatorUsername, String diagnosisResult,
-                                         List<Long> ids);
+                                         List<Long> ids, String createTimeFrom, String createTimeTo);
 
     CloseContactCase getAccessibleById(Long id);
 }
