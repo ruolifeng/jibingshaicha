@@ -87,8 +87,8 @@ function formatMapLabel(name: string | undefined, isTownshipView: boolean) {
 /** 地图区域名称样式（白描边，深浅底色均可读） */
 function buildMapLabelOptions(isTownshipView: boolean) {
   return {
-    show: !isTownshipView,
-    fontSize: isTownshipView ? 9 : 13,
+    show: true,
+    fontSize: isTownshipView ? 10 : 13,
     fontWeight: 500 as const,
     color: "#1d1d1f",
     textBorderColor: "#fff",
@@ -186,7 +186,7 @@ async function renderChart() {
         data: seriesData,
         label: mapLabel,
         labelLayout: {
-          hideOverlap: true
+          hideOverlap: false
         },
         emphasis: {
           label: emphasisLabel,
