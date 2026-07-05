@@ -86,7 +86,7 @@ function formatMapLabel(name: string | undefined, isTownshipView: boolean) {
 function buildMapLabelOptions(isTownshipView: boolean) {
   return {
     show: true,
-    fontSize: isTownshipView ? 11 : 13,
+    fontSize: isTownshipView ? 10 : 13,
     fontWeight: 500 as const,
     color: "#1d1d1f",
     textBorderColor: "#fff",
