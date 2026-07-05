@@ -478,7 +478,7 @@ function getRowClass({ row }: { row: any }) {
         <el-form-item label="乡镇">
           <el-input v-model="searchForm.township" placeholder="请输入乡镇" clearable />
         </el-form-item>
-        <el-form-item label="时间段">
+        <el-form-item label="报告卡录入时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"

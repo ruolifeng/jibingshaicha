@@ -43,12 +43,8 @@ function validateForm(): boolean {
     valid = false
   }
 
-  const password = loginFormData.password
-  if (!password) {
+  if (!loginFormData.password) {
     errors.password = "请输入密码"
-    valid = false
-  } else if (password.length < 6 || password.length > 16) {
-    errors.password = "长度在 6 到 16 个字符"
     valid = false
   }
 
@@ -58,7 +54,7 @@ function validateForm(): boolean {
 /** 登录 */
 function handleLogin() {
   if (!validateForm()) {
-    ElMessage.error("表单校验不通过")
+    ElMessage.error("请完善登录信息")
     return
   }
 
@@ -66,10 +62,20 @@ function handleLogin() {
   loginApi(loginFormData).then(({ data }) => {
     userStore.setToken(data)
     router.push("/")
-  }).catch(() => {
+  }).catch((err: Error) => {
+    const message = err.message || "用户名或密码错误"
+    errors.password = message
     loginFormData.password = ""
+    ElMessage.error(message)
   }).finally(() => {
     loading.value = false
+  })
+}
+
+function handleForgotPassword() {
+  ElMessageBox.alert("请联系管理员重置密码", "忘记密码", {
+    confirmButtonText: "我知道了",
+    type: "info"
   })
 }
 
@@ -88,8 +94,12 @@ function handlePasswordInput() {
 
     <div class="login-panel">
       <div class="login-panel__header">
-        <h1 class="login-panel__title">筛查管理</h1>
-        <p class="login-panel__subtitle">疾病追踪与筛查数据管理平台</p>
+        <h1 class="login-panel__title">
+          筛查管理
+        </h1>
+        <p class="login-panel__subtitle">
+          疾病追踪与筛查数据管理平台
+        </p>
       </div>
 
       <form class="login-form" @submit.prevent="handleLogin">
@@ -110,7 +120,9 @@ function handlePasswordInput() {
               @input="handleUsernameInput"
             >
           </div>
-          <p v-if="errors.username" class="form-field__error">{{ errors.username }}</p>
+          <p v-if="errors.username" class="form-field__error">
+            {{ errors.username }}
+          </p>
         </div>
 
         <div class="form-field" :class="{ 'is-error': errors.password }">
@@ -143,13 +155,21 @@ function handlePasswordInput() {
               </svg>
             </button>
           </div>
-          <p v-if="errors.password" class="form-field__error">{{ errors.password }}</p>
+          <p v-if="errors.password" class="form-field__error">
+            {{ errors.password }}
+          </p>
         </div>
 
-        <button class="login-btn" type="submit" :disabled="loading">
-          <span v-if="loading" class="login-btn__spinner" aria-hidden="true" />
-          <span>{{ loading ? "登录中..." : "登 录" }}</span>
-        </button>
+        <div class="login-form__actions">
+          <button class="login-btn" type="submit" :disabled="loading">
+            <span v-if="loading" class="login-btn__spinner" aria-hidden="true" />
+            <span>{{ loading ? "登录中..." : "登 录" }}</span>
+          </button>
+
+          <button type="button" class="forgot-password-btn" @click="handleForgotPassword">
+            忘记密码
+          </button>
+        </div>
       </form>
     </div>
 
@@ -225,6 +245,14 @@ function handlePasswordInput() {
   display: flex;
   flex-direction: column;
   gap: 18px;
+
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
+  }
 }
 
 .form-field {
@@ -292,7 +320,9 @@ function handlePasswordInput() {
     background: transparent;
     color: rgba(255, 255, 255, 0.72);
     cursor: pointer;
-    transition: color 0.2s ease, background-color 0.2s ease;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
 
     svg {
       width: 18px;
@@ -326,7 +356,6 @@ function handlePasswordInput() {
   gap: 8px;
   width: 100%;
   height: 48px;
-  margin-top: 6px;
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 14px;
   background: transparent;
@@ -363,6 +392,22 @@ function handlePasswordInput() {
     border-top-color: #fff;
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
+  }
+}
+
+.forgot-password-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: #fff;
   }
 }
 

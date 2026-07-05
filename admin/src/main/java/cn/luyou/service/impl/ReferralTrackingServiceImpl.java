@@ -1857,17 +1857,25 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
         applyBizModeFilter(wrapper, bizMode);
-        return wrapper
+        wrapper
                 .like(StrUtil.isNotBlank(name), ReferralTracking::getName, name)
                 .like(StrUtil.isNotBlank(idNumber), ReferralTracking::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), ReferralTracking::getPhone, phone)
                 .like(StrUtil.isNotBlank(township), ReferralTracking::getTownship, township)
                 .eq(trackingStatus != null, ReferralTracking::getTrackingStatus, trackingStatus)
                 .eq(archived != null, ReferralTracking::getArchived, archived)
-                .eq(StrUtil.isNotBlank(sourceType), ReferralTracking::getSourceType, sourceType)
-                .ge(from != null, ReferralTracking::getCreateTime, from)
-                .le(to != null, ReferralTracking::getCreateTime, to)
-                .orderByDesc(ReferralTracking::getCreateTime);
+                .eq(StrUtil.isNotBlank(sourceType), ReferralTracking::getSourceType, sourceType);
+        if ("track".equals(bizMode)) {
+            wrapper.ge(from != null, ReferralTracking::getReportCardTime, from)
+                    .le(to != null, ReferralTracking::getReportCardTime, to)
+                    .orderByDesc(ReferralTracking::getReportCardTime)
+                    .orderByDesc(ReferralTracking::getCreateTime);
+        } else {
+            wrapper.ge(from != null, ReferralTracking::getCreateTime, from)
+                    .le(to != null, ReferralTracking::getCreateTime, to)
+                    .orderByDesc(ReferralTracking::getCreateTime);
+        }
+        return wrapper;
     }
 
     private String trackingStatusLabel(Integer status) {

@@ -2,6 +2,7 @@
 import type { FormInstance, FormRules, UploadProps, UploadRequestOptions } from "element-plus"
 import { updateCurrentUserApi } from "@@/apis/users"
 import { resolveFileUrl, uploadAttachmentFile } from "@@/utils/attachment"
+import { STRONG_PASSWORD_HINT, strongPasswordRule } from "@@/utils/password"
 import { UserFilled } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -30,12 +31,19 @@ const avatarPreview = computed(() => resolveFileUrl(formData.avatar))
 
 const rules: FormRules<typeof formData> = {
   realName: [{ required: true, message: "请输入真实姓名", trigger: "blur" }],
+  password: [strongPasswordRule()],
   confirmPassword: [
     {
       validator: (_rule, value, callback) => {
-        if (formData.password && value !== formData.password) {
-          callback(new Error("两次输入的密码不一致"))
-          return
+        if (formData.password) {
+          if (!value) {
+            callback(new Error("请再次输入密码"))
+            return
+          }
+          if (value !== formData.password) {
+            callback(new Error("两次输入的密码不一致"))
+            return
+          }
         }
         callback()
       },
@@ -170,13 +178,16 @@ syncFormData()
             <el-form-item label="所属机构">
               <el-input v-model.trim="formData.orgName" placeholder="请输入所属机构名称" />
             </el-form-item>
-            <el-form-item label="新密码">
+            <el-form-item label="新密码" prop="password">
               <el-input
                 v-model="formData.password"
                 type="password"
                 show-password
                 placeholder="留空则不修改密码"
               />
+              <div class="password-hint">
+                {{ STRONG_PASSWORD_HINT }}
+              </div>
             </el-form-item>
             <el-form-item label="确认密码" prop="confirmPassword">
               <el-input
@@ -239,6 +250,13 @@ syncFormData()
 
   .profile-descriptions {
     margin-bottom: 24px;
+  }
+
+  .password-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
   }
 }
 </style>
