@@ -67,8 +67,7 @@ function bindMapClick() {
   if (!chart || clickBound) return
   chart.on("click", (params: any) => {
     if (props.heatmap.mapLevel !== "city") return
-    if (params.componentType === "series" && params.seriesType !== "map") return
-    if (params.componentType !== "series" && params.componentType !== "geo") return
+    if (params.componentType !== "series" || params.seriesType !== "map") return
     const name = normalizeDistrictName(params.name as string)
     if (!name || name === "未分配") return
     emit("drill", name)
@@ -176,12 +175,15 @@ async function renderChart() {
           color: ["#e8f4ff", "#66b1ff", "#409eff", "#1a56a8"]
         }
       },
-      geo: {
+      series: [{
+        name: "患者数",
+        type: "map",
         map: mapName,
         roam: true,
         scaleLimit: { min: 0.6, max: 6 },
         layoutCenter: ["50%", isTownshipView ? "52%" : "50%"],
         layoutSize: isTownshipView ? "92%" : "88%",
+        data: seriesData,
         label: mapLabel,
         labelLayout: {
           hideOverlap: true
@@ -193,16 +195,6 @@ async function renderChart() {
         itemStyle: {
           borderColor: "#fff",
           borderWidth: 1
-        }
-      },
-      series: [{
-        name: "患者数",
-        type: "map",
-        geoIndex: 0,
-        data: seriesData,
-        emphasis: {
-          label: emphasisLabel,
-          itemStyle: { areaColor: "#ffd666", borderColor: "#333" }
         }
       }]
     }, true)

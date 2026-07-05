@@ -5,6 +5,7 @@ import { getDepartmentListApi } from "@@/apis/department"
 import { createUserApi, deleteUserApi, getUserListApi, updateUserApi } from "@@/apis/users"
 import { ROLE_MAP, ROLE_OPTIONS } from "@@/constants/disease"
 import { flattenDepartmentOptions } from "@@/utils/departmentTree"
+import { STRONG_PASSWORD_HINT, validateStrongPassword } from "@@/utils/password"
 import { buildUserDepartmentTree, walkUserTreeRows } from "@@/utils/userDepartmentTree"
 
 const DEPT_LEVEL_MAP: Record<number, string> = {
@@ -148,6 +149,13 @@ function openEditDialog(row: UserTreeRow) {
 async function handleSubmit() {
   try {
     if (isEdit.value) {
+      if (formData.password) {
+        const passwordError = validateStrongPassword(formData.password)
+        if (passwordError) {
+          ElMessage.warning(passwordError)
+          return
+        }
+      }
       const payload: Record<string, any> = {
         id: formData.id,
         username: formData.username,
@@ -162,6 +170,11 @@ async function handleSubmit() {
     } else {
       if (!formData.password) {
         ElMessage.warning("请输入密码")
+        return
+      }
+      const passwordError = validateStrongPassword(formData.password)
+      if (passwordError) {
+        ElMessage.warning(passwordError)
         return
       }
       await createUserApi({ ...formData })
@@ -319,7 +332,15 @@ fetchData()
           <el-input v-model="formData.username" placeholder="请输入用户名" />
         </el-form-item>
         <el-form-item :label="isEdit ? '新密码' : '密码'">
-          <el-input v-model="formData.password" type="password" show-password :placeholder="isEdit ? '留空则不修改' : '请输入密码'" />
+          <el-input
+            v-model="formData.password"
+            type="password"
+            show-password
+            :placeholder="isEdit ? '留空则不修改' : '请输入密码'"
+          />
+          <div class="password-hint">
+            {{ STRONG_PASSWORD_HINT }}
+          </div>
         </el-form-item>
         <el-form-item label="真实姓名">
           <el-input v-model="formData.realName" placeholder="请输入真实姓名" />
@@ -402,5 +423,12 @@ fetchData()
 
 .ml-2 {
   margin-left: 8px;
+}
+
+.password-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
 }
 </style>

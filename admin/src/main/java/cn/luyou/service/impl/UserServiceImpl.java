@@ -11,6 +11,8 @@ import cn.luyou.service.PermissionService;
 import cn.luyou.service.UserService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.JwtUtil;
+import cn.luyou.utils.PasswordValidator;
+import cn.luyou.utils.PasswordValidator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -85,9 +87,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (count > 0) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "用户名已存在");
         }
-        if (StrUtil.isBlank(user.getPassword())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "密码不能为空");
-        }
+        PasswordValidator.assertStrongPassword(user.getPassword());
         if (user.getRole() == null) {
             user.setRole(6);
         }
@@ -118,6 +118,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         // 仅当传入了新密码时才重新加密，否则保持原密码不变
         if (StrUtil.isNotBlank(user.getPassword())) {
+            PasswordValidator.assertStrongPassword(user.getPassword());
             user.setPassword(PASSWORD_ENCODER.encode(user.getPassword()));
         } else {
             user.setPassword(null);
@@ -139,6 +140,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .set(User::getOrgName, user.getOrgName())
                 .set(User::getAvatar, user.getAvatar());
         if (StrUtil.isNotBlank(user.getPassword())) {
+            PasswordValidator.assertStrongPassword(user.getPassword());
             updater.set(User::getPassword, PASSWORD_ENCODER.encode(user.getPassword()));
         }
         updater.update();

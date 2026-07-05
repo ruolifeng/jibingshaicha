@@ -63,9 +63,15 @@ function createInstance() {
       switch (code) {
         case 200:
           return apiData
-        case 401:
+        case 401: {
+          const requestUrl = String(response.config?.url ?? "")
+          const isLoginRequest = requestUrl.includes("user/login")
+          if (isLoginRequest) {
+            return Promise.reject(new Error(apiData.msg || "用户名或密码错误"))
+          }
           // Token 过期时
           return logout()
+        }
         default:
           // 不是正确的 code
           ElMessage.error(apiData.msg || "Error")
