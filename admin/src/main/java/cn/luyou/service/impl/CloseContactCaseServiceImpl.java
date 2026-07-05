@@ -14,6 +14,7 @@ import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
+import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -29,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -171,9 +173,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     public IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                               String district, String phone, String creatorUsername,
-                                              String diagnosisResult) {
+                                              String diagnosisResult, String createTimeFrom, String createTimeTo) {
         LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
-                name, idNumber, district, phone, creatorUsername, diagnosisResult);
+                name, idNumber, district, phone, creatorUsername, diagnosisResult, createTimeFrom, createTimeTo);
         wrapper.orderByDesc(CloseContactCase::getCreateTime);
         applyDepartmentFilter(wrapper);
         IPage<CloseContactCase> result = page(new Page<>(page, size), wrapper);
@@ -225,13 +227,14 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     public List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                                  String phone, String creatorUsername, String diagnosisResult,
-                                                 List<Long> ids) {
+                                                 List<Long> ids, String createTimeFrom, String createTimeTo) {
         LambdaQueryWrapper<CloseContactCase> wrapper;
         if (ids != null && !ids.isEmpty()) {
             wrapper = new LambdaQueryWrapper<>();
             wrapper.in(CloseContactCase::getId, ids);
         } else {
-            wrapper = buildQueryWrapper(name, idNumber, district, phone, creatorUsername, diagnosisResult);
+            wrapper = buildQueryWrapper(name, idNumber, district, phone, creatorUsername, diagnosisResult,
+                    createTimeFrom, createTimeTo);
         }
         wrapper.orderByDesc(CloseContactCase::getCreateTime);
         applyDepartmentFilter(wrapper);
@@ -242,14 +245,19 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
 
     private LambdaQueryWrapper<CloseContactCase> buildQueryWrapper(String name, String idNumber,
                                                                     String district, String phone,
-                                                                    String creatorUsername, String diagnosisResult) {
+                                                                    String creatorUsername, String diagnosisResult,
+                                                                    String createTimeFrom, String createTimeTo) {
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<CloseContactCase> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), CloseContactCase::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), CloseContactCase::getIdNumber, idNumber)
                 .eq(StrUtil.isNotBlank(district), CloseContactCase::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), CloseContactCase::getPhone, phone)
                 .like(StrUtil.isNotBlank(creatorUsername), CloseContactCase::getCreatorUsername, creatorUsername)
-                .eq(StrUtil.isNotBlank(diagnosisResult), CloseContactCase::getFinalScreeningResult, diagnosisResult);
+                .eq(StrUtil.isNotBlank(diagnosisResult), CloseContactCase::getFinalScreeningResult, diagnosisResult)
+                .ge(createFrom != null, CloseContactCase::getCreateTime, createFrom)
+                .le(createTo != null, CloseContactCase::getCreateTime, createTo);
         return wrapper;
     }
 

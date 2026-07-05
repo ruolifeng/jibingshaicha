@@ -15,7 +15,8 @@ public interface ScreeningCloseContactService extends IService<ScreeningCloseCon
 
     IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
                                             String district, Integer ccStatus, String finalScreeningResult,
-                                            String phone, String dateFrom, String dateTo);
+                                            String phone, String dateFrom, String dateTo,
+                                            String createTimeFrom, String createTimeTo);
 
     /** 新增单条筛查记录 */
     void createScreening(ScreeningCloseContact data);

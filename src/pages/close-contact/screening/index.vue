@@ -23,7 +23,7 @@ import {
   SCREENING_FIELD_OTHER,
   selectOptionsWithLegacy
 } from "@@/constants/screening-close-contact"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { useRouter } from "vue-router"
 import {
   batchDeleteScreeningCloseContactApi,
@@ -53,6 +53,7 @@ const searchForm = reactive({
   district: "",
   phone: "",
   dateRange: [] as string[],
+  entryTimeRange: [] as string[],
   finalScreeningResult: "" as string
 })
 
@@ -123,7 +124,8 @@ async function fetchData() {
       district: searchForm.district || undefined,
       phone: searchForm.phone || undefined,
       finalScreeningResult: searchForm.finalScreeningResult || undefined,
-      ...extractDateRangeParams(searchForm.dateRange)
+      ...extractDateRangeParams(searchForm.dateRange),
+      ...extractCreateTimeRangeParams(searchForm.entryTimeRange)
     })
     tableData.value = listRes.data.records
     total.value = listRes.data.total
@@ -148,6 +150,7 @@ function handleReset() {
   searchForm.district = ""
   searchForm.phone = ""
   searchForm.dateRange = []
+  searchForm.entryTimeRange = []
   searchForm.finalScreeningResult = ""
   handleSearch()
 }
@@ -549,6 +552,16 @@ async function handleThreeMonthSubmit() {
           <el-select v-model="searchForm.finalScreeningResult" placeholder="全部" clearable style="width: 140px">
             <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="录入时间">
+          <el-date-picker
+            v-model="searchForm.entryTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">

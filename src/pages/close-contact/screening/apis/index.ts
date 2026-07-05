@@ -23,6 +23,8 @@ export function getScreeningCloseContactListApi(params: {
   phone?: string
   dateFrom?: string
   dateTo?: string
+  createTimeFrom?: string
+  createTimeTo?: string
   ccStatus?: number
   finalScreeningResult?: string
 }) {

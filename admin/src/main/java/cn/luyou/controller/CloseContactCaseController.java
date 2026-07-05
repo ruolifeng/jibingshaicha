@@ -46,9 +46,12 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
-            @RequestParam(required = false) String diagnosisResult) {
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo) {
         return ResultRes.success(closeContactCaseService.queryPage(
-                page, size, name, idNumber, district, phone, creatorUsername, diagnosisResult));
+                page, size, name, idNumber, district, phone, creatorUsername, diagnosisResult,
+                createTimeFrom, createTimeTo));
     }
 
     @Operation(summary = "新增密接个案")
@@ -91,7 +94,9 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
-            @RequestParam(required = false) String exportType) throws Exception {
+            @RequestParam(required = false) String exportType,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo) throws Exception {
 
         String effectiveDiagnosis = diagnosisResult;
         String fileName = "密接个案表.xlsx";
@@ -113,7 +118,8 @@ public class CloseContactCaseController {
         }
 
         List<CloseContactCase> list = closeContactCaseService.listForExport(
-                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis, idList);
+                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis, idList,
+                createTimeFrom, createTimeTo);
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +

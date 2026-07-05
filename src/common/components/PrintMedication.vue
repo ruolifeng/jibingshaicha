@@ -68,7 +68,7 @@ function handlePrint() {
   printElement(
     "print-medication-content",
     "肺结核患者治疗记录卡",
-    "@page { size: A4 landscape; margin: 10mm; }"
+    "@page { size: A4 landscape; margin: 0; } @media print { html, body { padding: 8mm 10mm; } }"
   )
 }
 </script>

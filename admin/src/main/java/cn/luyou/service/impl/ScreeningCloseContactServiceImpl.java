@@ -44,6 +44,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -319,9 +320,12 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     @Override
     public IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
                                                    String district, Integer ccStatus, String finalScreeningResult,
-                                                   String phone, String dateFrom, String dateTo) {
+                                                   String phone, String dateFrom, String dateTo,
+                                                   String createTimeFrom, String createTimeTo) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), ScreeningCloseContact::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningCloseContact::getIdNumber, idNumber)
@@ -331,6 +335,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         applyFinalScreeningResultFilter(wrapper, finalScreeningResult);
         wrapper.ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
+                .ge(createFrom != null, ScreeningCloseContact::getCreateTime, createFrom)
+                .le(createTo != null, ScreeningCloseContact::getCreateTime, createTo)
                 .orderByDesc(ScreeningCloseContact::getCreateTime);
         applyDepartmentScope(wrapper);
         IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);

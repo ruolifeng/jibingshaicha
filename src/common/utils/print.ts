@@ -8,6 +8,25 @@ import { ElMessage } from "element-plus"
  */
 
 const IMAGE_LOAD_TIMEOUT_MS = 15_000
+
+/**
+ * 去除浏览器默认页眉页脚（打印时间、网址、文档标题、页码）。
+ * Chrome 在 @page margin 为 0 时不渲染页眉页脚；内容边距改由 body padding 控制。
+ */
+const PRINT_PAGE_CSS = `
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  @media print {
+    html,
+    body {
+      margin: 0;
+      padding: 10mm 12mm;
+    }
+  }
+`
+
 const PRINT_ATTACHMENT_CSS = `
   .print-attachments { margin-top: 12px; }
   .print-attachments__title {
@@ -231,17 +250,15 @@ const PRINT_FORM_CSS = `
   }
 `
 
-function buildPrintDocument(title: string, bodyHtml: string, extraCss = ""): string {
+function buildPrintDocument(bodyHtml: string, extraCss = ""): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <title>${title}</title>
+  <title></title>
   <style>
     body { margin: 0; padding: 20px; background: #fff; color: #303133; }
-    @media print {
-      body { padding: 0; }
-    }
+    ${PRINT_PAGE_CSS}
     ${PRINT_ATTACHMENT_CSS}
     ${PRINT_FORM_CSS}
     ${extraCss}
@@ -345,21 +362,20 @@ async function ensurePrintImagesReady(doc: Document) {
 
 /**
  * 将 HTML 写入 iframe 并触发浏览器打印（可选择「另存为 PDF」）
+ *
+ * @param bodyHtml  打印内容 HTML
+ * @param title     iframe 无障碍标签，不会写入文档标题（避免浏览器页眉重复显示）
+ * @param extraCss  额外的 CSS 字符串（可选）
  */
 export function printHtml(bodyHtml: string, title = "打印", extraCss = "") {
   const iframe = createPrintFrame(title)
   const win = iframe.contentWindow
-  const doc = win?.document
 
-  if (!win || !doc) {
+  if (!win) {
     iframe.remove()
     ElMessage.error("无法创建打印窗口，请刷新页面后重试")
     return
   }
-
-  doc.open()
-  doc.write(buildPrintDocument(title, bodyHtml, extraCss))
-  doc.close()
 
   let printed = false
   let cleaned = false
@@ -390,6 +406,12 @@ export function printHtml(bodyHtml: string, title = "打印", extraCss = "") {
 
   const schedulePrint = async () => {
     if (preparing || printed) return
+    const doc = win.document
+    if (!doc) {
+      ElMessage.error("无法创建打印窗口，请刷新页面后重试")
+      cleanup()
+      return
+    }
     preparing = true
     try {
       await ensurePrintImagesReady(doc)
@@ -403,13 +425,16 @@ export function printHtml(bodyHtml: string, title = "打印", extraCss = "") {
     }
   }
 
-  if (doc.readyState === "complete") {
+  iframe.onload = () => {
     void schedulePrint()
-  } else {
-    win.onload = () => {
+  }
+  iframe.srcdoc = buildPrintDocument(bodyHtml, extraCss)
+
+  setTimeout(() => {
+    if (!printed && win.document?.readyState === "complete") {
       void schedulePrint()
     }
-  }
+  }, 500)
 
   setTimeout(cleanup, 60_000)
 }
@@ -418,7 +443,7 @@ export function printHtml(bodyHtml: string, title = "打印", extraCss = "") {
  * 打印指定 ID 的 DOM 元素
  *
  * @param elementId 要打印区域的元素 id
- * @param title     打印窗口标题（可选）
+ * @param title     iframe 无障碍标签（可选，不会出现在打印页眉）
  * @param extraCss  额外的 CSS 字符串，例如 @page 或覆盖样式（可选）
  */
 export function printElement(elementId: string, title = "打印", extraCss = "") {
