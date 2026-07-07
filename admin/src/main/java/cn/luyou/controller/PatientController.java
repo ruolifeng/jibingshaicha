@@ -305,9 +305,6 @@ public class PatientController {
         if (StrUtil.isBlank(fv.getDrugResistance())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择耐药情况");
         }
-        if (StrUtil.isBlank(fv.getSymptoms())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请至少选择一项症状及体征");
-        }
         if (StrUtil.isBlank(fv.getChemotherapy())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写化疗方案");
         }

@@ -40,6 +40,7 @@ import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.PatientAddressRegionParser;
 import cn.luyou.utils.StatYearPeriod;
@@ -1530,13 +1531,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
     }
 
-    /** 将 Excel 行按表头映射为 字段名 -> 值 */
+    /** 将 Excel 行按表头映射为 字段名 -> 值（日期列自动归一化为 yyyy-MM-dd） */
     private Map<String, String> buildNamedRowFields(Map<Integer, String> row, Map<String, Integer> headerIndex) {
         Map<String, String> fields = new LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : headerIndex.entrySet()) {
             String val = row.get(entry.getValue());
             if (StrUtil.isNotBlank(val)) {
-                fields.put(entry.getKey(), val.trim());
+                String header = entry.getKey();
+                String normalized = header != null && header.contains("日期")
+                        ? FlexibleDateParseUtil.normalizeToStandardString(val.trim())
+                        : val.trim();
+                fields.put(header, normalized);
             }
         }
         return fields;
@@ -1757,10 +1762,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
             java.time.LocalDate birthDate = null;
             if (StrUtil.isNotBlank(birthDateStr)) {
-                try { birthDate = java.time.LocalDate.parse(birthDateStr); } catch (Exception ignored) {
-                    try { birthDate = java.time.LocalDate.parse(birthDateStr,
-                            java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd")); } catch (Exception ignored2) {}
-                }
+                birthDate = FlexibleDateParseUtil.parse(birthDateStr);
             }
             Integer age = null;
             if (StrUtil.isNotBlank(ageStr)) {
@@ -1831,7 +1833,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (body.get("gender") != null) patient.setGender(body.get("gender").toString());
         if (body.containsKey("birthDate")) {
             String bd = body.get("birthDate") == null ? "" : body.get("birthDate").toString();
-            patient.setBirthDate(StrUtil.isNotBlank(bd) ? LocalDate.parse(bd) : null);
+            patient.setBirthDate(StrUtil.isNotBlank(bd) ? FlexibleDateParseUtil.parse(bd) : null);
         }
         if (body.containsKey("age")) {
             Object ageVal = body.get("age");
@@ -1937,21 +1939,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     private LocalDate parseLocalDateField(Object val) {
-        if (val == null || StrUtil.isBlank(val.toString())) return null;
-        String str = val.toString().trim();
-        try {
-            return LocalDate.parse(str);
-        } catch (Exception e1) {
-            try {
-                return LocalDate.parse(str, java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-            } catch (Exception e2) {
-                try {
-                    return LocalDate.parse(str, java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd"));
-                } catch (Exception e3) {
-                    return null;
-                }
-            }
-        }
+        return FlexibleDateParseUtil.parse(val);
     }
 
     private String stringField(Object val) {
@@ -2002,7 +1990,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
         String birthDate = body.getOrDefault("birthDate", "").toString().trim();
         if (StrUtil.isNotBlank(birthDate)) {
-            patient.setBirthDate(LocalDate.parse(birthDate));
+            patient.setBirthDate(FlexibleDateParseUtil.parse(birthDate));
         }
 
         save(patient);

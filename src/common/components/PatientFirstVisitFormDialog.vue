@@ -91,13 +91,6 @@ const rules: FormRules = {
   patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
   sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
   drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
-  symptoms: [{
-    type: "array",
-    required: true,
-    min: 1,
-    message: "请至少选择一项症状及体征",
-    trigger: "change"
-  }],
   chemotherapy: [{ required: true, whitespace: true, message: "请填写化疗方案", trigger: "blur" }],
   medicationUsage: [{ required: true, message: "请选择用法", trigger: "change" }],
   supervisor: [{ required: true, message: "请选择督导人员", trigger: "change" }],
@@ -323,7 +316,7 @@ async function handleSave() {
           </el-form-item>
         </el-col>
       </el-row>
-      <el-form-item label="症状及体征" prop="symptoms">
+      <el-form-item label="症状及体征">
         <el-checkbox-group v-model="firstVisitForm.symptoms">
           <el-checkbox v-for="s in SYMPTOM_OPTIONS" :key="s.value" :value="s.value">
             {{ s.label }}

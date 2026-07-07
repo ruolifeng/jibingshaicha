@@ -102,5 +102,16 @@ watch(() => route.query.view, syncFromQuery)
       padding: 0;
     }
   }
+
+  :deep(.screening-data-table) {
+    th.el-table__cell {
+      text-align: center;
+    }
+
+    th.el-table__cell > .cell {
+      justify-content: center;
+      text-align: center;
+    }
+  }
 }
 </style>

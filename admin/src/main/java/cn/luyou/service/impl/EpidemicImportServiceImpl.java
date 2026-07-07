@@ -11,6 +11,7 @@ import cn.luyou.model.Patient;
 import cn.luyou.service.EpidemicImportService;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -29,7 +30,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -363,34 +363,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
     }
 
     private LocalDate parseDate(String text) {
-        if (StrUtil.isBlank(text)) return null;
-        String val = text.trim();
-
-        // 兼容 Excel 序列日期（如 45678 / 45678.0）
-        if (val.matches("^\\d+(\\.\\d+)?$")) {
-            try {
-                double serial = Double.parseDouble(val);
-                if (serial > 59) {
-                    // Excel 1900 日期系统：序列号 1 对应 1899-12-31，Java 按 1899-12-30 计算可兼容闰年缺陷
-                    return LocalDate.of(1899, 12, 30).plusDays((long) Math.floor(serial));
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        try {
-            return LocalDate.parse(val, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        } catch (Exception e1) {
-            try {
-                return LocalDate.parse(val, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-            } catch (Exception e2) {
-                try {
-                    return LocalDate.parse(val, DateTimeFormatter.ofPattern("yyyy.MM.dd"));
-                } catch (Exception e3) {
-                    return null;
-                }
-            }
-        }
+        return FlexibleDateParseUtil.parse(text);
     }
 }
 

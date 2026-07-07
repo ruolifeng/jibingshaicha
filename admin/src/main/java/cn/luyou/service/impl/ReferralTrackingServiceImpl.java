@@ -7,6 +7,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.constant.EpidemicTrackImportHeaders;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.StatYearPeriod;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
@@ -1440,36 +1441,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     private LocalDate parseDate(Object val) {
-        if (val == null) return null;
-        String text = normalizeExcelCellText(val.toString());
-        if (StrUtil.isBlank(text)) return null;
-
-        if (text.matches("^\\d+(\\.\\d+)?$")) {
-            try {
-                double serial = Double.parseDouble(text);
-                if (serial > 59) {
-                    return LocalDate.of(1899, 12, 30).plusDays((long) Math.floor(serial));
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        for (String pattern : new String[]{
-                "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyy-M-d", "yyyy/M/d", "yyyyMMdd", "yyyy年MM月dd日"
-        }) {
-            try {
-                return LocalDate.parse(text, DateTimeFormatter.ofPattern(pattern));
-            } catch (Exception ignored) {
-            }
-        }
-        if (text.length() >= 10) {
-            String datePart = text.substring(0, 10).replace('/', '-').replace('.', '-');
-            try {
-                return LocalDate.parse(datePart, DateTimeFormatter.ISO_LOCAL_DATE);
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
+        return FlexibleDateParseUtil.parse(val);
     }
 
     private LocalDateTime parseDateTime(String text) {
@@ -1532,25 +1504,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     private LocalDate parseDateCell(Object val) {
         val = unwrapExcelCellValue(val);
-        if (val == null) {
-            return null;
-        }
-        if (val instanceof LocalDate ld) {
-            return ld;
-        }
-        if (val instanceof LocalDateTime ldt) {
-            return ldt.toLocalDate();
-        }
-        if (val instanceof java.util.Date d) {
-            return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        }
-        if (val instanceof Number n) {
-            LocalDateTime fromSerial = parseExcelSerialDateTime(n.doubleValue());
-            if (fromSerial != null) {
-                return fromSerial.toLocalDate();
-            }
-        }
-        return parseDate(cellToText(val));
+        return FlexibleDateParseUtil.parse(val);
     }
 
     private LocalDateTime parseExcelSerialDateTime(double serial) {

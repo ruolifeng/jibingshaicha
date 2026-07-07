@@ -8,6 +8,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ReferralTracking;
 import cn.luyou.service.ReferralTrackingService;
 import cn.luyou.service.UserService;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -169,14 +170,7 @@ public class ReferralTrackingController {
     }
 
     private LocalDate parseDate(Object val) {
-        if (val == null || StrUtil.isBlank(val.toString())) {
-            return null;
-        }
-        String text = val.toString().trim();
-        if (text.length() >= 10) {
-            text = text.substring(0, 10);
-        }
-        return LocalDate.parse(text);
+        return FlexibleDateParseUtil.parse(val);
     }
 
     @OperationLog(type = "update", module = "referral", action = "保存筛查信息")

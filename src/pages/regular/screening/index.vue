@@ -413,7 +413,7 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="year" label="年份" />

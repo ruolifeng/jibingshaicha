@@ -350,7 +350,7 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="gender" label="性别" />

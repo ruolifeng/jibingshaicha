@@ -15,24 +15,7 @@ public final class QueryDateRangeUtil {
     }
 
     public static LocalDate parseLocalDate(String text) {
-        if (StrUtil.isBlank(text)) {
-            return null;
-        }
-        String val = text.trim();
-        if (val.length() >= 10) {
-            String datePart = val.substring(0, 10).replace('/', '-');
-            try {
-                return LocalDate.parse(datePart, DateTimeFormatter.ISO_LOCAL_DATE);
-            } catch (Exception ignored) {
-            }
-        }
-        for (String pattern : new String[]{"yyyy-MM-dd", "yyyy/MM/dd"}) {
-            try {
-                return LocalDate.parse(val, DateTimeFormatter.ofPattern(pattern));
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
+        return FlexibleDateParseUtil.parseText(text);
     }
 
     public static LocalDateTime parseDateTimeFrom(String text) {
@@ -56,7 +39,7 @@ public final class QueryDateRangeUtil {
             return null;
         }
         String val = text.trim();
-        LocalDate dateOnly = parseLocalDate(val);
+        LocalDate dateOnly = FlexibleDateParseUtil.parseText(val);
         if (dateOnly != null && !val.contains(":")) {
             return dateOnly.atStartOfDay();
         }
