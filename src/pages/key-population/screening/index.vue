@@ -4,7 +4,7 @@ import { usePagination } from "@@/composables/usePagination"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
-import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
+import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, previewScreeningKeyPopulationUploadApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
@@ -83,17 +83,52 @@ function openTierCare(row: any) {
 /** Excel 上传 */
 const uploadRef = ref()
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, insertCount?: number, updateCount?: number, skippedCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
+const importResultMessage = computed(() => {
+  const { insertCount = 0, updateCount = 0, skippedCount = 0 } = importResult.value
+  const parts = [`成功处理 ${importResult.value.successCount} 条数据`]
+  if (insertCount > 0) parts.push(`新增 ${insertCount} 条`)
+  if (updateCount > 0) parts.push(`覆盖更新 ${updateCount} 条`)
+  if (skippedCount > 0) parts.push(`跳过重复 ${skippedCount} 条`)
+  return parts.join("，")
+})
+
 async function handleUpload(uploadFile: any) {
+  const file = uploadFile?.raw as File | undefined
+  if (!file) return
+
   try {
-    const { data } = await uploadScreeningKeyPopulationApi(uploadFile.raw)
+    const preview = await previewScreeningKeyPopulationUploadApi(file)
+    let overwrite = true
+
+    if ((preview.data?.duplicateCount ?? 0) > 0) {
+      const duplicateNames = (preview.data?.duplicates ?? [])
+        .slice(0, 5)
+        .map((item: { name: string, idNumber: string }) => `${item.name}（${item.idNumber}）`)
+        .join("、")
+      const more = (preview.data?.duplicateCount ?? 0) > 5 ? ` 等共 ${preview.data?.duplicateCount} 人` : ""
+      try {
+        await ElMessageBox.confirm(
+          `检测到 ${preview.data?.duplicateCount} 条数据与系统中已有人员重复（身份证号相同）：${duplicateNames}${more}。\n是否覆盖更新已有记录？选择「覆盖」将更新系统数据，选择「跳过重复」则仅导入新人员。`,
+          "重复人员确认",
+          { confirmButtonText: "覆盖", cancelButtonText: "跳过重复", type: "warning" }
+        )
+        overwrite = true
+      } catch {
+        overwrite = false
+      }
+    }
+
+    const { data } = await uploadScreeningKeyPopulationApi(file, overwrite)
     importResult.value = data
     importResultVisible.value = true
     fetchData()
   } catch {
     ElMessage.error("上传失败")
+  } finally {
+    uploadRef.value?.clearFiles()
   }
 }
 
@@ -413,7 +448,7 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
         <el-table-column prop="name" label="姓名" fixed />
         <el-table-column prop="year" label="年份" />
@@ -895,7 +930,7 @@ watch(
 
     <!-- 导入结果弹窗 -->
     <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
-      <el-alert :title="`成功导入 ${importResult.successCount} 条数据`" type="success" :closable="false" class="mb-3" />
+      <el-alert :title="importResultMessage" type="success" :closable="false" class="mb-3" />
       <template v-if="importResult.errors.length > 0">
         <el-alert :title="`发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">

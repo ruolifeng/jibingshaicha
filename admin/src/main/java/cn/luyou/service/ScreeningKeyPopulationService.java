@@ -6,17 +6,30 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
+
 public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopulation> {
 
     /**
      * 上传并解析 Excel（sourceType 默认 'keyPopulation'，疫情筛查传 'regular'）
+     *
+     * @param overwrite 是否与系统中同身份证号记录覆盖合并；false 时跳过重复行
      */
-    ImportResult uploadAndParse(MultipartFile file, String sourceType);
+    ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite);
 
-    /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
+    /** 导入预览：检测与系统已有记录（身份证号）重复的数据 */
+    Map<String, Object> previewUpload(MultipartFile file, String sourceType);
+
+    /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation，默认覆盖重复 */
     @Deprecated
     default ImportResult uploadAndParse(MultipartFile file) {
-        return uploadAndParse(file, "keyPopulation");
+        return uploadAndParse(file, "keyPopulation", true);
+    }
+
+    /** @deprecated 兼容旧调用，默认覆盖重复 */
+    @Deprecated
+    default ImportResult uploadAndParse(MultipartFile file, String sourceType) {
+        return uploadAndParse(file, sourceType, true);
     }
 
     IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,

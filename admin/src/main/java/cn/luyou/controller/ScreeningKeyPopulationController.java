@@ -34,9 +34,18 @@ public class ScreeningKeyPopulationController {
     @PostMapping("/upload")
     public ResultResponse<ImportResult> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
-        ImportResult result = screeningKeyPopulationService.uploadAndParse(file, sourceType);
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
+            @RequestParam(value = "overwrite", defaultValue = "true") boolean overwrite) {
+        ImportResult result = screeningKeyPopulationService.uploadAndParse(file, sourceType, overwrite);
         return ResultRes.success(result);
+    }
+
+    @Operation(summary = "上传重点人群/疫情筛查Excel预览（检测与系统重复人员）")
+    @PostMapping("/upload/preview")
+    public ResultResponse<java.util.Map<String, Object>> previewUpload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
+        return ResultRes.success(screeningKeyPopulationService.previewUpload(file, sourceType));
     }
 
     @Operation(summary = "分页查询重点人群/疫情筛查数据（sourceType=keyPopulation|regular，默认 keyPopulation）")

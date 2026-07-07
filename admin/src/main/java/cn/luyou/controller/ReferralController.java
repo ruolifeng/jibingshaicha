@@ -6,6 +6,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.vo.ReferralDetailVO;
 import cn.luyou.model.vo.SentReferralVO;
 import cn.luyou.service.ReferralService;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,14 +44,7 @@ public class ReferralController {
     }
 
     private LocalDate parseDate(Object val) {
-        if (val == null || StrUtil.isBlank(val.toString())) {
-            return null;
-        }
-        String text = val.toString().trim();
-        if (text.length() >= 10) {
-            text = text.substring(0, 10);
-        }
-        return LocalDate.parse(text);
+        return FlexibleDateParseUtil.parse(val);
     }
 
     @Operation(summary = "接收方拒绝")

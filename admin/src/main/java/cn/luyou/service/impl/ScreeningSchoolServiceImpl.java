@@ -29,6 +29,7 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -47,7 +48,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -489,7 +489,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         data.setDistrict(field(row, headerIndex, "县市区", "区县"));
         data.setName(field(row, headerIndex, "姓名"));
         data.setGender(field(row, headerIndex, "性别"));
-        data.setBirthDate(parseDate(field(row, headerIndex, "出生日期")));
+        data.setBirthDate(FlexibleDateParseUtil.parse(field(row, headerIndex, "出生日期")));
         data.setAge(parseInteger(field(row, headerIndex, "年龄")));
         data.setIdType(field(row, headerIndex, "证件类型"));
         data.setIdNumber(normalizeExcelCellText(field(row, headerIndex, "证件号", "身份证号", "身份证号码")));
@@ -504,12 +504,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         data.setCloseContactHistory(field(row, headerIndex, "密切接触史"));
         data.setSuspiciousSymptoms(field(row, headerIndex, "结核病可疑症状"));
         data.setHasInfectionScreen(field(row, headerIndex, "是否进行感染筛"));
-        data.setScreenDate(parseDate(field(row, headerIndex, "感染筛查日期")));
+        data.setScreenDate(FlexibleDateParseUtil.parse(field(row, headerIndex, "感染筛查日期")));
         data.setScreenMethod(field(row, headerIndex, "方法", "感染筛查方法"));
         data.setScreenResult(field(row, headerIndex, "结果PPDmmXmmEC及IGRA阳性阴性"));
         data.setInfectionResult(field(row, headerIndex, "感染筛查结果", "判定结果"));
         data.setHasChestXray(field(row, headerIndex, "是否进行胸片检查"));
-        data.setChestXrayDate(parseDate(field(row, headerIndex, "胸片检查日期")));
+        data.setChestXrayDate(FlexibleDateParseUtil.parse(field(row, headerIndex, "胸片检查日期")));
         data.setChestXrayResult(field(row, headerIndex, "胸片结果", "胸部DR", "胸片检查结果"));
         data.setSputumSmearResult(field(row, headerIndex, "痰涂片结果", "痰涂片"));
         data.setMolecularBiologyResult(field(row, headerIndex, "分子生物学结果", "分子生物学"));
@@ -531,24 +531,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     private boolean isBlankSchoolRow(ScreeningSchool data) {
         return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
-    }
-
-    private LocalDate parseDate(String value) {
-        if (StrUtil.isBlank(value)) return null;
-        String text = value.trim();
-        List<DateTimeFormatter> formatters = List.of(
-                DateTimeFormatter.ofPattern("yyyy-MM-dd"),
-                DateTimeFormatter.ofPattern("yyyy/MM/dd"),
-                DateTimeFormatter.ofPattern("yyyy.MM.dd"),
-                DateTimeFormatter.ofPattern("yyyyMMdd")
-        );
-        for (DateTimeFormatter formatter : formatters) {
-            try {
-                return LocalDate.parse(text, formatter);
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
     }
 
     private Integer parseInteger(String value) {

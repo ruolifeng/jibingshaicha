@@ -39,6 +39,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
@@ -1175,26 +1176,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
      * 兼容 Excel 日期单元格的多种返回类型（Date、LocalDateTime、字符串等）
      */
     private LocalDate parseDateCell(Object val) {
-        if (val == null) return null;
-        if (val instanceof LocalDate ld) return ld;
-        if (val instanceof java.time.LocalDateTime ldt) return ldt.toLocalDate();
-        if (val instanceof java.util.Date d) return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
-        String str = val.toString().trim();
-        if (StrUtil.isBlank(str)) return null;
-        try {
-            return LocalDate.parse(str, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        } catch (Exception e1) {
-            try {
-                return LocalDate.parse(str, DateTimeFormatter.ofPattern("yyyy.MM.dd"));
-            } catch (Exception e2) {
-                try {
-                    return LocalDate.parse(str, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-                } catch (Exception e3) {
-                    log.warn("无法解析日期: {}", str);
-                    return null;
-                }
-            }
-        }
+        return FlexibleDateParseUtil.parse(val);
     }
 
     @Override

@@ -49,7 +49,10 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -75,11 +78,115 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private final ScreeningScopeHelper screeningScopeHelper;
 
     @Override
-    public ImportResult uploadAndParse(MultipartFile file, String sourceType) {
+    public Map<String, Object> previewUpload(MultipartFile file, String sourceType) {
+        final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
+        ImportResult parseResult = new ImportResult();
+        List<ScreeningKeyPopulation> dataList = parseExcelFile(file, resolvedSourceType, null, parseResult);
+
+        List<Map<String, String>> duplicates = new ArrayList<>();
+        int newCount = 0;
+        for (ScreeningKeyPopulation data : dataList) {
+            if (StrUtil.isBlank(data.getIdNumber())) {
+                newCount++;
+                continue;
+            }
+            ScreeningKeyPopulation existing = findExistingByIdNumber(data.getIdNumber(), resolvedSourceType);
+            if (existing != null) {
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("name", StrUtil.blankToDefault(data.getName(), existing.getName()));
+                item.put("idNumber", data.getIdNumber());
+                duplicates.add(item);
+            } else {
+                newCount++;
+            }
+        }
+
+        Map<String, Object> preview = new HashMap<>();
+        preview.put("duplicateCount", duplicates.size());
+        preview.put("newCount", newCount);
+        preview.put("duplicates", duplicates);
+        return preview;
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite) {
         final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
         String batchId = UploadBatchSupport.newBatchId("重点人群筛查");
-        List<ScreeningKeyPopulation> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
+        List<ScreeningKeyPopulation> dataList = parseExcelFile(file, resolvedSourceType, batchId, result);
+
+        if (dataList.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
+        }
+
+        List<ScreeningKeyPopulation> toInsert = new ArrayList<>();
+        List<ScreeningKeyPopulation> toUpdate = new ArrayList<>();
+        int skippedCount = 0;
+        int duplicateCount = 0;
+
+        for (ScreeningKeyPopulation d : dataList) {
+            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
+                d.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(d.getDiagnosisFirst()));
+            }
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                toInsert.add(d);
+                continue;
+            }
+            ScreeningKeyPopulation existing = findExistingByIdNumber(d.getIdNumber(), resolvedSourceType);
+            if (existing != null) {
+                duplicateCount++;
+                if (!overwrite) {
+                    skippedCount++;
+                    continue;
+                }
+                mergeIntoExisting(existing, d);
+                toUpdate.add(existing);
+            } else {
+                toInsert.add(d);
+            }
+        }
+
+        if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
+        if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
+
+        result.setInsertCount(toInsert.size());
+        result.setUpdateCount(toUpdate.size());
+        result.setSkippedCount(skippedCount);
+        result.setDuplicateCount(duplicateCount);
+        result.setSuccessCount(toInsert.size() + toUpdate.size());
+
+        // 仅对新插入且感染筛查阳性、或已含胸片+首次诊断的记录自动创建潜伏感染记录。
+        // 注意：diagnosisResult 不在此处预填，需操作员在"待诊断"页面点击"诊断"后由
+        // referral 流程写入；否则会被潜伏列表的 diagnosisResult 过滤器排除，
+        // 导致导入的确诊/疑似记录在"待诊断"中不可见。
+        List<LatentInfection> latentList = toInsert.stream()
+                .filter(d -> d.getIsLatent() == 1)
+                .map(d -> buildLatentInfection(d))
+                .toList();
+        // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建
+        List<LatentInfection> latentFromUpdated = toUpdate.stream()
+                .filter(d -> d.getIsLatent() == 1)
+                .filter(d -> !latentInfectionService.lambdaQuery()
+                        .eq(LatentInfection::getScreeningId, d.getId())
+                        .in(LatentInfection::getPopulationType, "keyPopulation", "regular")
+                        .exists())
+                .map(this::buildLatentInfection)
+                .toList();
+        List<LatentInfection> allLatent = new ArrayList<>(latentList);
+        allLatent.addAll(latentFromUpdated);
+        if (!allLatent.isEmpty()) {
+            latentInfectionService.saveBatch(allLatent, 500);
+            latentInfectionService.autoReferralForDirectDiagnosis(allLatent);
+            log.info("自动创建重点人群潜伏感染记录 {} 条", allLatent.size());
+        }
+        syncLatentFromScreening(toUpdate);
+
+        return result;
+    }
+
+    private List<ScreeningKeyPopulation> parseExcelFile(MultipartFile file, String sourceType, String batchId,
+                                                      ImportResult result) {
+        List<ScreeningKeyPopulation> dataList = new ArrayList<>();
         AtomicInteger rowNum = new AtomicInteger(5); // 数据从第5行开始
 
         try {
@@ -94,10 +201,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
                         result.addError(row, data.getName(), "手机号格式不正确");
                     }
-                    data.setUploadBatch(batchId);
+                    if (StrUtil.isNotBlank(batchId)) {
+                        data.setUploadBatch(batchId);
+                    }
                     data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
-                    data.setSourceType(resolvedSourceType);
+                    data.setSourceType(sourceType);
                     dataList.add(data);
                 }
                 @Override
@@ -120,121 +229,53 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
 
-        if (dataList.isEmpty()) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
+        return dataList;
+    }
+
+    private ScreeningKeyPopulation findExistingByIdNumber(String idNumber, String sourceType) {
+        return lambdaQuery()
+                .eq(ScreeningKeyPopulation::getIdNumber, idNumber)
+                .eq(ScreeningKeyPopulation::getSourceType, sourceType)
+                .last("LIMIT 1")
+                .one();
+    }
+
+    private void mergeIntoExisting(ScreeningKeyPopulation existing, ScreeningKeyPopulation imported) {
+        if (StrUtil.isNotBlank(imported.getName())) existing.setName(imported.getName());
+        if (StrUtil.isNotBlank(imported.getPhone())) existing.setPhone(imported.getPhone());
+        if (StrUtil.isNotBlank(imported.getCurrentAddress())) existing.setCurrentAddress(imported.getCurrentAddress());
+        if (StrUtil.isNotBlank(imported.getInfectionResult())) existing.setInfectionResult(imported.getInfectionResult());
+        if (StrUtil.isNotBlank(imported.getHasChestXray())) existing.setHasChestXray(imported.getHasChestXray());
+        if (imported.getChestXrayDate() != null) existing.setChestXrayDate(imported.getChestXrayDate());
+        if (StrUtil.isNotBlank(imported.getChestXrayResult())) existing.setChestXrayResult(imported.getChestXrayResult());
+        if (StrUtil.isNotBlank(imported.getDiagnosisFirst())) {
+            existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(imported.getDiagnosisFirst()));
         }
+        if (StrUtil.isNotBlank(imported.getRemark())) existing.setRemark(imported.getRemark());
+        existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
+    }
 
-        // 增量导入：按身份证号去重，同一人多次导入时更新而非重复插入
-        List<ScreeningKeyPopulation> toInsert = new ArrayList<>();
-        List<ScreeningKeyPopulation> toUpdate = new ArrayList<>();
-
-        for (ScreeningKeyPopulation d : dataList) {
-            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
-                d.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(d.getDiagnosisFirst()));
-            }
-            if (StrUtil.isBlank(d.getIdNumber())) {
-                toInsert.add(d);
-                continue;
-            }
-            ScreeningKeyPopulation existing = lambdaQuery()
-                    .eq(ScreeningKeyPopulation::getIdNumber, d.getIdNumber())
-                    .last("LIMIT 1")
-                    .one();
-            if (existing != null) {
-                // 合并基本信息，以最新导入为准
-                if (StrUtil.isNotBlank(d.getName())) existing.setName(d.getName());
-                if (StrUtil.isNotBlank(d.getPhone())) existing.setPhone(d.getPhone());
-                if (StrUtil.isNotBlank(d.getCurrentAddress())) existing.setCurrentAddress(d.getCurrentAddress());
-                if (StrUtil.isNotBlank(d.getInfectionResult())) existing.setInfectionResult(d.getInfectionResult());
-                if (StrUtil.isNotBlank(d.getHasChestXray())) existing.setHasChestXray(d.getHasChestXray());
-                if (d.getChestXrayDate() != null) existing.setChestXrayDate(d.getChestXrayDate());
-                if (StrUtil.isNotBlank(d.getChestXrayResult())) existing.setChestXrayResult(d.getChestXrayResult());
-                if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
-                    existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(d.getDiagnosisFirst()));
-                }
-                if (StrUtil.isNotBlank(d.getRemark())) existing.setRemark(d.getRemark());
-                existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
-                toUpdate.add(existing);
-            } else {
-                toInsert.add(d);
-            }
-        }
-
-        if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
-        if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
-
-        result.setSuccessCount(dataList.size());
-
-        // 仅对新插入且感染筛查阳性、或已含胸片+首次诊断的记录自动创建潜伏感染记录。
-        // 注意：diagnosisResult 不在此处预填，需操作员在"待诊断"页面点击"诊断"后由
-        // referral 流程写入；否则会被潜伏列表的 diagnosisResult 过滤器排除，
-        // 导致导入的确诊/疑似记录在"待诊断"中不可见。
-        List<LatentInfection> latentList = toInsert.stream()
-                .filter(d -> d.getIsLatent() == 1)
-                .map(d -> {
-                    // sourceType 决定 populationType（regular→regular；其余→keyPopulation）
-                    String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
-                    return LatentInfection.builder()
-                            .screeningId(d.getId())
-                            .populationType(popType)
-                            .name(d.getName())
-                            .idNumber(d.getIdNumber())
-                            .gender(d.getGender())
-                            .age(d.getAge())
-                            .phone(d.getPhone())
-                            .infectionResult(d.getInfectionResult())
-                            .trackingStatus(0)
-                            .notInPlaceCount(0)
-                            .archived(0)
-                            .hasChestXray(d.getHasChestXray())
-                            .chestXrayDate(d.getChestXrayDate())
-                            .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(latentDiagnosisFirst(d))
-                            .departmentId(d.getDepartmentId())
-                            .creatorId(BaseContext.getCurrentId())
-                            .build();
-                })
-                .toList();
-        // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建
-        List<LatentInfection> latentFromUpdated = toUpdate.stream()
-                .filter(d -> d.getIsLatent() == 1)
-                .filter(d -> !latentInfectionService.lambdaQuery()
-                        .eq(LatentInfection::getScreeningId, d.getId())
-                        .in(LatentInfection::getPopulationType, "keyPopulation", "regular")
-                        .exists())
-                .map(d -> {
-                    String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
-                    return LatentInfection.builder()
-                            .screeningId(d.getId())
-                            .populationType(popType)
-                            .name(d.getName())
-                            .idNumber(d.getIdNumber())
-                            .gender(d.getGender())
-                            .age(d.getAge())
-                            .phone(d.getPhone())
-                            .infectionResult(d.getInfectionResult())
-                            .trackingStatus(0)
-                            .notInPlaceCount(0)
-                            .archived(0)
-                            .hasChestXray(d.getHasChestXray())
-                            .chestXrayDate(d.getChestXrayDate())
-                            .chestXrayResult(d.getChestXrayResult())
-                            .diagnosisFirst(latentDiagnosisFirst(d))
-                            .departmentId(d.getDepartmentId())
-                            .creatorId(BaseContext.getCurrentId())
-                            .build();
-                })
-                .toList();
-        List<LatentInfection> allLatent = new ArrayList<>(latentList);
-        allLatent.addAll(latentFromUpdated);
-        if (!allLatent.isEmpty()) {
-            latentInfectionService.saveBatch(allLatent, 500);
-            latentInfectionService.autoReferralForDirectDiagnosis(allLatent);
-            log.info("自动创建重点人群潜伏感染记录 {} 条", allLatent.size());
-        }
-        syncLatentFromScreening(toUpdate);
-
-        return result;
+    private LatentInfection buildLatentInfection(ScreeningKeyPopulation d) {
+        String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
+        return LatentInfection.builder()
+                .screeningId(d.getId())
+                .populationType(popType)
+                .name(d.getName())
+                .idNumber(d.getIdNumber())
+                .gender(d.getGender())
+                .age(d.getAge())
+                .phone(d.getPhone())
+                .infectionResult(d.getInfectionResult())
+                .trackingStatus(0)
+                .notInPlaceCount(0)
+                .archived(0)
+                .hasChestXray(d.getHasChestXray())
+                .chestXrayDate(d.getChestXrayDate())
+                .chestXrayResult(d.getChestXrayResult())
+                .diagnosisFirst(latentDiagnosisFirst(d))
+                .departmentId(d.getDepartmentId())
+                .creatorId(BaseContext.getCurrentId())
+                .build();
     }
 
     /**

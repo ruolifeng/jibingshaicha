@@ -1,13 +1,42 @@
 import { request } from "@/http/axios"
 
-/** 上传重点人群筛查 Excel */
-export function uploadScreeningKeyPopulationApi(file: File) {
+export interface ScreeningKeyPopulationImportPreview {
+  duplicateCount: number
+  newCount: number
+  duplicates: Array<{ name: string, idNumber: string }>
+}
+
+export interface ScreeningKeyPopulationImportResult {
+  successCount: number
+  insertCount?: number
+  updateCount?: number
+  skippedCount?: number
+  duplicateCount?: number
+  errors: string[]
+}
+
+/** 预览重点人群筛查 Excel 导入（检测与系统重复人员） */
+export function previewScreeningKeyPopulationUploadApi(file: File) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+  return request<ApiResponseData<ScreeningKeyPopulationImportPreview>>({
+    url: "screening/key-population/upload/preview",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000
+  })
+}
+
+/** 上传重点人群筛查 Excel */
+export function uploadScreeningKeyPopulationApi(file: File, overwrite = true) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return request<ApiResponseData<ScreeningKeyPopulationImportResult>>({
     url: "screening/key-population/upload",
     method: "post",
     data: formData,
+    params: { overwrite },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

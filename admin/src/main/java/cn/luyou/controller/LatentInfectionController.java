@@ -12,6 +12,7 @@ import cn.luyou.model.LatentInfection;
 import cn.luyou.service.LatentCheckService;
 import cn.luyou.service.LatentFollowUpService;
 import cn.luyou.service.LatentInfectionService;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -203,14 +204,7 @@ public class LatentInfectionController {
     }
 
     private LocalDate parseDate(Object val) {
-        if (val == null || StrUtil.isBlank(val.toString())) {
-            return null;
-        }
-        String text = val.toString().trim();
-        if (text.length() >= 10) {
-            text = text.substring(0, 10);
-        }
-        return LocalDate.parse(text);
+        return FlexibleDateParseUtil.parse(val);
     }
 
     // ==================== 预防治疗管理 ====================

@@ -9,6 +9,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.DataCleaningResult;
 import cn.luyou.service.DataCleaningService;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
+import cn.luyou.utils.FlexibleDateParseUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
@@ -517,6 +518,9 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         }
         if ("birthDate".equals(key) && StrUtil.isBlank(value)) {
             value = birthDateFromIdNumber(matchedValue(sourceRow, headerIndex, "idNumber", seq));
+        }
+        if (FlexibleDateParseUtil.isDateFieldKey(key)) {
+            value = FlexibleDateParseUtil.normalizeToStandardString(value);
         }
         return value;
     }
