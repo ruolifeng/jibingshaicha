@@ -31,6 +31,7 @@ import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ScreeningKeyPopulationOrderSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -54,7 +55,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
@@ -197,14 +197,13 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private List<ScreeningKeyPopulation> parseExcelFile(MultipartFile file, String sourceType, String batchId,
                                                       ImportResult result, boolean confirmSkipInvalid) {
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
-        AtomicInteger rowNum = new AtomicInteger(5); // 数据从第5行开始
 
         try {
             // 重点人群模板：第1行大分组，第2行字段名，第3行子字段细项，第4行空行，数据从第5行开始
             EasyExcel.read(file.getInputStream(), ScreeningKeyPopulation.class, new ReadListener<ScreeningKeyPopulation>() {
                 @Override
                 public void invoke(ScreeningKeyPopulation data, AnalysisContext context) {
-                    int row = rowNum.getAndIncrement();
+                    int row = context.readRowHolder().getRowIndex() + 1;
                     if (isBlankKeyPopulationRow(data)) {
                         return;
                     }
@@ -224,6 +223,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     if (StrUtil.isNotBlank(batchId)) {
                         data.setUploadBatch(batchId);
                     }
+                    data.setImportRowNo(row);
                     data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setSourceType(sourceType);
@@ -252,6 +252,11 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         return dataList;
     }
 
+    private List<ScreeningKeyPopulation> parseExcelFile(MultipartFile file, String sourceType, String batchId,
+                                                      ImportResult result) {
+        return parseExcelFile(file, sourceType, batchId, result, false);
+    }
+
     private ScreeningKeyPopulation findExistingByIdNumber(String idNumber, String sourceType) {
         return lambdaQuery()
                 .eq(ScreeningKeyPopulation::getIdNumber, idNumber)
@@ -272,6 +277,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(imported.getDiagnosisFirst()));
         }
         if (StrUtil.isNotBlank(imported.getRemark())) existing.setRemark(imported.getRemark());
+        if (StrUtil.isNotBlank(imported.getUploadBatch())) existing.setUploadBatch(imported.getUploadBatch());
+        if (imported.getImportRowNo() != null) existing.setImportRowNo(imported.getImportRowNo());
         existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
     }
 
@@ -392,7 +399,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         applyCrowdCategoryFilter(wrapper, crowdCategory);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        wrapper.orderByDesc(ScreeningKeyPopulation::getCreateTime);
+        ScreeningKeyPopulationOrderSupport.applyDisplayOrder(wrapper);
         return page(new Page<>(page, size), wrapper);
     }
 

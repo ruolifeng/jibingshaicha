@@ -4,10 +4,10 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
+import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.ScreeningScopeHelper;
 import cn.luyou.utils.UploadBatchSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +33,7 @@ public class DashboardController {
     private final ReferralService referralService;
     private final WorkbenchStatisticsService workbenchStatisticsService;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final DataScopeHelper dataScopeHelper;
 
     @Operation(summary = "获取待处理事项汇总")
     @GetMapping("/summary")
@@ -40,32 +41,27 @@ public class DashboardController {
             @RequestParam(required = false) Integer year) {
         Map<String, Object> data = new HashMap<>();
 
-        // 待追踪：潜伏感染、追踪状态为0（待追踪）、未归档
-        long pendingTracking = latentInfectionService.count(
-                new LambdaQueryWrapper<LatentInfection>()
-                        .eq(LatentInfection::getTrackingStatus, 0)
-                        .eq(LatentInfection::getArchived, 0)
-        );
-        data.put("pendingTracking", pendingTracking);
+        LambdaQueryWrapper<LatentInfection> pendingTrackingWrapper = new LambdaQueryWrapper<LatentInfection>()
+                .eq(LatentInfection::getTrackingStatus, 0)
+                .eq(LatentInfection::getArchived, 0);
+        dataScopeHelper.applyLatentScope(pendingTrackingWrapper);
+        data.put("pendingTracking", latentInfectionService.count(pendingTrackingWrapper));
 
-        // 年度统计（周期：自然年 1/1—12/31）
         data.putAll(workbenchStatisticsService.buildSummary(year));
 
-        // 待确认通知单：状态为已发送（1）的通知单数
-        long pendingNotice = noticeService.count(
-                new LambdaQueryWrapper<Notice>().eq(Notice::getStatus, 1)
-        );
-        data.put("pendingNotice", pendingNotice);
+        LambdaQueryWrapper<Notice> pendingNoticeWrapper = new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getStatus, 1);
+        dataScopeHelper.applyNoticeScope(pendingNoticeWrapper);
+        data.put("pendingNotice", noticeService.count(pendingNoticeWrapper));
 
-        // 近期复查（15天内）：密接人群中登记时间在 165~195 天前，即将需要6月随访复查的人数
         LocalDate today = LocalDate.now();
-        long upcomingReview = closeContactService.count(
-                new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .isNotNull(ScreeningCloseContact::getRegistrationDate)
-                        .ge(ScreeningCloseContact::getRegistrationDate, today.minusDays(195))
-                        .le(ScreeningCloseContact::getRegistrationDate, today.minusDays(165))
-        );
-        data.put("upcomingReview", upcomingReview);
+        LambdaQueryWrapper<ScreeningCloseContact> reviewWrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
+                .isNotNull(ScreeningCloseContact::getRegistrationDate)
+                .ge(ScreeningCloseContact::getRegistrationDate, today.minusDays(195))
+                .le(ScreeningCloseContact::getRegistrationDate, today.minusDays(165));
+        screeningScopeHelper.applyDepartmentScope(
+                reviewWrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        data.put("upcomingReview", closeContactService.count(reviewWrapper));
 
         return ResultRes.success(data);
     }
@@ -80,12 +76,12 @@ public class DashboardController {
         mergeCloseContactBatchMeta(metaMap);
 
         List<Map<String, String>> result = metaMap.entrySet().stream()
-                        .sorted(Comparator
-                                .comparing((Map.Entry<String, UploadBatchSupport.BatchMeta> e) ->
-                                        e.getValue().getUploadTime() != null
-                                                ? e.getValue().getUploadTime()
-                                                : LocalDateTime.MIN)
-                                .reversed())
+                .sorted(Comparator
+                        .comparing((Map.Entry<String, UploadBatchSupport.BatchMeta> e) ->
+                                e.getValue().getUploadTime() != null
+                                        ? e.getValue().getUploadTime()
+                                        : LocalDateTime.MIN)
+                        .reversed())
                 .map(entry -> {
                     Map<String, String> item = new LinkedHashMap<>();
                     item.put("value", entry.getKey());
@@ -98,90 +94,69 @@ public class DashboardController {
     }
 
     private void mergeSchoolBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
-        List<Map<String, Object>> rows = screeningSchoolService.listMaps(
-                new QueryWrapper<ScreeningSchool>()
-                        .select("upload_batch AS uploadBatch",
-                                "MIN(create_time) AS minTime",
-                                "MIN(year) AS yearVal",
-                                "COUNT(*) AS cnt")
-                        .isNotNull("upload_batch")
-                        .ne("upload_batch", "")
-                        .groupBy("upload_batch"));
-        mergeBatchRows(metaMap, "学校筛查", rows);
+        LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<ScreeningSchool>()
+                .isNotNull(ScreeningSchool::getUploadBatch)
+                .ne(ScreeningSchool::getUploadBatch, "")
+                .select(ScreeningSchool::getUploadBatch, ScreeningSchool::getCreateTime, ScreeningSchool::getYear);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        mergeBatchRecords(metaMap, "学校筛查", screeningSchoolService.list(wrapper), ScreeningSchool::getUploadBatch,
+                ScreeningSchool::getCreateTime, ScreeningSchool::getYear);
     }
 
     private void mergeKeyPopulationBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
-        List<Map<String, Object>> rows = screeningKeyPopulationService.listMaps(
-                new QueryWrapper<ScreeningKeyPopulation>()
-                        .select("upload_batch AS uploadBatch",
-                                "MIN(create_time) AS minTime",
-                                "MIN(year) AS yearVal",
-                                "COUNT(*) AS cnt")
-                        .isNotNull("upload_batch")
-                        .ne("upload_batch", "")
-                        .groupBy("upload_batch"));
-        mergeBatchRows(metaMap, "重点人群筛查", rows);
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<ScreeningKeyPopulation>()
+                .isNotNull(ScreeningKeyPopulation::getUploadBatch)
+                .ne(ScreeningKeyPopulation::getUploadBatch, "")
+                .select(ScreeningKeyPopulation::getUploadBatch, ScreeningKeyPopulation::getCreateTime,
+                        ScreeningKeyPopulation::getYear);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        mergeBatchRecords(metaMap, "重点人群筛查", screeningKeyPopulationService.list(wrapper),
+                ScreeningKeyPopulation::getUploadBatch, ScreeningKeyPopulation::getCreateTime,
+                ScreeningKeyPopulation::getYear);
     }
 
     private void mergeCloseContactBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
-        List<Map<String, Object>> rows = closeContactService.listMaps(
-                new QueryWrapper<ScreeningCloseContact>()
-                        .select("upload_batch AS uploadBatch",
-                                "MIN(create_time) AS minTime",
-                                "MIN(year) AS yearVal",
-                                "COUNT(*) AS cnt")
-                        .isNotNull("upload_batch")
-                        .ne("upload_batch", "")
-                        .groupBy("upload_batch"));
-        mergeBatchRows(metaMap, "密接筛查", rows);
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
+                .isNotNull(ScreeningCloseContact::getUploadBatch)
+                .ne(ScreeningCloseContact::getUploadBatch, "")
+                .select(ScreeningCloseContact::getUploadBatch, ScreeningCloseContact::getCreateTime,
+                        ScreeningCloseContact::getYear);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        mergeBatchRecords(metaMap, "密接筛查", closeContactService.list(wrapper),
+                ScreeningCloseContact::getUploadBatch, ScreeningCloseContact::getCreateTime,
+                ScreeningCloseContact::getYear);
     }
 
-    private void mergeBatchRows(
+    private <T> void mergeBatchRecords(
             Map<String, UploadBatchSupport.BatchMeta> metaMap,
             String populationLabel,
-            List<Map<String, Object>> rows) {
-        if (rows == null) {
+            List<T> records,
+            java.util.function.Function<T, String> batchGetter,
+            java.util.function.Function<T, LocalDateTime> timeGetter,
+            java.util.function.Function<T, String> yearGetter) {
+        if (records == null || records.isEmpty()) {
             return;
         }
-        for (Map<String, Object> row : rows) {
-            Object batchObj = row.get("uploadBatch");
-            if (batchObj == null) {
-                batchObj = row.get("upload_batch");
-            }
-            if (batchObj == null) {
-                continue;
-            }
-            String batch = batchObj.toString().trim();
-            if (!StringUtils.hasText(batch)) {
-                continue;
-            }
-            UploadBatchSupport.BatchMeta meta = metaMap.computeIfAbsent(batch, key -> new UploadBatchSupport.BatchMeta());
-            meta.merge(
-                    populationLabel,
-                    row.get("yearVal") != null ? row.get("yearVal").toString() : null,
-                    parseDateTime(row.get("minTime")),
-                    row.get("cnt") != null ? Long.parseLong(row.get("cnt").toString()) : 0L
-            );
-        }
-    }
-
-    private LocalDateTime parseDateTime(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof LocalDateTime time) {
-            return time;
-        }
-        if (value instanceof java.sql.Timestamp timestamp) {
-            return timestamp.toLocalDateTime();
-        }
-        if (value instanceof java.util.Date date) {
-            return new java.sql.Timestamp(date.getTime()).toLocalDateTime();
-        }
-        try {
-            return LocalDateTime.parse(value.toString().replace(" ", "T"));
-        } catch (Exception ignored) {
-            return null;
+        Map<String, List<T>> grouped = records.stream()
+                .filter(r -> StringUtils.hasText(batchGetter.apply(r)))
+                .collect(Collectors.groupingBy(r -> batchGetter.apply(r).trim(), LinkedHashMap::new, Collectors.toList()));
+        for (Map.Entry<String, List<T>> entry : grouped.entrySet()) {
+            UploadBatchSupport.BatchMeta meta = metaMap.computeIfAbsent(entry.getKey(), key -> new UploadBatchSupport.BatchMeta());
+            List<T> batchRecords = entry.getValue();
+            LocalDateTime minTime = batchRecords.stream()
+                    .map(timeGetter)
+                    .filter(Objects::nonNull)
+                    .min(LocalDateTime::compareTo)
+                    .orElse(null);
+            String yearVal = batchRecords.stream()
+                    .map(yearGetter)
+                    .filter(StringUtils::hasText)
+                    .findFirst()
+                    .orElse(null);
+            meta.merge(populationLabel, yearVal, minTime, batchRecords.size());
         }
     }
 
@@ -298,31 +273,44 @@ public class DashboardController {
     public ResultResponse<Map<String, Object>> messageStats() {
         Map<String, Object> data = new HashMap<>();
 
-        // 潜伏感染者通知单
-        data.put("latentNoticeSent", noticeService.count(
-                new LambdaQueryWrapper<Notice>().eq(Notice::getNoticeType, "latent")));
-        data.put("latentNoticeConfirmed", noticeService.count(
-                new LambdaQueryWrapper<Notice>()
-                        .eq(Notice::getNoticeType, "latent").eq(Notice::getStatus, 2)));
+        LambdaQueryWrapper<Notice> latentSentWrapper = new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getNoticeType, "latent");
+        dataScopeHelper.applyNoticeScope(latentSentWrapper);
+        data.put("latentNoticeSent", noticeService.count(latentSentWrapper));
 
-        // 患者通知单
-        data.put("patientNoticeSent", noticeService.count(
-                new LambdaQueryWrapper<Notice>().eq(Notice::getNoticeType, "patient")));
-        data.put("patientNoticeConfirmed", noticeService.count(
-                new LambdaQueryWrapper<Notice>()
-                        .eq(Notice::getNoticeType, "patient").eq(Notice::getStatus, 2)));
+        LambdaQueryWrapper<Notice> latentConfirmedWrapper = new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getNoticeType, "latent")
+                .eq(Notice::getStatus, 2);
+        dataScopeHelper.applyNoticeScope(latentConfirmedWrapper);
+        data.put("latentNoticeConfirmed", noticeService.count(latentConfirmedWrapper));
 
-        // 分级诊疗
-        data.put("referralSent", referralService.count(new LambdaQueryWrapper<>()));
-        data.put("referralConfirmed", referralService.count(
-                new LambdaQueryWrapper<Referral>().eq(Referral::getStatus, 2)));
-        data.put("referralRejected", referralService.count(
-                new LambdaQueryWrapper<Referral>().eq(Referral::getStatus, 3)));
+        LambdaQueryWrapper<Notice> patientSentWrapper = new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getNoticeType, "patient");
+        dataScopeHelper.applyNoticeScope(patientSentWrapper);
+        data.put("patientNoticeSent", noticeService.count(patientSentWrapper));
+
+        LambdaQueryWrapper<Notice> patientConfirmedWrapper = new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getNoticeType, "patient")
+                .eq(Notice::getStatus, 2);
+        dataScopeHelper.applyNoticeScope(patientConfirmedWrapper);
+        data.put("patientNoticeConfirmed", noticeService.count(patientConfirmedWrapper));
+
+        LambdaQueryWrapper<Referral> referralSentWrapper = new LambdaQueryWrapper<>();
+        dataScopeHelper.applyReferralScope(referralSentWrapper);
+        data.put("referralSent", referralService.count(referralSentWrapper));
+
+        LambdaQueryWrapper<Referral> referralConfirmedWrapper = new LambdaQueryWrapper<Referral>()
+                .eq(Referral::getStatus, 2);
+        dataScopeHelper.applyReferralScope(referralConfirmedWrapper);
+        data.put("referralConfirmed", referralService.count(referralConfirmedWrapper));
+
+        LambdaQueryWrapper<Referral> referralRejectedWrapper = new LambdaQueryWrapper<Referral>()
+                .eq(Referral::getStatus, 3);
+        dataScopeHelper.applyReferralScope(referralRejectedWrapper);
+        data.put("referralRejected", referralService.count(referralRejectedWrapper));
 
         return ResultRes.success(data);
     }
-
-    // ===== 内部辅助方法 =====
 
     /**
      * 统计学校/重点人群的潜伏感染者数量。
@@ -336,6 +324,7 @@ public class DashboardController {
         if (hasBatch) {
             wrapper.in(LatentInfection::getScreeningId, ids);
         }
+        dataScopeHelper.applyLatentScope(wrapper);
         return latentInfectionService.count(wrapper);
     }
 

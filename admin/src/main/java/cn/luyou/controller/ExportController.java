@@ -28,6 +28,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -77,6 +78,7 @@ public class ExportController {
     private final MedicationManagementMapper medicationManagementMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final DataScopeHelper dataScopeHelper;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -142,7 +144,7 @@ public class ExportController {
         List<Map<String, Object>> rows = new ArrayList<>();
 
         // 学校人群
-        screeningSchoolService.list(buildYearWrapper(year, ScreeningSchool::getYear)).forEach(s -> {
+        screeningSchoolService.list(buildScopedSchoolYearWrapper(year)).forEach(s -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("人群类型", "学校人群");
             row.put("年份", s.getYear());
@@ -159,7 +161,7 @@ public class ExportController {
         });
 
         // 重点人群
-        keyPopulationService.list(buildYearWrapper(year, ScreeningKeyPopulation::getYear)).forEach(s -> {
+        keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year)).forEach(s -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("人群类型", "重点人群");
             row.put("年份", s.getYear());
@@ -176,7 +178,7 @@ public class ExportController {
         });
 
         // 密接人群
-        closeContactService.list(buildYearWrapper(year, ScreeningCloseContact::getYear)).forEach(s -> {
+        closeContactService.list(buildScopedCloseContactYearWrapper(year)).forEach(s -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("人群类型", "密接人群");
             row.put("年份", s.getYear());
@@ -209,7 +211,7 @@ public class ExportController {
         switch (populationType) {
             case "school" -> {
                 fileName = "学校人群汇总表";
-                screeningSchoolService.list(buildYearWrapper(year, ScreeningSchool::getYear)).forEach(s -> {
+                screeningSchoolService.list(buildScopedSchoolYearWrapper(year)).forEach(s -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("年份", s.getYear()); row.put("市州", s.getCity()); row.put("县区", s.getDistrict());
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
@@ -222,7 +224,7 @@ public class ExportController {
             }
             case "keyPopulation" -> {
                 fileName = "重点人群汇总表";
-                keyPopulationService.list(buildYearWrapper(year, ScreeningKeyPopulation::getYear)).forEach(s -> {
+                keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year)).forEach(s -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("年份", s.getYear()); row.put("市州", s.getCity()); row.put("县区", s.getDistrict());
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
@@ -236,7 +238,7 @@ public class ExportController {
             }
             case "closeContact" -> {
                 fileName = "密接人群汇总表";
-                closeContactService.list(buildYearWrapper(year, ScreeningCloseContact::getYear)).forEach(s -> {
+                closeContactService.list(buildScopedCloseContactYearWrapper(year)).forEach(s -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("年份", s.getYear()); row.put("市州", s.getCity()); row.put("县区", s.getDistrict());
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
@@ -267,11 +269,11 @@ public class ExportController {
 
         // 获取该人群类型的完整数据
         switch (populationType) {
-            case "school" -> screeningSchoolService.list(buildYearWrapper(year, ScreeningSchool::getYear))
+            case "school" -> screeningSchoolService.list(buildScopedSchoolYearWrapper(year))
                     .forEach(s -> allRows.add(toMap(s)));
-            case "keyPopulation" -> keyPopulationService.list(buildYearWrapper(year, ScreeningKeyPopulation::getYear))
+            case "keyPopulation" -> keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year))
                     .forEach(s -> allRows.add(toMap(s)));
-            case "closeContact" -> closeContactService.list(buildYearWrapper(year, ScreeningCloseContact::getYear))
+            case "closeContact" -> closeContactService.list(buildScopedCloseContactYearWrapper(year))
                     .forEach(s -> allRows.add(toMap(s)));
         }
 
@@ -1261,6 +1263,27 @@ public class ExportController {
         if ("是".equals(s.getCrowdCategoryTbHist()))   cats.add("既往结核史");
         if ("是".equals(s.getCrowdCategoryNormal()))   cats.add("非重点人群");
         return String.join("、", cats);
+    }
+
+    private LambdaQueryWrapper<ScreeningSchool> buildScopedSchoolYearWrapper(String year) {
+        LambdaQueryWrapper<ScreeningSchool> wrapper = buildYearWrapper(year, ScreeningSchool::getYear);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ScreeningKeyPopulation> buildScopedKeyPopulationYearWrapper(String year) {
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = buildYearWrapper(year, ScreeningKeyPopulation::getYear);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ScreeningCloseContact> buildScopedCloseContactYearWrapper(String year) {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = buildYearWrapper(year, ScreeningCloseContact::getYear);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        return wrapper;
     }
 
     private <T> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<T> buildYearWrapper(
