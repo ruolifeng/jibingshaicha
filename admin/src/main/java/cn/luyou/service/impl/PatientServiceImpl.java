@@ -39,6 +39,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -2003,8 +2004,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ImportResult importManualBatch(MultipartFile file) {
+        return importManualBatch(file, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid) {
         List<Map<Integer, String>> allRows = new ArrayList<>();
         try {
             EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
@@ -2040,6 +2046,20 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
         ImportResult result = new ImportResult();
         List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
+        for (int i = 0; i < dataRows.size(); i++) {
+            Map<Integer, String> row = dataRows.get(i);
+            int rowNum = i + 2;
+            String name = getImportField(row, headerIndex, "姓名");
+            String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+            if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+                continue;
+            }
+            ImportIdentitySupport.registerInvalidIdentity(result, rowNum, name, idNumber, confirmSkipInvalid);
+        }
+        if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
+        }
+
         Set<String> importedKeys = new HashSet<>();
         for (int i = 0; i < dataRows.size(); i++) {
             Map<Integer, String> row = dataRows.get(i);
@@ -2050,20 +2070,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
                     continue;
                 }
+                if (ImportIdentitySupport.isMissingBasicIdentity(name, idNumber)) {
+                    continue;
+                }
 
                 String populationTypeRaw = getImportField(row, headerIndex, "数据来源");
                 String populationType = resolvePopulationType(populationTypeRaw);
                 String phone = normalizeExcelCellText(getImportField(row, headerIndex, "联系电话"));
 
                 boolean hasError = false;
-                if (StrUtil.isBlank(name)) {
-                    result.addError(rowNum, idNumber, "姓名不能为空");
-                    hasError = true;
-                }
-                if (StrUtil.isBlank(idNumber)) {
-                    result.addError(rowNum, name, "证件号不能为空");
-                    hasError = true;
-                } else if (!isValidIdCard(idNumber)) {
+                if (!isValidIdCard(idNumber)) {
                     result.addError(rowNum, name, "身份证号格式不正确");
                     hasError = true;
                 }

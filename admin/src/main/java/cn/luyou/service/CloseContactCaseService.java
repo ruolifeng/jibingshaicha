@@ -10,7 +10,11 @@ import java.util.List;
 
 public interface CloseContactCaseService extends IService<CloseContactCase> {
 
-    ImportResult uploadAndParse(MultipartFile file);
+    ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid);
+
+    default ImportResult uploadAndParse(MultipartFile file) {
+        return uploadAndParse(file, false);
+    }
 
     IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                       String district, String phone, String creatorUsername,

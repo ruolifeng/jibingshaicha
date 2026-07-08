@@ -1,14 +1,16 @@
 import { request } from "@/http/axios"
 
 /** 上传疫情筛查 Excel（复用重点人群接口，sourceType=regular） */
-export function uploadScreeningRegularApi(file: File) {
+export function uploadScreeningRegularApi(file: File, confirmSkipInvalid = false) {
   const formData = new FormData()
   formData.append("file", file)
   formData.append("sourceType", "regular")
-  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+  formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
+  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
     url: "screening/key-population/upload",
     method: "post",
     data: formData,
+    params: { confirmSkipInvalid },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

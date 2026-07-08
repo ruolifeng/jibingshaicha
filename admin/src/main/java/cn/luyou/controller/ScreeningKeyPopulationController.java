@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
@@ -32,11 +33,13 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "上传重点人群/疫情筛查Excel（sourceType=keyPopulation|regular，默认 keyPopulation）")
     @PostMapping("/upload")
+    @OperationLog(type = "import", module = "screening", action = "上传重点人群筛查Excel")
     public ResultResponse<ImportResult> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
-            @RequestParam(value = "overwrite", defaultValue = "true") boolean overwrite) {
-        ImportResult result = screeningKeyPopulationService.uploadAndParse(file, sourceType, overwrite);
+            @RequestParam(value = "overwrite", defaultValue = "true") boolean overwrite,
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
+        ImportResult result = screeningKeyPopulationService.uploadAndParse(file, sourceType, overwrite, confirmSkipInvalid);
         return ResultRes.success(result);
     }
 
@@ -74,6 +77,7 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "新增重点人群筛查记录")
     @PostMapping("/create")
+    @OperationLog(type = "create", module = "screening", action = "新增重点人群筛查记录")
     public ResultResponse<Void> create(@RequestBody ScreeningKeyPopulation data) {
         screeningKeyPopulationService.createScreening(data);
         return ResultRes.success(null);
@@ -81,6 +85,7 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "更新重点人群筛查记录")
     @PutMapping("/update/{id}")
+    @OperationLog(type = "update", module = "screening", action = "编辑重点人群筛查记录")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningKeyPopulation data) {
         data.setId(id);
         screeningKeyPopulationService.updateScreening(data);
@@ -89,6 +94,7 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "删除重点人群筛查记录（级联删除后续所有关联数据）")
     @DeleteMapping("/delete/{id}")
+    @OperationLog(type = "delete", module = "screening", action = "删除重点人群筛查记录")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         screeningKeyPopulationService.deleteScreeningCascade(id);
         return ResultRes.success(null);
@@ -96,6 +102,7 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "批量删除重点人群筛查记录（级联删除）")
     @DeleteMapping("/batch-delete")
+    @OperationLog(type = "delete", module = "screening", action = "批量删除重点人群筛查记录")
     public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
         if (ids != null) ids.forEach(screeningKeyPopulationService::deleteScreeningCascade);
         return ResultRes.success(null);
@@ -109,6 +116,7 @@ public class ScreeningKeyPopulationController {
 
     @Operation(summary = "导出重点人群筛查数据")
     @GetMapping("/export")
+    @OperationLog(type = "export", module = "screening", action = "导出重点人群筛查数据")
     public void export(
             HttpServletResponse response,
             @RequestParam(required = false) String ids,

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
-import { usePagination } from "@@/composables/usePagination"
+import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
+import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
@@ -9,6 +10,8 @@ import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreenin
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 
 const loading = ref(false)
+const batchDeleting = ref(false)
+const exporting = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
@@ -31,7 +34,7 @@ async function fetchData() {
     const { entryUnit, year, entryTimeRange, ...rest } = searchForm
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
-      size: paginationData.pageSize,
+      size: Math.min(paginationData.pageSize, MAX_PAGE_SIZE),
       ...rest,
       ...extractCreateTimeRangeParams(entryTimeRange),
       ...(year ? { year } : {}),
@@ -83,10 +86,11 @@ const selectedRows = ref<any[]>([])
 
 async function handleUpload(uploadFile: any) {
   try {
-    const { data } = await uploadScreeningSchoolApi(uploadFile.raw)
+    const data = await runImportWithIdentityConfirm(uploadScreeningSchoolApi, uploadFile.raw)
+    if (!data) return
     importResult.value = data
     importResultVisible.value = true
-    fetchData()
+    if (data.successCount > 0) fetchData()
   } catch {
     ElMessage.error("上传失败")
   }
@@ -94,6 +98,10 @@ async function handleUpload(uploadFile: any) {
 
 function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
+}
+
+function isRequestTimeout(err: any) {
+  return err?.code === "ECONNABORTED" || String(err?.message ?? "").includes("超时")
 }
 
 /** 导出 Excel（支持导出全部或勾选项） */
@@ -104,6 +112,7 @@ async function handleExport(ids?: number[]) {
       cancelButtonText: "取消",
       type: "warning"
     })
+    exporting.value = true
     const res = await exportScreeningSchoolApi(ids)
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
@@ -114,7 +123,11 @@ async function handleExport(ids?: number[]) {
     URL.revokeObjectURL(url)
     ElMessage.success("导出成功")
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("导出失败")
+    if (err !== "cancel") {
+      ElMessage.error(isRequestTimeout(err) ? "导出超时，请稍后重试或缩小导出范围" : "导出失败")
+    }
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -235,18 +248,32 @@ async function handleBatchDelete() {
       { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
     )
     const ids = selectedRows.value.map((r: any) => r.id)
+    batchDeleting.value = true
     await batchDeleteScreeningSchoolApi(ids)
     ElMessage.success(`成功删除 ${ids.length} 条记录`)
     selectedRows.value = []
     fetchData()
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("批量删除失败")
+    if (err !== "cancel") {
+      if (isRequestTimeout(err)) {
+        ElMessage.warning("删除请求超时，数据可能已删除，正在刷新列表…")
+        selectedRows.value = []
+        fetchData()
+      } else {
+        ElMessage.error("批量删除失败")
+      }
+    }
+  } finally {
+    batchDeleting.value = false
   }
 }
 
 watch(
   () => [paginationData.currentPage, paginationData.pageSize],
-  fetchData,
+  () => {
+    selectedRows.value = []
+    fetchData()
+  },
   { immediate: true }
 )
 </script>
@@ -325,13 +352,13 @@ watch(
             <el-button type="success" @click="handleCreate">
               新增数据
             </el-button>
-            <el-button @click="() => handleExport()">
+            <el-button :loading="exporting" @click="() => handleExport()">
               导出全部
             </el-button>
-            <el-button type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">
+            <el-button type="warning" :loading="exporting" :disabled="selectedRows.length === 0" @click="handleExportSelected">
               导出勾选
             </el-button>
-            <el-button type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
+            <el-button type="danger" :loading="batchDeleting" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
               批量删除
             </el-button>
             <el-upload

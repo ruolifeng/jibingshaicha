@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
-import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { isSuspectedTbDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, SUSPECTED_TB_DIAGNOSIS } from "@@/constants/disease"
@@ -169,14 +169,14 @@ function openTierCare(row: any) {
 
 async function handleUpload(uploadFile: any) {
   try {
-    const { data } = await uploadScreeningCloseContactApi(uploadFile.raw)
+    const data = await runImportWithIdentityConfirm(uploadScreeningCloseContactApi, uploadFile.raw)
+    if (!data) return
     importResult.value = data
     importResultVisible.value = true
+    if (data.successCount > 0) fetchData()
   } catch (err: any) {
     ElMessage.error(err?.message || "上传失败")
-    return
   }
-  fetchData()
 }
 
 function handleSelectionChange(rows: any[]) {

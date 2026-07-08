@@ -13,6 +13,7 @@ import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import com.alibaba.excel.EasyExcel;
@@ -48,8 +49,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private final UserMapper userMapper;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ImportResult uploadAndParse(MultipartFile file) {
+        return uploadAndParse(file, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
         String batchId = IdUtil.fastSimpleUUID();
         String creatorUsername = resolveCurrentUsername();
         List<CloseContactCase> dataList = new ArrayList<>();
@@ -76,6 +82,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                     if (isBlankDataRow(data)) {
                         return;
                     }
+                    if (ImportIdentitySupport.registerInvalidIdentity(
+                            result, row, data.getName(), data.getIdNumber(), confirmSkipInvalid)) {
+                        return;
+                    }
+                    if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
+                        return;
+                    }
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "接触者身份证号格式不正确");
                     }
@@ -100,6 +113,10 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             log.error("密接个案表 Excel 解析失败", e);
             throw new ServiceException(StatusEnum.PARAM_INVALID,
                     "Excel解析失败，请使用系统导出的模板或标准密接表（含表头）: " + e.getMessage());
+        }
+
+        if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
         }
 
         if (dataList.isEmpty()) {

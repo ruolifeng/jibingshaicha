@@ -4,6 +4,7 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
+import cn.luyou.utils.ScreeningScopeHelper;
 import cn.luyou.utils.UploadBatchSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -31,6 +32,7 @@ public class DashboardController {
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
     private final ReferralService referralService;
     private final WorkbenchStatisticsService workbenchStatisticsService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "获取待处理事项汇总")
     @GetMapping("/summary")

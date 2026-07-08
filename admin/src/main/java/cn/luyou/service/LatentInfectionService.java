@@ -91,7 +91,11 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     Long createManual(Map<String, Object> body);
 
     /** 批量导入潜伏感染记录（字段与手动新增一致） */
-    ImportResult importManualBatch(MultipartFile file);
+    ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid);
+
+    default ImportResult importManualBatch(MultipartFile file) {
+        return importManualBatch(file, false);
+    }
 
     /** 级联删除潜伏感染记录及其关联数据 */
     void deleteCascade(Long id);

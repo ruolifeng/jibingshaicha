@@ -15,7 +15,12 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
      *
      * @param overwrite 是否与系统中同身份证号记录覆盖合并；false 时跳过重复行
      */
-    ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite);
+    ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid);
+
+    /** @deprecated 兼容旧调用，默认覆盖重复、不确认跳过无效行 */
+    default ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite) {
+        return uploadAndParse(file, sourceType, overwrite, false);
+    }
 
     /** 导入预览：检测与系统已有记录（身份证号）重复的数据 */
     Map<String, Object> previewUpload(MultipartFile file, String sourceType);

@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Permission;
@@ -43,6 +44,7 @@ public class PermissionController {
 
     @Operation(summary = "分配角色权限")
     @PostMapping("/assign")
+    @OperationLog(type = "update", module = "system", action = "分配角色权限")
     public ResultResponse<Void> assign(@RequestBody Map<String, Object> params) {
         userService.checkPermissionCode("permission:assign");
         int role = (int) params.get("role");
@@ -63,6 +65,7 @@ public class PermissionController {
 
     @Operation(summary = "分配用户额外权限（全量替换，与角色权限合并生效）")
     @PostMapping("/assign-user")
+    @OperationLog(type = "update", module = "system", action = "分配用户额外权限")
     public ResultResponse<Void> assignUser(@RequestBody Map<String, Object> params) {
         userService.checkAnyPermissionCode("system:permissions", "permission:assign");
         long userId = ((Number) params.get("userId")).longValue();

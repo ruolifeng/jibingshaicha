@@ -30,6 +30,7 @@ import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -78,6 +79,11 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
+        return uploadAndParse(file, false);
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
         String batchId = UploadBatchSupport.newBatchId("学校筛查");
         List<ScreeningSchool> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
@@ -106,6 +112,13 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 if (isBlankSchoolRow(data)) {
                     continue;
                 }
+                if (ImportIdentitySupport.registerInvalidIdentity(
+                        result, rowNum, data.getName(), data.getIdNumber(), confirmSkipInvalid)) {
+                    continue;
+                }
+                if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
+                    continue;
+                }
                 if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                     result.addError(rowNum, data.getName(), "身份证号格式不正确");
                 }
@@ -120,6 +133,10 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             log.info("学校人群筛查数据解析完成，共 {} 条", dataList.size());
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
+        }
+
+        if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
         }
 
         if (dataList.isEmpty()) {
@@ -441,6 +458,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(incoming.getDiagnosisFirst()));
         }
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
+        if (StrUtil.isNotBlank(incoming.getUploadBatch())) existing.setUploadBatch(incoming.getUploadBatch());
     }
 
     private Map<String, Integer> buildSchoolHeaderIndex(List<Map<Integer, String>> rows) {
@@ -644,6 +662,21 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteScreeningCascade(Long id) {
+        doDeleteScreeningCascade(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchDeleteCascade(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (Long id : ids) {
+            doDeleteScreeningCascade(id);
+        }
+    }
+
+    private void doDeleteScreeningCascade(Long id) {
         if (getById(id) == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }

@@ -650,6 +650,12 @@ const noticeMaxSent = computed(() =>
     padding: 2px 10px;
     border-radius: 10px;
   }
+
+  .batch-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--el-text-color-secondary);
+  }
 }
 
 // ===== Stat Cards =====

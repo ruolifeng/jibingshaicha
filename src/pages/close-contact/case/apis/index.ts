@@ -11,13 +11,15 @@ export function downloadCloseContactCaseTemplateApi() {
 }
 
 /** 上传密接个案表 Excel（72列官方模板） */
-export function uploadCloseContactCaseApi(file: File) {
+export function uploadCloseContactCaseApi(file: File, confirmSkipInvalid = false) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+  formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
+  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
     url: "close-contact/case/upload",
     method: "post",
     data: formData,
+    params: { confirmSkipInvalid },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

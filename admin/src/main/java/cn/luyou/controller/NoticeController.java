@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Notice;
@@ -38,6 +39,7 @@ public class NoticeController {
 
     @Operation(summary = "发送通知单")
     @PostMapping("/send")
+    @OperationLog(type = "create", module = "patient", action = "发送通知单")
     public ResultResponse<Void> send(@RequestBody Notice notice) {
         assertPatientNoticeFill(notice);
         noticeService.send(notice);
@@ -46,6 +48,7 @@ public class NoticeController {
 
     @Operation(summary = "保存通知单草稿（填写但不发送）")
     @PostMapping("/draft")
+    @OperationLog(type = "update", module = "patient", action = "保存通知单草稿")
     public ResultResponse<Void> saveDraft(@RequestBody Notice notice) {
         assertPatientNoticeFill(notice);
         noticeService.saveAsDraft(notice);
@@ -54,6 +57,7 @@ public class NoticeController {
 
     @Operation(summary = "确认接收通知单")
     @PostMapping("/confirm/{id}")
+    @OperationLog(type = "update", module = "patient", action = "确认接收通知单")
     public ResultResponse<Void> confirm(@PathVariable Long id) {
         Notice notice = noticeService.getById(id);
         assertPatientNoticeAccess(notice);
@@ -86,6 +90,7 @@ public class NoticeController {
 
     @Operation(summary = "催促接收方接收通知单")
     @PostMapping("/remind/{id}")
+    @OperationLog(type = "update", module = "patient", action = "催促接收通知单")
     public ResultResponse<Void> remind(@PathVariable Long id) {
         assertPatientNoticeFill(noticeService.getById(id));
         noticeService.remind(id);

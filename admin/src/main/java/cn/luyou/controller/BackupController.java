@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,6 +54,7 @@ public class BackupController {
     /** 手动触发备份，并返回文件供下载 */
     @Operation(summary = "手动备份并下载")
     @GetMapping("/download")
+    @OperationLog(type = "export", module = "system", action = "手动备份并下载数据库")
     public void backupAndDownload(HttpServletResponse response) throws IOException {
         String filePath = doBackup();
         if (filePath == null) {

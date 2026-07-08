@@ -1,10 +1,11 @@
 import { request } from "@/http/axios"
 
 /** 上传学校人群筛查 Excel */
-export function uploadScreeningSchoolApi(file: File) {
+export function uploadScreeningSchoolApi(file: File, confirmSkipInvalid = false) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+  formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
+  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
     url: "screening/school/upload",
     method: "post",
     data: formData,
@@ -19,7 +20,8 @@ export function exportScreeningSchoolApi(ids?: number[]) {
     url: "screening/school/export",
     method: "get",
     params: ids && ids.length > 0 ? { ids: ids.join(",") } : undefined,
-    responseType: "blob"
+    responseType: "blob",
+    timeout: 120000
   })
 }
 
@@ -54,7 +56,8 @@ export function batchDeleteScreeningSchoolApi(ids: number[]) {
   return request<ApiResponseData<null>>({
     url: "screening/school/batch-delete",
     method: "delete",
-    data: ids
+    data: ids,
+    timeout: 120000
   })
 }
 

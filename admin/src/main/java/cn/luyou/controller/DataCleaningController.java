@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.DataCleaningResult;
@@ -31,6 +32,7 @@ public class DataCleaningController {
 
     @Operation(summary = "上传筛查数据进行清洗校验")
     @PostMapping("/clean")
+    @OperationLog(type = "import", module = "system", action = "上传筛查数据进行清洗校验")
     public ResultResponse<DataCleaningResult> clean(
             @RequestParam String populationType,
             @RequestParam("file") MultipartFile file) {
@@ -39,12 +41,14 @@ public class DataCleaningController {
 
     @Operation(summary = "学生筛查数据匹配为系统模板")
     @PostMapping("/match/school")
+    @OperationLog(type = "import", module = "system", action = "学生筛查数据匹配为系统模板")
     public ResultResponse<DataCleaningResult> matchSchool(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(dataCleaningService.matchSchool(file));
     }
 
     @Operation(summary = "下载清洗结果文件")
     @GetMapping("/download/{fileId}")
+    @OperationLog(type = "export", module = "system", action = "下载数据清洗结果")
     public void download(@PathVariable String fileId, HttpServletResponse response) throws Exception {
         Resource resource = dataCleaningService.getResultFile(fileId, BaseContext.getCurrentId(), BaseContext.isSuperAdmin());
         String fileName = resource.getFilename() == null ? "数据清洗结果.xlsx" : resource.getFilename();

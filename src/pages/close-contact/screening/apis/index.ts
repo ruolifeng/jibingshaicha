@@ -1,13 +1,15 @@
 import { request } from "@/http/axios"
 
 /** 上传密接人群筛查 Excel（72列官方模板） */
-export function uploadScreeningCloseContactApi(file: File) {
+export function uploadScreeningCloseContactApi(file: File, confirmSkipInvalid = false) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+  formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
+  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
     url: "screening/close-contact/upload",
     method: "post",
     data: formData,
+    params: { confirmSkipInvalid },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

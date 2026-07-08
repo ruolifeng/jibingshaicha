@@ -1,6 +1,7 @@
 package cn.luyou.controller;
 
 import cn.hutool.core.util.StrUtil;
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.FollowUpVisitMapper;
 import cn.luyou.mapper.MedicationManagementMapper;
@@ -134,6 +135,7 @@ public class ExportController {
     /** 大汇总表：三类人群筛查数据合并导出 */
     @Operation(summary = "大汇总表导出")
     @GetMapping("/wide-table")
+    @OperationLog(type = "export", module = "statistics", action = "导出大汇总表")
     public void exportWideTable(
             @RequestParam(defaultValue = "") String year,
             HttpServletResponse response) throws IOException {
@@ -196,6 +198,7 @@ public class ExportController {
     /** 分类汇总表：按人群类型分别导出 */
     @Operation(summary = "分类汇总表导出")
     @GetMapping("/category-table")
+    @OperationLog(type = "export", module = "statistics", action = "导出分类汇总表")
     public void exportCategoryTable(
             @RequestParam String populationType,
             @RequestParam(defaultValue = "") String year,
@@ -253,6 +256,7 @@ public class ExportController {
     /** 自定义字段导出 */
     @Operation(summary = "自定义字段导出")
     @GetMapping("/custom")
+    @OperationLog(type = "export", module = "statistics", action = "自定义字段导出")
     public void exportCustom(
             @RequestParam String populationType,
             @RequestParam String fields, // 逗号分隔的字段名列表
@@ -284,6 +288,7 @@ public class ExportController {
     /** 潜伏感染管理列表导出（学校/重点人群），字段与模板表头保持一致 */
     @Operation(summary = "潜伏感染管理列表导出")
     @GetMapping("/latent-list")
+    @OperationLog(type = "export", module = "statistics", action = "导出潜伏感染管理列表")
     public void exportLatentList(
             @RequestParam String populationType,
             @RequestParam(required = false) String name,
@@ -454,6 +459,7 @@ public class ExportController {
     /** 患者管理列表导出（学校/重点人群），字段与模板表头保持一致 */
     @Operation(summary = "患者管理列表导出")
     @GetMapping("/patient-list")
+    @OperationLog(type = "export", module = "statistics", action = "导出患者管理列表")
     public void exportPatientList(
             @RequestParam String populationType,
             @RequestParam(required = false) String name,
@@ -595,6 +601,7 @@ public class ExportController {
      */
     @Operation(summary = "患者信息总表导出（全部来源，含来源标签）")
     @GetMapping("/all-patients")
+    @OperationLog(type = "export", module = "statistics", action = "导出患者信息总表")
     public void exportAllPatients(
             @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
@@ -770,6 +777,7 @@ public class ExportController {
 
     @Operation(summary = "导出勾选患者的首次入户随访信息")
     @GetMapping("/patient-first-visits")
+    @OperationLog(type = "export", module = "statistics", action = "导出首次入户随访")
     public void exportPatientFirstVisits(
             @RequestParam String ids,
             HttpServletResponse response) throws IOException {

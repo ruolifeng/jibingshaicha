@@ -49,13 +49,15 @@ export function exportAllLatentApi(params: Record<string, any>) {
 }
 
 /** 批量导入潜伏感染者（字段与新增一致） */
-export function importLatentApi(file: File) {
+export function importLatentApi(file: File, confirmSkipInvalid = false) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ successCount: number, errors: string[] }>>({
+  formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
+  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
     url: "latent/import",
     method: "post",
     data: formData,
+    params: { confirmSkipInvalid },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })
