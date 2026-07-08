@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { downloadBlob } from "@@/utils/download"
@@ -102,14 +103,14 @@ async function handleDownloadTemplate() {
 
 async function handleUpload(uploadFile: any) {
   try {
-    const { data } = await uploadCloseContactCaseApi(uploadFile.raw)
+    const data = await runImportWithIdentityConfirm(uploadCloseContactCaseApi, uploadFile.raw)
+    if (!data) return
     importResult.value = data
     importResultVisible.value = true
+    if (data.successCount > 0) fetchData()
   } catch (err: any) {
     ElMessage.error(err?.message || "上传失败")
-    return
   }
-  fetchData()
 }
 
 function getSelectedRows() {

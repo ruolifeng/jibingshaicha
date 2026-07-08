@@ -54,7 +54,11 @@ public interface PatientService extends IService<Patient> {
     Long createManual(Map<String, Object> body);
 
     /** 批量导入在管患者（字段与手动新增一致） */
-    ImportResult importManualBatch(MultipartFile file);
+    ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid);
+
+    default ImportResult importManualBatch(MultipartFile file) {
+        return importManualBatch(file, false);
+    }
 
     /** 批量删除患者（级联删除） */
     void batchDeletePatients(List<Long> ids);

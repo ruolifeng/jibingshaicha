@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
@@ -121,10 +122,14 @@ async function handleUpload(uploadFile: any) {
       }
     }
 
-    const { data } = await uploadScreeningKeyPopulationApi(file, overwrite)
+    const data = await runImportWithIdentityConfirm(
+      (f, confirmSkipInvalid) => uploadScreeningKeyPopulationApi(f, overwrite, confirmSkipInvalid),
+      file
+    )
+    if (!data) return
     importResult.value = data
     importResultVisible.value = true
-    fetchData()
+    if (data.successCount > 0) fetchData()
   } catch {
     ElMessage.error("上传失败")
   } finally {

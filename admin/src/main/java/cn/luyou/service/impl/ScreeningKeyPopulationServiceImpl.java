@@ -27,6 +27,7 @@ import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
@@ -110,10 +111,19 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite) {
+        return uploadAndParse(file, sourceType, overwrite, false);
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid) {
         final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
         String batchId = UploadBatchSupport.newBatchId("重点人群筛查");
         ImportResult result = new ImportResult();
-        List<ScreeningKeyPopulation> dataList = parseExcelFile(file, resolvedSourceType, batchId, result);
+        List<ScreeningKeyPopulation> dataList = parseExcelFile(file, resolvedSourceType, batchId, result, confirmSkipInvalid);
+
+        if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
+        }
 
         if (dataList.isEmpty()) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
@@ -185,7 +195,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     }
 
     private List<ScreeningKeyPopulation> parseExcelFile(MultipartFile file, String sourceType, String batchId,
-                                                      ImportResult result) {
+                                                      ImportResult result, boolean confirmSkipInvalid) {
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
         AtomicInteger rowNum = new AtomicInteger(5); // 数据从第5行开始
 
@@ -195,6 +205,16 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 @Override
                 public void invoke(ScreeningKeyPopulation data, AnalysisContext context) {
                     int row = rowNum.getAndIncrement();
+                    if (isBlankKeyPopulationRow(data)) {
+                        return;
+                    }
+                    if (ImportIdentitySupport.registerInvalidIdentity(
+                            result, row, data.getName(), data.getIdNumber(), confirmSkipInvalid)) {
+                        return;
+                    }
+                    if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
+                        return;
+                    }
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "身份证号格式不正确");
                     }
@@ -573,5 +593,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             sysMessageService.lambdaUpdate().in(SysMessage::getBizId, referralIds).remove();
             referralService.lambdaUpdate().eq(Referral::getBizId, bizId).remove();
         }
+    }
+
+    private boolean isBlankKeyPopulationRow(ScreeningKeyPopulation data) {
+        return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
     }
 }

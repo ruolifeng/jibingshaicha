@@ -4,6 +4,7 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
+import cn.luyou.utils.ScreeningScopeHelper;
 import cn.luyou.utils.UploadBatchSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -31,6 +32,7 @@ public class DashboardController {
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
     private final ReferralService referralService;
     private final WorkbenchStatisticsService workbenchStatisticsService;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "获取待处理事项汇总")
     @GetMapping("/summary")
@@ -188,55 +190,107 @@ public class DashboardController {
     public ResultResponse<Map<String, Object>> taskStats(
             @RequestParam(required = false) String batch) {
         Map<String, Object> data = new HashMap<>();
-        boolean hasBatch = StringUtils.hasText(batch);
+        BatchScope batchScope = resolveBatchScope(batch);
 
         // ===== 学校人群 =====
-        long schoolTotal = screeningSchoolService.count(
-                hasBatch ? new LambdaQueryWrapper<ScreeningSchool>()
-                        .eq(ScreeningSchool::getUploadBatch, batch)
-                        : new LambdaQueryWrapper<>()
-        );
-        List<Object> schoolIds = hasBatch
-                ? screeningSchoolService.listObjs(new LambdaQueryWrapper<ScreeningSchool>()
-                        .select(ScreeningSchool::getId)
-                        .eq(ScreeningSchool::getUploadBatch, batch))
+        LambdaQueryWrapper<ScreeningSchool> schoolWrapper = scopedSchoolWrapper();
+        if (batchScope.filterSchool()) {
+            schoolWrapper.eq(ScreeningSchool::getUploadBatch, batch);
+        }
+        long schoolTotal = screeningSchoolService.count(schoolWrapper);
+        List<Object> schoolIds = batchScope.filterSchool()
+                ? screeningSchoolService.listObjs(schoolWrapper.clone().select(ScreeningSchool::getId))
                 : null;
         data.put("school", buildPopStats(schoolTotal,
-                countLatent("school", hasBatch, schoolIds),
-                countConfirmedPatient("school", hasBatch, batch)));
+                countLatent("school", batchScope.filterSchool(), schoolIds),
+                countSchoolConfirmedPatients(batchScope.filterSchool(), batch, schoolWrapper)));
 
         // ===== 重点人群 =====
-        long keyTotal = screeningKeyPopulationService.count(
-                hasBatch ? new LambdaQueryWrapper<ScreeningKeyPopulation>()
-                        .eq(ScreeningKeyPopulation::getUploadBatch, batch)
-                        : new LambdaQueryWrapper<>()
-        );
-        List<Object> keyIds = hasBatch
-                ? screeningKeyPopulationService.listObjs(new LambdaQueryWrapper<ScreeningKeyPopulation>()
-                        .select(ScreeningKeyPopulation::getId)
-                        .eq(ScreeningKeyPopulation::getUploadBatch, batch))
+        LambdaQueryWrapper<ScreeningKeyPopulation> keyWrapper = scopedKeyPopulationWrapper();
+        if (batchScope.filterKeyPopulation()) {
+            keyWrapper.eq(ScreeningKeyPopulation::getUploadBatch, batch);
+        }
+        long keyTotal = screeningKeyPopulationService.count(keyWrapper);
+        List<Object> keyIds = batchScope.filterKeyPopulation()
+                ? screeningKeyPopulationService.listObjs(keyWrapper.clone().select(ScreeningKeyPopulation::getId))
                 : null;
         data.put("keyPopulation", buildPopStats(keyTotal,
-                countLatent("keyPopulation", hasBatch, keyIds),
-                countConfirmedPatient("keyPopulation", hasBatch, batch)));
+                countLatent("keyPopulation", batchScope.filterKeyPopulation(), keyIds),
+                countKeyPopulationConfirmedPatients(batchScope.filterKeyPopulation(), batch, keyWrapper)));
 
         // ===== 密接人群 =====
-        long closeTotal = closeContactService.count(
-                hasBatch ? new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .eq(ScreeningCloseContact::getUploadBatch, batch)
-                        : new LambdaQueryWrapper<>()
-        );
-        // 密接潜伏感染者直接从 screening_close_contact 统计（与密接潜伏感染菜单保持一致）
-        long closeLatent = closeContactService.count(
-                new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .eq(ScreeningCloseContact::getFinalScreeningResult, "潜伏感染者")
-                        .eq(hasBatch, ScreeningCloseContact::getUploadBatch, batch)
-        );
+        LambdaQueryWrapper<ScreeningCloseContact> closeWrapper = scopedCloseContactWrapper();
+        if (batchScope.filterCloseContact()) {
+            closeWrapper.eq(ScreeningCloseContact::getUploadBatch, batch);
+        }
+        long closeTotal = closeContactService.count(closeWrapper);
+        LambdaQueryWrapper<ScreeningCloseContact> closeLatentWrapper = scopedCloseContactWrapper()
+                .eq(ScreeningCloseContact::getFinalScreeningResult, "潜伏感染者");
+        if (batchScope.filterCloseContact()) {
+            closeLatentWrapper.eq(ScreeningCloseContact::getUploadBatch, batch);
+        }
+        long closeLatent = closeContactService.count(closeLatentWrapper);
         data.put("closeContact", buildPopStats(closeTotal,
                 closeLatent,
-                countConfirmedPatient("closeContact", hasBatch, batch)));
+                countCloseContactConfirmedPatients(batchScope.filterCloseContact(), batch, closeWrapper)));
 
         return ResultRes.success(data);
+    }
+
+    /**
+     * 批次仅作用于实际包含该人群数据的统计项。
+     * 例如选中「重点人群筛查」批次时，学校/密接仍展示各自全量（含部门权限范围）数据。
+     */
+    private BatchScope resolveBatchScope(String batch) {
+        if (!StringUtils.hasText(batch)) {
+            return BatchScope.all();
+        }
+        boolean hasSchool = screeningSchoolService.count(
+                new LambdaQueryWrapper<ScreeningSchool>().eq(ScreeningSchool::getUploadBatch, batch)) > 0;
+        boolean hasKeyPopulation = screeningKeyPopulationService.count(
+                new LambdaQueryWrapper<ScreeningKeyPopulation>().eq(ScreeningKeyPopulation::getUploadBatch, batch)) > 0;
+        boolean hasCloseContact = closeContactService.count(
+                new LambdaQueryWrapper<ScreeningCloseContact>().eq(ScreeningCloseContact::getUploadBatch, batch)) > 0;
+        return new BatchScope(hasSchool, hasKeyPopulation, hasCloseContact);
+    }
+
+    private LambdaQueryWrapper<ScreeningSchool> scopedSchoolWrapper() {
+        LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ScreeningKeyPopulation> scopedKeyPopulationWrapper() {
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ScreeningCloseContact> scopedCloseContactWrapper() {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        return wrapper;
+    }
+
+    private record BatchScope(boolean hasSchool, boolean hasKeyPopulation, boolean hasCloseContact) {
+        static BatchScope all() {
+            return new BatchScope(false, false, false);
+        }
+
+        boolean filterSchool() {
+            return hasSchool;
+        }
+
+        boolean filterKeyPopulation() {
+            return hasKeyPopulation;
+        }
+
+        boolean filterCloseContact() {
+            return hasCloseContact;
+        }
     }
 
     @Operation(summary = "获取消息通知统计（通知单 + 分级诊疗）")
@@ -289,28 +343,34 @@ public class DashboardController {
      * 统计筛查确诊患者：以筛查表诊断结果为准（上传 Excel 时 diagnosis_first=确诊患者）。
      * 确诊患者仅标红结案，不进入患者管理表，故不能从 patient 表统计。
      */
-    private long countConfirmedPatient(String populationType, boolean hasBatch, String batch) {
-        return switch (populationType) {
-            case "school" -> {
-                LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<ScreeningSchool>()
-                        .eq(ScreeningSchool::getDiagnosisFirst, "确诊患者");
-                if (hasBatch) wrapper.eq(ScreeningSchool::getUploadBatch, batch);
-                yield screeningSchoolService.count(wrapper);
-            }
-            case "keyPopulation" -> {
-                LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<ScreeningKeyPopulation>()
-                        .eq(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者");
-                if (hasBatch) wrapper.eq(ScreeningKeyPopulation::getUploadBatch, batch);
-                yield screeningKeyPopulationService.count(wrapper);
-            }
-            case "closeContact" -> {
-                LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
-                        .eq(ScreeningCloseContact::getFinalScreeningResult, "活动性肺结核");
-                if (hasBatch) wrapper.eq(ScreeningCloseContact::getUploadBatch, batch);
-                yield closeContactService.count(wrapper);
-            }
-            default -> 0L;
-        };
+    private long countSchoolConfirmedPatients(boolean filterByBatch, String batch,
+                                              LambdaQueryWrapper<ScreeningSchool> scopedWrapper) {
+        LambdaQueryWrapper<ScreeningSchool> wrapper = scopedWrapper.clone()
+                .eq(ScreeningSchool::getDiagnosisFirst, "确诊患者");
+        if (filterByBatch) {
+            wrapper.eq(ScreeningSchool::getUploadBatch, batch);
+        }
+        return screeningSchoolService.count(wrapper);
+    }
+
+    private long countKeyPopulationConfirmedPatients(boolean filterByBatch, String batch,
+                                                     LambdaQueryWrapper<ScreeningKeyPopulation> scopedWrapper) {
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = scopedWrapper.clone()
+                .eq(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者");
+        if (filterByBatch) {
+            wrapper.eq(ScreeningKeyPopulation::getUploadBatch, batch);
+        }
+        return screeningKeyPopulationService.count(wrapper);
+    }
+
+    private long countCloseContactConfirmedPatients(boolean filterByBatch, String batch,
+                                                    LambdaQueryWrapper<ScreeningCloseContact> scopedWrapper) {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = scopedWrapper.clone()
+                .eq(ScreeningCloseContact::getFinalScreeningResult, "活动性肺结核");
+        if (filterByBatch) {
+            wrapper.eq(ScreeningCloseContact::getUploadBatch, batch);
+        }
+        return closeContactService.count(wrapper);
     }
 
     private Map<String, Object> buildPopStats(long total, long latent, long patient) {

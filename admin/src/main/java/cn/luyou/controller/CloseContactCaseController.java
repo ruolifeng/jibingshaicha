@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.CloseContactCase;
@@ -32,8 +33,11 @@ public class CloseContactCaseController {
 
     @Operation(summary = "上传密接个案表Excel（72列官方模板）")
     @PostMapping("/upload")
-    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
-        return ResultRes.success(closeContactCaseService.uploadAndParse(file));
+    @OperationLog(type = "import", module = "screening", action = "上传密接个案表Excel")
+    public ResultResponse<ImportResult> upload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
+        return ResultRes.success(closeContactCaseService.uploadAndParse(file, confirmSkipInvalid));
     }
 
     @Operation(summary = "分页查询密接个案表")
@@ -56,6 +60,7 @@ public class CloseContactCaseController {
 
     @Operation(summary = "新增密接个案")
     @PostMapping("/create")
+    @OperationLog(type = "create", module = "screening", action = "新增密接个案")
     public ResultResponse<Void> create(@RequestBody CloseContactCase data) {
         closeContactCaseService.createCase(data);
         return ResultRes.success(null);
@@ -63,6 +68,7 @@ public class CloseContactCaseController {
 
     @Operation(summary = "更新密接个案")
     @PutMapping("/update/{id}")
+    @OperationLog(type = "update", module = "screening", action = "编辑密接个案")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody CloseContactCase data) {
         data.setId(id);
         closeContactCaseService.updateCase(data);
@@ -71,6 +77,7 @@ public class CloseContactCaseController {
 
     @Operation(summary = "删除密接个案")
     @DeleteMapping("/delete/{id}")
+    @OperationLog(type = "delete", module = "screening", action = "删除密接个案")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         closeContactCaseService.deleteCase(id);
         return ResultRes.success(null);
@@ -78,6 +85,7 @@ public class CloseContactCaseController {
 
     @Operation(summary = "批量删除密接个案")
     @DeleteMapping("/batch-delete")
+    @OperationLog(type = "delete", module = "screening", action = "批量删除密接个案")
     public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
         closeContactCaseService.batchDelete(ids);
         return ResultRes.success(null);
@@ -85,6 +93,7 @@ public class CloseContactCaseController {
 
     @Operation(summary = "导出密接个案表（支持筛选/勾选/按诊断结果导出）")
     @GetMapping("/export")
+    @OperationLog(type = "export", module = "screening", action = "导出密接个案表")
     public void export(
             HttpServletResponse response,
             @RequestParam(required = false) String ids,

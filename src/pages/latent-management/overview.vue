@@ -2,6 +2,7 @@
 import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue"
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, LATENT_MANUAL_POPULATION_TYPE_OPTIONS } from "@@/constants/disease"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
 import { downloadBlob } from "@@/utils/download"
@@ -140,7 +141,8 @@ async function handleImport(uploadFile: any) {
   }
   importing.value = true
   try {
-    const { data } = await importLatentApi(file)
+    const data = await runImportWithIdentityConfirm(importLatentApi, file)
+    if (!data) return
     importResult.value = data ?? { successCount: 0, errors: [] }
     importResultVisible.value = true
     importDialogVisible.value = false

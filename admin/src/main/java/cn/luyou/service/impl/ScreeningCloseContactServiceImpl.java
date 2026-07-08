@@ -24,6 +24,7 @@ import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
@@ -96,8 +97,13 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     // ==================== 上传与导入 ====================
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public ImportResult uploadAndParse(MultipartFile file) {
+        return uploadAndParse(file, false);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
         String batchId = UploadBatchSupport.newBatchId("密接筛查");
         List<ScreeningCloseContact> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
@@ -120,6 +126,16 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 @Override
                 public void invoke(ScreeningCloseContact data, AnalysisContext context) {
                     int row = rowNum.getAndIncrement();
+                    if (isBlankCloseContactRow(data)) {
+                        return;
+                    }
+                    if (ImportIdentitySupport.registerInvalidIdentity(
+                            result, row, data.getName(), data.getIdNumber(), confirmSkipInvalid)) {
+                        return;
+                    }
+                    if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
+                        return;
+                    }
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "接触者身份证号格式不正确");
                     }
@@ -144,6 +160,10 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             log.error("密接筛查 Excel 解析失败", e);
             throw new ServiceException(StatusEnum.PARAM_INVALID,
                     "Excel解析失败，请使用系统导出的模板或标准密接表（含表头）: " + e.getMessage());
+        }
+
+        if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
         }
 
         if (dataList.isEmpty()) {
@@ -628,5 +648,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
     private boolean isValidPhone(String phone) {
         return phone != null && phone.matches("^1[3-9]\\d{9}$");
+    }
+
+    private boolean isBlankCloseContactRow(ScreeningCloseContact data) {
+        return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
     }
 }

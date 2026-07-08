@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
@@ -34,6 +35,7 @@ public class SupervisionFormController {
 
     @Operation(summary = "保存督导表草稿（部分填写即可）")
     @PostMapping("/draft")
+    @OperationLog(type = "update", module = "latent", action = "保存督导表草稿")
     public ResultResponse<Void> saveDraft(@RequestBody SupervisionForm form) {
         validateLatentId(form);
         userService.checkPermissionCode("latentManagement:supervision:fill");
@@ -43,6 +45,7 @@ public class SupervisionFormController {
 
     @Operation(summary = "保存督导表（status=1 提交，status=2 归档）")
     @PostMapping("/save")
+    @OperationLog(type = "update", module = "latent", action = "保存督导表")
     public ResultResponse<Void> save(@RequestBody SupervisionForm form) {
         validateRequired(form);
         assertSupervisionSavePermission(form);

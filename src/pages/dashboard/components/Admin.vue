@@ -206,7 +206,7 @@ const noticeMaxSent = computed(() =>
         </el-select>
         <el-select
           v-model="selectedBatch"
-          placeholder="全部任务"
+          placeholder="全部任务（不限批次）"
           clearable
           class="batch-select"
           :prefix-icon="List"
@@ -300,6 +300,7 @@ const noticeMaxSent = computed(() =>
     <div class="section-label" style="margin-top: 32px">
       <span class="label-bar" />人群筛查数据统计
       <span v-if="selectedBatch" class="batch-tag">{{ selectedBatchLabel }}</span>
+      <span v-else class="batch-hint">全部任务汇总</span>
     </div>
     <el-row :gutter="20" v-loading="taskLoading" class="pop-row">
       <el-col v-for="pc in popCards" :key="pc.key" :xs="24" :sm="8">
@@ -677,6 +678,12 @@ const noticeMaxSent = computed(() =>
     color: var(--el-color-primary);
     padding: 2px 10px;
     border-radius: 10px;
+  }
+
+  .batch-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--el-text-color-secondary);
   }
 }
 

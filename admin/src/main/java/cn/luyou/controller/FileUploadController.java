@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
@@ -33,6 +34,7 @@ public class FileUploadController {
 
     @Operation(summary = "上传附件（图片/PDF等）")
     @PostMapping("/upload")
+    @OperationLog(type = "create", module = "system", action = "上传附件")
     public ResultResponse<String> upload(@RequestParam("file") MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "文件不能为空");

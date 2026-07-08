@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.mapper.UserMapper;
@@ -104,6 +105,7 @@ public class UserController {
 
     @Operation(summary = "创建用户")
     @PostMapping("/create")
+    @OperationLog(type = "create", module = "system", action = "创建用户")
     public ResultResponse<Void> create(@RequestBody User user) {
         userService.checkPermissionCode("user:create");
         userService.createUser(user);
@@ -112,6 +114,7 @@ public class UserController {
 
     @Operation(summary = "更新用户")
     @PutMapping("/update")
+    @OperationLog(type = "update", module = "system", action = "更新用户")
     public ResultResponse<Void> update(@RequestBody User user) {
         userService.checkPermissionCode("user:edit");
         userService.updateUser(user);
@@ -120,6 +123,7 @@ public class UserController {
 
     @Operation(summary = "更新当前登录用户个人信息")
     @PutMapping("/profile")
+    @OperationLog(type = "update", module = "system", action = "更新个人信息")
     public ResultResponse<Void> updateProfile(@RequestBody User user) {
         userService.updateCurrentUser(user);
         return ResultRes.success(null);
@@ -127,6 +131,7 @@ public class UserController {
 
     @Operation(summary = "删除用户")
     @DeleteMapping("/delete/{id}")
+    @OperationLog(type = "delete", module = "system", action = "删除用户")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         userService.checkPermissionCode("user:delete");
         userService.deleteUser(id);

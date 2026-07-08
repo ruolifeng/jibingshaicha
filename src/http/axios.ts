@@ -79,6 +79,12 @@ function createInstance() {
       }
     },
     (error) => {
+      // 请求超时（大批量删除/导出等耗时操作可能触发）
+      if (error.code === "ECONNABORTED") {
+        error.message = "请求超时，请稍后刷新页面确认操作结果"
+        ElMessage.error(error.message)
+        return Promise.reject(error)
+      }
       // status 是 HTTP 状态码
       const status = get(error, "response.status")
       const message = get(error, "response.data.msg")
@@ -137,7 +143,9 @@ function createRequest(instance: AxiosInstance) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(!isFormData ? { "Content-Type": "application/json" } : {})
       },
-      timeout: isFormData || config.responseType === "blob" ? 60000 : 10000,
+      timeout: isFormData || config.responseType === "blob" || (config.method?.toLowerCase() === "delete" && config.data != null)
+        ? 120000
+        : 10000,
       withCredentials: false
     }
     const mergeConfig = merge({}, defaultConfig, config)

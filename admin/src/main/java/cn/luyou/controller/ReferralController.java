@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Referral;
@@ -29,6 +30,7 @@ public class ReferralController {
 
     @Operation(summary = "发起分级诊疗推送")
     @PostMapping("/send")
+    @OperationLog(type = "create", module = "referral", action = "发起分级诊疗推送")
     public ResultResponse<Void> send(@RequestBody Referral referral) {
         referralService.send(referral);
         return ResultRes.success(null);
@@ -36,6 +38,7 @@ public class ReferralController {
 
     @Operation(summary = "接收方确认接收")
     @PostMapping("/confirm/{id}")
+    @OperationLog(type = "update", module = "referral", action = "确认接收分级诊疗")
     public ResultResponse<Void> confirm(@PathVariable Long id,
                                         @RequestBody(required = false) Map<String, String> body) {
         LocalDate actualReferralDate = parseDate(body != null ? body.get("actualReferralDate") : null);
@@ -49,6 +52,7 @@ public class ReferralController {
 
     @Operation(summary = "接收方拒绝")
     @PostMapping("/reject/{id}")
+    @OperationLog(type = "update", module = "referral", action = "拒绝分级诊疗")
     public ResultResponse<Void> reject(@PathVariable Long id,
                                        @RequestBody(required = false) Map<String, String> body) {
         String reason = body != null ? body.get("rejectReason") : null;
@@ -58,6 +62,7 @@ public class ReferralController {
 
     @Operation(summary = "发送方重新发起（仅拒绝状态可用）")
     @PostMapping("/resend/{id}")
+    @OperationLog(type = "update", module = "referral", action = "重新发起分级诊疗")
     public ResultResponse<Void> resend(@PathVariable Long id) {
         referralService.resend(id);
         return ResultRes.success(null);

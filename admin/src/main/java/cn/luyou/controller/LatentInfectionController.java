@@ -59,6 +59,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "更新潜伏感染基本信息")
     @PutMapping("/{id}")
+    @OperationLog(type = "update", module = "latent", action = "更新潜伏感染基本信息")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         latentInfectionService.updateBasicInfo(id, body);
         return ResultRes.success(null);
@@ -82,8 +83,10 @@ public class LatentInfectionController {
     @Operation(summary = "批量导入潜伏感染记录（字段与手动新增一致）")
     @PostMapping("/import")
     @OperationLog(type = "import", module = "latent", action = "批量导入潜伏感染者")
-    public ResultResponse<ImportResult> importManual(@RequestParam("file") MultipartFile file) {
-        return ResultRes.success(latentInfectionService.importManualBatch(file));
+    public ResultResponse<ImportResult> importManual(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
+        return ResultRes.success(latentInfectionService.importManualBatch(file, confirmSkipInvalid));
     }
 
     @Operation(summary = "批量删除潜伏感染记录（级联删除）")
@@ -125,6 +128,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "追踪操作")
     @PostMapping("/track")
+    @OperationLog(type = "update", module = "latent", action = "潜伏感染追踪操作")
     public ResultResponse<Void> track(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null || body.get("status") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 status");
@@ -191,6 +195,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "转诊操作")
     @PostMapping("/referral")
+    @OperationLog(type = "update", module = "latent", action = "潜伏感染转诊操作")
     public ResultResponse<Void> referral(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null || body.get("result") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 result");
@@ -211,6 +216,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "设置服药状态")
     @PostMapping("/medication-status")
+    @OperationLog(type = "update", module = "latent", action = "设置潜伏感染服药状态")
     public ResultResponse<Void> setMedicationStatus(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null || body.get("medicationStatus") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 medicationStatus");
@@ -223,6 +229,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "结案归档")
     @PostMapping("/close-case/{id}")
+    @OperationLog(type = "update", module = "latent", action = "潜伏感染结案归档")
     public ResultResponse<Void> closeCase(@PathVariable Long id) {
         latentInfectionService.closeCase(id);
         return ResultRes.success(null);
@@ -238,6 +245,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "新增电话随访记录")
     @PostMapping("/follow-up/save")
+    @OperationLog(type = "update", module = "latent", action = "新增潜伏感染电话随访")
     public ResultResponse<Void> saveFollowUp(@RequestBody LatentFollowUp followUp) {
         latentFollowUpService.save(followUp);
         return ResultRes.success(null);
@@ -253,6 +261,7 @@ public class LatentInfectionController {
 
     @Operation(summary = "新增按期检查记录")
     @PostMapping("/check/save")
+    @OperationLog(type = "update", module = "latent", action = "新增潜伏感染按期检查")
     public ResultResponse<Void> saveCheck(@RequestBody LatentCheck check) {
         latentCheckService.save(check);
         return ResultRes.success(null);

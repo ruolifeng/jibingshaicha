@@ -1,10 +1,12 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.service.ScreeningSchoolService;
+import cn.luyou.utils.PageQueryUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -32,8 +34,11 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "上传学校人群筛查Excel")
     @PostMapping("/upload")
-    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
-        ImportResult result = screeningSchoolService.uploadAndParse(file);
+    @OperationLog(type = "import", module = "screening", action = "上传学校人群筛查Excel")
+    public ResultResponse<ImportResult> upload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
+        ImportResult result = screeningSchoolService.uploadAndParse(file, confirmSkipInvalid);
         return ResultRes.success(result);
     }
 
@@ -54,13 +59,14 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo) {
         IPage<ScreeningSchool> result = screeningSchoolService.queryPage(
-                page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
+                page, PageQueryUtil.clampSize(size), name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
                 createTimeFrom, createTimeTo);
         return ResultRes.success(result);
     }
 
     @Operation(summary = "新增学校人群筛查记录")
     @PostMapping("/create")
+    @OperationLog(type = "create", module = "screening", action = "新增学校人群筛查记录")
     public ResultResponse<Void> create(@RequestBody ScreeningSchool data) {
         screeningSchoolService.createScreening(data);
         return ResultRes.success(null);
@@ -68,6 +74,7 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "更新学校人群筛查记录")
     @PutMapping("/update/{id}")
+    @OperationLog(type = "update", module = "screening", action = "编辑学校人群筛查记录")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningSchool data) {
         data.setId(id);
         screeningSchoolService.updateScreening(data);
@@ -76,6 +83,7 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "删除学校人群筛查记录（级联删除后续所有关联数据）")
     @DeleteMapping("/delete/{id}")
+    @OperationLog(type = "delete", module = "screening", action = "删除学校人群筛查记录")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         screeningSchoolService.deleteScreeningCascade(id);
         return ResultRes.success(null);
@@ -83,8 +91,9 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "批量删除学校人群筛查记录（级联删除）")
     @DeleteMapping("/batch-delete")
+    @OperationLog(type = "delete", module = "screening", action = "批量删除学校人群筛查记录")
     public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
-        if (ids != null) ids.forEach(screeningSchoolService::deleteScreeningCascade);
+        screeningSchoolService.batchDeleteCascade(ids);
         return ResultRes.success(null);
     }
 
@@ -96,6 +105,7 @@ public class ScreeningSchoolController {
 
     @Operation(summary = "导出学校人群筛查数据")
     @GetMapping("/export")
+    @OperationLog(type = "export", module = "screening", action = "导出学校人群筛查数据")
     public void export(
             HttpServletResponse response,
             @RequestParam(required = false) String ids) throws Exception {

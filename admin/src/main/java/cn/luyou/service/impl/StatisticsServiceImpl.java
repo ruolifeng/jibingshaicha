@@ -9,6 +9,7 @@ import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.StatisticsService;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final LatentInfectionMapper latentInfectionMapper;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Override
     public List<SchoolStatisticsVO> getSchoolStatistics(String year, String district) {
@@ -92,6 +94,8 @@ public class StatisticsServiceImpl implements StatisticsService {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(year), ScreeningSchool::getYear, year)
                .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
         return screeningSchoolMapper.selectList(wrapper);
     }
 

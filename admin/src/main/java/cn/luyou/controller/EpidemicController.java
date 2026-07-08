@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
@@ -30,6 +31,7 @@ public class EpidemicController {
 
     @Operation(summary = "导入大疫情表")
     @PostMapping("/import")
+    @OperationLog(type = "import", module = "patient", action = "导入大疫情筛查数据")
     public ResultResponse<Map<String, Object>> importData(@RequestParam("file") MultipartFile file) {
         return ResultRes.success(epidemicImportService.importData(file));
     }
@@ -50,6 +52,7 @@ public class EpidemicController {
 
     @Operation(summary = "追踪操作")
     @PostMapping("/track")
+    @OperationLog(type = "update", module = "patient", action = "大疫情追踪操作")
     public ResultResponse<Void> track(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null || body.get("status") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 status");
@@ -63,6 +66,7 @@ public class EpidemicController {
 
     @Operation(summary = "录入胸片结果")
     @PostMapping("/xray")
+    @OperationLog(type = "update", module = "patient", action = "录入大疫情胸片结果")
     public ResultResponse<Void> xray(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id");
@@ -74,6 +78,7 @@ public class EpidemicController {
 
     @Operation(summary = "录入诊断结果并自动分流")
     @PostMapping("/diagnosis")
+    @OperationLog(type = "update", module = "patient", action = "录入大疫情诊断结果")
     public ResultResponse<Void> diagnosis(@RequestBody Map<String, Object> body) {
         if (body.get("id") == null || body.get("diagnosisResult") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少必要参数 id 或 diagnosisResult");

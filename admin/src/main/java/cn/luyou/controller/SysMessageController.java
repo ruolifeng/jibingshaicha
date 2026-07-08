@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.SysMessage;
@@ -31,6 +32,7 @@ public class SysMessageController {
 
     @Operation(summary = "标记消息已读")
     @PostMapping("/read/{id}")
+    @OperationLog(type = "update", module = "system", action = "标记消息已读")
     public ResultResponse<Void> markRead(@PathVariable Long id) {
         sysMessageService.markRead(id);
         return ResultRes.success(null);
@@ -45,6 +47,7 @@ public class SysMessageController {
 
     @Operation(summary = "删除消息")
     @DeleteMapping("/{id}")
+    @OperationLog(type = "delete", module = "system", action = "删除系统消息")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         Long userId = BaseContext.getCurrentId();
         sysMessageService.deleteMessage(id, userId);

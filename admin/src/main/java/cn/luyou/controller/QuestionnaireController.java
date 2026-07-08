@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ScreeningSchool;
@@ -33,6 +34,7 @@ public class QuestionnaireController {
 
     @Operation(summary = "公开提交问卷")
     @PostMapping("/public/{code}/submit")
+    @OperationLog(type = "create", module = "system", action = "公开提交筛查问卷")
     public ResultResponse<Void> publicSubmit(@PathVariable String code, @RequestBody Map<String, Object> formData) {
         questionnaireService.submit(code, formData);
         return ResultRes.success(null);
@@ -46,6 +48,7 @@ public class QuestionnaireController {
 
     @Operation(summary = "更新问卷配置（管理端）")
     @PutMapping("/{code}/config")
+    @OperationLog(type = "update", module = "system", action = "更新问卷配置")
     public ResultResponse<Void> updateConfig(@PathVariable String code, @RequestBody QuestionnaireConfigVO vo) {
         questionnaireService.updateConfig(code, vo);
         return ResultRes.success(null);
@@ -53,6 +56,7 @@ public class QuestionnaireController {
 
     @Operation(summary = "切换问卷开关（管理端）")
     @PutMapping("/{code}/enabled")
+    @OperationLog(type = "update", module = "system", action = "切换问卷开关")
     public ResultResponse<Void> updateEnabled(@PathVariable String code, @RequestBody Map<String, Boolean> body) {
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
         questionnaireService.updateEnabled(code, enabled);
@@ -72,6 +76,7 @@ public class QuestionnaireController {
 
     @Operation(summary = "导出问卷提交记录")
     @GetMapping("/{code}/submissions/export")
+    @OperationLog(type = "export", module = "system", action = "导出问卷提交记录")
     public void exportSubmissions(
             @PathVariable String code,
             @RequestParam(required = false) String name,

@@ -1,5 +1,6 @@
 package cn.luyou.controller;
 
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
@@ -35,8 +36,11 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "上传密接人群筛查Excel（72列官方模板）")
     @PostMapping("/upload")
-    public ResultResponse<ImportResult> upload(@RequestParam("file") MultipartFile file) {
-        return ResultRes.success(screeningCloseContactService.uploadAndParse(file));
+    @OperationLog(type = "import", module = "screening", action = "上传密接人群筛查Excel")
+    public ResultResponse<ImportResult> upload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
+        return ResultRes.success(screeningCloseContactService.uploadAndParse(file, confirmSkipInvalid));
     }
 
     @Operation(summary = "分页查询密接人群筛查数据")
@@ -67,6 +71,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "新增密接人群筛查记录")
     @PostMapping("/create")
+    @OperationLog(type = "create", module = "screening", action = "新增密接人群筛查记录")
     public ResultResponse<Void> create(@RequestBody ScreeningCloseContact data) {
         screeningCloseContactService.createScreening(data);
         return ResultRes.success(null);
@@ -74,6 +79,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "更新密接人群筛查记录")
     @PutMapping("/update/{id}")
+    @OperationLog(type = "update", module = "screening", action = "编辑密接人群筛查记录")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody ScreeningCloseContact data) {
         data.setId(id);
         screeningCloseContactService.updateScreening(data);
@@ -82,6 +88,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "删除密接人群筛查记录（级联删除）")
     @DeleteMapping("/delete/{id}")
+    @OperationLog(type = "delete", module = "screening", action = "删除密接人群筛查记录")
     public ResultResponse<Void> delete(@PathVariable Long id) {
         screeningCloseContactService.deleteScreeningCascade(id);
         return ResultRes.success(null);
@@ -89,6 +96,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "批量删除密接人群筛查记录（级联删除）")
     @DeleteMapping("/batch-delete")
+    @OperationLog(type = "delete", module = "screening", action = "批量删除密接人群筛查记录")
     public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
         if (ids != null) ids.forEach(screeningCloseContactService::deleteScreeningCascade);
         return ResultRes.success(null);
@@ -104,6 +112,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "设置预计完成治疗时间（潜伏感染者-预防治疗）")
     @PostMapping("/{id}/expected-end-date")
+    @OperationLog(type = "update", module = "screening", action = "设置密接筛查预计完成治疗时间")
     public ResultResponse<Void> setExpectedEndDate(
             @PathVariable Long id,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate expectedDate) {
@@ -113,6 +122,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "确认治疗是否完成（到预计完成时间后操作）")
     @PostMapping("/{id}/confirm-treatment")
+    @OperationLog(type = "update", module = "screening", action = "确认密接筛查治疗完成情况")
     public ResultResponse<Void> confirmTreatment(
             @PathVariable Long id,
             @RequestParam boolean done) {
@@ -122,6 +132,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "提交3月复查结果（未发现异常流程）")
     @PostMapping("/{id}/three-month-check")
+    @OperationLog(type = "update", module = "screening", action = "提交密接筛查3月复查结果")
     public ResultResponse<Void> threeMonthCheck(
             @PathVariable Long id,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkDate,
@@ -135,6 +146,7 @@ public class ScreeningCloseContactController {
 
     @Operation(summary = "导出密接人群筛查数据（72列官方模板，可再导入）")
     @GetMapping("/export")
+    @OperationLog(type = "export", module = "screening", action = "导出密接人群筛查数据")
     public void export(
             HttpServletResponse response,
             @RequestParam(required = false) String ids) throws Exception {

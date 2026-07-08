@@ -3,6 +3,7 @@ package cn.luyou.controller;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
@@ -45,14 +46,18 @@ public class PatientController {
 
     @Operation(summary = "手动新增在管患者")
     @PostMapping
+    @OperationLog(type = "create", module = "patient", action = "手动新增在管患者")
     public ResultResponse<Long> create(@RequestBody Map<String, Object> body) {
         return ResultRes.success(patientService.createManual(body));
     }
 
     @Operation(summary = "批量导入在管患者（字段与手动新增一致）")
     @PostMapping("/import")
-    public ResultResponse<ImportResult> importManual(@RequestParam("file") MultipartFile file) {
-        return ResultRes.success(patientService.importManualBatch(file));
+    @OperationLog(type = "import", module = "patient", action = "批量导入在管患者")
+    public ResultResponse<ImportResult> importManual(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
+        return ResultRes.success(patientService.importManualBatch(file, confirmSkipInvalid));
     }
 
     @Operation(summary = "患者详情")
@@ -63,6 +68,7 @@ public class PatientController {
 
     @Operation(summary = "更新患者基本信息")
     @PutMapping("/{id}")
+    @OperationLog(type = "update", module = "patient", action = "更新患者基本信息")
     public ResultResponse<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         patientService.updateBasicInfo(id, body);
         return ResultRes.success(null);
@@ -124,6 +130,7 @@ public class PatientController {
 
     @Operation(summary = "导入大疫情表")
     @PostMapping("/import-epidemic")
+    @OperationLog(type = "import", module = "patient", action = "导入大疫情表")
     public ResultResponse<Integer> importEpidemic(
             @RequestParam("file") MultipartFile file,
             @RequestParam String populationType) {
@@ -133,6 +140,7 @@ public class PatientController {
 
     @Operation(summary = "导入专病网/病案信息表（populationType=specialDisease）")
     @PostMapping("/import-special-disease")
+    @OperationLog(type = "import", module = "patient", action = "导入专病网病案信息表")
     public ResultResponse<Integer> importSpecialDisease(@RequestParam("file") MultipartFile file) {
         int count = patientService.importSpecialDisease(file);
         return ResultRes.success(count);
@@ -140,6 +148,7 @@ public class PatientController {
 
     @Operation(summary = "归档患者")
     @PostMapping("/archive/{id}")
+    @OperationLog(type = "update", module = "patient", action = "归档患者")
     public ResultResponse<Void> archive(@PathVariable Long id) {
         patientService.archivePatient(id);
         return ResultRes.success(null);
@@ -147,6 +156,7 @@ public class PatientController {
 
     @Operation(summary = "解锁停止治疗归档的患者（管理员）")
     @PostMapping("/unarchive/{id}")
+    @OperationLog(type = "update", module = "patient", action = "解锁停止治疗归档患者")
     public ResultResponse<Void> unarchiveFromStopTreatment(@PathVariable Long id) {
         Integer role = BaseContext.getCurrentRole();
         if (role == null || role == 6) {
@@ -158,6 +168,7 @@ public class PatientController {
 
     @Operation(summary = "批量删除患者（级联删除首次随访/后续随访/服药/通知单）")
     @DeleteMapping("/batch-delete")
+    @OperationLog(type = "delete", module = "patient", action = "批量删除患者")
     public ResultResponse<Void> batchDelete(@RequestBody Map<String, Object> body) {
         userService.checkPermissionCode("patientManagement:delete");
         @SuppressWarnings("unchecked")
@@ -173,6 +184,7 @@ public class PatientController {
 
     @Operation(summary = "删除患者（级联删除首次随访/后续随访/服药/通知单）")
     @DeleteMapping("/{id}")
+    @OperationLog(type = "delete", module = "patient", action = "删除患者")
     public ResultResponse<Void> deletePatient(@PathVariable Long id) {
         userService.checkPermissionCode("patientManagement:delete");
         patientService.deletePatient(id);
@@ -212,6 +224,7 @@ public class PatientController {
 
     @Operation(summary = "保存首次随访草稿（部分填写即可）")
     @PostMapping("/first-visit/draft")
+    @OperationLog(type = "update", module = "patient", action = "保存首次随访草稿")
     public ResultResponse<Void> saveFirstVisitDraft(@RequestBody FirstVisit firstVisit) {
         if (firstVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
@@ -232,6 +245,7 @@ public class PatientController {
 
     @Operation(summary = "保存首次随访")
     @PostMapping("/first-visit/save")
+    @OperationLog(type = "update", module = "patient", action = "保存首次随访")
     public ResultResponse<Void> saveFirstVisit(@RequestBody FirstVisit firstVisit) {
         validateFirstVisitRequired(firstVisit);
         if (firstVisit.getPatientId() == null) {
@@ -361,6 +375,7 @@ public class PatientController {
 
     @Operation(summary = "保存领药记录")
     @PostMapping("/medication-pickup/save")
+    @OperationLog(type = "update", module = "patient", action = "保存领药记录")
     public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
         userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
         if (pickup.getPatientId() != null) {
@@ -449,6 +464,7 @@ public class PatientController {
 
     @Operation(summary = "保存后续随访草稿（部分填写即可）")
     @PostMapping("/follow-up/draft")
+    @OperationLog(type = "update", module = "patient", action = "保存后续随访草稿")
     public ResultResponse<Void> saveFollowUpDraft(@RequestBody FollowUpVisit followUpVisit) {
         if (followUpVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
@@ -473,6 +489,7 @@ public class PatientController {
 
     @Operation(summary = "保存后续随访")
     @PostMapping("/follow-up/save")
+    @OperationLog(type = "update", module = "patient", action = "保存后续随访")
     public ResultResponse<Void> saveFollowUp(@RequestBody FollowUpVisit followUpVisit) {
         if (followUpVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
@@ -620,6 +637,7 @@ public class PatientController {
 
     @Operation(summary = "删除单条后续随访记录")
     @DeleteMapping("/follow-up/{id}")
+    @OperationLog(type = "delete", module = "patient", action = "删除后续随访记录")
     public ResultResponse<Void> deleteFollowUp(@PathVariable Long id) {
         FollowUpVisit existing = followUpVisitService.getById(id);
         if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
@@ -680,6 +698,7 @@ public class PatientController {
 
     @Operation(summary = "保存服药管理")
     @PostMapping("/medication/save")
+    @OperationLog(type = "update", module = "patient", action = "保存服药管理")
     public ResultResponse<Void> saveMedication(@RequestBody MedicationManagement medication) {
         if (medication.getPatientId() != null) {
             patientService.assertPatientOperable(medication.getPatientId());
@@ -700,6 +719,7 @@ public class PatientController {
 
     @Operation(summary = "完成服药管理（归档患者）")
     @PostMapping("/medication/complete")
+    @OperationLog(type = "update", module = "patient", action = "完成服药管理")
     public ResultResponse<Void> completeMedication(@RequestBody MedicationManagement medication) {
         if (medication.getPatientId() != null) {
             patientService.assertPatientOperable(medication.getPatientId());

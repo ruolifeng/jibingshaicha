@@ -4,6 +4,7 @@ import ConfirmReferralDialog from "@@/components/ConfirmReferralDialog.vue"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
@@ -155,11 +156,12 @@ async function handleImport(uploadFile: any) {
   }
   importing.value = true
   try {
-    const { data } = await importPatientApi(file)
+    const data = await runImportWithIdentityConfirm(importPatientApi, file)
+    if (!data) return
     importResult.value = data ?? { successCount: 0, errors: [] }
     importResultVisible.value = true
     importDialogVisible.value = false
-    if (data?.successCount > 0) {
+    if (data.successCount > 0) {
       fetchData()
     }
   } catch {
