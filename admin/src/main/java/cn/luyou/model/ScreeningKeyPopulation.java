@@ -143,6 +143,9 @@ public class ScreeningKeyPopulation extends BaseEntity {
     private Integer isLatent;
     @ExcelIgnore
     private String uploadBatch;
+    /** Excel 导入行号（与模板物理行号一致，用于列表按原 Excel 顺序展示） */
+    @ExcelIgnore
+    private Integer importRowNo;
     /** 所属部门ID */
     @ExcelIgnore
     private Long departmentId;

@@ -33,9 +33,8 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Override
     public List<SchoolStatisticsVO> getSchoolStatistics(String year, String district) {
         List<ScreeningSchool> records = queryRecords(year, district);
-        // 胸片/诊断数据已迁移到 latent_infection，按 populationType=school 一次查出
-        List<LatentInfection> latentList = queryLatentRecords("school");
-        Map<Long, LatentInfection> latentByScreeningId = latentList.stream()
+        Set<Long> screeningIds = records.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
+        Map<Long, LatentInfection> latentByScreeningId = queryLatentRecords("school", screeningIds).stream()
                 .filter(l -> l.getScreeningId() != null)
                 .collect(Collectors.toMap(LatentInfection::getScreeningId, l -> l, (a, b) -> a));
 
@@ -57,8 +56,8 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Override
     public List<DistrictStatisticsVO> getDistrictStatistics(String year, String district) {
         List<ScreeningSchool> records = queryRecords(year, district);
-        List<LatentInfection> latentList = queryLatentRecords("school");
-        Map<Long, LatentInfection> latentByScreeningId = latentList.stream()
+        Set<Long> screeningIds = records.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
+        Map<Long, LatentInfection> latentByScreeningId = queryLatentRecords("school", screeningIds).stream()
                 .filter(l -> l.getScreeningId() != null)
                 .collect(Collectors.toMap(LatentInfection::getScreeningId, l -> l, (a, b) -> a));
 
@@ -78,13 +77,14 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     @Override
     public List<String> getDistrictOptions() {
-        return screeningSchoolMapper.selectList(
-                Wrappers.<ScreeningSchool>lambdaQuery()
-                        .select(ScreeningSchool::getDistrict)
-                        .isNotNull(ScreeningSchool::getDistrict)
-                        .groupBy(ScreeningSchool::getDistrict)
-                        .orderByAsc(ScreeningSchool::getDistrict)
-        ).stream()
+        LambdaQueryWrapper<ScreeningSchool> wrapper = Wrappers.<ScreeningSchool>lambdaQuery()
+                .select(ScreeningSchool::getDistrict)
+                .isNotNull(ScreeningSchool::getDistrict)
+                .groupBy(ScreeningSchool::getDistrict)
+                .orderByAsc(ScreeningSchool::getDistrict);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        return screeningSchoolMapper.selectList(wrapper).stream()
                 .map(ScreeningSchool::getDistrict)
                 .filter(StrUtil::isNotBlank)
                 .collect(Collectors.toList());
@@ -99,10 +99,14 @@ public class StatisticsServiceImpl implements StatisticsService {
         return screeningSchoolMapper.selectList(wrapper);
     }
 
-    private List<LatentInfection> queryLatentRecords(String populationType) {
+    private List<LatentInfection> queryLatentRecords(String populationType, Set<Long> screeningIds) {
+        if (screeningIds == null || screeningIds.isEmpty()) {
+            return List.of();
+        }
         return latentInfectionMapper.selectList(
                 Wrappers.<LatentInfection>lambdaQuery()
-                        .eq(LatentInfection::getPopulationType, populationType));
+                        .eq(LatentInfection::getPopulationType, populationType)
+                        .in(LatentInfection::getScreeningId, screeningIds));
     }
 
     /**

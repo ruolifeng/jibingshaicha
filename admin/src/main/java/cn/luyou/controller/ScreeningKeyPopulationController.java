@@ -7,6 +7,7 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.utils.KeyPopulationScreeningExcelExportSupport;
+import cn.luyou.utils.ScreeningKeyPopulationOrderSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -139,7 +140,7 @@ public class ScreeningKeyPopulationController {
         }
         screeningScopeHelper.applyDepartmentScope(
                 query, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        query.orderByDesc(ScreeningKeyPopulation::getCreateTime);
+        ScreeningKeyPopulationOrderSupport.applyDisplayOrder(query);
         List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(query);
         KeyPopulationScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }

@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `remark`                      TEXT         DEFAULT NULL COMMENT '备注',
     `is_latent`                   TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
     `upload_batch`                VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `import_row_no`               INT          DEFAULT NULL COMMENT 'Excel导入行号（与模板行号一致，用于列表排序）',
     `create_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`                  TINYINT      NOT NULL DEFAULT 0,

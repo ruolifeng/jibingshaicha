@@ -6,7 +6,9 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.PatientMapper;
 import cn.luyou.model.LatentInfection;
+import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
+import cn.luyou.model.Referral;
 import cn.luyou.service.DepartmentService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
@@ -37,6 +39,57 @@ public class DataScopeHelper {
     public void applyLatentScope(LambdaQueryWrapper<LatentInfection> wrapper) {
         applyBizScope(wrapper, LatentInfection::getId, LatentInfection::getDepartmentId,
                 LatentInfection::getCreatorId, "latent");
+    }
+
+    /**
+     * 通知单统计：关联业务（患者/潜伏感染）在当前部门树辖区内的通知单。
+     * 市/区县/社区均按 {@link DepartmentService#getDescendantIds} 隔离。
+     */
+    public void applyNoticeScope(LambdaQueryWrapper<Notice> wrapper) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+        if (deptIds == null || deptIds.isEmpty()) {
+            wrapper.and(w -> w
+                    .and(w1 -> w1.eq(Notice::getNoticeType, "patient")
+                            .inSql(Notice::getBizId,
+                                    "SELECT id FROM patient WHERE deleted = 0 AND department_id IS NULL"))
+                    .or(w2 -> w2.eq(Notice::getNoticeType, "latent")
+                            .inSql(Notice::getBizId,
+                                    "SELECT id FROM latent_infection WHERE deleted = 0 AND department_id IS NULL")));
+            return;
+        }
+        String deptCsv = deptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        String userSql = "SELECT id FROM `user` WHERE deleted = 0 AND department_id IN (" + deptCsv + ")";
+        wrapper.and(w -> w
+                .and(w1 -> w1.eq(Notice::getNoticeType, "patient")
+                        .inSql(Notice::getBizId,
+                                "SELECT id FROM patient WHERE deleted = 0 AND department_id IN (" + deptCsv + ")"))
+                .or(w2 -> w2.eq(Notice::getNoticeType, "latent")
+                        .inSql(Notice::getBizId,
+                                "SELECT id FROM latent_infection WHERE deleted = 0 AND department_id IN (" + deptCsv + ")"))
+                .or().inSql(Notice::getSenderId, userSql)
+                .or().inSql(Notice::getReceiverOrgId, userSql));
+    }
+
+    /**
+     * 分级诊疗统计：发送方或接收方属于当前部门树辖区内的记录。
+     */
+    public void applyReferralScope(LambdaQueryWrapper<Referral> wrapper) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+        if (deptIds == null || deptIds.isEmpty()) {
+            wrapper.apply("1 = 0");
+            return;
+        }
+        String deptCsv = deptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        String userSql = "SELECT id FROM `user` WHERE deleted = 0 AND department_id IN (" + deptCsv + ")";
+        wrapper.and(w -> w.inSql(Referral::getSenderId, userSql)
+                .or()
+                .inSql(Referral::getReceiverOrgId, userSql));
     }
 
     public void assertPatientAccessible(Long patientId) {
