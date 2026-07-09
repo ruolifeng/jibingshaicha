@@ -11,6 +11,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningSchoolMapper;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
@@ -27,10 +28,13 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -54,6 +58,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -76,6 +81,20 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final UserMapper userMapper;
+
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "year", "city", "district", "gender", "idNumber", "phone", "ethnicity",
+            "schoolName", "className", "schoolType", "currentAddress", "householdAddress",
+            "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult",
+            "remark", "creatorUsername", "idType", "tbHistory", "closeContactHistory",
+            "suspiciousSymptoms", "hasInfectionScreen", "screenResult"
+    );
+    private static final Set<String> COLUMN_FILTER_EQ_FIELDS = Set.of(
+            "gender", "year", "city", "district", "ethnicity", "idType", "schoolType",
+            "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult",
+            "tbHistory", "closeContactHistory", "suspiciousSymptoms", "hasInfectionScreen", "screenResult"
+    );
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
@@ -126,6 +145,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                     result.addError(rowNum, data.getName(), "手机号格式不正确");
                 }
                 data.setUploadBatch(batchId);
+                data.setImportRowNo(rowNum);
+                CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
                 data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
                 data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                 dataList.add(data);
@@ -312,7 +333,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     public IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
                                              String phone, String year, String entryUnit,
-                                             String createTimeFrom, String createTimeTo) {
+                                             String createTimeFrom, String createTimeTo,
+                                             String creatorUsername, String columnFilters) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
@@ -322,16 +344,54 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), ScreeningSchool::getPhone, phone)
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
+                .like(StrUtil.isNotBlank(creatorUsername), ScreeningSchool::getCreatorUsername, creatorUsername)
                 .ge(createFrom != null, ScreeningSchool::getCreateTime, createFrom)
                 .le(createTo != null, ScreeningSchool::getCreateTime, createTo);
         ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
                 wrapper, ScreeningSchool::getIsLatent, ScreeningSchool::getDiagnosisFirst, diagnosisFirst);
         applyScreenYearFilter(wrapper, year);
         applyEntryUnitFilter(wrapper, entryUnit);
+        applyColumnFilters(wrapper, columnFilters);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
-        wrapper.orderByDesc(ScreeningSchool::getCreateTime);
+        ImportRowOrderSupport.applyWithBatch(wrapper);
         return page(new Page<>(page, size), wrapper);
+    }
+
+    private void applyColumnFilters(LambdaQueryWrapper<ScreeningSchool> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getName, value);
+                case "year" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getYear, value);
+                case "city" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getCity, value);
+                case "district" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getDistrict, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getPhone, value);
+                case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getEthnicity, value);
+                case "schoolName" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getSchoolName, value);
+                case "className" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getClassName, value);
+                case "schoolType" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getSchoolType, value);
+                case "currentAddress" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getCurrentAddress, value);
+                case "householdAddress" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getHouseholdAddress, value);
+                case "screenMethod" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getScreenMethod, value);
+                case "infectionResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getInfectionResult, value);
+                case "diagnosisFirst" -> ScreeningDiagnosisSupport.applyScreeningDiagnosisColumnFilter(
+                        wrapper, ScreeningSchool::getIsLatent, ScreeningSchool::getDiagnosisFirst, value);
+                case "hasChestXray" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getHasChestXray, value);
+                case "chestXrayResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getChestXrayResult, value);
+                case "remark" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getRemark, value);
+                case "creatorUsername" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getCreatorUsername, value);
+                case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getIdType, value);
+                case "tbHistory" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getTbHistory, value);
+                case "closeContactHistory" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getCloseContactHistory, value);
+                case "suspiciousSymptoms" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getSuspiciousSymptoms, value);
+                case "hasInfectionScreen" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getHasInfectionScreen, value);
+                case "screenResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getScreenResult, value);
+                default -> { }
+            }
+        });
     }
 
     /** 年度筛选：优先匹配 Excel「年度/年份」列，无年度字段时按筛查日期兜底 */
@@ -381,6 +441,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+        CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
         save(data);
 
         if (data.getIsLatent() == 1) {
@@ -462,6 +523,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
         if (StrUtil.isNotBlank(incoming.getUploadBatch())) existing.setUploadBatch(incoming.getUploadBatch());
+        if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
+        // 覆盖导入只更新业务字段与行号，保留首次录入人
         existing.setDepartmentId(incoming.getDepartmentId());
     }
 
@@ -655,9 +718,10 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
-        if (data.getDepartmentId() == null) {
-            data.setDepartmentId(existing.getDepartmentId());
-        }
+        // 录入用户与部门不可被前端覆盖
+        data.setCreatorId(existing.getCreatorId());
+        data.setCreatorUsername(existing.getCreatorUsername());
+        data.setDepartmentId(existing.getDepartmentId());
         updateById(data);
         ScreeningSchool updated = getById(data.getId());
         syncLatentFromScreening(List.of(updated), "school");

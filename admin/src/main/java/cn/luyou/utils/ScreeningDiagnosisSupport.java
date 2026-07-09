@@ -148,6 +148,34 @@ public final class ScreeningDiagnosisSupport {
     }
 
     /**
+     * 表头「诊断结果」筛选：与顶部筛选项口径一致；多选（逗号分隔）时为 OR。
+     */
+    public static <T> void applyScreeningDiagnosisColumnFilter(LambdaQueryWrapper<T> wrapper,
+                                                               SFunction<T, Integer> isLatentColumn,
+                                                               SFunction<T, String> diagnosisColumn,
+                                                               String value) {
+        List<String> values = ColumnFilterSupport.splitValues(value).stream().toList();
+        if (values.isEmpty()) {
+            return;
+        }
+        if (values.size() == 1) {
+            applyScreeningDiagnosisFilter(wrapper, isLatentColumn, diagnosisColumn, values.get(0));
+            return;
+        }
+        wrapper.and(outer -> {
+            boolean first = true;
+            for (String diagnosis : values) {
+                if (first) {
+                    outer.nested(sub -> applyScreeningDiagnosisFilter(sub, isLatentColumn, diagnosisColumn, diagnosis));
+                    first = false;
+                } else {
+                    outer.or(sub -> applyScreeningDiagnosisFilter(sub, isLatentColumn, diagnosisColumn, diagnosis));
+                }
+            }
+        });
+    }
+
+    /**
      * 潜伏/待诊断列表诊断结果筛选：「正常」匹配终态正常类诊断。
      */
     public static <T> void applyDiagnosisFirstFilter(LambdaQueryWrapper<T> wrapper,

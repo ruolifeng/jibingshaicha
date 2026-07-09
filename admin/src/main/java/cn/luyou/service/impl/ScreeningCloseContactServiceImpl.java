@@ -10,6 +10,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningCloseContactMapper;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
@@ -23,8 +24,11 @@ import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
@@ -82,6 +86,19 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final UserMapper userMapper;
+
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "year", "city", "district", "gender", "idNumber", "phone", "ethnicity",
+            "currentAddress", "householdAddress", "sourcePatientName", "contactType", "contactPlace",
+            "finalScreeningResult", "infectionCheckResult", "imagingResult", "sputumCheckResult",
+            "hasPreventiveTreatment", "remark", "creatorUsername", "phoneContactRelation"
+    );
+    private static final Set<String> COLUMN_FILTER_EQ_FIELDS = Set.of(
+            "gender", "year", "city", "district", "ethnicity", "contactType",
+            "finalScreeningResult", "infectionCheckResult", "imagingResult", "sputumCheckResult",
+            "hasPreventiveTreatment"
+    );
 
     /** 活动性肺结核的最终筛查结果标识（模板中的文字） */
     private static final String RESULT_ACTIVE_TB = "活动性肺结核";
@@ -147,6 +164,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
                     }
                     data.setUploadBatch(batchId);
+                    data.setImportRowNo(row);
+                    CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     dataList.add(data);
                 }
@@ -275,6 +294,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
         existing.setUploadBatch(incoming.getUploadBatch());
+        if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
+        // 覆盖导入只更新业务字段与行号，保留首次录入人
         existing.setDepartmentId(incoming.getDepartmentId());
     }
 
@@ -346,7 +367,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     public IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
                                                    String district, Integer ccStatus, String finalScreeningResult,
                                                    String phone, String dateFrom, String dateTo,
-                                                   String createTimeFrom, String createTimeTo) {
+                                                   String createTimeFrom, String createTimeTo,
+                                                   String creatorUsername, String columnFilters) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
@@ -356,13 +378,15 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningCloseContact::getIdNumber, idNumber)
                 .eq(StrUtil.isNotBlank(district), ScreeningCloseContact::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), ScreeningCloseContact::getPhone, phone)
-                .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus);
+                .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus)
+                .like(StrUtil.isNotBlank(creatorUsername), ScreeningCloseContact::getCreatorUsername, creatorUsername);
         applyFinalScreeningResultFilter(wrapper, finalScreeningResult);
+        applyColumnFilters(wrapper, columnFilters);
         wrapper.ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
                 .ge(createFrom != null, ScreeningCloseContact::getCreateTime, createFrom)
-                .le(createTo != null, ScreeningCloseContact::getCreateTime, createTo)
-                .orderByDesc(ScreeningCloseContact::getCreateTime);
+                .le(createTo != null, ScreeningCloseContact::getCreateTime, createTo);
+        ImportRowOrderSupport.applyWithBatch(wrapper);
         applyDepartmentScope(wrapper);
         IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);
 
@@ -456,7 +480,38 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         }
         determineStatus(data);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+        CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
         save(data);
+    }
+
+    private void applyColumnFilters(LambdaQueryWrapper<ScreeningCloseContact> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getName, value);
+                case "year" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getYear, value);
+                case "city" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getCity, value);
+                case "district" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getDistrict, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getPhone, value);
+                case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getEthnicity, value);
+                case "currentAddress" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getCurrentAddress, value);
+                case "householdAddress" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getHouseholdAddress, value);
+                case "sourcePatientName" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getSourcePatientName, value);
+                case "contactType" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getContactType, value);
+                case "contactPlace" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getContactPlace, value);
+                case "finalScreeningResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getFinalScreeningResult, value);
+                case "infectionCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getInfectionCheckResult, value);
+                case "imagingResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getImagingResult, value);
+                case "sputumCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getSputumCheckResult, value);
+                case "hasPreventiveTreatment" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningCloseContact::getHasPreventiveTreatment, value);
+                case "remark" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getRemark, value);
+                case "creatorUsername" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getCreatorUsername, value);
+                case "phoneContactRelation" -> ColumnFilterSupport.like(wrapper, ScreeningCloseContact::getPhoneContactRelation, value);
+                default -> { }
+            }
+        });
     }
 
     @Override
@@ -481,6 +536,10 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (Integer.valueOf(4).equals(effectiveCcStatus)) {
             ensureFollowupDueDates(data);
         }
+        // 录入用户与部门不可被前端覆盖
+        data.setCreatorId(existing.getCreatorId());
+        data.setCreatorUsername(existing.getCreatorUsername());
+        data.setDepartmentId(existing.getDepartmentId());
         updateById(data);
     }
 

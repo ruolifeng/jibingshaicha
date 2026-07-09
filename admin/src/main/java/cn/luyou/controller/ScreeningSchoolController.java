@@ -57,10 +57,12 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String year,
             @RequestParam(required = false) String entryUnit,
             @RequestParam(required = false) String createTimeFrom,
-            @RequestParam(required = false) String createTimeTo) {
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters) {
         IPage<ScreeningSchool> result = screeningSchoolService.queryPage(
                 page, PageQueryUtil.clampSize(size), name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
-                createTimeFrom, createTimeTo);
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters);
         return ResultRes.success(result);
     }
 
@@ -125,7 +127,7 @@ public class ScreeningSchoolController {
         }
         screeningScopeHelper.applyDepartmentScope(
                 query, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
-        query.orderByDesc(ScreeningSchool::getCreateTime);
+        cn.luyou.utils.ImportRowOrderSupport.applyWithBatch(query);
         List<ScreeningSchool> list = screeningSchoolService.list(query);
         EasyExcel.write(response.getOutputStream(), ScreeningSchool.class).sheet("筛查数据").doWrite(list);
     }

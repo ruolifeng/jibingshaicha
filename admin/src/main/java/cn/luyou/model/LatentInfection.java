@@ -85,6 +85,11 @@ public class LatentInfection extends BaseEntity {
     private Long departmentId;
     /** 录入人用户ID（手动新增/导入时写入，五级数据权限） */
     private Long creatorId;
+    /** Excel 导入行号（与模板物理行号一致，用于列表按原 Excel 顺序展示） */
+    private Integer importRowNo;
+    /** 录入用户名（非数据库字段，查询时按 creatorId 填充） */
+    @TableField(exist = false)
+    private String creatorUsername;
     /** 转出复制来源潜伏感染ID */
     private Long sourceLatentId;
 

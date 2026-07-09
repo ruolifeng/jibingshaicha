@@ -7,7 +7,9 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.constant.EpidemicTrackImportHeaders;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.StatYearPeriod;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
@@ -47,6 +49,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -138,13 +141,20 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return record;
     }
 
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "gender", "idNumber", "phone", "currentAddress", "township",
+            "crowdCategory", "caseCategory", "diseaseName", "reportUnit",
+            "diagnosisResult", "sourceType", "cardId", "workplace", "epidemicRemark",
+            "creatorUserName", "creatorUsername"
+    );
+
     @Override
     public IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                               String name, String idNumber,
                                               Integer trackingStatus, Integer archived,
                                               String phone, String township,
                                               String dateFrom, String dateTo, String sourceType,
-                                              String creatorOrEntryUnit) {
+                                              String creatorOrEntryUnit, String columnFilters) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
 
@@ -152,6 +162,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 bizMode, name, idNumber, trackingStatus, archived,
                 phone, township, dateFrom, dateTo, sourceType);
         applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
+        applyColumnFilters(wrapper, columnFilters);
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
 
         IPage<ReferralTracking> pageResult = page(new Page<>(page, size), wrapper);
@@ -159,6 +170,31 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         pageResult.getRecords().forEach(this::fillDisplayNames);
 
         return pageResult;
+    }
+
+    private void applyColumnFilters(LambdaQueryWrapper<ReferralTracking> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getName, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, ReferralTracking::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getPhone, value);
+                case "currentAddress" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getCurrentAddress, value);
+                case "township" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getTownship, value);
+                case "crowdCategory" -> ColumnFilterSupport.eqOrIn(wrapper, ReferralTracking::getCrowdCategory, value);
+                case "caseCategory" -> ColumnFilterSupport.eqOrIn(wrapper, ReferralTracking::getCaseCategory, value);
+                case "diseaseName" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getDiseaseName, value);
+                case "reportUnit" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getReportUnit, value);
+                case "diagnosisResult" -> ColumnFilterSupport.eqOrIn(wrapper, ReferralTracking::getDiagnosisResult, value);
+                case "sourceType" -> ColumnFilterSupport.eqOrIn(wrapper, ReferralTracking::getSourceType, value);
+                case "cardId" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getCardId, value);
+                case "workplace" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getWorkplace, value);
+                case "epidemicRemark" -> ColumnFilterSupport.like(wrapper, ReferralTracking::getEpidemicRemark, value);
+                case "creatorUserName", "creatorUsername" -> applyCreatorOrEntryUnitFilter(wrapper, value);
+                default -> { }
+            }
+        });
     }
 
     @Override
@@ -233,7 +269,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId());
             if (existingByCard != null) {
                 if (mergeEpidemicImportFields(existingByCard, row.reportCardTime(), row.currentAddress(),
-                        row.township(), currentUserId, currentDeptId)) {
+                        row.township(), currentUserId, currentDeptId, row.importRowNo())) {
                     updateById(existingByCard);
                     updated++;
                 }
@@ -268,7 +304,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         log.info("大疫情表表头解析（第{}行）：{}", headerRowIndex + 1, headerIndex.keySet());
 
         List<EpidemicImportRow> rows = new ArrayList<>();
-        for (Map<Integer, Object> row : allRows.subList(headerRowIndex + 1, allRows.size())) {
+        List<Map<Integer, Object>> dataRows = allRows.subList(headerRowIndex + 1, allRows.size());
+        for (int ri = 0; ri < dataRows.size(); ri++) {
+            Map<Integer, Object> row = dataRows.get(ri);
+            int importRowNo = headerRowIndex + 2 + ri;
             String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
             String idNumber = getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证");
@@ -303,7 +342,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     getFieldByHeader(row, headerIndex, "疾病名称"),
                     getFieldByHeader(row, headerIndex, "报告单位"),
                     reportCardTime,
-                    getFieldByHeader(row, headerIndex, "备注")
+                    getFieldByHeader(row, headerIndex, "备注"),
+                    importRowNo
             ));
         }
         return rows;
@@ -336,6 +376,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .notInPlaceCount(0)
                 .archived(0)
                 .uploadBatch(batchNo)
+                .importRowNo(row.importRowNo())
                 .departmentId(currentDeptId)
                 .creatorId(currentUserId)
                 .build();
@@ -358,7 +399,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             String diseaseName,
             String reportUnit,
             LocalDateTime reportCardTime,
-            String epidemicRemark
+            String epidemicRemark,
+            Integer importRowNo
     ) {
     }
 
@@ -1713,7 +1755,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     /** 重复导入时补全报告卡录入时间、录入人等信息 */
     private boolean mergeEpidemicImportFields(ReferralTracking existing, LocalDateTime reportCardTime,
                                               String currentAddress, String township,
-                                              Long currentUserId, Long currentDeptId) {
+                                              Long currentUserId, Long currentDeptId, Integer importRowNo) {
         boolean changed = false;
         if (reportCardTime != null && existing.getReportCardTime() == null) {
             existing.setReportCardTime(reportCardTime);
@@ -1729,6 +1771,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         if (existing.getCreatorId() == null && currentUserId != null) {
             existing.setCreatorId(currentUserId);
+            changed = true;
+        }
+        if (importRowNo != null && !importRowNo.equals(existing.getImportRowNo())) {
+            existing.setImportRowNo(importRowNo);
             changed = true;
         }
         if (existing.getDepartmentId() == null && currentDeptId != null) {
@@ -1821,9 +1867,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .eq(StrUtil.isNotBlank(sourceType), ReferralTracking::getSourceType, sourceType);
         if ("track".equals(bizMode)) {
             wrapper.ge(from != null, ReferralTracking::getReportCardTime, from)
-                    .le(to != null, ReferralTracking::getReportCardTime, to)
-                    .orderByDesc(ReferralTracking::getReportCardTime)
-                    .orderByDesc(ReferralTracking::getCreateTime);
+                    .le(to != null, ReferralTracking::getReportCardTime, to);
+            ImportRowOrderSupport.applyWithBatch(wrapper);
         } else {
             wrapper.ge(from != null, ReferralTracking::getCreateTime, from)
                     .le(to != null, ReferralTracking::getCreateTime, to)
@@ -1946,6 +1991,17 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         applyUserScopeFilter(wrapper, "recommend", level5RecommendView);
         applyDashboardDepartmentFilter(wrapper, filterDeptIds);
         return wrapper;
+    }
+
+    @Override
+    public long countPendingTrackingForDashboard(List<Long> filterDeptIds) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
+        applyBizModeFilter(wrapper, "track");
+        applyUserScopeFilter(wrapper, "track", false);
+        applyDashboardDepartmentFilter(wrapper, filterDeptIds);
+        wrapper.eq(ReferralTracking::getTrackingStatus, 0)
+                .eq(ReferralTracking::getArchived, 0);
+        return count(wrapper);
     }
 
     @Override

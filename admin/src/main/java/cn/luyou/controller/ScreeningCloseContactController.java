@@ -57,10 +57,12 @@ public class ScreeningCloseContactController {
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String createTimeFrom,
-            @RequestParam(required = false) String createTimeTo) {
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(screeningCloseContactService.queryPage(
                 page, size, name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
-                createTimeFrom, createTimeTo));
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters));
     }
 
     @Operation(summary = "各最终筛查结果分类统计")
@@ -165,7 +167,7 @@ public class ScreeningCloseContactController {
         }
         screeningScopeHelper.applyDepartmentScope(
                 query, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
-        query.orderByDesc(ScreeningCloseContact::getCreateTime);
+        cn.luyou.utils.ImportRowOrderSupport.applyWithBatch(query);
         List<ScreeningCloseContact> list = screeningCloseContactService.list(query);
 
         CloseContactCaseExcelExportSupport.write(

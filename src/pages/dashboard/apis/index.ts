@@ -26,6 +26,7 @@ export interface MessageStatsData {
 }
 
 export interface DashboardSummaryData {
+  /** 追踪模块待追踪人数（不含筛查管理版块） */
   pendingTracking: number
   pendingVisit: number
   pendingNotice: number

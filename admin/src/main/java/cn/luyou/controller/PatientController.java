@@ -89,10 +89,13 @@ public class PatientController {
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String dateFilterBy,
             @RequestParam(required = false) String medicationManagementUnit,
-            @RequestParam(required = false) String crowdCategory) {
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(patientService.queryPage(
                 page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
-                dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory));
+                dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                creatorUsername, columnFilters));
     }
 
     @Operation(summary = "历史患者列表")

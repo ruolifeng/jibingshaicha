@@ -2,8 +2,10 @@
 import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import PrintRecommend from "@@/components/PrintRecommend.vue"
 import ReferralDiagnosisDialog from "@@/components/ReferralDiagnosisDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
-import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import {
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
@@ -74,6 +76,15 @@ const loading = ref(false)
 const exporting = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const diagnosisFilterOptions = REFERRAL_TRACKING_DIAGNOSIS_OPTIONS.map(item => ({
+  text: item.label,
+  value: item.value
+}))
 const searchForm = reactive({
   name: "",
   idNumber: "",
@@ -87,6 +98,7 @@ const paginationData = reactive({ currentPage: 1, pageSize: 20 })
 async function fetchList() {
   loading.value = true
   try {
+    const columnFiltersParam = toQueryParam()
     const res = await getReferralTrackingListApi({
       bizMode: "recommend",
       page: paginationData.currentPage,
@@ -96,7 +108,8 @@ async function fetchList() {
       phone: searchForm.phone || undefined,
       township: searchForm.township || undefined,
       creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
-      ...extractDateRangeParams(searchForm.dateRange)
+      ...extractDateRangeParams(searchForm.dateRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
     tableData.value = res.data?.records ?? []
     total.value = res.data?.total ?? 0
@@ -119,6 +132,7 @@ function handleReset() {
   searchForm.township = ""
   searchForm.creatorOrEntryUnit = ""
   searchForm.dateRange = []
+  clearFilters()
   handleSearch()
 }
 
@@ -630,11 +644,63 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="idNumber" min-width="160">
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="township" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="乡镇"
+              :model-value="columnFilters.township"
+              @change="(v) => { setFilter('township', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="creatorUserName" min-width="100" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="录入用户"
+              :model-value="columnFilters.creatorUserName"
+              @change="(v) => { setFilter('creatorUserName', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="crowdCategory" label="人群分类" />
         <el-table-column prop="recommendReason" label="推介原因" show-overflow-tooltip />
         <el-table-column prop="receiverUserName" label="推介接收人" />
@@ -659,7 +725,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="诊断结果" min-width="160" show-overflow-tooltip>
+        <el-table-column prop="diagnosisResult" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="诊断结果"
+              type="select"
+              :options="diagnosisFilterOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag
               v-if="row.diagnosisResult"

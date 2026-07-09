@@ -6,8 +6,8 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationScreeningExcelExportSupport;
-import cn.luyou.utils.ScreeningKeyPopulationOrderSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -62,7 +62,7 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String townshipCommunity,
-            @RequestParam(required = false) String crowdCategory, // 逗号分隔多选，AND 匹配
+            @RequestParam(required = false) String crowdCategory, // 逗号分隔多选：单选为单纯分类，多选为 AND
             @RequestParam(required = false) String screenMethod,
             @RequestParam(required = false) Integer isLatent,
             @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
@@ -71,9 +71,13 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String entryUnit,
             @RequestParam(required = false) String createTimeFrom,
-            @RequestParam(required = false) String createTimeTo) {
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
-                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent, sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo));
+                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
+                creatorUsername, columnFilters));
     }
 
     @Operation(summary = "新增重点人群筛查记录")
@@ -140,7 +144,7 @@ public class ScreeningKeyPopulationController {
         }
         screeningScopeHelper.applyDepartmentScope(
                 query, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        ScreeningKeyPopulationOrderSupport.applyDisplayOrder(query);
+        ImportRowOrderSupport.applyWithBatch(query);
         List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(query);
         KeyPopulationScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }

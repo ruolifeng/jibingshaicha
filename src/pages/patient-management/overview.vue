@@ -4,6 +4,7 @@ import ConfirmReferralDialog from "@@/components/ConfirmReferralDialog.vue"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
 import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
@@ -25,10 +26,27 @@ const {
   tableData,
   total,
   searchForm,
+  columnFilters,
+  setFilter,
   fetchData,
   handleSearch,
   handleReset
 } = usePatientList(0, { overviewSearch: true })
+
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const pathogenFilterOptions = PATHOGEN_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const populationTypeFilterOptions = [
+  { text: "学生筛查", value: "school" },
+  { text: "重点人群", value: "keyPopulation" },
+  { text: "疫情筛查", value: "regular" },
+  { text: "大疫情", value: "epidemic" },
+  { text: "推介", value: "referral" },
+  { text: "密接", value: "closeContact" },
+  { text: "专病网", value: "specialDisease" }
+]
 
 watch(() => searchForm.populationType, (val) => {
   if (val !== "keyPopulation") {
@@ -88,6 +106,7 @@ async function handleExport() {
       diagnosisResult: searchForm.diagnosisResult || undefined,
       populationType: searchForm.populationType || undefined,
       medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
+      creatorUsername: searchForm.creatorUsername || undefined,
       crowdCategory: searchForm.keyPopulationSubCategories.length
         ? searchForm.keyPopulationSubCategories.join(",")
         : undefined,
@@ -256,6 +275,9 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             style="width: 160px"
           />
         </el-form-item>
+        <el-form-item label="录入用户">
+          <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 140px" />
+        </el-form-item>
         <el-form-item label="住址">
           <el-input v-model="searchForm.currentAddress" placeholder="请输入现住址" clearable style="width: 160px" />
         </el-form-item>
@@ -350,19 +372,79 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             {{ resolveRegistrationNo(row) || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="姓名">
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">
               {{ row.name }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
-        <el-table-column prop="diagnosisResult" label="病原学结果" show-overflow-tooltip />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="currentAddress" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="现住址"
+              :model-value="columnFilters.currentAddress"
+              @change="(v) => { setFilter('currentAddress', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="病原学结果"
+              type="select"
+              :options="pathogenFilterOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="creatorUsername" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="录入用户"
+              :model-value="columnFilters.creatorUsername"
+              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="治疗分类" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">
             <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">
@@ -391,7 +473,16 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getLatentPopulationDisplayLabel(row.populationType, row.crowdCategory) }}

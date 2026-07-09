@@ -1,6 +1,8 @@
 <script lang="ts" setup>
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { downloadBlob } from "@@/utils/download"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
@@ -16,6 +18,19 @@ import {
 } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const diagnosisFilterOptions = DIAGNOSIS_RESULT_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+/** 支持表头筛选的列（与后端 columnFilters 白名单对齐） */
+const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "select", options?: { text: string, value: string }[] }> = {
+  creatorUsername: { label: "录入用户" },
+  district: { label: "区/县" },
+  name: { label: "接触者姓名" },
+  idNumber: { label: "身份证号" },
+  phone: { label: "接触者电话" },
+  sourcePatientName: { label: "患者姓名" },
+  finalScreeningResult: { label: "最终筛查结果", type: "select", options: diagnosisFilterOptions }
+}
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -34,10 +49,20 @@ const searchForm = reactive({
 
 const previewColumns = CLOSE_CONTACT_CASE_COLUMNS
 
+function getHeaderFilter(field: string) {
+  return HEADER_FILTER_META[field]
+}
+
+function onHeaderFilterChange(field: string, value: string) {
+  setFilter(field, value)
+  handleSearch()
+}
+
 async function fetchData() {
   loading.value = true
   try {
     const { entryTimeRange, ...rest } = searchForm
+    const columnFiltersParam = toQueryParam()
     const res = await getCloseContactCaseListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
@@ -48,7 +73,8 @@ async function fetchData() {
       phone: rest.phone || undefined,
       creatorUsername: rest.creatorUsername || undefined,
       diagnosisResult: rest.diagnosisResult || undefined,
-      ...extractCreateTimeRangeParams(entryTimeRange)
+      ...extractCreateTimeRangeParams(entryTimeRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
     tableData.value = res.data.records
     total.value = res.data.total
@@ -72,6 +98,7 @@ function handleReset() {
   searchForm.creatorUsername = ""
   searchForm.diagnosisResult = ""
   searchForm.entryTimeRange = []
+  clearFilters()
   handleSearch()
 }
 
@@ -320,7 +347,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-form-item label="区县">
           <el-input v-model="searchForm.district" placeholder="区/县" clearable />
         </el-form-item>
-        <el-form-item label="用户名">
+        <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="录入账号" clearable />
         </el-form-item>
         <el-form-item label="最终筛查结果">
@@ -420,6 +447,15 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             :min-width="col.width"
             :fixed="col.fixed"
           >
+            <template v-if="getHeaderFilter(col.field)" #header>
+              <TableHeaderFilter
+                :label="getHeaderFilter(col.field)!.label"
+                :type="getHeaderFilter(col.field)!.type || 'text'"
+                :options="getHeaderFilter(col.field)!.options || []"
+                :model-value="columnFilters[col.field]"
+                @change="(v) => onHeaderFilterChange(col.field, v)"
+              />
+            </template>
             <template v-if="col.field === 'finalScreeningResult'" #default="{ row }">
               <el-tag v-if="row.finalScreeningResult" :type="getDiagnosisTag(row.finalScreeningResult)" size="small">
                 {{ row.finalScreeningResult }}

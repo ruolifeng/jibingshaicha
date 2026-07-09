@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { isSuspectedTbDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, SUSPECTED_TB_DIAGNOSIS } from "@@/constants/disease"
 import {
@@ -39,6 +41,9 @@ import {
 
 const router = useRouter()
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const finalScreeningFilterOptions = CC_FINAL_SCREENING_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -52,6 +57,7 @@ const searchForm = reactive({
   idNumber: "",
   district: "",
   phone: "",
+  creatorUsername: "",
   dateRange: [] as string[],
   entryTimeRange: [] as string[],
   finalScreeningResult: "" as string
@@ -116,6 +122,7 @@ const OTHER_FIELD_WATCH_PAIRS = [
 async function fetchData() {
   loading.value = true
   try {
+    const columnFiltersParam = toQueryParam()
     const listRes = await getScreeningCloseContactListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
@@ -123,9 +130,11 @@ async function fetchData() {
       idNumber: searchForm.idNumber || undefined,
       district: searchForm.district || undefined,
       phone: searchForm.phone || undefined,
+      creatorUsername: searchForm.creatorUsername || undefined,
       finalScreeningResult: searchForm.finalScreeningResult || undefined,
       ...extractDateRangeParams(searchForm.dateRange),
-      ...extractCreateTimeRangeParams(searchForm.entryTimeRange)
+      ...extractCreateTimeRangeParams(searchForm.entryTimeRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
     tableData.value = listRes.data.records
     total.value = listRes.data.total
@@ -149,9 +158,11 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.district = ""
   searchForm.phone = ""
+  searchForm.creatorUsername = ""
   searchForm.dateRange = []
   searchForm.entryTimeRange = []
   searchForm.finalScreeningResult = ""
+  clearFilters()
   handleSearch()
 }
 
@@ -538,6 +549,9 @@ async function handleThreeMonthSubmit() {
         <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
         </el-form-item>
+        <el-form-item label="录入用户">
+          <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 160px" />
+        </el-form-item>
         <el-form-item label="筛查时间">
           <el-date-picker
             v-model="searchForm.dateRange"
@@ -604,12 +618,44 @@ async function handleThreeMonthSubmit() {
       <div class="table-scroll-wrap">
         <el-table v-loading="loading" :data="tableData" border stripe max-height="600" row-key="id" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="40" fixed />
-          <el-table-column prop="name" label="接触者姓名" min-width="90" show-overflow-tooltip />
-          <el-table-column prop="idNumber" label="接触者身份证号" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="name" min-width="110" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderFilter
+                label="接触者姓名"
+                :model-value="columnFilters.name"
+                @change="(v) => { setFilter('name', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="idNumber" min-width="180" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderFilter
+                label="接触者身份证号"
+                :model-value="columnFilters.idNumber"
+                @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
           <el-table-column prop="age" label="年龄" width="70" />
-          <el-table-column prop="phone" label="联系电话" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="phone" min-width="120" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderFilter
+                label="联系电话"
+                :model-value="columnFilters.phone"
+                @change="(v) => { setFilter('phone', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
           <el-table-column prop="city" label="市/州" min-width="100" show-overflow-tooltip />
-          <el-table-column prop="district" label="区/县" min-width="100" show-overflow-tooltip />
+          <el-table-column prop="district" min-width="100" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderFilter
+                label="区/县"
+                :model-value="columnFilters.district"
+                @change="(v) => { setFilter('district', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
           <el-table-column prop="contactType" label="接触类型" min-width="100" show-overflow-tooltip />
           <el-table-column label="接触场所" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">
@@ -622,6 +668,15 @@ async function handleThreeMonthSubmit() {
           <el-table-column prop="infectionCheckResult" label="感染检测结果" min-width="120" show-overflow-tooltip />
           <el-table-column prop="imagingDate" label="影像检查日期" min-width="120" />
           <el-table-column prop="imagingResult" label="影像结果" min-width="100" show-overflow-tooltip />
+          <el-table-column prop="creatorUsername" min-width="100" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderFilter
+                label="录入用户"
+                :model-value="columnFilters.creatorUsername"
+                @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
           <el-table-column label="6月随访" min-width="120">
             <template #default="{ row }">
               <el-tag v-if="hasFollowupData(row, 6)" :type="tagType(getFollowupTag(row.followup6Result))" size="small">
@@ -646,7 +701,16 @@ async function handleThreeMonthSubmit() {
               <span v-else class="text-gray-400">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="最终筛查结果" min-width="110">
+          <el-table-column prop="finalScreeningResult" min-width="130">
+            <template #header>
+              <TableHeaderFilter
+                label="最终筛查结果"
+                type="select"
+                :options="finalScreeningFilterOptions"
+                :model-value="columnFilters.finalScreeningResult"
+                @change="(v) => { setFilter('finalScreeningResult', v); handleSearch() }"
+              />
+            </template>
             <template #default="{ row }">
               <el-tag
                 v-if="formatFinalScreeningDisplay(row.finalScreeningResult, row.finalScreeningResultOther)"

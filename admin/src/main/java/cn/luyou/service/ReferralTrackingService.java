@@ -24,7 +24,17 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
                                       Integer trackingStatus, Integer archived,
                                       String phone, String township,
                                       String dateFrom, String dateTo, String sourceType,
-                                      String creatorOrEntryUnit);
+                                      String creatorOrEntryUnit, String columnFilters);
+
+    default IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
+                                              String name, String idNumber,
+                                              Integer trackingStatus, Integer archived,
+                                              String phone, String township,
+                                              String dateFrom, String dateTo, String sourceType,
+                                              String creatorOrEntryUnit) {
+        return queryPage(page, size, bizMode, name, idNumber, trackingStatus, archived,
+                phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, null);
+    }
 
     /** 大疫情表导入（创建 bizMode=track, sourceType=epidemic 记录） */
     Map<String, Object> previewEpidemicImport(MultipartFile file);
@@ -77,4 +87,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
      * 首页追踪统计（追踪模块，统计周期：自然年 1/1—12/31）。
      */
     Map<String, Object> getTrackDashboardStats(Integer statYear, List<Long> filterDeptIds);
+
+    /** 首页待追踪人数：与追踪管理列表一致，仅统计 biz_mode=track 且 trackingStatus=待追踪 的记录 */
+    long countPendingTrackingForDashboard(List<Long> filterDeptIds);
 }

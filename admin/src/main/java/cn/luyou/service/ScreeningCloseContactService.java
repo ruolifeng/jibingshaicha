@@ -20,7 +20,16 @@ public interface ScreeningCloseContactService extends IService<ScreeningCloseCon
     IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
                                             String district, Integer ccStatus, String finalScreeningResult,
                                             String phone, String dateFrom, String dateTo,
-                                            String createTimeFrom, String createTimeTo);
+                                            String createTimeFrom, String createTimeTo,
+                                            String creatorUsername, String columnFilters);
+
+    default IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
+                                                   String district, Integer ccStatus, String finalScreeningResult,
+                                                   String phone, String dateFrom, String dateTo,
+                                                   String createTimeFrom, String createTimeTo) {
+        return queryPage(page, size, name, idNumber, district, ccStatus, finalScreeningResult,
+                phone, dateFrom, dateTo, createTimeFrom, createTimeTo, null, null);
+    }
 
     /** 新增单条筛查记录 */
     void createScreening(ScreeningCloseContact data);

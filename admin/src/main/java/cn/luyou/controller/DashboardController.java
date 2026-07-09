@@ -33,6 +33,7 @@ public class DashboardController {
     private final ScreeningSchoolService screeningSchoolService;
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
     private final ReferralService referralService;
+    private final ReferralTrackingService referralTrackingService;
     private final WorkbenchStatisticsService workbenchStatisticsService;
     private final ScreeningScopeHelper screeningScopeHelper;
     private final DataScopeHelper dataScopeHelper;
@@ -46,12 +47,7 @@ public class DashboardController {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         Map<String, Object> data = new HashMap<>();
 
-        List<Map<String, Object>> pendingTrackingBreakdown =
-                latentInfectionService.getPendingTrackingBreakdownForDashboard(filterDeptIds);
-        data.put("pendingTrackingBreakdown", pendingTrackingBreakdown);
-        data.put("pendingTracking", pendingTrackingBreakdown.stream()
-                .mapToLong(row -> ((Number) row.getOrDefault("count", 0L)).longValue())
-                .sum());
+        data.put("pendingTracking", referralTrackingService.countPendingTrackingForDashboard(filterDeptIds));
 
         data.putAll(workbenchStatisticsService.buildSummary(year, filterDeptIds));
 

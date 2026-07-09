@@ -43,7 +43,10 @@ import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.LatentScreeningLinkSupport;
@@ -104,6 +107,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final MedicationPickupService medicationPickupService;
     private final EpidemicReportService epidemicReportService;
 
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
+            "infectionResult", "diagnosisFirst", "diagnosisResult", "populationType",
+            "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark"
+    );
+
     private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
             "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact", "other"
     );
@@ -136,7 +145,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                              String referralResult, String diagnosisFirst,
                                              String phone, String dateFrom, String dateTo,
                                              String dateFilterBy, String creatorName, String crowdCategory,
-                                             List<Long> filterDepartmentIds) {
+                                             List<Long> filterDepartmentIds, String columnFilters) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         boolean noticeFillFilter = "noticeFill".equals(dateFilterBy);
@@ -213,7 +222,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
                     .le(createTo != null, LatentInfection::getCreateTime, createTo);
         }
-        wrapper.orderByDesc(LatentInfection::getCreateTime);
+        applyColumnFilters(wrapper, columnFilters);
+        ImportRowOrderSupport.applyWithoutBatch(wrapper);
         departmentFilterSupport.applyDepartmentIdFilter(
                 wrapper, LatentInfection::getDepartmentId, filterDepartmentIds);
         dataScopeHelper.applyLatentScope(wrapper);
@@ -223,6 +233,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         List<LatentInfection> records = result.getRecords();
         if (records == null || records.isEmpty()) return result;
 
+        fillCreatorUsernames(records);
         fillScreeningDiagnosisDraft(records);
         records.forEach(this::fillNoticeAutoFields);
         fillNoticeAndSupervisionStatus(records, populationType);
@@ -230,55 +241,58 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         return result;
     }
 
-    @Override
-    public long countPendingTrackingForDashboard(List<Long> filterDeptIds) {
-        return getPendingTrackingBreakdownForDashboard(filterDeptIds).stream()
-                .mapToLong(row -> ((Number) row.getOrDefault("count", 0L)).longValue())
-                .sum();
+    private void applyColumnFilters(LambdaQueryWrapper<LatentInfection> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, LatentInfection::getName, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, LatentInfection::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, LatentInfection::getPhone, value);
+                case "currentAddress" -> ColumnFilterSupport.like(wrapper, LatentInfection::getCurrentAddress, value);
+                case "householdAddress" -> ColumnFilterSupport.like(wrapper, LatentInfection::getHouseholdAddress, value);
+                case "infectionResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getInfectionResult, value);
+                case "diagnosisFirst" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getDiagnosisFirst, value);
+                case "diagnosisResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getDiagnosisResult, value);
+                case "populationType" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getPopulationType, value);
+                case "hasChestXray" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getHasChestXray, value);
+                case "chestXrayResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getChestXrayResult, value);
+                case "crowdCategory" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getCrowdCategory, value);
+                case "remark" -> ColumnFilterSupport.like(wrapper, LatentInfection::getRemark, value);
+                case "creatorUsername" -> {
+                    List<Long> ids = CreatorUserSupport.resolveUserIdsByKeyword(userMapper, value);
+                    if (!ids.isEmpty()) {
+                        wrapper.in(LatentInfection::getCreatorId, ids);
+                    }
+                }
+                default -> { }
+            }
+        });
     }
 
-    @Override
-    public List<Map<String, Object>> getPendingTrackingBreakdownForDashboard(List<Long> filterDeptIds) {
-        List<Map<String, Object>> breakdown = new ArrayList<>();
-        for (String populationType : List.of("school", "keyPopulation", "regular")) {
-            long suspected = countPendingTrackingViaListQuery(populationType, "pending", filterDeptIds);
-            if (suspected > 0) {
-                breakdown.add(pendingTrackingRow(populationType, "suspected", suspected));
-            }
-            long latent = countPendingTrackingViaListQuery(populationType, "latent", filterDeptIds);
-            if (latent > 0) {
-                breakdown.add(pendingTrackingRow(populationType, "latent", latent));
+    private void fillCreatorUsernames(List<LatentInfection> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        List<Long> ids = records.stream()
+                .map(LatentInfection::getCreatorId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<Long, String> nameMap = new HashMap<>();
+        for (User u : userMapper.selectBatchIds(ids)) {
+            if (u != null) {
+                nameMap.put(u.getId(), StrUtil.blankToDefault(u.getRealName(), u.getUsername()));
             }
         }
-        return breakdown;
-    }
-
-    /** 与各人群「疑似结核 / 潜伏感染」列表完全相同的查询口径，仅筛 trackingStatus=待追踪 */
-    private long countPendingTrackingViaListQuery(String populationType, String referralResult,
-                                                  List<Long> filterDeptIds) {
-        return queryPage(1, 1, populationType, null, null, 0, 0,
-                referralResult, null, null, null, null, null, null, null, filterDeptIds).getTotal();
-    }
-
-    private Map<String, Object> pendingTrackingRow(String populationType, String menuType, long count) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("populationType", populationType);
-        row.put("menuType", menuType);
-        row.put("menuLabel", menuLabel(populationType, menuType));
-        row.put("count", count);
-        return row;
-    }
-
-    private String menuLabel(String populationType, String menuType) {
-        String pop = switch (populationType) {
-            case "school" -> "学校人群";
-            case "keyPopulation" -> "重点人群";
-            case "regular" -> "疫情筛查";
-            case "closeContact" -> "密接人群";
-            default -> populationType;
-        };
-        String menu = "suspected".equals(menuType) ? "疑似结核管理" : "潜伏感染者管理";
-        return pop + " - " + menu;
+        for (LatentInfection r : records) {
+            if (r.getCreatorId() != null) {
+                r.setCreatorUsername(nameMap.get(r.getCreatorId()));
+            }
+        }
     }
 
     /** 按通知单首次填写时间（notice.create_time）筛选 */
@@ -1493,6 +1507,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .trackingStatus(0)
                         .notInPlaceCount(0)
                         .archived(0)
+                        .importRowNo(rowNum)
                         .referralResult("latent")
                         .diagnosisResult("潜伏感染者")
                         .departmentId(BaseContext.getCurrentDepartmentId())

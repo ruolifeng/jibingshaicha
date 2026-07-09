@@ -71,6 +71,8 @@ public class ReferralTracking extends BaseEntity {
     private String epidemicRemark;
     /** 导入批次号 */
     private String uploadBatch;
+    /** Excel 导入行号（与模板物理行号一致，用于列表按原 Excel 顺序展示） */
+    private Integer importRowNo;
 
     // ===== 推介专用字段（bizMode=recommend 时使用）=====
     /** 接收推介的一至五级用户ID */
