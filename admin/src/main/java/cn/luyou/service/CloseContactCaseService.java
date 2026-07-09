@@ -18,7 +18,15 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                       String district, String phone, String creatorUsername,
-                                      String diagnosisResult, String createTimeFrom, String createTimeTo);
+                                      String diagnosisResult, String createTimeFrom, String createTimeTo,
+                                      String columnFilters);
+
+    default IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
+                                              String district, String phone, String creatorUsername,
+                                              String diagnosisResult, String createTimeFrom, String createTimeTo) {
+        return queryPage(page, size, name, idNumber, district, phone, creatorUsername,
+                diagnosisResult, createTimeFrom, createTimeTo, null);
+    }
 
     void createCase(CloseContactCase data);
 

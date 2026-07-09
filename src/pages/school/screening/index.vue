@@ -1,13 +1,22 @@
 <script lang="ts" setup>
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const diagnosisFilterOptions = SCREENING_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
 
 const loading = ref(false)
 const batchDeleting = ref(false)
@@ -22,6 +31,7 @@ const searchForm = reactive({
   district: "",
   phone: "",
   entryUnit: "",
+  creatorUsername: "",
   year: "" as string,
   isLatent: undefined as number | undefined,
   diagnosisFirst: "" as string,
@@ -31,14 +41,17 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { entryUnit, year, entryTimeRange, ...rest } = searchForm
+    const { entryUnit, creatorUsername, year, entryTimeRange, ...rest } = searchForm
+    const columnFiltersParam = toQueryParam()
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
       size: Math.min(paginationData.pageSize, MAX_PAGE_SIZE),
       ...rest,
       ...extractCreateTimeRangeParams(entryTimeRange),
       ...(year ? { year } : {}),
-      ...(entryUnit ? { entryUnit } : {})
+      ...(entryUnit ? { entryUnit } : {}),
+      ...(creatorUsername ? { creatorUsername } : {}),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
     tableData.value = data.records
     total.value = data.total
@@ -59,10 +72,12 @@ function handleReset() {
   searchForm.district = ""
   searchForm.phone = ""
   searchForm.entryUnit = ""
+  searchForm.creatorUsername = ""
   searchForm.year = ""
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
   searchForm.entryTimeRange = []
+  clearFilters()
   handleSearch()
 }
 
@@ -311,6 +326,9 @@ watch(
         <el-form-item label="录入单位">
           <el-input v-model="searchForm.entryUnit" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
+        <el-form-item label="录入用户">
+          <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 160px" />
+        </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
             <el-option label="待确诊" :value="1" />
@@ -379,19 +397,86 @@ watch(
       <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
       <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="district" label="区县" />
-        <el-table-column prop="schoolName" label="学校名称" />
-        <el-table-column prop="className" label="班级" />
+        <el-table-column prop="idNumber" min-width="160">
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="district" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="区县"
+              :model-value="columnFilters.district"
+              @change="(v) => { setFilter('district', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="schoolName" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="学校名称"
+              :model-value="columnFilters.schoolName"
+              @change="(v) => { setFilter('schoolName', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="className" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="班级"
+              :model-value="columnFilters.className"
+              @change="(v) => { setFilter('className', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="schoolType" label="学校类型" />
         <el-table-column prop="ethnicity" label="民族" />
         <el-table-column prop="tbHistory" label="既往结核病史" />
         <el-table-column prop="closeContactHistory" label="密切接触史" />
         <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
+        <el-table-column prop="creatorUsername" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="录入用户"
+              :model-value="columnFilters.creatorUsername"
+              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="学校人群感染筛查情况">
           <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
           <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" />
@@ -401,7 +486,15 @@ watch(
               {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
             </template>
           </el-table-column>
-          <el-table-column prop="infectionResult" label="感染筛查结果" min-width="110" />
+          <el-table-column prop="infectionResult" min-width="110">
+            <template #header>
+              <TableHeaderFilter
+                label="感染筛查结果"
+                :model-value="columnFilters.infectionResult"
+                @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="学校人群胸片检查">
           <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
@@ -410,7 +503,17 @@ watch(
         </el-table-column>
         <el-table-column prop="sputumSmearResult" label="痰涂片结果" />
         <el-table-column prop="molecularBiologyResult" label="分子生物学结果" />
-        <el-table-column prop="diagnosisFirst" label="诊断结果" />
+        <el-table-column prop="diagnosisFirst" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="诊断结果"
+              type="select"
+              :options="diagnosisFilterOptions"
+              :model-value="columnFilters.diagnosisFirst"
+              @change="(v) => { setFilter('diagnosisFirst', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <!-- 预防性治疗情况（督导表归档后同步） -->
         <el-table-column label="潜伏感染者管理情况">
           <el-table-column prop="preventivePlan" label="预防性治疗方案" min-width="120" show-overflow-tooltip />

@@ -3,6 +3,7 @@
  * 各子菜单页面通过 usePagination + 本 composable 获取统一的患者列表数据。
  */
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getPatientListApi } from "../apis"
 
@@ -24,6 +25,7 @@ function hasMedicationUnitSearch(options?: PatientListOptions) {
 
 export function usePatientList(defaultArchived?: number, options?: PatientListOptions) {
   const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+  const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
   const loading = ref(false)
   const tableData = ref<any[]>([])
@@ -37,6 +39,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     diagnosisResult: "",
     populationType: "",
     keyPopulationSubCategories: [] as string[],
+    creatorUsername: "",
     dateRange: [] as string[],
     archived: defaultArchived,
     ...(hasMedicationUnitSearch(options) ? { medicationManagementUnit: "" } : {})
@@ -46,6 +49,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     loading.value = true
     try {
       const { dateRange, keyPopulationSubCategories, ...rest } = searchForm
+      const columnFiltersParam = toQueryParam()
       const params: Record<string, any> = {
         page: paginationData.currentPage,
         size: paginationData.pageSize,
@@ -53,7 +57,8 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
         ...extractDateRangeParams(dateRange),
         ...(keyPopulationSubCategories.length > 0
           ? { crowdCategory: keyPopulationSubCategories.join(",") }
-          : {})
+          : {}),
+        ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
       }
       if (options?.overviewSearch) {
         params.dateFilterBy = "registrationDate"
@@ -68,6 +73,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
       if (!params.phone) delete params.phone
       if (!params.currentAddress) delete params.currentAddress
       if (!params.diagnosisResult) delete params.diagnosisResult
+      if (!params.creatorUsername) delete params.creatorUsername
       if (!params.medicationManagementUnit) delete params.medicationManagementUnit
       const { data } = await getPatientListApi(params)
       tableData.value = data.records
@@ -89,10 +95,12 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     searchForm.diagnosisResult = ""
     searchForm.populationType = ""
     searchForm.keyPopulationSubCategories = []
+    searchForm.creatorUsername = ""
     searchForm.dateRange = []
     if (hasMedicationUnitSearch(options) && "medicationManagementUnit" in searchForm) {
       searchForm.medicationManagementUnit = ""
     }
+    clearFilters()
     handleSearch()
   }
 
@@ -107,6 +115,10 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     tableData,
     total,
     searchForm,
+    columnFilters,
+    setFilter,
+    clearFilters,
+    toQueryParam,
     fetchData,
     handleSearch,
     handleReset,

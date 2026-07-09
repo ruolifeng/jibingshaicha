@@ -340,6 +340,10 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelIgnore
     private String uploadBatch;
 
+    /** Excel 导入行号（与模板物理行号一致，用于列表按原 Excel 顺序展示） */
+    @ExcelIgnore
+    private Integer importRowNo;
+
     /** 年份（从 registrationDate 提取，方便查询统计） */
     @ExcelIgnore
     private String year;
@@ -362,6 +366,14 @@ public class ScreeningCloseContact extends BaseEntity {
     /** 所属部门ID */
     @ExcelIgnore
     private Long departmentId;
+
+    /** 录入人用户ID */
+    @ExcelIgnore
+    private Long creatorId;
+
+    /** 录入用户名 */
+    @ExcelIgnore
+    private String creatorUsername;
 
     /** 是否已发送通知单（非数据库字段，查询时动态填充） */
     @ExcelIgnore

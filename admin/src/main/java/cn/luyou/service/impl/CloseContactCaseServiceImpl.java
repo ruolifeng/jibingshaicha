@@ -13,7 +13,9 @@ import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
+import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
@@ -35,6 +37,8 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
@@ -49,6 +53,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private final DepartmentService departmentService;
     private final UserMapper userMapper;
     private final ScreeningScopeHelper screeningScopeHelper;
+
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "year", "city", "district", "gender", "idNumber", "phone",
+            "sourcePatientName", "finalScreeningResult", "infectionCheckResult",
+            "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
+            "remark", "creatorUsername"
+    );
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
@@ -101,6 +112,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
                     }
                     data.setUploadBatch(batchId);
+                    data.setImportRowNo(row);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setCreatorUsername(creatorUsername);
                     dataList.add(data);
@@ -190,21 +202,48 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             existing.setYear(String.valueOf(incoming.getRegistrationDate().getYear()));
         }
         existing.setUploadBatch(incoming.getUploadBatch());
+        if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
+        // 覆盖导入只更新业务字段与行号，保留首次录入人
         existing.setDepartmentId(incoming.getDepartmentId());
-        existing.setCreatorUsername(incoming.getCreatorUsername());
     }
 
     @Override
     public IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                               String district, String phone, String creatorUsername,
-                                              String diagnosisResult, String createTimeFrom, String createTimeTo) {
+                                              String diagnosisResult, String createTimeFrom, String createTimeTo,
+                                              String columnFilters) {
         LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
                 name, idNumber, district, phone, creatorUsername, diagnosisResult, createTimeFrom, createTimeTo);
-        wrapper.orderByDesc(CloseContactCase::getCreateTime);
+        applyColumnFilters(wrapper, columnFilters);
+        ImportRowOrderSupport.applyWithBatch(wrapper);
         applyDepartmentFilter(wrapper);
         IPage<CloseContactCase> result = page(new Page<>(page, size), wrapper);
         CloseContactCaseExcelDerivedSupport.applyAll(result.getRecords());
         return result;
+    }
+
+    private void applyColumnFilters(LambdaQueryWrapper<CloseContactCase> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getName, value);
+                case "year" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getYear, value);
+                case "city" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getCity, value);
+                case "district" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getDistrict, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getPhone, value);
+                case "sourcePatientName" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getSourcePatientName, value);
+                case "finalScreeningResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getFinalScreeningResult, value);
+                case "infectionCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getInfectionCheckResult, value);
+                case "imagingResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getImagingResult, value);
+                case "sputumCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSputumCheckResult, value);
+                case "hasPreventiveTreatment" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getHasPreventiveTreatment, value);
+                case "remark" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getRemark, value);
+                case "creatorUsername" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getCreatorUsername, value);
+                default -> { }
+            }
+        });
     }
 
     @Override
@@ -260,7 +299,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             wrapper = buildQueryWrapper(name, idNumber, district, phone, creatorUsername, diagnosisResult,
                     createTimeFrom, createTimeTo);
         }
-        wrapper.orderByDesc(CloseContactCase::getCreateTime);
+        ImportRowOrderSupport.applyWithBatch(wrapper);
         applyDepartmentFilter(wrapper);
         List<CloseContactCase> list = list(wrapper);
         CloseContactCaseExcelDerivedSupport.applyAll(list);

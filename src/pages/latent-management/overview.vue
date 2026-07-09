@@ -2,6 +2,7 @@
 import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue"
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, LATENT_MANUAL_POPULATION_TYPE_OPTIONS } from "@@/constants/disease"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
@@ -19,10 +20,21 @@ const {
   tableData,
   total,
   searchForm,
+  columnFilters,
+  setFilter,
   fetchData,
   handleSearch,
   handleReset
 } = useLatentOverviewList()
+
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const populationTypeFilterOptions = LATENT_MANUAL_POPULATION_TYPE_OPTIONS.map(item => ({
+  text: item.label,
+  value: item.value
+}))
 
 watch(() => searchForm.populationType, (val) => {
   if (val !== "keyPopulation") {
@@ -275,12 +287,63 @@ async function handleImport(uploadFile: any) {
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" />
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" show-overflow-tooltip />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查结果"
+              :model-value="columnFilters.infectionResult"
+              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="creatorUsername" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="录入用户"
+              :model-value="columnFilters.creatorUsername"
+              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
             <el-tag v-if="row.noticeStatus === 1 || row.noticeStatus === 2" type="success" size="small">
@@ -294,7 +357,16 @@ async function handleImport(uploadFile: any) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getLatentPopulationDisplayLabel(row.populationType, row.crowdCategory) }}

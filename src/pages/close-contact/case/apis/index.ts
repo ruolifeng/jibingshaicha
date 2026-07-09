@@ -34,6 +34,7 @@ export function getCloseContactCaseListApi(params: {
   district?: string
   phone?: string
   creatorUsername?: string
+  columnFilters?: string
   diagnosisResult?: string
   createTimeFrom?: string
   createTimeTo?: string

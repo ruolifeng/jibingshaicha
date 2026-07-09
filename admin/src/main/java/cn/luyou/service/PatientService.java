@@ -48,7 +48,17 @@ public interface PatientService extends IService<Patient> {
     IPage<Patient> queryPage(int page, int size, String populationType,
                               String name, String idNumber, String phone, String currentAddress,
                               String diagnosisResult, Integer archived, String dateFrom, String dateTo,
-                              String dateFilterBy, String medicationManagementUnit, String crowdCategory);
+                              String dateFilterBy, String medicationManagementUnit, String crowdCategory,
+                              String creatorUsername, String columnFilters);
+
+    default IPage<Patient> queryPage(int page, int size, String populationType,
+                                     String name, String idNumber, String phone, String currentAddress,
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory) {
+        return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
+                diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                null, null);
+    }
 
     /** 手动新增在管患者（在管总览） */
     Long createManual(Map<String, Object> body);

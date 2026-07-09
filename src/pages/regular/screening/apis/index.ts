@@ -83,6 +83,8 @@ export function getScreeningRegularListApi(params: {
   isLatent?: number
   diagnosisFirst?: string
   entryUnit?: string
+  creatorUsername?: string
+  columnFilters?: string
   dateFrom?: string
   dateTo?: string
   createTimeFrom?: string

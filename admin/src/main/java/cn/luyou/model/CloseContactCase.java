@@ -274,6 +274,10 @@ public class CloseContactCase extends BaseEntity {
     @ExcelIgnore
     private Long departmentId;
 
+    /** Excel 导入行号（与模板物理行号一致，用于列表按原 Excel 顺序展示） */
+    @ExcelIgnore
+    private Integer importRowNo;
+
     /** 录入用户名（系统账号统一命名格式） */
     @ExcelIgnore
     private String creatorUsername;

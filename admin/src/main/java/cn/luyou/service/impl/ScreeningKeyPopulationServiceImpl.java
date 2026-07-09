@@ -11,6 +11,7 @@ import cn.luyou.model.Referral;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.EpidemicReportService;
 import cn.luyou.service.FirstVisitService;
@@ -27,11 +28,14 @@ import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.UploadBatchSupport;
+import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
-import cn.luyou.utils.ScreeningKeyPopulationOrderSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -55,6 +59,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -77,6 +82,24 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private final SysMessageService sysMessageService;
     private final ReferralService referralService;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final UserMapper userMapper;
+
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "year", "city", "district", "gender", "idNumber", "phone", "ethnicity",
+            "townshipCommunity", "currentAddress", "screenMethod", "infectionResult",
+            "diagnosisFirst", "hasChestXray", "chestXrayResult", "remark", "creatorUsername",
+            "householdAddress", "idType", "crowdCategoryClose", "crowdCategoryStudent",
+            "crowdCategoryTeacher", "crowdCategoryElder", "crowdCategoryDiabetes",
+            "crowdCategoryDual", "crowdCategoryTbHist", "crowdCategoryNormal",
+            "hasSuspiciousSymptoms", "screenResult"
+    );
+    private static final Set<String> COLUMN_FILTER_EQ_FIELDS = Set.of(
+            "gender", "diagnosisFirst", "infectionResult", "hasChestXray", "chestXrayResult",
+            "screenMethod", "year", "city", "district", "ethnicity", "idType",
+            "crowdCategoryClose", "crowdCategoryStudent", "crowdCategoryTeacher",
+            "crowdCategoryElder", "crowdCategoryDiabetes", "crowdCategoryDual",
+            "crowdCategoryTbHist", "crowdCategoryNormal", "hasSuspiciousSymptoms", "screenResult"
+    );
 
     @Override
     public Map<String, Object> previewUpload(MultipartFile file, String sourceType) {
@@ -224,6 +247,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                         data.setUploadBatch(batchId);
                     }
                     data.setImportRowNo(row);
+                    CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
                     data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setSourceType(sourceType);
@@ -266,10 +290,38 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         return getOne(wrapper, false);
     }
 
+    private void mergeCrowdCategoryFields(ScreeningKeyPopulation target, ScreeningKeyPopulation source) {
+        if (StrUtil.isNotBlank(source.getCrowdCategoryClose())) {
+            target.setCrowdCategoryClose(source.getCrowdCategoryClose());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryStudent())) {
+            target.setCrowdCategoryStudent(source.getCrowdCategoryStudent());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryTeacher())) {
+            target.setCrowdCategoryTeacher(source.getCrowdCategoryTeacher());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryElder())) {
+            target.setCrowdCategoryElder(source.getCrowdCategoryElder());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryDiabetes())) {
+            target.setCrowdCategoryDiabetes(source.getCrowdCategoryDiabetes());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryDual())) {
+            target.setCrowdCategoryDual(source.getCrowdCategoryDual());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryTbHist())) {
+            target.setCrowdCategoryTbHist(source.getCrowdCategoryTbHist());
+        }
+        if (StrUtil.isNotBlank(source.getCrowdCategoryNormal())) {
+            target.setCrowdCategoryNormal(source.getCrowdCategoryNormal());
+        }
+    }
+
     private void mergeIntoExisting(ScreeningKeyPopulation existing, ScreeningKeyPopulation imported) {
         if (StrUtil.isNotBlank(imported.getName())) existing.setName(imported.getName());
         if (StrUtil.isNotBlank(imported.getPhone())) existing.setPhone(imported.getPhone());
         if (StrUtil.isNotBlank(imported.getCurrentAddress())) existing.setCurrentAddress(imported.getCurrentAddress());
+        mergeCrowdCategoryFields(existing, imported);
         if (StrUtil.isNotBlank(imported.getInfectionResult())) existing.setInfectionResult(imported.getInfectionResult());
         if (StrUtil.isNotBlank(imported.getHasChestXray())) existing.setHasChestXray(imported.getHasChestXray());
         if (imported.getChestXrayDate() != null) existing.setChestXrayDate(imported.getChestXrayDate());
@@ -280,6 +332,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         if (StrUtil.isNotBlank(imported.getRemark())) existing.setRemark(imported.getRemark());
         if (StrUtil.isNotBlank(imported.getUploadBatch())) existing.setUploadBatch(imported.getUploadBatch());
         if (imported.getImportRowNo() != null) existing.setImportRowNo(imported.getImportRowNo());
+        // 覆盖导入只更新业务字段与行号，保留首次录入人
         existing.setDepartmentId(imported.getDepartmentId());
         existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
     }
@@ -375,7 +428,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                     String crowdCategory, String screenMethod, Integer isLatent,
                                                     String sourceType, String diagnosisFirst,
                                                     String dateFrom, String dateTo, String entryUnit,
-                                                    String createTimeFrom, String createTimeTo) {
+                                                    String createTimeFrom, String createTimeTo,
+                                                    String creatorUsername, String columnFilters) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
@@ -391,6 +445,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .like(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
                 .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
                 .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
+                .like(StrUtil.isNotBlank(creatorUsername), ScreeningKeyPopulation::getCreatorUsername, creatorUsername)
                 .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo)
                 .ge(createFrom != null, ScreeningKeyPopulation::getCreateTime, createFrom)
@@ -398,11 +453,51 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
                 wrapper, ScreeningKeyPopulation::getIsLatent, ScreeningKeyPopulation::getDiagnosisFirst, diagnosisFirst);
         applyEntryUnitFilter(wrapper, entryUnit);
-        applyCrowdCategoryFilter(wrapper, crowdCategory);
+        ScreeningCrowdCategoryFilterSupport.applyFilter(wrapper, crowdCategory);
+        applyColumnFilters(wrapper, columnFilters);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        ScreeningKeyPopulationOrderSupport.applyDisplayOrder(wrapper);
+        ImportRowOrderSupport.applyWithBatch(wrapper);
         return page(new Page<>(page, size), wrapper);
+    }
+
+    private void applyColumnFilters(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getName, value);
+                case "year" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getYear, value);
+                case "city" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCity, value);
+                case "district" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getDistrict, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getPhone, value);
+                case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getEthnicity, value);
+                case "townshipCommunity" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getTownshipCommunity, value);
+                case "currentAddress" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getCurrentAddress, value);
+                case "householdAddress" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getHouseholdAddress, value);
+                case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getIdType, value);
+                case "screenMethod" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getScreenMethod, value);
+                case "infectionResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getInfectionResult, value);
+                case "diagnosisFirst" -> ScreeningDiagnosisSupport.applyScreeningDiagnosisColumnFilter(
+                        wrapper, ScreeningKeyPopulation::getIsLatent, ScreeningKeyPopulation::getDiagnosisFirst, value);
+                case "hasChestXray" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getHasChestXray, value);
+                case "chestXrayResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getChestXrayResult, value);
+                case "remark" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getRemark, value);
+                case "creatorUsername" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getCreatorUsername, value);
+                case "crowdCategoryClose" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryClose, value);
+                case "crowdCategoryStudent" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryStudent, value);
+                case "crowdCategoryTeacher" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryTeacher, value);
+                case "crowdCategoryElder" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryElder, value);
+                case "crowdCategoryDiabetes" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryDiabetes, value);
+                case "crowdCategoryDual" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryDual, value);
+                case "crowdCategoryTbHist" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryTbHist, value);
+                case "crowdCategoryNormal" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryNormal, value);
+                case "hasSuspiciousSymptoms" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getHasSuspiciousSymptoms, value);
+                case "screenResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getScreenResult, value);
+                default -> { }
+            }
+        });
     }
 
     /** 录入单位：按部门名称模糊匹配 department_id */
@@ -415,32 +510,6 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             wrapper.eq(ScreeningKeyPopulation::getId, -1L);
         } else {
             wrapper.in(ScreeningKeyPopulation::getDepartmentId, deptIds);
-        }
-    }
-
-    /** 人群分类：支持逗号分隔多选，同时满足所选分类（AND） */
-    private void applyCrowdCategoryFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String crowdCategory) {
-        if (StrUtil.isBlank(crowdCategory)) {
-            return;
-        }
-        for (String category : crowdCategory.split(",")) {
-            if (StrUtil.isNotBlank(category)) {
-                applySingleCrowdCategoryFilter(wrapper, category.trim());
-            }
-        }
-    }
-
-    private void applySingleCrowdCategoryFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String crowdCategory) {
-        switch (crowdCategory) {
-            case "密接" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryClose, "是");
-            case "学生" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryStudent, "是");
-            case "教职工" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTeacher, "是");
-            case "老年人" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryElder, "是");
-            case "糖尿病" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是");
-            case "双感" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDual, "是");
-            case "既往结核史" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryTbHist, "是");
-            case "非重点人群" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryNormal, "是");
-            default -> {}
         }
     }
 
@@ -459,6 +528,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+        CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
         save(data);
 
         if (data.getIsLatent() == 1) {
@@ -527,9 +597,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         if (StrUtil.isBlank(data.getSourceType())) {
             data.setSourceType(existing.getSourceType());
         }
-        if (data.getDepartmentId() == null) {
-            data.setDepartmentId(existing.getDepartmentId());
-        }
+        // 录入用户与部门不可被前端覆盖
+        data.setCreatorId(existing.getCreatorId());
+        data.setCreatorUsername(existing.getCreatorUsername());
+        data.setDepartmentId(existing.getDepartmentId());
         updateById(data);
         ScreeningKeyPopulation updated = getById(data.getId());
         syncLatentFromScreening(List.of(updated));

@@ -120,10 +120,11 @@ public class LatentInfectionController {
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String dateFilterBy,
             @RequestParam(required = false) String creatorName,
-            @RequestParam(required = false) String crowdCategory) {
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(latentInfectionService.queryPage(
                 page, size, populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst,
-                phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory));
+                phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory, null, columnFilters));
     }
 
     @Operation(summary = "追踪操作")

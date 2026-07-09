@@ -1,10 +1,12 @@
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getLatentAggregateListApi } from "../apis"
 
 /** 在管潜伏感染者总览列表（含手动/导入密接，排除密接筛查同步数据） */
 export function useLatentOverviewList() {
   const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+  const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
   const loading = ref(false)
   const tableData = ref<any[]>([])
@@ -25,6 +27,7 @@ export function useLatentOverviewList() {
     loading.value = true
     try {
       const { dateRange, keyPopulationSubCategories, ...rest } = searchForm
+      const columnFiltersParam = toQueryParam()
       const params: Record<string, any> = {
         page: 1,
         size: FETCH_ALL_SIZE,
@@ -34,7 +37,8 @@ export function useLatentOverviewList() {
         ...extractDateRangeParams(dateRange),
         ...(keyPopulationSubCategories.length > 0
           ? { crowdCategory: keyPopulationSubCategories.join(",") }
-          : {})
+          : {}),
+        ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
@@ -63,6 +67,7 @@ export function useLatentOverviewList() {
     searchForm.keyPopulationSubCategories = []
     searchForm.creatorName = ""
     searchForm.dateRange = []
+    clearFilters()
     handleSearch()
   }
 
@@ -77,6 +82,10 @@ export function useLatentOverviewList() {
     tableData,
     total,
     searchForm,
+    columnFilters,
+    setFilter,
+    clearFilters,
+    toQueryParam,
     fetchData,
     handleSearch,
     handleReset

@@ -52,10 +52,11 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
             @RequestParam(required = false) String createTimeFrom,
-            @RequestParam(required = false) String createTimeTo) {
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(closeContactCaseService.queryPage(
                 page, size, name, idNumber, district, phone, creatorUsername, diagnosisResult,
-                createTimeFrom, createTimeTo));
+                createTimeFrom, createTimeTo, columnFilters));
     }
 
     @Operation(summary = "新增密接个案")

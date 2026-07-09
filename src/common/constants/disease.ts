@@ -1,4 +1,4 @@
-/** 筛查列表「人群分类」筛选项（支持多选，逗号分隔传参） */
+/** 筛查列表「人群分类」筛选项（支持多选，逗号分隔传参；单选仅匹配单纯分类，多选 AND 匹配） */
 export const SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS = [
   { label: "密接", value: "密接" },
   { label: "学生", value: "学生" },

@@ -27,6 +27,8 @@ export function getScreeningCloseContactListApi(params: {
   dateTo?: string
   createTimeFrom?: string
   createTimeTo?: string
+  creatorUsername?: string
+  columnFilters?: string
   ccStatus?: number
   finalScreeningResult?: string
 }) {

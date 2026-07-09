@@ -40,7 +40,10 @@ import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -141,6 +144,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final DepartmentService departmentService;
     private final DepartmentFilterSupport departmentFilterSupport;
 
+    private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
+            "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
+            "diagnosisResult", "populationType", "ethnicity", "idType", "creatorUsername", "source"
+    );
+
     public PatientServiceImpl(
             DataScopeHelper dataScopeHelper,
             EpidemicReportService epidemicReportService,
@@ -178,12 +186,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     public IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo,
-                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory) {
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory,
+                                     String creatorUsername, String columnFilters) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
                 dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory);
-        wrapper.orderByDesc(Patient::getCreateTime);
+        applyCreatorUsernameFilter(wrapper, creatorUsername);
+        applyColumnFilters(wrapper, columnFilters);
+        ImportRowOrderSupport.applyWithoutBatch(wrapper);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
+        fillCreatorUsernames(result.getRecords());
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
         fillMedicationPickupSummary(result.getRecords());
@@ -205,11 +217,69 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (Integer.valueOf(1).equals(archived)) {
             wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getArchivedTime);
         } else {
-            wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getCreateTime);
+            ImportRowOrderSupport.applyWithoutBatch(wrapper);
         }
         List<Patient> patients = list(wrapper);
         fillEpidemicExtraFields(patients);
         return patients;
+    }
+
+
+    private void applyCreatorUsernameFilter(LambdaQueryWrapper<Patient> wrapper, String creatorUsername) {
+        if (StrUtil.isBlank(creatorUsername)) {
+            return;
+        }
+        List<Long> ids = CreatorUserSupport.resolveUserIdsByKeyword(userMapper, creatorUsername);
+        if (ids.isEmpty()) {
+            return;
+        }
+        wrapper.in(Patient::getCreatorId, ids);
+    }
+
+    private void applyColumnFilters(LambdaQueryWrapper<Patient> wrapper, String columnFilters) {
+        Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
+        ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
+            switch (field) {
+                case "name" -> ColumnFilterSupport.like(wrapper, Patient::getName, value);
+                case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getGender, value);
+                case "idNumber" -> ColumnFilterSupport.like(wrapper, Patient::getIdNumber, value);
+                case "phone" -> ColumnFilterSupport.like(wrapper, Patient::getPhone, value);
+                case "currentAddress" -> ColumnFilterSupport.like(wrapper, Patient::getCurrentAddress, value);
+                case "householdAddress" -> ColumnFilterSupport.like(wrapper, Patient::getHouseholdAddress, value);
+                case "diagnosisResult" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getDiagnosisResult, value);
+                case "populationType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getPopulationType, value);
+                case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getEthnicity, value);
+                case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getIdType, value);
+                case "source" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getSource, value);
+                case "creatorUsername" -> applyCreatorUsernameFilter(wrapper, value);
+                default -> { }
+            }
+        });
+    }
+
+    private void fillCreatorUsernames(List<Patient> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        List<Long> ids = records.stream()
+                .map(Patient::getCreatorId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<Long, String> nameMap = new HashMap<>();
+        for (User u : userMapper.selectBatchIds(ids)) {
+            if (u != null) {
+                nameMap.put(u.getId(), StrUtil.blankToDefault(u.getRealName(), u.getUsername()));
+            }
+        }
+        for (Patient p : records) {
+            if (p.getCreatorId() != null) {
+                p.setCreatorUsername(nameMap.get(p.getCreatorId()));
+            }
+        }
     }
 
     private LambdaQueryWrapper<Patient> buildPatientQueryWrapper(String populationType, String name,
@@ -1041,7 +1111,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
 
         int matchCount = 0;
-        for (Map<Integer, String> row : dataRows) {
+        for (int ri = 0; ri < dataRows.size(); ri++) {
+            Map<Integer, String> row = dataRows.get(ri);
+            int importRowNo = ri + 2;
             String nameVal = getFieldByHeader(row, headerIndex, "姓名");
             String idNumberVal = getFieldByHeader(row, headerIndex, "证件号", "身份证号", "身份证");
 
@@ -1085,6 +1157,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
             if (matched != null) {
                 matched.setEpidemicData(rawJson);
+                matched.setImportRowNo(importRowNo);
                 updateById(matched);
                 report.setPatientId(matched.getId());
                 report.setMatched(1);
@@ -1097,6 +1170,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .source("epidemic")
                         .archived(0)
                         .epidemicData(rawJson)
+                        .importRowNo(importRowNo)
                         .departmentId(BaseContext.getCurrentDepartmentId())
                         .creatorId(BaseContext.getCurrentId())
                         .build();
@@ -1741,7 +1815,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
         List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
         int count = 0;
-        for (Map<Integer, String> row : dataRows) {
+        for (int ri = 0; ri < dataRows.size(); ri++) {
+            Map<Integer, String> row = dataRows.get(ri);
+            int importRowNo = ri + 2;
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
             String idNumber = getFieldByHeader(row, headerIndex, "身份证号", "有效证件号", "证件号");
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) continue;
@@ -1794,6 +1870,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     .diagnosisResult(diagnosisResult)
                     .epidemicData(extraJson)
                     .archived(0)
+                    .importRowNo(importRowNo)
                     .departmentId(BaseContext.getCurrentDepartmentId())
                     .creatorId(BaseContext.getCurrentId())
                     .build();
@@ -2140,6 +2217,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .epidemicData(epidemicJson)
                         .source("manual")
                         .archived(0)
+                        .importRowNo(rowNum)
                         .departmentId(BaseContext.getCurrentDepartmentId())
                         .creatorId(BaseContext.getCurrentId())
                         .build();

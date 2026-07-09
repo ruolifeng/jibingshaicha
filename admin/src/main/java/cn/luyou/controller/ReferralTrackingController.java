@@ -45,10 +45,11 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
             @RequestParam(required = false) String sourceType,
-            @RequestParam(required = false) String creatorOrEntryUnit) {
+            @RequestParam(required = false) String creatorOrEntryUnit,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(referralTrackingService.queryPage(
                 page, size, bizMode, name, idNumber, trackingStatus, archived,
-                phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit));
+                phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters));
     }
 
     @Operation(summary = "查询推介/追踪记录详情")

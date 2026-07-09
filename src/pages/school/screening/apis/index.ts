@@ -81,6 +81,8 @@ export function getScreeningSchoolListApi(params: {
   diagnosisFirst?: string
   phone?: string
   entryUnit?: string
+  creatorUsername?: string
+  columnFilters?: string
   year?: string
   createTimeFrom?: string
   createTimeTo?: string

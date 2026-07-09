@@ -26,3 +26,13 @@ export function extractCreateTimeRangeParams(dateRange?: string[] | null) {
     createTimeTo: createTimeTo || undefined
   }
 }
+
+/** 表头筛选 JSON 参数（无筛选时不带该字段） */
+export function appendColumnFiltersParam(
+  params: Record<string, unknown>,
+  columnFiltersJson?: string | null
+) {
+  if (columnFiltersJson) {
+    params.columnFilters = columnFiltersJson
+  }
+}

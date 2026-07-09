@@ -149,6 +149,12 @@ public class ScreeningKeyPopulation extends BaseEntity {
     /** 所属部门ID */
     @ExcelIgnore
     private Long departmentId;
+    /** 录入人用户ID */
+    @ExcelIgnore
+    private Long creatorId;
+    /** 录入用户名 */
+    @ExcelIgnore
+    private String creatorUsername;
     /**
      * V16 数据来源类型：keyPopulation（重点人群）/ regular（疫情筛查）
      * 用于区分同一张表中的两类数据，影响 latent_infection.population_type 的赋值。
