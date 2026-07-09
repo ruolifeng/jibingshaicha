@@ -5,7 +5,7 @@ export function joinDepartmentIds(ids?: number[] | null): string | undefined {
 }
 
 /** 合并 API 查询参数中的 departmentIds */
-export function withDepartmentIds<T extends Record<string, unknown>>(
+export function withDepartmentIds<T extends object>(
   params: T,
   departmentIds?: number[] | null
 ): T & { departmentIds?: string } {
