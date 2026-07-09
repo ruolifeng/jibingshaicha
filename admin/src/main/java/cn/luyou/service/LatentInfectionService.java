@@ -22,6 +22,9 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                       String phone, String dateFrom, String dateTo,
                                       String dateFilterBy, String creatorName, String crowdCategory);
 
+    /** 工作台待追踪人数：与潜伏/疑似列表可见且 trackingStatus=待追踪 的记录口径一致 */
+    long countPendingTrackingForDashboard();
+
     /** 追踪操作 */
     void track(Long id, Integer status, String remark, LocalDate actualArrivalDate);
 

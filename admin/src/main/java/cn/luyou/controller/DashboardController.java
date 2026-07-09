@@ -41,11 +41,7 @@ public class DashboardController {
             @RequestParam(required = false) Integer year) {
         Map<String, Object> data = new HashMap<>();
 
-        LambdaQueryWrapper<LatentInfection> pendingTrackingWrapper = new LambdaQueryWrapper<LatentInfection>()
-                .eq(LatentInfection::getTrackingStatus, 0)
-                .eq(LatentInfection::getArchived, 0);
-        dataScopeHelper.applyLatentScope(pendingTrackingWrapper);
-        data.put("pendingTracking", latentInfectionService.count(pendingTrackingWrapper));
+        data.put("pendingTracking", latentInfectionService.countPendingTrackingForDashboard());
 
         data.putAll(workbenchStatisticsService.buildSummary(year));
 

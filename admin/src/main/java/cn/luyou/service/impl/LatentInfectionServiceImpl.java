@@ -222,6 +222,34 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         return result;
     }
 
+    @Override
+    public long countPendingTrackingForDashboard() {
+        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(LatentInfection::getTrackingStatus, 0)
+                .eq(LatentInfection::getArchived, 0);
+        applyPendingTrackingVisibilityFilters(wrapper);
+        dataScopeHelper.applyLatentScope(wrapper);
+        return count(wrapper);
+    }
+
+    /**
+     * 工作台「待追踪人数」与菜单可见范围对齐：
+     * - 与在管总览一致，排除密接筛查同步数据（密接模块单独管理）
+     * - 与列表一致，排除确诊患者终态
+     * - 仅统计疑似/潜伏菜单中的在管记录（referralResult 为空或 latent）
+     */
+    private void applyPendingTrackingVisibilityFilters(LambdaQueryWrapper<LatentInfection> wrapper) {
+        wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                .or()
+                .isNull(LatentInfection::getScreeningId));
+        wrapper.and(w -> w.isNull(LatentInfection::getDiagnosisResult)
+                .or()
+                .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
+        wrapper.and(w -> w.isNull(LatentInfection::getReferralResult)
+                .or()
+                .eq(LatentInfection::getReferralResult, "latent"));
+    }
+
     /** 按通知单首次填写时间（notice.create_time）筛选 */
     private Set<Long> resolveNoticeDateBizIds(String populationType,
                                               LocalDateTime noticeFrom, LocalDateTime noticeTo) {
