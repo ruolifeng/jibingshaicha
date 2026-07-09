@@ -11,7 +11,16 @@ export interface Department {
   createTime?: string
 }
 
-export type DepartmentPayload = {
+/** 统计分析部门筛选树节点 */
+export interface DepartmentFilterOption {
+  id: number
+  name: string
+  level?: number
+  parentId?: number | null
+  children?: DepartmentFilterOption[]
+}
+
+export interface DepartmentPayload {
   name: string
   description?: string
   parentId?: number | null
@@ -22,6 +31,14 @@ export type DepartmentPayload = {
 export function getDepartmentListApi() {
   return request<ApiResponseData<Department[]>>({
     url: "department/list",
+    method: "get"
+  })
+}
+
+/** 统计分析部门筛选选项（按当前用户层级隔离） */
+export function getDepartmentFilterOptionsApi() {
+  return request<ApiResponseData<DepartmentFilterOption[]>>({
+    url: "department/filter-options",
     method: "get"
   })
 }

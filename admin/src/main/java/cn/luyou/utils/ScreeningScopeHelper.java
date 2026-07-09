@@ -1,6 +1,9 @@
 package cn.luyou.utils;
 
+import cn.hutool.core.util.StrUtil;
+import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.Referral;
+import cn.luyou.model.User;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.ReferralService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,6 +23,7 @@ public class ScreeningScopeHelper {
 
     private final DepartmentService departmentService;
     private final ReferralService referralService;
+    private final UserMapper userMapper;
 
     /**
      * @param populationType 转诊模块人群类型：school / key / close
@@ -83,9 +87,72 @@ public class ScreeningScopeHelper {
 
     /** 非超管上传/新增时写入部门；未绑定部门则返回 null（与查询 isNull 逻辑一致） */
     public Long resolveUploadDepartmentId() {
-        if (BaseContext.isSuperAdmin()) {
-            return BaseContext.getCurrentDepartmentId();
-        }
         return BaseContext.getCurrentDepartmentId();
+    }
+
+    /**
+     * 密接个案表列表/导出范围：按部门树隔离；未绑定部门时仅可见本人录入。
+     */
+    public <T> void applyCloseContactCaseScope(LambdaQueryWrapper<T> wrapper,
+                                               SFunction<T, Long> departmentIdColumn,
+                                               SFunction<T, String> creatorUsernameColumn) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+        if (deptIds.isEmpty()) {
+            String username = resolveCurrentUsername();
+            if (StrUtil.isBlank(username)) {
+                wrapper.apply("1 = 0");
+            } else {
+                wrapper.eq(creatorUsernameColumn, username);
+            }
+            return;
+        }
+        wrapper.in(departmentIdColumn, deptIds);
+    }
+
+    /**
+     * 导入去重范围：与列表可见范围一致。
+     * 非超管仅在辖区内匹配已存在记录；未匹配则插入新行（即使其他辖区已有同证件号）。
+     */
+    public <T> void applyImportDedupScope(LambdaQueryWrapper<T> wrapper,
+                                          SFunction<T, Long> departmentIdColumn) {
+        applyImportDedupScope(wrapper, departmentIdColumn, null, null);
+    }
+
+    public <T> void applyImportDedupScope(LambdaQueryWrapper<T> wrapper,
+                                          SFunction<T, Long> departmentIdColumn,
+                                          SFunction<T, String> creatorUsernameColumn,
+                                          SFunction<T, Long> creatorIdColumn) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+        if (deptIds.isEmpty()) {
+            if (creatorUsernameColumn != null) {
+                String username = resolveCurrentUsername();
+                if (StrUtil.isNotBlank(username)) {
+                    wrapper.eq(creatorUsernameColumn, username);
+                    return;
+                }
+            }
+            if (creatorIdColumn != null && BaseContext.getCurrentId() != null) {
+                wrapper.eq(creatorIdColumn, BaseContext.getCurrentId());
+                return;
+            }
+            wrapper.isNull(departmentIdColumn);
+            return;
+        }
+        wrapper.in(departmentIdColumn, deptIds);
+    }
+
+    private String resolveCurrentUsername() {
+        Long userId = BaseContext.getCurrentId();
+        if (userId == null) {
+            return null;
+        }
+        User user = userMapper.selectById(userId);
+        return user != null ? user.getUsername() : null;
     }
 }

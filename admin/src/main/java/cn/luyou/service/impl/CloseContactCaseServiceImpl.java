@@ -16,6 +16,7 @@ import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -47,6 +48,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
 
     private final DepartmentService departmentService;
     private final UserMapper userMapper;
+    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
@@ -99,7 +101,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
                     }
                     data.setUploadBatch(batchId);
-                    data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setCreatorUsername(creatorUsername);
                     dataList.add(data);
                 }
@@ -131,10 +133,14 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 toInsert.add(d);
                 continue;
             }
-            CloseContactCase existing = lambdaQuery()
-                    .eq(CloseContactCase::getIdNumber, d.getIdNumber())
-                    .last("LIMIT 1")
-                    .one();
+            CloseContactCase existing = null;
+            if (StrUtil.isNotBlank(d.getIdNumber())) {
+                LambdaQueryWrapper<CloseContactCase> dupWrapper = new LambdaQueryWrapper<>();
+                dupWrapper.eq(CloseContactCase::getIdNumber, d.getIdNumber()).last("LIMIT 1");
+                screeningScopeHelper.applyImportDedupScope(
+                        dupWrapper, CloseContactCase::getDepartmentId, CloseContactCase::getCreatorUsername, null);
+                existing = getOne(dupWrapper, false);
+            }
             if (existing != null) {
                 mergeCaseData(existing, d);
                 toUpdate.add(existing);
@@ -184,6 +190,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             existing.setYear(String.valueOf(incoming.getRegistrationDate().getYear()));
         }
         existing.setUploadBatch(incoming.getUploadBatch());
+        existing.setDepartmentId(incoming.getDepartmentId());
         existing.setCreatorUsername(incoming.getCreatorUsername());
     }
 
@@ -206,7 +213,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
-        data.setDepartmentId(BaseContext.getCurrentDepartmentId());
+        data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         data.setCreatorUsername(resolveCurrentUsername());
         save(data);
     }
@@ -279,22 +286,8 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     }
 
     private void applyDepartmentFilter(LambdaQueryWrapper<CloseContactCase> wrapper) {
-        if (BaseContext.isSuperAdmin()) {
-            return;
-        }
-        Long currentDeptId = BaseContext.getCurrentDepartmentId();
-        List<Long> deptIds = departmentService.getDescendantIds(currentDeptId);
-        if (deptIds.isEmpty()) {
-            // 未绑定部门时，仅可见本人录入的数据，避免 IN () 导致 SQL 异常
-            String username = resolveCurrentUsername();
-            if (StrUtil.isBlank(username)) {
-                wrapper.apply("1 = 0");
-            } else {
-                wrapper.eq(CloseContactCase::getCreatorUsername, username);
-            }
-            return;
-        }
-        wrapper.in(CloseContactCase::getDepartmentId, deptIds);
+        screeningScopeHelper.applyCloseContactCaseScope(
+                wrapper, CloseContactCase::getDepartmentId, CloseContactCase::getCreatorUsername);
     }
 
     @Override

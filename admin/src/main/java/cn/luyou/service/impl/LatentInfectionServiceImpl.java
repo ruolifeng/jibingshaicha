@@ -42,9 +42,11 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -82,6 +84,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         implements LatentInfectionService {
 
     private final DataScopeHelper dataScopeHelper;
+    private final DepartmentFilterSupport departmentFilterSupport;
     private final PatientService patientService;
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
@@ -132,7 +135,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
                                              String referralResult, String diagnosisFirst,
                                              String phone, String dateFrom, String dateTo,
-                                             String dateFilterBy, String creatorName, String crowdCategory) {
+                                             String dateFilterBy, String creatorName, String crowdCategory,
+                                             List<Long> filterDepartmentIds) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         boolean noticeFillFilter = "noticeFill".equals(dateFilterBy);
@@ -201,6 +205,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         KeyPopulationCrowdCategoryQuerySupport.applyLatentFilter(
                 wrapper, populationType, crowdCategory, screeningKeyPopulationMapper);
 
+        LatentScreeningLinkSupport.applyLinkedScreeningExistsFilter(wrapper);
+
         if (filterBizIds != null) {
             wrapper.in(LatentInfection::getId, filterBizIds);
         } else if (!hasSpecialDateRange) {
@@ -208,6 +214,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     .le(createTo != null, LatentInfection::getCreateTime, createTo);
         }
         wrapper.orderByDesc(LatentInfection::getCreateTime);
+        departmentFilterSupport.applyDepartmentIdFilter(
+                wrapper, LatentInfection::getDepartmentId, filterDepartmentIds);
         dataScopeHelper.applyLatentScope(wrapper);
         IPage<LatentInfection> result = page(new Page<>(page, size), wrapper);
 
@@ -223,31 +231,54 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     @Override
-    public long countPendingTrackingForDashboard() {
-        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LatentInfection::getTrackingStatus, 0)
-                .eq(LatentInfection::getArchived, 0);
-        applyPendingTrackingVisibilityFilters(wrapper);
-        dataScopeHelper.applyLatentScope(wrapper);
-        return count(wrapper);
+    public long countPendingTrackingForDashboard(List<Long> filterDeptIds) {
+        return getPendingTrackingBreakdownForDashboard(filterDeptIds).stream()
+                .mapToLong(row -> ((Number) row.getOrDefault("count", 0L)).longValue())
+                .sum();
     }
 
-    /**
-     * 工作台「待追踪人数」与菜单可见范围对齐：
-     * - 与在管总览一致，排除密接筛查同步数据（密接模块单独管理）
-     * - 与列表一致，排除确诊患者终态
-     * - 仅统计疑似/潜伏菜单中的在管记录（referralResult 为空或 latent）
-     */
-    private void applyPendingTrackingVisibilityFilters(LambdaQueryWrapper<LatentInfection> wrapper) {
-        wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
-                .or()
-                .isNull(LatentInfection::getScreeningId));
-        wrapper.and(w -> w.isNull(LatentInfection::getDiagnosisResult)
-                .or()
-                .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
-        wrapper.and(w -> w.isNull(LatentInfection::getReferralResult)
-                .or()
-                .eq(LatentInfection::getReferralResult, "latent"));
+    @Override
+    public List<Map<String, Object>> getPendingTrackingBreakdownForDashboard(List<Long> filterDeptIds) {
+        List<Map<String, Object>> breakdown = new ArrayList<>();
+        for (String populationType : List.of("school", "keyPopulation", "regular")) {
+            long suspected = countPendingTrackingViaListQuery(populationType, "pending", filterDeptIds);
+            if (suspected > 0) {
+                breakdown.add(pendingTrackingRow(populationType, "suspected", suspected));
+            }
+            long latent = countPendingTrackingViaListQuery(populationType, "latent", filterDeptIds);
+            if (latent > 0) {
+                breakdown.add(pendingTrackingRow(populationType, "latent", latent));
+            }
+        }
+        return breakdown;
+    }
+
+    /** 与各人群「疑似结核 / 潜伏感染」列表完全相同的查询口径，仅筛 trackingStatus=待追踪 */
+    private long countPendingTrackingViaListQuery(String populationType, String referralResult,
+                                                  List<Long> filterDeptIds) {
+        return queryPage(1, 1, populationType, null, null, 0, 0,
+                referralResult, null, null, null, null, null, null, null, filterDeptIds).getTotal();
+    }
+
+    private Map<String, Object> pendingTrackingRow(String populationType, String menuType, long count) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("populationType", populationType);
+        row.put("menuType", menuType);
+        row.put("menuLabel", menuLabel(populationType, menuType));
+        row.put("count", count);
+        return row;
+    }
+
+    private String menuLabel(String populationType, String menuType) {
+        String pop = switch (populationType) {
+            case "school" -> "学校人群";
+            case "keyPopulation" -> "重点人群";
+            case "regular" -> "疫情筛查";
+            case "closeContact" -> "密接人群";
+            default -> populationType;
+        };
+        String menu = "suspected".equals(menuType) ? "疑似结核管理" : "潜伏感染者管理";
+        return pop + " - " + menu;
     }
 
     /** 按通知单首次填写时间（notice.create_time）筛选 */
@@ -880,12 +911,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             String idNumber = getStrCell(row, idNumberIdx);
             if (StrUtil.isBlank(idNumber)) continue;
 
-            LatentInfection entity = lambdaQuery()
-                    .eq(LatentInfection::getIdNumber, idNumber)
+            LambdaQueryWrapper<LatentInfection> dupWrapper = new LambdaQueryWrapper<>();
+            dupWrapper.eq(LatentInfection::getIdNumber, idNumber)
                     .eq(LatentInfection::getPopulationType, populationType)
                     .eq(LatentInfection::getArchived, 0)
-                    .last("LIMIT 1")
-                    .one();
+                    .last("LIMIT 1");
+            dataScopeHelper.applyImportDedupScope(
+                    dupWrapper, LatentInfection::getDepartmentId, LatentInfection::getCreatorId);
+            LatentInfection entity = getOne(dupWrapper, false);
             if (entity == null || !Integer.valueOf(1).equals(entity.getTrackingStatus())) continue;
             if (StrUtil.isNotBlank(entity.getDiagnosisFirst())) continue;
 
@@ -1427,11 +1460,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     continue;
                 }
 
-                if (lambdaQuery()
-                        .eq(LatentInfection::getIdNumber, idNumber)
+                LambdaQueryWrapper<LatentInfection> dupWrapper = new LambdaQueryWrapper<>();
+                dupWrapper.eq(LatentInfection::getIdNumber, idNumber)
                         .eq(LatentInfection::getPopulationType, populationType)
-                        .eq(LatentInfection::getArchived, 0)
-                        .exists()) {
+                        .eq(LatentInfection::getArchived, 0);
+                dataScopeHelper.applyImportDedupScope(
+                        dupWrapper, LatentInfection::getDepartmentId, LatentInfection::getCreatorId);
+                if (count(dupWrapper) > 0) {
                     result.addError(rowNum, name, "该证件号在此数据来源下已存在");
                     continue;
                 }

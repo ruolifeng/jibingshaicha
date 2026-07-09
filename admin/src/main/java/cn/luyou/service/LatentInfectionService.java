@@ -20,10 +20,24 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                       String name, String idNumber, Integer trackingStatus, Integer archived,
                                       String referralResult, String diagnosisFirst,
                                       String phone, String dateFrom, String dateTo,
-                                      String dateFilterBy, String creatorName, String crowdCategory);
+                                      String dateFilterBy, String creatorName, String crowdCategory,
+                                      List<Long> filterDepartmentIds);
+
+    default IPage<LatentInfection> queryPage(int page, int size, String populationType,
+                                             String name, String idNumber, Integer trackingStatus, Integer archived,
+                                             String referralResult, String diagnosisFirst,
+                                             String phone, String dateFrom, String dateTo,
+                                             String dateFilterBy, String creatorName, String crowdCategory) {
+        return queryPage(page, size, populationType, name, idNumber, trackingStatus, archived,
+                referralResult, diagnosisFirst, phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory,
+                null);
+    }
 
     /** 工作台待追踪人数：与潜伏/疑似列表可见且 trackingStatus=待追踪 的记录口径一致 */
-    long countPendingTrackingForDashboard();
+    long countPendingTrackingForDashboard(List<Long> filterDeptIds);
+
+    /** 工作台待追踪人数明细（按人群与菜单类型拆分，便于排查统计来源） */
+    java.util.List<java.util.Map<String, Object>> getPendingTrackingBreakdownForDashboard(List<Long> filterDeptIds);
 
     /** 追踪操作 */
     void track(Long id, Integer status, String remark, LocalDate actualArrivalDate);

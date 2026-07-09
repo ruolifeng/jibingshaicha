@@ -26,6 +26,7 @@ import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
@@ -79,6 +80,7 @@ public class ExportController {
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final DataScopeHelper dataScopeHelper;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final DepartmentFilterSupport departmentFilterSupport;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -140,11 +142,13 @@ public class ExportController {
     @OperationLog(type = "export", module = "statistics", action = "导出大汇总表")
     public void exportWideTable(
             @RequestParam(defaultValue = "") String year,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         List<Map<String, Object>> rows = new ArrayList<>();
 
         // 学校人群
-        screeningSchoolService.list(buildScopedSchoolYearWrapper(year)).forEach(s -> {
+        screeningSchoolService.list(buildScopedSchoolYearWrapper(year, filterDeptIds)).forEach(s -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("人群类型", "学校人群");
             row.put("年份", s.getYear());
@@ -161,7 +165,7 @@ public class ExportController {
         });
 
         // 重点人群
-        keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year)).forEach(s -> {
+        keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year, filterDeptIds)).forEach(s -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("人群类型", "重点人群");
             row.put("年份", s.getYear());
@@ -178,7 +182,7 @@ public class ExportController {
         });
 
         // 密接人群
-        closeContactService.list(buildScopedCloseContactYearWrapper(year)).forEach(s -> {
+        closeContactService.list(buildScopedCloseContactYearWrapper(year, filterDeptIds)).forEach(s -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("人群类型", "密接人群");
             row.put("年份", s.getYear());
@@ -204,14 +208,16 @@ public class ExportController {
     public void exportCategoryTable(
             @RequestParam String populationType,
             @RequestParam(defaultValue = "") String year,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         List<Map<String, Object>> rows = new ArrayList<>();
         String fileName = "分类汇总表";
 
         switch (populationType) {
             case "school" -> {
                 fileName = "学校人群汇总表";
-                screeningSchoolService.list(buildScopedSchoolYearWrapper(year)).forEach(s -> {
+                screeningSchoolService.list(buildScopedSchoolYearWrapper(year, filterDeptIds)).forEach(s -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("年份", s.getYear()); row.put("市州", s.getCity()); row.put("县区", s.getDistrict());
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
@@ -224,7 +230,7 @@ public class ExportController {
             }
             case "keyPopulation" -> {
                 fileName = "重点人群汇总表";
-                keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year)).forEach(s -> {
+                keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year, filterDeptIds)).forEach(s -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("年份", s.getYear()); row.put("市州", s.getCity()); row.put("县区", s.getDistrict());
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
@@ -238,7 +244,7 @@ public class ExportController {
             }
             case "closeContact" -> {
                 fileName = "密接人群汇总表";
-                closeContactService.list(buildScopedCloseContactYearWrapper(year)).forEach(s -> {
+                closeContactService.list(buildScopedCloseContactYearWrapper(year, filterDeptIds)).forEach(s -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("年份", s.getYear()); row.put("市州", s.getCity()); row.put("县区", s.getDistrict());
                     row.put("姓名", s.getName()); row.put("性别", s.getGender()); row.put("年龄", s.getAge());
@@ -263,17 +269,19 @@ public class ExportController {
             @RequestParam String populationType,
             @RequestParam String fields, // 逗号分隔的字段名列表
             @RequestParam(defaultValue = "") String year,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         List<String> fieldList = Arrays.asList(fields.split(","));
         List<Map<String, Object>> allRows = new ArrayList<>();
 
         // 获取该人群类型的完整数据
         switch (populationType) {
-            case "school" -> screeningSchoolService.list(buildScopedSchoolYearWrapper(year))
+            case "school" -> screeningSchoolService.list(buildScopedSchoolYearWrapper(year, filterDeptIds))
                     .forEach(s -> allRows.add(toMap(s)));
-            case "keyPopulation" -> keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year))
+            case "keyPopulation" -> keyPopulationService.list(buildScopedKeyPopulationYearWrapper(year, filterDeptIds))
                     .forEach(s -> allRows.add(toMap(s)));
-            case "closeContact" -> closeContactService.list(buildScopedCloseContactYearWrapper(year))
+            case "closeContact" -> closeContactService.list(buildScopedCloseContactYearWrapper(year, filterDeptIds))
                     .forEach(s -> allRows.add(toMap(s)));
         }
 
@@ -620,11 +628,19 @@ public class ExportController {
             @RequestParam(required = false) String medicationManagementUnit,
             @RequestParam(required = false) String stopTreatmentReason,
             @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
 
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         List<Patient> patientList = patientService.listForExport(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                 archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit, crowdCategory);
+        if (departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
+            Set<Long> allowed = new HashSet<>(filterDeptIds);
+            patientList = patientList.stream()
+                    .filter(p -> p.getDepartmentId() != null && allowed.contains(p.getDepartmentId()))
+                    .toList();
+        }
         if (StrUtil.isNotBlank(stopTreatmentReason)) {
             List<Long> matchedPatientIds = patientService.findPatientIdsByPreferredStopTreatmentReason(stopTreatmentReason);
             if (matchedPatientIds.isEmpty()) {
@@ -1088,8 +1104,10 @@ public class ExportController {
             @RequestParam(required = false) Integer archived,
             @RequestParam(required = false) String treatmentCompletionStatus,
             @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
 
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         List<Long> creatorUserIds = null;
@@ -1135,6 +1153,7 @@ public class ExportController {
         } else {
             wrapper.orderByDesc(LatentInfection::getCreateTime);
         }
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, LatentInfection::getDepartmentId, filterDeptIds);
         dataScopeHelper.applyLatentScope(wrapper);
 
         if (StrUtil.isNotBlank(treatmentCompletionStatus)) {
@@ -1265,24 +1284,27 @@ public class ExportController {
         return String.join("、", cats);
     }
 
-    private LambdaQueryWrapper<ScreeningSchool> buildScopedSchoolYearWrapper(String year) {
+    private LambdaQueryWrapper<ScreeningSchool> buildScopedSchoolYearWrapper(String year, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = buildYearWrapper(year, ScreeningSchool::getYear);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningSchool::getDepartmentId, filterDeptIds);
         return wrapper;
     }
 
-    private LambdaQueryWrapper<ScreeningKeyPopulation> buildScopedKeyPopulationYearWrapper(String year) {
+    private LambdaQueryWrapper<ScreeningKeyPopulation> buildScopedKeyPopulationYearWrapper(String year, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = buildYearWrapper(year, ScreeningKeyPopulation::getYear);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
         return wrapper;
     }
 
-    private LambdaQueryWrapper<ScreeningCloseContact> buildScopedCloseContactYearWrapper(String year) {
+    private LambdaQueryWrapper<ScreeningCloseContact> buildScopedCloseContactYearWrapper(String year, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningCloseContact> wrapper = buildYearWrapper(year, ScreeningCloseContact::getYear);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningCloseContact::getDepartmentId, filterDeptIds);
         return wrapper;
     }
 

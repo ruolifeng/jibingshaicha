@@ -8,6 +8,7 @@ import cn.luyou.model.vo.SchoolStatisticsVO;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.service.StatisticsService;
+import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -29,10 +30,11 @@ public class StatisticsServiceImpl implements StatisticsService {
     private final ScreeningSchoolMapper screeningSchoolMapper;
     private final LatentInfectionMapper latentInfectionMapper;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final DepartmentFilterSupport departmentFilterSupport;
 
     @Override
-    public List<SchoolStatisticsVO> getSchoolStatistics(String year, String district) {
-        List<ScreeningSchool> records = queryRecords(year, district);
+    public List<SchoolStatisticsVO> getSchoolStatistics(String year, String district, List<Long> filterDeptIds) {
+        List<ScreeningSchool> records = queryRecords(year, district, filterDeptIds);
         Set<Long> screeningIds = records.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
         Map<Long, LatentInfection> latentByScreeningId = queryLatentRecords("school", screeningIds).stream()
                 .filter(l -> l.getScreeningId() != null)
@@ -54,8 +56,8 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     @Override
-    public List<DistrictStatisticsVO> getDistrictStatistics(String year, String district) {
-        List<ScreeningSchool> records = queryRecords(year, district);
+    public List<DistrictStatisticsVO> getDistrictStatistics(String year, String district, List<Long> filterDeptIds) {
+        List<ScreeningSchool> records = queryRecords(year, district, filterDeptIds);
         Set<Long> screeningIds = records.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
         Map<Long, LatentInfection> latentByScreeningId = queryLatentRecords("school", screeningIds).stream()
                 .filter(l -> l.getScreeningId() != null)
@@ -76,7 +78,7 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     @Override
-    public List<String> getDistrictOptions() {
+    public List<String> getDistrictOptions(List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = Wrappers.<ScreeningSchool>lambdaQuery()
                 .select(ScreeningSchool::getDistrict)
                 .isNotNull(ScreeningSchool::getDistrict)
@@ -84,18 +86,22 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .orderByAsc(ScreeningSchool::getDistrict);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        departmentFilterSupport.applyDepartmentIdFilter(
+                wrapper, ScreeningSchool::getDepartmentId, filterDeptIds);
         return screeningSchoolMapper.selectList(wrapper).stream()
                 .map(ScreeningSchool::getDistrict)
                 .filter(StrUtil::isNotBlank)
                 .collect(Collectors.toList());
     }
 
-    private List<ScreeningSchool> queryRecords(String year, String district) {
+    private List<ScreeningSchool> queryRecords(String year, String district, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(year), ScreeningSchool::getYear, year)
                .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        departmentFilterSupport.applyDepartmentIdFilter(
+                wrapper, ScreeningSchool::getDepartmentId, filterDeptIds);
         return screeningSchoolMapper.selectList(wrapper);
     }
 

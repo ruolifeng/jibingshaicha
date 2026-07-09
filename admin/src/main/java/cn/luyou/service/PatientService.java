@@ -131,23 +131,24 @@ public interface PatientService extends IService<Patient> {
      *
      * @param statYear 统计年度（自然年 1/1—12/31）；为 null 时不限年度
      */
-    long countManagedPatientsForDashboard(Integer statYear);
+    long countManagedPatientsForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
      * 首页统计：在管总览 + 历史患者中「病原学结果阳性」人数（与列表筛选项「病原学结果阳性」口径一致）。
      */
-    long countPathogenPositivePatientsForDashboard(Integer statYear);
+    long countPathogenPositivePatientsForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
      * 首页统计：治疗成功人数。分母为 statYear 年度管理患者；分子为其中任意时间完成疗程者（可跨年）。
      */
-    long countTreatmentSuccessForDashboard(Integer statYear);
+    long countTreatmentSuccessForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
      * 患者分布热力图（三级及以上用户，自贡地图：市级区县 / 区县级乡镇）。
      *
      * @param districtName 下钻区县名称，为空时返回自贡各区县汇总
      */
-    PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName);
+    PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName,
+                                                               List<Long> filterDeptIds);
 
 }
