@@ -7,6 +7,7 @@ import PatientHeatmapChart from "./PatientHeatmapChart.vue"
 
 const props = defineProps<{
   showHeatmap?: boolean
+  departmentIds?: number[]
 }>()
 
 const yearOptions = buildStatYearOptions()
@@ -53,7 +54,7 @@ const heatmapDistrict = ref<string>()
 async function fetchPanel(key: Exclude<PanelKey, "heatmap">) {
   panelLoading[key] = true
   try {
-    const { data } = await getWorkbenchStatisticsApi(panelYears[key])
+    const { data } = await getWorkbenchStatisticsApi(panelYears[key], props.departmentIds)
     panelSummaries[key] = { ...emptySummary(), ...(data || {}) }
   } catch {
     panelSummaries[key] = emptySummary()
@@ -76,7 +77,7 @@ async function fetchPatientHeatmap(district?: string) {
   if (!props.showHeatmap) return
   heatmapLoading.value = true
   try {
-    const { data } = await getPatientHeatmapApi(heatmapYear.value, district)
+    const { data } = await getPatientHeatmapApi(heatmapYear.value, district, props.departmentIds)
     heatmapData.value = data || {}
     heatmapDistrict.value = district
   } catch {
@@ -102,6 +103,12 @@ watch(heatmapYear, () => {
   heatmapDistrict.value = undefined
   fetchPatientHeatmap()
 })
+
+watch(() => props.departmentIds, () => {
+  fetchAllPanels()
+  heatmapDistrict.value = undefined
+  fetchPatientHeatmap()
+}, { deep: true })
 
 function panelYear(summary: DashboardSummaryData, fallback: string) {
   return String(summary.managementYear ?? summary.trackingStatYear ?? fallback)
@@ -129,7 +136,11 @@ onMounted(() => {
 })
 
 defineExpose({
-  refresh: fetchAllPanels
+  refresh: async () => {
+    await fetchAllPanels()
+    heatmapDistrict.value = undefined
+    await fetchPatientHeatmap()
+  }
 })
 </script>
 

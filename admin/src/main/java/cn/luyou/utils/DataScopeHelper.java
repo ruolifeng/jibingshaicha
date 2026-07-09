@@ -92,6 +92,55 @@ public class DataScopeHelper {
                 .inSql(Referral::getReceiverOrgId, userSql));
     }
 
+    /** 统计分析部门筛选：通知单关联业务须落在指定部门 */
+    public void applyNoticeBizDepartmentFilter(LambdaQueryWrapper<Notice> wrapper, List<Long> filterDeptIds) {
+        if (filterDeptIds == null || filterDeptIds.isEmpty()) {
+            return;
+        }
+        String csv = filterDeptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        wrapper.and(w -> w
+                .and(w1 -> w1.eq(Notice::getNoticeType, "patient")
+                        .inSql(Notice::getBizId,
+                                "SELECT id FROM patient WHERE deleted = 0 AND department_id IN (" + csv + ")"))
+                .or(w2 -> w2.eq(Notice::getNoticeType, "latent")
+                        .inSql(Notice::getBizId,
+                                "SELECT id FROM latent_infection WHERE deleted = 0 AND department_id IN (" + csv + ")")));
+    }
+
+    /** 统计分析部门筛选：转诊发送方/接收方用户所属部门在范围内 */
+    public void applyReferralBizDepartmentFilter(LambdaQueryWrapper<Referral> wrapper, List<Long> filterDeptIds) {
+        if (filterDeptIds == null || filterDeptIds.isEmpty()) {
+            return;
+        }
+        String csv = filterDeptIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        String userSql = "SELECT id FROM `user` WHERE deleted = 0 AND department_id IN (" + csv + ")";
+        wrapper.and(w -> w.inSql(Referral::getSenderId, userSql)
+                .or()
+                .inSql(Referral::getReceiverOrgId, userSql));
+    }
+
+    /**
+     * 导入去重范围：与患者/潜伏感染列表可见范围一致。
+     * 非超管仅在辖区内匹配已存在记录；未匹配则允许插入新行。
+     */
+    public <T> void applyImportDedupScope(LambdaQueryWrapper<T> wrapper,
+                                          SFunction<T, Long> departmentIdColumn,
+                                          SFunction<T, Long> creatorIdColumn) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
+        if (deptIds.isEmpty()) {
+            if (creatorIdColumn != null && BaseContext.getCurrentId() != null) {
+                wrapper.eq(creatorIdColumn, BaseContext.getCurrentId());
+            } else {
+                wrapper.isNull(departmentIdColumn);
+            }
+            return;
+        }
+        wrapper.in(departmentIdColumn, deptIds);
+    }
+
     public void assertPatientAccessible(Long patientId) {
         if (BaseContext.isSuperAdmin() || patientId == null) {
             return;

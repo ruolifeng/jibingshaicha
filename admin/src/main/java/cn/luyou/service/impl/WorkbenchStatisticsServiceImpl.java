@@ -18,16 +18,16 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
     private final ReferralTrackingService referralTrackingService;
 
     @Override
-    public Map<String, Object> buildSummary(Integer statYear) {
+    public Map<String, Object> buildSummary(Integer statYear, List<Long> filterDeptIds) {
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
 
         // 分母均限定 statYear 管理/发起 cohort；分子可跨年（如治疗成功、推介/追踪到位）
-        long managedPatientCount = patientService.countManagedPatientsForDashboard(year);
-        long pathogenPositiveCount = patientService.countPathogenPositivePatientsForDashboard(year);
-        long treatmentSuccessCount = patientService.countTreatmentSuccessForDashboard(year);
-        long recommendCount = referralTrackingService.countRecommendSentForDashboard(year);
-        long recommendArrivedCount = referralTrackingService.countRecommendArrivedForDashboard(year);
+        long managedPatientCount = patientService.countManagedPatientsForDashboard(year, filterDeptIds);
+        long pathogenPositiveCount = patientService.countPathogenPositivePatientsForDashboard(year, filterDeptIds);
+        long treatmentSuccessCount = patientService.countTreatmentSuccessForDashboard(year, filterDeptIds);
+        long recommendCount = referralTrackingService.countRecommendSentForDashboard(year, filterDeptIds);
+        long recommendArrivedCount = referralTrackingService.countRecommendArrivedForDashboard(year, filterDeptIds);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("managementYear", year);
@@ -47,7 +47,7 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
         data.put("recommendArrivalRate", recommendCount > 0
                 ? Math.round(recommendArrivedCount * 1000.0 / recommendCount) / 10.0
                 : 0.0);
-        data.putAll(referralTrackingService.getTrackDashboardStats(year));
+        data.putAll(referralTrackingService.getTrackDashboardStats(year, filterDeptIds));
         return data;
     }
 }

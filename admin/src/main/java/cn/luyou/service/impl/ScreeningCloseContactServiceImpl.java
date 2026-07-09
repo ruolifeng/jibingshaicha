@@ -183,10 +183,13 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 toInsert.add(d);
                 continue;
             }
-            ScreeningCloseContact existing = lambdaQuery()
-                    .eq(ScreeningCloseContact::getIdNumber, d.getIdNumber())
-                    .last("LIMIT 1")
-                    .one();
+            ScreeningCloseContact existing = null;
+            if (StrUtil.isNotBlank(d.getIdNumber())) {
+                LambdaQueryWrapper<ScreeningCloseContact> dupWrapper = new LambdaQueryWrapper<>();
+                dupWrapper.eq(ScreeningCloseContact::getIdNumber, d.getIdNumber()).last("LIMIT 1");
+                screeningScopeHelper.applyImportDedupScope(dupWrapper, ScreeningCloseContact::getDepartmentId);
+                existing = getOne(dupWrapper, false);
+            }
             if (existing != null) {
                 mergeFollowupData(existing, d);
                 determineStatus(existing);
@@ -271,6 +274,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         }
 
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
+        existing.setUploadBatch(incoming.getUploadBatch());
+        existing.setDepartmentId(incoming.getDepartmentId());
     }
 
     /**

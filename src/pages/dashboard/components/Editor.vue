@@ -1,11 +1,13 @@
 <script lang="ts" setup>
 import type { DashboardSummaryData } from "../apis"
+import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
 import { DASHBOARD_EDITOR_WELCOME } from "@@/constants/app"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { Bell, Calendar, FirstAidKit, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
+const selectedDepartmentIds = ref<number[]>([])
 const yearOptions = buildStatYearOptions()
 const summaryLoading = ref(false)
 const summary = ref<DashboardSummaryData>({
@@ -18,7 +20,7 @@ const summary = ref<DashboardSummaryData>({
 async function fetchSummary() {
   summaryLoading.value = true
   try {
-    const { data } = await getDashboardSummaryApi(selectedStatYear.value)
+    const { data } = await getDashboardSummaryApi(selectedStatYear.value, selectedDepartmentIds.value)
     summary.value = { ...summary.value, ...(data || {}) }
   } catch { /* handled */ } finally {
     summaryLoading.value = false
@@ -32,6 +34,10 @@ onMounted(() => {
 watch(selectedStatYear, () => {
   fetchSummary()
 })
+
+watch(selectedDepartmentIds, () => {
+  fetchSummary()
+}, { deep: true })
 
 const cards = [
   { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search },
@@ -95,13 +101,16 @@ function alphaColor(hex: string, alpha = "20") {
           {{ DASHBOARD_EDITOR_WELCOME }}
         </div>
       </div>
-      <el-select
-        v-model="selectedStatYear"
-        placeholder="统计年度"
-        class="year-select"
-      >
-        <el-option v-for="y in yearOptions" :key="y" :label="`${y}年度`" :value="y" />
-      </el-select>
+      <div class="dashboard-header-right">
+        <ScopedDepartmentMultiSelect v-model="selectedDepartmentIds" width="240px" />
+        <el-select
+          v-model="selectedStatYear"
+          placeholder="统计年度"
+          class="year-select"
+        >
+          <el-option v-for="y in yearOptions" :key="y" :label="`${y}年度`" :value="y" />
+        </el-select>
+      </div>
     </div>
 
     <div v-loading="summaryLoading" class="year-stats-section">
@@ -196,6 +205,13 @@ function alphaColor(hex: string, alpha = "20") {
 
 .dashboard-header-left {
   flex: 1;
+}
+
+.dashboard-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .year-select {

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { ArrowDown } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
@@ -29,7 +30,8 @@ const activeTab = ref("workbench")
 // ==================== 筛选条件 ====================
 const filterForm = reactive({
   year: String(getCurrentStatYear()),
-  district: ""
+  district: "",
+  departmentIds: [] as number[]
 })
 
 const districtOptions = ref<string[]>([])
@@ -37,7 +39,7 @@ const yearOptions = buildStatYearOptions()
 
 async function loadDistrictOptions() {
   try {
-    const { data } = await getDistrictOptionsApi()
+    const { data } = await getDistrictOptionsApi(filterForm.departmentIds)
     districtOptions.value = data || []
   } catch { /* ignore */ }
 }
@@ -51,7 +53,8 @@ async function fetchSchoolStatistics() {
   try {
     const { data } = await getSchoolStatisticsApi({
       year: filterForm.year,
-      district: filterForm.district
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds
     })
     schoolData.value = data || []
   } catch { /* handled */ } finally {
@@ -68,7 +71,8 @@ async function fetchDistrictStatistics() {
   try {
     const { data } = await getDistrictStatisticsApi({
       year: filterForm.year,
-      district: filterForm.district
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds
     })
     districtData.value = data || []
   } catch { /* handled */ } finally {
@@ -85,6 +89,9 @@ function refreshWorkbenchStatistics() {
 
 // ==================== 搜索与重置 ====================
 function handleSearch() {
+  if (activeTab.value !== "workbench") {
+    loadDistrictOptions()
+  }
   if (activeTab.value === "school") {
     fetchSchoolStatistics()
   } else if (activeTab.value === "district") {
@@ -97,6 +104,7 @@ function handleSearch() {
 function handleReset() {
   filterForm.year = String(getCurrentStatYear())
   filterForm.district = ""
+  filterForm.departmentIds = []
   handleSearch()
 }
 
@@ -114,7 +122,8 @@ async function handleExportSchool() {
   try {
     const data = await exportSchoolStatisticsApi({
       year: filterForm.year,
-      district: filterForm.district
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds
     })
     downloadBlob(data as unknown as Blob, `学校人群统计总表_${filterForm.year}.xlsx`)
     ElMessage.success("导出成功")
@@ -127,7 +136,8 @@ async function handleExportDistrict() {
   try {
     const data = await exportDistrictStatisticsApi({
       year: filterForm.year,
-      district: filterForm.district
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds
     })
     downloadBlob(data as unknown as Blob, `区县统计表_${filterForm.year}.xlsx`)
     ElMessage.success("导出成功")
@@ -139,7 +149,7 @@ async function handleExportDistrict() {
 // ==================== 大汇总/分类/自定义导出 ====================
 async function handleExportWide() {
   try {
-    const data = await exportWideTableApi(filterForm.year)
+    const data = await exportWideTableApi(filterForm.year, filterForm.departmentIds)
     downloadBlob(data as unknown as Blob, `大汇总表_${filterForm.year}.xlsx`)
     ElMessage.success("导出成功")
   } catch {
@@ -155,7 +165,7 @@ const categoryPopOptions = [
 ]
 async function handleExportCategory() {
   try {
-    const data = await exportCategoryTableApi(categoryPopType.value, filterForm.year)
+    const data = await exportCategoryTableApi(categoryPopType.value, filterForm.year, filterForm.departmentIds)
     const label = categoryPopOptions.find(o => o.value === categoryPopType.value)?.label || "人群"
     downloadBlob(data as unknown as Blob, `${label}汇总表_${filterForm.year}.xlsx`)
     ElMessage.success("导出成功")
@@ -188,7 +198,12 @@ async function handleExportCustom() {
     return
   }
   try {
-    const data = await exportCustomApi(customPopType.value, selectedCustomFields.value.join(","), filterForm.year)
+    const data = await exportCustomApi(
+      customPopType.value,
+      selectedCustomFields.value.join(","),
+      filterForm.year,
+      filterForm.departmentIds
+    )
     downloadBlob(data as unknown as Blob, `自定义导出_${filterForm.year}.xlsx`)
     customDialogVisible.value = false
     ElMessage.success("导出成功")
@@ -249,6 +264,7 @@ async function handleExportAllPatients() {
     if (aggregateFilterForm.name) params.name = aggregateFilterForm.name
     if (aggregateFilterForm.idNumber) params.idNumber = aggregateFilterForm.idNumber
     if (aggregateFilterForm.archived !== undefined) params.archived = aggregateFilterForm.archived
+    if (filterForm.departmentIds.length) params.departmentIds = filterForm.departmentIds
     const data = await exportAllPatientsApi(params)
     const label = AGGREGATE_POP_OPTIONS.find(o => o.value === aggregateFilterForm.populationType)?.label || "全部来源"
     downloadBlob(data as unknown as Blob, `患者信息总表_${label}.xlsx`)
@@ -265,6 +281,7 @@ async function handleExportAllLatent() {
     if (latentFilterForm.name) params.name = latentFilterForm.name
     if (latentFilterForm.idNumber) params.idNumber = latentFilterForm.idNumber
     if (latentFilterForm.archived !== undefined) params.archived = latentFilterForm.archived
+    if (filterForm.departmentIds.length) params.departmentIds = filterForm.departmentIds
     const data = await exportAllLatentApi(params)
     const label = LATENT_POP_OPTIONS.find(o => o.value === (latentFilterForm.populationType || ""))?.label || "全部来源"
     downloadBlob(data as unknown as Blob, `潜伏感染者信息总表_${label}.xlsx`)
@@ -295,6 +312,9 @@ onMounted(() => {
     <!-- 筛选条件（问卷 Tab 不需要年份/区县筛选） -->
     <el-card v-if="activeTab !== 'questionnaire'" shadow="never" class="mb-4">
       <el-form :model="filterForm" inline>
+        <el-form-item label="部门">
+          <ScopedDepartmentMultiSelect v-model="filterForm.departmentIds" />
+        </el-form-item>
         <el-form-item v-if="activeTab !== 'workbench'" label="年份">
           <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">
             <el-option v-for="y in yearOptions" :key="y" :label="y" :value="y" />
@@ -349,6 +369,7 @@ onMounted(() => {
           <WorkbenchStatsPanel
             ref="workbenchPanelRef"
             :show-heatmap="canViewPatientHeatmap"
+            :department-ids="filterForm.departmentIds"
           />
         </el-tab-pane>
 

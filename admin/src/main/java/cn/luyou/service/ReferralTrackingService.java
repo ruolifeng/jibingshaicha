@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 public interface ReferralTrackingService extends IService<ReferralTracking> {
@@ -67,13 +68,13 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     void deleteRecord(Long id);
 
     /** 首页统计：推介人数（已发送推介，与推介管理列表一致的数据权限） */
-    long countRecommendSentForDashboard(Integer statYear);
+    long countRecommendSentForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /** 首页统计：推介到位人数（statYear 内已发送推介中，任意时间到位者） */
-    long countRecommendArrivedForDashboard(Integer statYear);
+    long countRecommendArrivedForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
      * 首页追踪统计（追踪模块，统计周期：自然年 1/1—12/31）。
      */
-    Map<String, Object> getTrackDashboardStats(Integer statYear);
+    Map<String, Object> getTrackDashboardStats(Integer statYear, List<Long> filterDeptIds);
 }

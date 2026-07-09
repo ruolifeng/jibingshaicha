@@ -39,6 +39,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
@@ -138,6 +139,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final UserMapper userMapper;
     private final ReferralService referralService;
     private final DepartmentService departmentService;
+    private final DepartmentFilterSupport departmentFilterSupport;
 
     public PatientServiceImpl(
             DataScopeHelper dataScopeHelper,
@@ -153,7 +155,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             ScreeningCloseContactMapper screeningCloseContactMapper,
             UserMapper userMapper,
             @Lazy ReferralService referralService,
-            DepartmentService departmentService) {
+            DepartmentService departmentService,
+            DepartmentFilterSupport departmentFilterSupport) {
         this.dataScopeHelper = dataScopeHelper;
         this.epidemicReportService = epidemicReportService;
         this.objectMapper = objectMapper;
@@ -168,6 +171,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         this.userMapper = userMapper;
         this.referralService = referralService;
         this.departmentService = departmentService;
+        this.departmentFilterSupport = departmentFilterSupport;
     }
 
     @Override
@@ -359,21 +363,21 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     @Override
-    public long countManagedPatientsForDashboard(Integer statYear) {
-        return count(buildManagedPatientDashboardWrapper(statYear));
+    public long countManagedPatientsForDashboard(Integer statYear, List<Long> filterDeptIds) {
+        return count(buildManagedPatientDashboardWrapper(statYear, filterDeptIds));
     }
 
     @Override
-    public long countPathogenPositivePatientsForDashboard(Integer statYear) {
-        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear);
+    public long countPathogenPositivePatientsForDashboard(Integer statYear, List<Long> filterDeptIds) {
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear, filterDeptIds);
         applyPathogenResultPositiveFilter(wrapper);
         return count(wrapper);
     }
 
     @Override
-    public long countTreatmentSuccessForDashboard(Integer statYear) {
+    public long countTreatmentSuccessForDashboard(Integer statYear, List<Long> filterDeptIds) {
         // 分母：statYear 年度管理患者；分子：其中任意时间完成疗程者（可跨年，不按 stop_treatment_date 限年度）
-        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear);
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear, filterDeptIds);
         wrapper.inSql(Patient::getId, TREATMENT_SUCCESS_FOLLOW_UP_SQL);
         return count(wrapper);
     }
@@ -392,12 +396,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     );
 
     @Override
-    public PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName) {
+    public PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName,
+                                                                        List<Long> filterDeptIds) {
         assertHeatmapRoleAllowed();
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
 
-        Map<String, Map<String, Long>> matrix = buildHeatmapDistrictMatrix(year);
+        Map<String, Map<String, Long>> matrix = buildHeatmapDistrictMatrix(year, filterDeptIds);
         long total = matrix.values().stream()
                 .flatMap(m -> m.values().stream())
                 .mapToLong(Long::longValue)
@@ -416,8 +421,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private static final String HEATMAP_UNASSIGNED_DISTRICT = "未分配";
     private static final String HEATMAP_UNPARSED_TOWNSHIP = "未识别乡镇";
 
-    private Map<String, Map<String, Long>> buildHeatmapDistrictMatrix(int year) {
-        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(year);
+    private Map<String, Map<String, Long>> buildHeatmapDistrictMatrix(int year, List<Long> filterDeptIds) {
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(year, filterDeptIds);
         wrapper.select(Patient::getCurrentAddress, Patient::getEpidemicData);
         List<Patient> patients = list(wrapper);
 
@@ -708,10 +713,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
     }
 
-    private LambdaQueryWrapper<Patient> buildManagedPatientDashboardWrapper(Integer statYear) {
+    private LambdaQueryWrapper<Patient> buildManagedPatientDashboardWrapper(Integer statYear, List<Long> filterDeptIds) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(Patient::getArchived, 0, 1);
         dataScopeHelper.applyPatientScope(wrapper);
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, Patient::getDepartmentId, filterDeptIds);
         if (statYear != null) {
             applyStatYearPatientFilter(wrapper, StatYearPeriod.of(statYear));
         }
@@ -1052,21 +1058,23 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 rawJson = namedRow.toString();
             }
 
-            // 优先按证件号精确匹配，再按姓名模糊匹配
+            // 优先按证件号精确匹配，再按姓名模糊匹配（仅在当前用户辖区内匹配）
             Patient matched = null;
             if (StrUtil.isNotBlank(idNumberVal)) {
-                matched = lambdaQuery()
-                        .eq(Patient::getPopulationType, populationType)
+                LambdaQueryWrapper<Patient> idWrapper = new LambdaQueryWrapper<>();
+                idWrapper.eq(Patient::getPopulationType, populationType)
                         .eq(Patient::getIdNumber, idNumberVal)
-                        .last("LIMIT 1")
-                        .one();
+                        .last("LIMIT 1");
+                dataScopeHelper.applyImportDedupScope(idWrapper, Patient::getDepartmentId, Patient::getCreatorId);
+                matched = getOne(idWrapper, false);
             }
             if (matched == null && StrUtil.isNotBlank(nameVal)) {
-                matched = lambdaQuery()
-                        .eq(Patient::getPopulationType, populationType)
+                LambdaQueryWrapper<Patient> nameWrapper = new LambdaQueryWrapper<>();
+                nameWrapper.eq(Patient::getPopulationType, populationType)
                         .like(Patient::getName, nameVal)
-                        .last("LIMIT 1")
-                        .one();
+                        .last("LIMIT 1");
+                dataScopeHelper.applyImportDedupScope(nameWrapper, Patient::getDepartmentId, Patient::getCreatorId);
+                matched = getOne(nameWrapper, false);
             }
 
             EpidemicReport report = EpidemicReport.builder()
@@ -1090,6 +1098,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .archived(0)
                         .epidemicData(rawJson)
                         .departmentId(BaseContext.getCurrentDepartmentId())
+                        .creatorId(BaseContext.getCurrentId())
                         .build();
                 save(newPatient);
                 report.setPatientId(newPatient.getId());
@@ -2100,11 +2109,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     result.addError(rowNum, name, "该证件号在本文件中重复");
                     continue;
                 }
-                if (lambdaQuery()
-                        .eq(Patient::getIdNumber, idNumber)
+                LambdaQueryWrapper<Patient> dupWrapper = new LambdaQueryWrapper<>();
+                dupWrapper.eq(Patient::getIdNumber, idNumber)
                         .eq(Patient::getPopulationType, populationType)
-                        .eq(Patient::getArchived, 0)
-                        .exists()) {
+                        .eq(Patient::getArchived, 0);
+                dataScopeHelper.applyImportDedupScope(
+                        dupWrapper, Patient::getDepartmentId, Patient::getCreatorId);
+                if (count(dupWrapper) > 0) {
                     result.addError(rowNum, name, "该证件号在此数据来源下已存在");
                     continue;
                 }

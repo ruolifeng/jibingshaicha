@@ -152,10 +152,13 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 toInsert.add(d);
                 continue;
             }
-            ScreeningSchool existing = lambdaQuery()
-                    .eq(ScreeningSchool::getIdNumber, d.getIdNumber())
-                    .last("LIMIT 1")
-                    .one();
+            ScreeningSchool existing = null;
+            if (StrUtil.isNotBlank(d.getIdNumber())) {
+                LambdaQueryWrapper<ScreeningSchool> dupWrapper = new LambdaQueryWrapper<>();
+                dupWrapper.eq(ScreeningSchool::getIdNumber, d.getIdNumber()).last("LIMIT 1");
+                screeningScopeHelper.applyImportDedupScope(dupWrapper, ScreeningSchool::getDepartmentId);
+                existing = getOne(dupWrapper, false);
+            }
             if (existing != null) {
                 // 合并基本信息，以最新导入为准
                 mergeSchoolImportFields(existing, d);
@@ -459,6 +462,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
         if (StrUtil.isNotBlank(incoming.getUploadBatch())) existing.setUploadBatch(incoming.getUploadBatch());
+        existing.setDepartmentId(incoming.getDepartmentId());
     }
 
     private Map<String, Integer> buildSchoolHeaderIndex(List<Map<Integer, String>> rows) {

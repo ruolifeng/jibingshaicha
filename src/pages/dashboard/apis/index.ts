@@ -1,3 +1,4 @@
+import { withDepartmentIds } from "@@/utils/departmentFilter"
 import { request } from "@/http/axios"
 
 export interface PopulationStat {
@@ -62,11 +63,14 @@ export interface DashboardSummaryData {
 }
 
 /** 获取首页待处理事项汇总数据 */
-export function getDashboardSummaryApi(year?: number | string) {
+export function getDashboardSummaryApi(year?: number | string, departmentIds?: number[]) {
   return request<ApiResponseData<DashboardSummaryData>>({
     url: "dashboard/summary",
     method: "get",
-    params: year != null && year !== "" ? { year: Number(year) } : {}
+    params: withDepartmentIds(
+      year != null && year !== "" ? { year: Number(year) } : {},
+      departmentIds
+    )
   })
 }
 
@@ -76,26 +80,31 @@ export interface DashboardBatchOption {
 }
 
 /** 获取所有上传批次（任务）列表 */
-export function getDashboardBatchesApi() {
+export function getDashboardBatchesApi(departmentIds?: number[]) {
   return request<ApiResponseData<DashboardBatchOption[]>>({
     url: "dashboard/batches",
-    method: "get"
+    method: "get",
+    params: withDepartmentIds({}, departmentIds)
   })
 }
 
 /** 按年度获取三类人群统计数据 */
-export function getDashboardTaskStatsApi(year?: number | string) {
+export function getDashboardTaskStatsApi(year?: number | string, departmentIds?: number[]) {
   return request<ApiResponseData<TaskStatsData>>({
     url: "dashboard/task-stats",
     method: "get",
-    params: year != null && year !== "" ? { year: Number(year) } : {}
+    params: withDepartmentIds(
+      year != null && year !== "" ? { year: Number(year) } : {},
+      departmentIds
+    )
   })
 }
 
 /** 获取消息通知统计（通知单 + 转诊） */
-export function getDashboardMessageStatsApi() {
+export function getDashboardMessageStatsApi(departmentIds?: number[]) {
   return request<ApiResponseData<MessageStatsData>>({
     url: "dashboard/message-stats",
-    method: "get"
+    method: "get",
+    params: withDepartmentIds({}, departmentIds)
   })
 }

@@ -258,11 +258,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     }
 
     private ScreeningKeyPopulation findExistingByIdNumber(String idNumber, String sourceType) {
-        return lambdaQuery()
-                .eq(ScreeningKeyPopulation::getIdNumber, idNumber)
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ScreeningKeyPopulation::getIdNumber, idNumber)
                 .eq(ScreeningKeyPopulation::getSourceType, sourceType)
-                .last("LIMIT 1")
-                .one();
+                .last("LIMIT 1");
+        screeningScopeHelper.applyImportDedupScope(wrapper, ScreeningKeyPopulation::getDepartmentId);
+        return getOne(wrapper, false);
     }
 
     private void mergeIntoExisting(ScreeningKeyPopulation existing, ScreeningKeyPopulation imported) {
@@ -279,6 +280,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         if (StrUtil.isNotBlank(imported.getRemark())) existing.setRemark(imported.getRemark());
         if (StrUtil.isNotBlank(imported.getUploadBatch())) existing.setUploadBatch(imported.getUploadBatch());
         if (imported.getImportRowNo() != null) existing.setImportRowNo(imported.getImportRowNo());
+        existing.setDepartmentId(imported.getDepartmentId());
         existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
     }
 

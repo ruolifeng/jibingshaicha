@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
+import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
 import { DASHBOARD_ADMIN_TITLE, DASHBOARD_ADMIN_WELCOME } from "@@/constants/app"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import {
@@ -22,6 +23,7 @@ import {
 } from "../apis"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
+const selectedDepartmentIds = ref<number[]>([])
 const yearOptions = buildStatYearOptions()
 
 const summaryLoading = ref(false)
@@ -51,7 +53,7 @@ const messageStats = ref<MessageStatsData>({
 async function fetchYearSummary() {
   yearStatsLoading.value = true
   try {
-    const { data } = await getDashboardSummaryApi(selectedStatYear.value)
+    const { data } = await getDashboardSummaryApi(selectedStatYear.value, selectedDepartmentIds.value)
     summary.value = { ...summary.value, ...(data || {}) }
   } catch { /* handled globally */ } finally {
     yearStatsLoading.value = false
@@ -62,8 +64,8 @@ async function fetchAll() {
   summaryLoading.value = true
   try {
     const [summaryRes, msgRes] = await Promise.all([
-      getDashboardSummaryApi(selectedStatYear.value),
-      getDashboardMessageStatsApi()
+      getDashboardSummaryApi(selectedStatYear.value, selectedDepartmentIds.value),
+      getDashboardMessageStatsApi(selectedDepartmentIds.value)
     ])
     summary.value = { ...summary.value, ...(summaryRes.data || {}) }
     messageStats.value = msgRes.data || messageStats.value
@@ -76,7 +78,7 @@ async function fetchAll() {
 async function fetchTaskStats() {
   taskLoading.value = true
   try {
-    const { data } = await getDashboardTaskStatsApi(selectedStatYear.value)
+    const { data } = await getDashboardTaskStatsApi(selectedStatYear.value, selectedDepartmentIds.value)
     if (data) taskStats.value = data
   } catch { /* handled globally */ } finally {
     taskLoading.value = false
@@ -91,6 +93,10 @@ watch(selectedStatYear, () => {
   fetchYearSummary()
   fetchTaskStats()
 })
+
+watch(selectedDepartmentIds, () => {
+  fetchAll()
+}, { deep: true })
 
 const managementYear = computed(() => summary.value.managementYear ?? getCurrentStatYear())
 
@@ -183,6 +189,7 @@ const noticeMaxSent = computed(() =>
         </div>
       </div>
       <div class="db-header-right">
+        <ScopedDepartmentMultiSelect v-model="selectedDepartmentIds" width="240px" />
         <el-select
           v-model="selectedStatYear"
           placeholder="统计年度"

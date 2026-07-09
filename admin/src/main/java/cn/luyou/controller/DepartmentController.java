@@ -5,8 +5,10 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Department;
 import cn.luyou.model.ImportResult;
+import cn.luyou.model.vo.DepartmentFilterOptionVO;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.UserService;
+import cn.luyou.utils.DepartmentFilterSupport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +25,18 @@ public class DepartmentController {
 
     private final DepartmentService departmentService;
     private final UserService userService;
+    private final DepartmentFilterSupport departmentFilterSupport;
 
     @Operation(summary = "部门列表")
     @GetMapping("/list")
     public ResultResponse<List<Department>> list() {
         return ResultRes.success(departmentService.listAll());
+    }
+
+    @Operation(summary = "统计分析部门筛选选项（按当前用户层级隔离，支持多选）")
+    @GetMapping("/filter-options")
+    public ResultResponse<List<DepartmentFilterOptionVO>> filterOptions() {
+        return ResultRes.success(departmentFilterSupport.getStatisticsFilterOptions());
     }
 
     @Operation(summary = "创建部门")

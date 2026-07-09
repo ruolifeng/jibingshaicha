@@ -8,6 +8,7 @@ import cn.luyou.model.vo.SchoolStatisticsVO;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.StatisticsService;
 import cn.luyou.service.WorkbenchStatisticsService;
+import cn.luyou.utils.DepartmentFilterSupport;
 import com.alibaba.excel.EasyExcel;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,42 +31,53 @@ public class StatisticsController {
     private final StatisticsService statisticsService;
     private final WorkbenchStatisticsService workbenchStatisticsService;
     private final PatientService patientService;
+    private final DepartmentFilterSupport departmentFilterSupport;
 
     @Operation(summary = "获取区县选项列表")
     @GetMapping("/district-options")
-    public ResultResponse<List<String>> districtOptions() {
-        return ResultRes.success(statisticsService.getDistrictOptions());
+    public ResultResponse<List<String>> districtOptions(
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(statisticsService.getDistrictOptions(filterDeptIds));
     }
 
     @Operation(summary = "学校人群统计总表")
     @GetMapping("/school")
     public ResultResponse<List<SchoolStatisticsVO>> schoolStatistics(
             @RequestParam(required = false) String year,
-            @RequestParam(required = false) String district) {
-        return ResultRes.success(statisticsService.getSchoolStatistics(year, district));
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(statisticsService.getSchoolStatistics(year, district, filterDeptIds));
     }
 
     @Operation(summary = "区县统计表")
     @GetMapping("/district")
     public ResultResponse<List<DistrictStatisticsVO>> districtStatistics(
             @RequestParam(required = false) String year,
-            @RequestParam(required = false) String district) {
-        return ResultRes.success(statisticsService.getDistrictStatistics(year, district));
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(statisticsService.getDistrictStatistics(year, district, filterDeptIds));
     }
 
     @Operation(summary = "我的工作台年度统计")
     @GetMapping("/workbench")
     public ResultResponse<Map<String, Object>> workbenchStatistics(
-            @RequestParam(required = false) Integer year) {
-        return ResultRes.success(workbenchStatisticsService.buildSummary(year));
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(workbenchStatisticsService.buildSummary(year, filterDeptIds));
     }
 
     @Operation(summary = "患者分布热力图（三级及以上用户）")
     @GetMapping("/patient-heatmap")
     public ResultResponse<PatientDistributionHeatmapVO> patientHeatmap(
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) String district) {
-        return ResultRes.success(patientService.buildPatientDistributionHeatmap(year, district));
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(patientService.buildPatientDistributionHeatmap(year, district, filterDeptIds));
     }
 
     @Operation(summary = "导出学校人群统计Excel")
@@ -73,8 +85,10 @@ public class StatisticsController {
     public void exportSchool(
             @RequestParam(required = false) String year,
             @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
-        List<SchoolStatisticsVO> data = statisticsService.getSchoolStatistics(year, district);
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<SchoolStatisticsVO> data = statisticsService.getSchoolStatistics(year, district, filterDeptIds);
         setExcelResponse(response, "学校人群统计总表");
         EasyExcel.write(response.getOutputStream(), SchoolStatisticsVO.class)
                 .sheet("辖区教育机构统计总表")
@@ -86,8 +100,10 @@ public class StatisticsController {
     public void exportDistrict(
             @RequestParam(required = false) String year,
             @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
-        List<DistrictStatisticsVO> data = statisticsService.getDistrictStatistics(year, district);
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<DistrictStatisticsVO> data = statisticsService.getDistrictStatistics(year, district, filterDeptIds);
         setExcelResponse(response, "区县统计表");
         EasyExcel.write(response.getOutputStream(), DistrictStatisticsVO.class)
                 .sheet("区县统计表")

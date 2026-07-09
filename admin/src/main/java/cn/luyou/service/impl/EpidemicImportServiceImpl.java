@@ -99,18 +99,20 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
             String reportUnit = getFieldByHeader(row, headerIndex, "报告单位");
             LocalDate birthDate = parseDate(birthDateText);
 
-            // 去重策略：证件号优先；证件号为空时按 姓名+出生日期+联系电话 兜底
-            boolean exists = lambdaQuery()
-                    .and(w -> {
-                        if (StrUtil.isNotBlank(idNumber)) {
-                            w.eq(EpidemicImport::getIdNumber, idNumber);
-                        } else {
-                            w.eq(EpidemicImport::getName, name)
-                                    .eq(birthDate != null, EpidemicImport::getBirthDate, birthDate)
-                                    .eq(StrUtil.isNotBlank(phone), EpidemicImport::getPhone, phone);
-                        }
-                    })
-                    .exists();
+            // 去重策略：证件号优先；证件号为空时按 姓名+出生日期+联系电话 兜底（仅在当前用户辖区内去重）
+            LambdaQueryWrapper<EpidemicImport> dupWrapper = new LambdaQueryWrapper<>();
+            dupWrapper.and(w -> {
+                if (StrUtil.isNotBlank(idNumber)) {
+                    w.eq(EpidemicImport::getIdNumber, idNumber);
+                } else {
+                    w.eq(EpidemicImport::getName, name)
+                            .eq(birthDate != null, EpidemicImport::getBirthDate, birthDate)
+                            .eq(StrUtil.isNotBlank(phone), EpidemicImport::getPhone, phone);
+                }
+            });
+            screeningScopeHelper.applyImportDedupScope(
+                    dupWrapper, EpidemicImport::getDepartmentId, null, EpidemicImport::getCreatorId);
+            boolean exists = count(dupWrapper) > 0;
             if (exists) {
                 continue;
             }

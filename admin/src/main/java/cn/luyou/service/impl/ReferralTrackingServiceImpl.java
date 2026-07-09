@@ -1921,16 +1921,16 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     @Override
-    public long countRecommendSentForDashboard(Integer statYear) {
-        LambdaQueryWrapper<ReferralTracking> wrapper = buildRecommendDashboardWrapper();
+    public long countRecommendSentForDashboard(Integer statYear, List<Long> filterDeptIds) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildRecommendDashboardWrapper(filterDeptIds);
         wrapper.isNotNull(ReferralTracking::getRecommendSentTime);
         applyStatYearTimeFilter(wrapper, ReferralTracking::getRecommendSentTime, statYear);
         return count(wrapper);
     }
 
     @Override
-    public long countRecommendArrivedForDashboard(Integer statYear) {
-        LambdaQueryWrapper<ReferralTracking> wrapper = buildRecommendDashboardWrapper();
+    public long countRecommendArrivedForDashboard(Integer statYear, List<Long> filterDeptIds) {
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildRecommendDashboardWrapper(filterDeptIds);
         wrapper.isNotNull(ReferralTracking::getRecommendSentTime)
                 .isNotNull(ReferralTracking::getArrivalTime);
         applyStatYearTimeFilter(wrapper, ReferralTracking::getRecommendSentTime, statYear);
@@ -1938,21 +1938,22 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /** 首页推介统计：与推介管理列表一致的业务范围与数据权限 */
-    private LambdaQueryWrapper<ReferralTracking> buildRecommendDashboardWrapper() {
+    private LambdaQueryWrapper<ReferralTracking> buildRecommendDashboardWrapper(List<Long> filterDeptIds) {
         LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
         applyBizModeFilter(wrapper, "recommend");
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = Integer.valueOf(6).equals(role);
         applyUserScopeFilter(wrapper, "recommend", level5RecommendView);
+        applyDashboardDepartmentFilter(wrapper, filterDeptIds);
         return wrapper;
     }
 
     @Override
-    public Map<String, Object> getTrackDashboardStats(Integer statYear) {
+    public Map<String, Object> getTrackDashboardStats(Integer statYear, List<Long> filterDeptIds) {
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
-        long trackingCount = count(buildTrackDashboardWrapper(period));
-        LambdaQueryWrapper<ReferralTracking> arrivedWrapper = buildTrackDashboardWrapper(period);
+        long trackingCount = count(buildTrackDashboardWrapper(period, filterDeptIds));
+        LambdaQueryWrapper<ReferralTracking> arrivedWrapper = buildTrackDashboardWrapper(period, filterDeptIds);
         arrivedWrapper.isNotNull(ReferralTracking::getArrivalTime);
         long trackingArrivedCount = count(arrivedWrapper);
 
@@ -1969,13 +1970,25 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /** 首页追踪统计：与追踪管理列表一致的业务范围、数据权限及创建时间周期 */
-    private LambdaQueryWrapper<ReferralTracking> buildTrackDashboardWrapper(StatYearPeriod period) {
+    private LambdaQueryWrapper<ReferralTracking> buildTrackDashboardWrapper(StatYearPeriod period,
+                                                                            List<Long> filterDeptIds) {
         LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
         applyBizModeFilter(wrapper, "track");
         applyUserScopeFilter(wrapper, "track", false);
+        applyDashboardDepartmentFilter(wrapper, filterDeptIds);
         wrapper.ge(ReferralTracking::getCreateTime, period.start().atStartOfDay())
                 .le(ReferralTracking::getCreateTime, period.end().atTime(23, 59, 59));
         return wrapper;
+    }
+
+    private void applyDashboardDepartmentFilter(LambdaQueryWrapper<ReferralTracking> wrapper,
+                                                List<Long> filterDeptIds) {
+        if (filterDeptIds == null || filterDeptIds.isEmpty()) {
+            return;
+        }
+        wrapper.and(w -> w.in(ReferralTracking::getDepartmentId, filterDeptIds)
+                .or()
+                .in(ReferralTracking::getReceiverDeptId, filterDeptIds));
     }
 
     private void applyStatYearTimeFilter(LambdaQueryWrapper<ReferralTracking> wrapper,

@@ -5,6 +5,8 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import cn.luyou.utils.UploadBatchSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,29 +36,36 @@ public class DashboardController {
     private final WorkbenchStatisticsService workbenchStatisticsService;
     private final ScreeningScopeHelper screeningScopeHelper;
     private final DataScopeHelper dataScopeHelper;
+    private final DepartmentFilterSupport departmentFilterSupport;
 
     @Operation(summary = "获取待处理事项汇总")
     @GetMapping("/summary")
     public ResultResponse<Map<String, Object>> summary(
-            @RequestParam(required = false) Integer year) {
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         Map<String, Object> data = new HashMap<>();
 
-        data.put("pendingTracking", latentInfectionService.countPendingTrackingForDashboard());
+        List<Map<String, Object>> pendingTrackingBreakdown =
+                latentInfectionService.getPendingTrackingBreakdownForDashboard(filterDeptIds);
+        data.put("pendingTrackingBreakdown", pendingTrackingBreakdown);
+        data.put("pendingTracking", pendingTrackingBreakdown.stream()
+                .mapToLong(row -> ((Number) row.getOrDefault("count", 0L)).longValue())
+                .sum());
 
-        data.putAll(workbenchStatisticsService.buildSummary(year));
+        data.putAll(workbenchStatisticsService.buildSummary(year, filterDeptIds));
 
         LambdaQueryWrapper<Notice> pendingNoticeWrapper = new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getStatus, 1);
         dataScopeHelper.applyNoticeScope(pendingNoticeWrapper);
+        dataScopeHelper.applyNoticeBizDepartmentFilter(pendingNoticeWrapper, filterDeptIds);
         data.put("pendingNotice", noticeService.count(pendingNoticeWrapper));
 
         LocalDate today = LocalDate.now();
-        LambdaQueryWrapper<ScreeningCloseContact> reviewWrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
+        LambdaQueryWrapper<ScreeningCloseContact> reviewWrapper = scopedCloseContactWrapper(filterDeptIds)
                 .isNotNull(ScreeningCloseContact::getRegistrationDate)
                 .ge(ScreeningCloseContact::getRegistrationDate, today.minusDays(195))
                 .le(ScreeningCloseContact::getRegistrationDate, today.minusDays(165));
-        screeningScopeHelper.applyDepartmentScope(
-                reviewWrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
         data.put("upcomingReview", closeContactService.count(reviewWrapper));
 
         return ResultRes.success(data);
@@ -64,12 +73,14 @@ public class DashboardController {
 
     @Operation(summary = "获取所有上传批次（任务）列表")
     @GetMapping("/batches")
-    public ResultResponse<List<Map<String, String>>> batches() {
+    public ResultResponse<List<Map<String, String>>> batches(
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         Map<String, UploadBatchSupport.BatchMeta> metaMap = new LinkedHashMap<>();
 
-        mergeSchoolBatchMeta(metaMap);
-        mergeKeyPopulationBatchMeta(metaMap);
-        mergeCloseContactBatchMeta(metaMap);
+        mergeSchoolBatchMeta(metaMap, filterDeptIds);
+        mergeKeyPopulationBatchMeta(metaMap, filterDeptIds);
+        mergeCloseContactBatchMeta(metaMap, filterDeptIds);
 
         List<Map<String, String>> result = metaMap.entrySet().stream()
                 .sorted(Comparator
@@ -89,18 +100,20 @@ public class DashboardController {
         return ResultRes.success(result);
     }
 
-    private void mergeSchoolBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
+    private void mergeSchoolBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<ScreeningSchool>()
                 .isNotNull(ScreeningSchool::getUploadBatch)
                 .ne(ScreeningSchool::getUploadBatch, "")
                 .select(ScreeningSchool::getUploadBatch, ScreeningSchool::getCreateTime, ScreeningSchool::getYear);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        departmentFilterSupport.applyDepartmentIdFilter(
+                wrapper, ScreeningSchool::getDepartmentId, filterDeptIds);
         mergeBatchRecords(metaMap, "学校筛查", screeningSchoolService.list(wrapper), ScreeningSchool::getUploadBatch,
                 ScreeningSchool::getCreateTime, ScreeningSchool::getYear);
     }
 
-    private void mergeKeyPopulationBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
+    private void mergeKeyPopulationBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<ScreeningKeyPopulation>()
                 .isNotNull(ScreeningKeyPopulation::getUploadBatch)
                 .ne(ScreeningKeyPopulation::getUploadBatch, "")
@@ -108,12 +121,14 @@ public class DashboardController {
                         ScreeningKeyPopulation::getYear);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        departmentFilterSupport.applyDepartmentIdFilter(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
         mergeBatchRecords(metaMap, "重点人群筛查", screeningKeyPopulationService.list(wrapper),
                 ScreeningKeyPopulation::getUploadBatch, ScreeningKeyPopulation::getCreateTime,
                 ScreeningKeyPopulation::getYear);
     }
 
-    private void mergeCloseContactBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap) {
+    private void mergeCloseContactBatchMeta(Map<String, UploadBatchSupport.BatchMeta> metaMap, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
                 .isNotNull(ScreeningCloseContact::getUploadBatch)
                 .ne(ScreeningCloseContact::getUploadBatch, "")
@@ -121,6 +136,8 @@ public class DashboardController {
                         ScreeningCloseContact::getYear);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        departmentFilterSupport.applyDepartmentIdFilter(
+                wrapper, ScreeningCloseContact::getDepartmentId, filterDeptIds);
         mergeBatchRecords(metaMap, "密接筛查", closeContactService.list(wrapper),
                 ScreeningCloseContact::getUploadBatch, ScreeningCloseContact::getCreateTime,
                 ScreeningCloseContact::getYear);
@@ -159,117 +176,140 @@ public class DashboardController {
     @Operation(summary = "按年度获取三类人群数据统计")
     @GetMapping("/task-stats")
     public ResultResponse<Map<String, Object>> taskStats(
-            @RequestParam(required = false) Integer year) {
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         Map<String, Object> data = new HashMap<>();
         boolean hasYear = year != null;
         String yearStr = hasYear ? String.valueOf(year) : null;
 
-        LambdaQueryWrapper<ScreeningSchool> schoolWrapper = buildSchoolTaskWrapper(hasYear, yearStr);
+        LambdaQueryWrapper<ScreeningSchool> schoolWrapper = buildSchoolTaskWrapper(hasYear, yearStr, filterDeptIds);
         long schoolTotal = screeningSchoolService.count(schoolWrapper);
         List<Object> schoolIds = hasYear
-                ? screeningSchoolService.listObjs(buildSchoolTaskWrapper(true, yearStr).select(ScreeningSchool::getId))
+                ? screeningSchoolService.listObjs(
+                        buildSchoolTaskWrapper(true, yearStr, filterDeptIds).select(ScreeningSchool::getId))
                 : null;
         data.put("school", buildPopStats(schoolTotal,
-                countLatent("school", hasYear, schoolIds),
-                countConfirmedPatient("school", hasYear, yearStr)));
+                countLatent("school", hasYear, schoolIds, filterDeptIds),
+                countConfirmedPatient("school", hasYear, yearStr, filterDeptIds)));
 
-        LambdaQueryWrapper<ScreeningKeyPopulation> keyWrapper = buildKeyPopulationTaskWrapper(hasYear, yearStr);
+        LambdaQueryWrapper<ScreeningKeyPopulation> keyWrapper = buildKeyPopulationTaskWrapper(hasYear, yearStr, filterDeptIds);
         long keyTotal = screeningKeyPopulationService.count(keyWrapper);
         List<Object> keyIds = hasYear
                 ? screeningKeyPopulationService.listObjs(
-                        buildKeyPopulationTaskWrapper(true, yearStr).select(ScreeningKeyPopulation::getId))
+                        buildKeyPopulationTaskWrapper(true, yearStr, filterDeptIds).select(ScreeningKeyPopulation::getId))
                 : null;
         data.put("keyPopulation", buildPopStats(keyTotal,
-                countLatent("keyPopulation", hasYear, keyIds),
-                countConfirmedPatient("keyPopulation", hasYear, yearStr)));
+                countLatent("keyPopulation", hasYear, keyIds, filterDeptIds),
+                countConfirmedPatient("keyPopulation", hasYear, yearStr, filterDeptIds)));
 
-        LambdaQueryWrapper<ScreeningCloseContact> closeWrapper = buildCloseContactTaskWrapper(hasYear, yearStr);
+        LambdaQueryWrapper<ScreeningCloseContact> closeWrapper = buildCloseContactTaskWrapper(hasYear, yearStr, filterDeptIds);
         long closeTotal = closeContactService.count(closeWrapper);
 
-        LambdaQueryWrapper<ScreeningCloseContact> closeLatentWrapper = buildCloseContactTaskWrapper(hasYear, yearStr)
+        LambdaQueryWrapper<ScreeningCloseContact> closeLatentWrapper = buildCloseContactTaskWrapper(hasYear, yearStr, filterDeptIds)
                 .eq(ScreeningCloseContact::getFinalScreeningResult, "潜伏感染者");
         long closeLatent = closeContactService.count(closeLatentWrapper);
         data.put("closeContact", buildPopStats(closeTotal, closeLatent,
-                countConfirmedPatient("closeContact", hasYear, yearStr)));
+                countConfirmedPatient("closeContact", hasYear, yearStr, filterDeptIds)));
 
         return ResultRes.success(data);
     }
 
     @Operation(summary = "获取消息通知统计（通知单 + 分级诊疗）")
     @GetMapping("/message-stats")
-    public ResultResponse<Map<String, Object>> messageStats() {
+    public ResultResponse<Map<String, Object>> messageStats(
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         Map<String, Object> data = new HashMap<>();
 
         LambdaQueryWrapper<Notice> latentSentWrapper = new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getNoticeType, "latent");
         dataScopeHelper.applyNoticeScope(latentSentWrapper);
+        dataScopeHelper.applyNoticeBizDepartmentFilter(latentSentWrapper, filterDeptIds);
         data.put("latentNoticeSent", noticeService.count(latentSentWrapper));
 
         LambdaQueryWrapper<Notice> latentConfirmedWrapper = new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getNoticeType, "latent")
                 .eq(Notice::getStatus, 2);
         dataScopeHelper.applyNoticeScope(latentConfirmedWrapper);
+        dataScopeHelper.applyNoticeBizDepartmentFilter(latentConfirmedWrapper, filterDeptIds);
         data.put("latentNoticeConfirmed", noticeService.count(latentConfirmedWrapper));
 
         LambdaQueryWrapper<Notice> patientSentWrapper = new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getNoticeType, "patient");
         dataScopeHelper.applyNoticeScope(patientSentWrapper);
+        dataScopeHelper.applyNoticeBizDepartmentFilter(patientSentWrapper, filterDeptIds);
         data.put("patientNoticeSent", noticeService.count(patientSentWrapper));
 
         LambdaQueryWrapper<Notice> patientConfirmedWrapper = new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getNoticeType, "patient")
                 .eq(Notice::getStatus, 2);
         dataScopeHelper.applyNoticeScope(patientConfirmedWrapper);
+        dataScopeHelper.applyNoticeBizDepartmentFilter(patientConfirmedWrapper, filterDeptIds);
         data.put("patientNoticeConfirmed", noticeService.count(patientConfirmedWrapper));
 
         LambdaQueryWrapper<Referral> referralSentWrapper = new LambdaQueryWrapper<>();
         dataScopeHelper.applyReferralScope(referralSentWrapper);
+        dataScopeHelper.applyReferralBizDepartmentFilter(referralSentWrapper, filterDeptIds);
         data.put("referralSent", referralService.count(referralSentWrapper));
 
         LambdaQueryWrapper<Referral> referralConfirmedWrapper = new LambdaQueryWrapper<Referral>()
                 .eq(Referral::getStatus, 2);
         dataScopeHelper.applyReferralScope(referralConfirmedWrapper);
+        dataScopeHelper.applyReferralBizDepartmentFilter(referralConfirmedWrapper, filterDeptIds);
         data.put("referralConfirmed", referralService.count(referralConfirmedWrapper));
 
         LambdaQueryWrapper<Referral> referralRejectedWrapper = new LambdaQueryWrapper<Referral>()
                 .eq(Referral::getStatus, 3);
         dataScopeHelper.applyReferralScope(referralRejectedWrapper);
+        dataScopeHelper.applyReferralBizDepartmentFilter(referralRejectedWrapper, filterDeptIds);
         data.put("referralRejected", referralService.count(referralRejectedWrapper));
 
         return ResultRes.success(data);
     }
 
-    private LambdaQueryWrapper<ScreeningSchool> buildSchoolTaskWrapper(boolean hasYear, String yearStr) {
+    private LambdaQueryWrapper<ScreeningCloseContact> scopedCloseContactWrapper(List<Long> filterDeptIds) {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningCloseContact::getDepartmentId, filterDeptIds);
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ScreeningSchool> buildSchoolTaskWrapper(boolean hasYear, String yearStr, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         if (hasYear) {
             wrapper.eq(ScreeningSchool::getYear, yearStr);
         }
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningSchool::getDepartmentId, filterDeptIds);
         return wrapper;
     }
 
-    private LambdaQueryWrapper<ScreeningKeyPopulation> buildKeyPopulationTaskWrapper(boolean hasYear, String yearStr) {
+    private LambdaQueryWrapper<ScreeningKeyPopulation> buildKeyPopulationTaskWrapper(boolean hasYear, String yearStr, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         if (hasYear) {
             wrapper.eq(ScreeningKeyPopulation::getYear, yearStr);
         }
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
         return wrapper;
     }
 
-    private LambdaQueryWrapper<ScreeningCloseContact> buildCloseContactTaskWrapper(boolean hasYear, String yearStr) {
+    private LambdaQueryWrapper<ScreeningCloseContact> buildCloseContactTaskWrapper(boolean hasYear, String yearStr, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
         if (hasYear) {
             wrapper.eq(ScreeningCloseContact::getYear, yearStr);
         }
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningCloseContact::getDepartmentId, filterDeptIds);
         return wrapper;
     }
 
-    private long countLatent(String populationType, boolean hasYear, List<Object> ids) {
+    private long countLatent(String populationType, boolean hasYear, List<Object> ids, List<Long> filterDeptIds) {
         if (hasYear && (ids == null || ids.isEmpty())) {
             return 0L;
         }
@@ -279,11 +319,13 @@ public class DashboardController {
         if (hasYear) {
             wrapper.in(LatentInfection::getScreeningId, ids);
         }
+        LatentScreeningLinkSupport.applyLinkedScreeningExistsFilter(wrapper);
+        departmentFilterSupport.applyDepartmentIdFilter(wrapper, LatentInfection::getDepartmentId, filterDeptIds);
         dataScopeHelper.applyLatentScope(wrapper);
         return latentInfectionService.count(wrapper);
     }
 
-    private long countConfirmedPatient(String populationType, boolean hasYear, String year) {
+    private long countConfirmedPatient(String populationType, boolean hasYear, String year, List<Long> filterDeptIds) {
         return switch (populationType) {
             case "school" -> {
                 LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<ScreeningSchool>()
@@ -293,6 +335,7 @@ public class DashboardController {
                 }
                 screeningScopeHelper.applyDepartmentScope(
                         wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+                departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningSchool::getDepartmentId, filterDeptIds);
                 yield screeningSchoolService.count(wrapper);
             }
             case "keyPopulation" -> {
@@ -303,6 +346,7 @@ public class DashboardController {
                 }
                 screeningScopeHelper.applyDepartmentScope(
                         wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+                departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
                 yield screeningKeyPopulationService.count(wrapper);
             }
             case "closeContact" -> {
@@ -313,6 +357,7 @@ public class DashboardController {
                 }
                 screeningScopeHelper.applyDepartmentScope(
                         wrapper, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
+                departmentFilterSupport.applyDepartmentIdFilter(wrapper, ScreeningCloseContact::getDepartmentId, filterDeptIds);
                 yield closeContactService.count(wrapper);
             }
             default -> 0L;
