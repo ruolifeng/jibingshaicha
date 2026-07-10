@@ -429,7 +429,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                     String sourceType, String diagnosisFirst,
                                                     String dateFrom, String dateTo, String entryUnit,
                                                     String createTimeFrom, String createTimeTo,
-                                                    String creatorUsername, String columnFilters) {
+                                                    String creatorUsername, String hasChestXray,
+                                                    String chestXrayResult, String columnFilters) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
@@ -446,6 +447,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
                 .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
                 .like(StrUtil.isNotBlank(creatorUsername), ScreeningKeyPopulation::getCreatorUsername, creatorUsername)
+                .eq(StrUtil.isNotBlank(hasChestXray), ScreeningKeyPopulation::getHasChestXray, hasChestXray)
+                .eq(StrUtil.isNotBlank(chestXrayResult), ScreeningKeyPopulation::getChestXrayResult, chestXrayResult)
                 .ge(screenFrom != null, ScreeningKeyPopulation::getScreenDate, screenFrom)
                 .le(screenTo != null, ScreeningKeyPopulation::getScreenDate, screenTo)
                 .ge(createFrom != null, ScreeningKeyPopulation::getCreateTime, createFrom)

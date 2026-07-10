@@ -43,7 +43,8 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                              String sourceType, String diagnosisFirst,
                                              String dateFrom, String dateTo, String entryUnit,
                                              String createTimeFrom, String createTimeTo,
-                                             String creatorUsername, String columnFilters);
+                                             String creatorUsername, String hasChestXray,
+                                             String chestXrayResult, String columnFilters);
 
     /** @deprecated 兼容旧调用 */
     @Deprecated
@@ -55,7 +56,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
                 crowdCategory, screenMethod, isLatent, sourceType, diagnosisFirst, dateFrom, dateTo,
-                entryUnit, createTimeFrom, createTimeTo, null, null);
+                entryUnit, createTimeFrom, createTimeTo, null, null, null, null);
     }
 
     /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
@@ -64,7 +65,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
-                crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null, null, null, null, null, null);
+                crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null, null, null, null, null, null, null, null);
     }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */

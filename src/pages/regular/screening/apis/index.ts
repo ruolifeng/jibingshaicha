@@ -84,6 +84,8 @@ export function getScreeningRegularListApi(params: {
   diagnosisFirst?: string
   entryUnit?: string
   creatorUsername?: string
+  hasChestXray?: string
+  chestXrayResult?: string
   columnFilters?: string
   dateFrom?: string
   dateTo?: string

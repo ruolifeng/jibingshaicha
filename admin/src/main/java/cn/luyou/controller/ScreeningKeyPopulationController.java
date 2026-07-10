@@ -73,11 +73,13 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String hasChestXray,
+            @RequestParam(required = false) String chestXrayResult,
             @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
                 page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
-                creatorUsername, columnFilters));
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters));
     }
 
     @Operation(summary = "新增重点人群筛查记录")

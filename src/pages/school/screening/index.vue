@@ -397,6 +397,15 @@ watch(
       <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
       <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
+        <el-table-column prop="creatorUsername" min-width="100" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="录入用户"
+              :model-value="columnFilters.creatorUsername"
+              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="name" min-width="90" fixed>
           <template #header>
             <TableHeaderFilter
@@ -468,15 +477,6 @@ watch(
         <el-table-column prop="tbHistory" label="既往结核病史" />
         <el-table-column prop="closeContactHistory" label="密切接触史" />
         <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
-        <el-table-column prop="creatorUsername" min-width="100">
-          <template #header>
-            <TableHeaderFilter
-              label="录入用户"
-              :model-value="columnFilters.creatorUsername"
-              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
         <el-table-column label="学校人群感染筛查情况">
           <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
           <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" />
