@@ -4,7 +4,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, previewScreeningKeyPopulationUploadApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
@@ -40,13 +40,15 @@ const searchForm = reactive({
   dateRange: [] as string[],
   entryTimeRange: [] as string[],
   isLatent: undefined as number | undefined,
-  diagnosisFirst: "" as string
+  diagnosisFirst: "" as string,
+  hasChestXray: "" as string,
+  chestXrayResult: "" as string
 })
 
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, entryTimeRange, entryUnit, creatorUsername, crowdCategory, ...rest } = searchForm
+    const { dateRange, entryTimeRange, entryUnit, creatorUsername, crowdCategory, hasChestXray, chestXrayResult, ...rest } = searchForm
     const columnFiltersParam = toQueryParam()
     const { data } = await getScreeningKeyPopulationListApi({
       page: paginationData.currentPage,
@@ -56,6 +58,8 @@ async function fetchData() {
       ...extractCreateTimeRangeParams(entryTimeRange),
       ...(entryUnit ? { entryUnit } : {}),
       ...(creatorUsername ? { creatorUsername } : {}),
+      ...(hasChestXray ? { hasChestXray } : {}),
+      ...(chestXrayResult ? { chestXrayResult } : {}),
       ...(crowdCategory.length > 0 ? { crowdCategory: crowdCategory.join(",") } : {}),
       ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
@@ -85,6 +89,8 @@ function handleReset() {
   searchForm.entryTimeRange = []
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
+  searchForm.hasChestXray = ""
+  searchForm.chestXrayResult = ""
   clearFilters()
   handleSearch()
 }
@@ -410,6 +416,17 @@ watch(
             <el-option label="EC" value="EC" />
           </el-select>
         </el-form-item>
+        <el-form-item label="是否进行胸片检查">
+          <el-select v-model="searchForm.hasChestXray" placeholder="全部" clearable style="width: 120px">
+            <el-option label="是" value="是" />
+            <el-option label="否" value="否" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="胸片结果">
+          <el-select v-model="searchForm.chestXrayResult" placeholder="全部" clearable style="width: 120px">
+            <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
             <el-option label="待确诊" :value="1" />
@@ -478,6 +495,15 @@ watch(
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
       <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
         <el-table-column type="selection" fixed />
+        <el-table-column prop="creatorUsername" min-width="100" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="录入用户"
+              :model-value="columnFilters.creatorUsername"
+              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="name" min-width="90" fixed>
           <template #header>
             <TableHeaderFilter
@@ -542,15 +568,6 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
-        <el-table-column prop="creatorUsername" min-width="100">
-          <template #header>
-            <TableHeaderFilter
-              label="录入用户"
-              :model-value="columnFilters.creatorUsername"
-              @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
         <!-- 人群分类：与模板「人群分类（可多选）」分组一致 -->
         <el-table-column label="人群分类（可多选）">
           <el-table-column prop="crowdCategoryClose" label="密接" width="60" />
