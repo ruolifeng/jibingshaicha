@@ -27,6 +27,7 @@ import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.UploadBatchSupport;
@@ -121,8 +122,13 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, confirmSkipInvalid, false);
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         String batchId = UploadBatchSupport.newBatchId("密接筛查");
-        List<ScreeningCloseContact> dataList = new ArrayList<>();
+        final List<ScreeningCloseContact> parsedList = new ArrayList<>();
         ImportResult result = new ImportResult();
         byte[] fileBytes;
         try {
@@ -167,12 +173,12 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     data.setImportRowNo(row);
                     CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
-                    dataList.add(data);
+                    parsedList.add(data);
                 }
 
                 @Override
                 public void doAfterAllAnalysed(AnalysisContext context) {
-                    log.info("密接人群筛查数据解析完成，共 {} 条", dataList.size());
+                    log.info("密接人群筛查数据解析完成，共 {} 条", parsedList.size());
                 }
             }).sheet().headRowNumber(headRowNumber).doRead();
         } catch (Exception e) {
@@ -182,6 +188,18 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         }
 
         if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
+        }
+
+        List<ScreeningCloseContact> dataList = ImportDuplicateIdSupport.handleDuplicateInFile(
+                result,
+                parsedList,
+                d -> ImportDuplicateIdSupport.normalizeIdNumber(d.getIdNumber()),
+                ScreeningCloseContact::getImportRowNo,
+                ScreeningCloseContact::getIdNumber,
+                ScreeningCloseContact::getName,
+                confirmSkipDuplicateInFile);
+        if (dataList == null) {
             return result;
         }
 

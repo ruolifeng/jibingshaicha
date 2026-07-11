@@ -51,7 +51,9 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   referral_tracking_confirmed: "推介已接收",
   referral_tracking_rejected: "推介已被拒绝",
   referral_tracking_joint: "共同追踪已开启",
-  review_reminder: "复查提醒"
+  review_reminder: "复查提醒",
+  sputum_culture_pending: "痰培养未补充",
+  sputum_culture_supplemented: "痰培养已补充"
 }
 
 function getMessageTypeTagType(type: string) {
@@ -65,6 +67,8 @@ function getMessageTypeTagType(type: string) {
   if (type === "referral_tracking_confirmed") return "success"
   if (type === "referral_tracking_rejected") return "danger"
   if (type === "referral_tracking_joint") return "success"
+  if (type === "sputum_culture_pending") return "warning"
+  if (type === "sputum_culture_supplemented") return "success"
   return "info"
 }
 
@@ -407,7 +411,17 @@ const activeTab = ref("received")
             </el-table-column>
             <el-table-column label="状态">
               <template #default="{ row }">
-                <el-tag :type="row.isRead ? 'info' : 'success'" size="small">
+                <template v-if="row.type === 'sputum_culture_pending'">
+                  <el-tag type="warning" size="small">
+                    未补充
+                  </el-tag>
+                </template>
+                <template v-else-if="row.type === 'sputum_culture_supplemented'">
+                  <el-tag type="success" size="small">
+                    补充
+                  </el-tag>
+                </template>
+                <el-tag v-else :type="row.isRead ? 'info' : 'success'" size="small">
                   {{ row.isRead ? "已读" : "未读" }}
                 </el-tag>
               </template>
@@ -456,6 +470,12 @@ const activeTab = ref("received")
                       拒绝
                     </el-button>
                   </template>
+                </template>
+                <!-- 痰培养未补充：前往首次随访补充 -->
+                <template v-if="row.type === 'sputum_culture_pending'">
+                  <el-button type="primary" size="small" link @click="router.push('/patient-management/first-visit')">
+                    前往补充
+                  </el-button>
                 </template>
                 <el-button v-if="!row.isRead" type="primary" size="small" link @click="handleMarkRead(row)">
                   标为已读

@@ -11,6 +11,7 @@ import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.*;
 import cn.luyou.service.*;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.FirstVisitSputumCultureSupport;
 import cn.luyou.utils.FollowUpCaseClosureSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -38,6 +39,7 @@ public class PatientController {
     private final MedicationManagementService medicationManagementService;
     private final MedicationPickupService medicationPickupService;
     private final UserService userService;
+    private final FirstVisitSputumCultureSupport firstVisitSputumCultureSupport;
 
     /** 填写领药与服药管理分离：仅 pickup 权限可保存领药记录 */
     private static final String[] MEDICATION_PICKUP_PERMISSIONS = {
@@ -56,8 +58,9 @@ public class PatientController {
     @OperationLog(type = "import", module = "patient", action = "批量导入在管患者")
     public ResultResponse<ImportResult> importManual(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
-        return ResultRes.success(patientService.importManualBatch(file, confirmSkipInvalid));
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid,
+            @RequestParam(value = "confirmSkipDuplicateInFile", defaultValue = "false") boolean confirmSkipDuplicateInFile) {
+        return ResultRes.success(patientService.importManualBatch(file, confirmSkipInvalid, confirmSkipDuplicateInFile));
     }
 
     @Operation(summary = "患者详情")
@@ -264,8 +267,15 @@ public class PatientController {
         } else {
             userService.checkPermissionCode("patientManagement:firstVisit:fill");
         }
+        if (firstVisit.getFilledBy() == null) {
+            firstVisit.setFilledBy(BaseContext.getCurrentId());
+        } else if (existing != null && existing.getFilledBy() != null) {
+            firstVisit.setFilledBy(existing.getFilledBy());
+        }
         firstVisit.setStatus(1);
+        firstVisitSputumCultureSupport.prepareSupplementStatus(firstVisit, existing);
         firstVisitService.saveOrUpdate(firstVisit);
+        firstVisitSputumCultureSupport.syncMessages(firstVisit, existing);
         return ResultRes.success(null);
     }
 
@@ -318,6 +328,9 @@ public class PatientController {
         }
         if (StrUtil.isBlank(fv.getSputumStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择痰菌情况");
+        }
+        if (StrUtil.isBlank(fv.getSputumCulture())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择痰培养情况");
         }
         if (StrUtil.isBlank(fv.getDrugResistance())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择耐药情况");

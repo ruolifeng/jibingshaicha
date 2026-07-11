@@ -30,12 +30,15 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
+import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -101,6 +104,21 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             "crowdCategoryTbHist", "crowdCategoryNormal", "hasSuspiciousSymptoms", "screenResult"
     );
 
+    private static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
+            Map.entry("importRowNo", "import_row_no"),
+            Map.entry("createTime", "create_time"),
+            Map.entry("name", "name"),
+            Map.entry("district", "district"),
+            Map.entry("screenDate", "screen_date"),
+            Map.entry("age", "age"),
+            Map.entry("idNumber", "id_number"),
+            Map.entry("uploadBatch", "upload_batch"),
+            Map.entry("year", "year"),
+            Map.entry("city", "city"),
+            Map.entry("phone", "phone"),
+            Map.entry("creatorUsername", "creator_username")
+    );
+
     @Override
     public Map<String, Object> previewUpload(MultipartFile file, String sourceType) {
         final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
@@ -132,19 +150,36 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         return preview;
     }
 
-    @Override
     public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite) {
         return uploadAndParse(file, sourceType, overwrite, false);
     }
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, sourceType, overwrite, confirmSkipInvalid, false);
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite,
+                                       boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         final String resolvedSourceType = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
         String batchId = UploadBatchSupport.newBatchId("重点人群筛查");
         ImportResult result = new ImportResult();
         List<ScreeningKeyPopulation> dataList = parseExcelFile(file, resolvedSourceType, batchId, result, confirmSkipInvalid);
 
         if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
+        }
+
+        dataList = ImportDuplicateIdSupport.handleDuplicateInFile(
+                result,
+                dataList,
+                d -> ImportDuplicateIdSupport.normalizeIdNumber(d.getIdNumber()),
+                ScreeningKeyPopulation::getImportRowNo,
+                ScreeningKeyPopulation::getIdNumber,
+                ScreeningKeyPopulation::getName,
+                confirmSkipDuplicateInFile);
+        if (dataList == null) {
             return result;
         }
 
@@ -222,7 +257,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
 
         try {
-            // 重点人群模板：第1行大分组，第2行字段名，第3行子字段细项，第4行空行，数据从第5行开始
+            // 重点人群模板：第1行大分组，第2行字段名/子分组，第3行子字段细项，数据从第4行开始
             EasyExcel.read(file.getInputStream(), ScreeningKeyPopulation.class, new ReadListener<ScreeningKeyPopulation>() {
                 @Override
                 public void invoke(ScreeningKeyPopulation data, AnalysisContext context) {
@@ -268,7 +303,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                         throw exception;
                     }
                 }
-            }).sheet().headRowNumber(4).doRead();
+            }).sheet().headRowNumber(3).doRead();
         } catch (IOException e) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
@@ -290,50 +325,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         return getOne(wrapper, false);
     }
 
-    private void mergeCrowdCategoryFields(ScreeningKeyPopulation target, ScreeningKeyPopulation source) {
-        if (StrUtil.isNotBlank(source.getCrowdCategoryClose())) {
-            target.setCrowdCategoryClose(source.getCrowdCategoryClose());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryStudent())) {
-            target.setCrowdCategoryStudent(source.getCrowdCategoryStudent());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryTeacher())) {
-            target.setCrowdCategoryTeacher(source.getCrowdCategoryTeacher());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryElder())) {
-            target.setCrowdCategoryElder(source.getCrowdCategoryElder());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryDiabetes())) {
-            target.setCrowdCategoryDiabetes(source.getCrowdCategoryDiabetes());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryDual())) {
-            target.setCrowdCategoryDual(source.getCrowdCategoryDual());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryTbHist())) {
-            target.setCrowdCategoryTbHist(source.getCrowdCategoryTbHist());
-        }
-        if (StrUtil.isNotBlank(source.getCrowdCategoryNormal())) {
-            target.setCrowdCategoryNormal(source.getCrowdCategoryNormal());
-        }
-    }
-
     private void mergeIntoExisting(ScreeningKeyPopulation existing, ScreeningKeyPopulation imported) {
-        if (StrUtil.isNotBlank(imported.getName())) existing.setName(imported.getName());
-        if (StrUtil.isNotBlank(imported.getPhone())) existing.setPhone(imported.getPhone());
-        if (StrUtil.isNotBlank(imported.getCurrentAddress())) existing.setCurrentAddress(imported.getCurrentAddress());
-        mergeCrowdCategoryFields(existing, imported);
-        if (StrUtil.isNotBlank(imported.getInfectionResult())) existing.setInfectionResult(imported.getInfectionResult());
-        if (StrUtil.isNotBlank(imported.getHasChestXray())) existing.setHasChestXray(imported.getHasChestXray());
-        if (imported.getChestXrayDate() != null) existing.setChestXrayDate(imported.getChestXrayDate());
-        if (StrUtil.isNotBlank(imported.getChestXrayResult())) existing.setChestXrayResult(imported.getChestXrayResult());
-        if (StrUtil.isNotBlank(imported.getDiagnosisFirst())) {
-            existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(imported.getDiagnosisFirst()));
-        }
-        if (StrUtil.isNotBlank(imported.getRemark())) existing.setRemark(imported.getRemark());
-        if (StrUtil.isNotBlank(imported.getUploadBatch())) existing.setUploadBatch(imported.getUploadBatch());
-        if (imported.getImportRowNo() != null) existing.setImportRowNo(imported.getImportRowNo());
+        ScreeningImportMergeSupport.mergeKeyPopulation(existing, imported);
         // 覆盖导入只更新业务字段与行号，保留首次录入人
-        existing.setDepartmentId(imported.getDepartmentId());
         existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
     }
 
@@ -430,13 +424,56 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                     String dateFrom, String dateTo, String entryUnit,
                                                     String createTimeFrom, String createTimeTo,
                                                     String creatorUsername, String hasChestXray,
-                                                    String chestXrayResult, String columnFilters) {
+                                                    String chestXrayResult, String columnFilters,
+                                                    String sortField, String sortOrder) {
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = buildListWrapper(
+                name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters);
+        applyListOrder(wrapper, sortField, sortOrder);
+        return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
+    public List<ScreeningKeyPopulation> listForExport(String name, String idNumber,
+                                                       String phone, String district, String townshipCommunity,
+                                                       String crowdCategory, String screenMethod, Integer isLatent,
+                                                       String sourceType, String diagnosisFirst,
+                                                       String dateFrom, String dateTo, String entryUnit,
+                                                       String createTimeFrom, String createTimeTo,
+                                                       String creatorUsername, String hasChestXray,
+                                                       String chestXrayResult, String columnFilters,
+                                                       String sortField, String sortOrder,
+                                                       List<Long> ids) {
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper;
+        if (ids != null && !ids.isEmpty()) {
+            String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
+            wrapper = new LambdaQueryWrapper<>();
+            wrapper.in(ScreeningKeyPopulation::getId, ids)
+                    .eq(ScreeningKeyPopulation::getSourceType, resolvedSource);
+            screeningScopeHelper.applyDepartmentScope(
+                    wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        } else {
+            wrapper = buildListWrapper(
+                    name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                    sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
+                    creatorUsername, hasChestXray, chestXrayResult, columnFilters);
+        }
+        applyListOrder(wrapper, sortField, sortOrder);
+        return list(wrapper);
+    }
+
+    private LambdaQueryWrapper<ScreeningKeyPopulation> buildListWrapper(
+            String name, String idNumber, String phone, String district, String townshipCommunity,
+            String crowdCategory, String screenMethod, Integer isLatent, String sourceType,
+            String diagnosisFirst, String dateFrom, String dateTo, String entryUnit,
+            String createTimeFrom, String createTimeTo, String creatorUsername,
+            String hasChestXray, String chestXrayResult, String columnFilters) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
-        // sourceType 为空时默认只查 keyPopulation（向后兼容），传 regular 时查常规
         String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
         wrapper.eq(ScreeningKeyPopulation::getSourceType, resolvedSource)
                 .like(StrUtil.isNotBlank(name), ScreeningKeyPopulation::getName, name)
@@ -460,8 +497,12 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         applyColumnFilters(wrapper, columnFilters);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        ImportRowOrderSupport.applyWithBatch(wrapper);
-        return page(new Page<>(page, size), wrapper);
+        return wrapper;
+    }
+
+    private void applyListOrder(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper,
+                                String sortField, String sortOrder) {
+        ListSortSupport.apply(wrapper, sortField, sortOrder, SORT_COLUMNS, ImportRowOrderSupport.WITH_BATCH);
     }
 
     private void applyColumnFilters(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String columnFilters) {

@@ -35,6 +35,7 @@ public final class PatientManualImportHeaders {
             "备注",
             "首次治疗方案",
             "药敏结果：利福平（R）",
-            "药敏结果：异烟肼（H）"
+            "药敏结果：异烟肼（H）",
+            "培养结果"
     ));
 }

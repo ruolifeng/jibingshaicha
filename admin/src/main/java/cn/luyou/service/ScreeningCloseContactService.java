@@ -11,7 +11,11 @@ import java.util.Map;
 
 public interface ScreeningCloseContactService extends IService<ScreeningCloseContact> {
 
-    ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid);
+    ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile);
+
+    default ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, confirmSkipInvalid, false);
+    }
 
     default ImportResult uploadAndParse(MultipartFile file) {
         return uploadAndParse(file, false);

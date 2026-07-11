@@ -64,10 +64,10 @@ public interface PatientService extends IService<Patient> {
     Long createManual(Map<String, Object> body);
 
     /** 批量导入在管患者（字段与手动新增一致） */
-    ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid);
+    ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile);
 
-    default ImportResult importManualBatch(MultipartFile file) {
-        return importManualBatch(file, false);
+    default ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid) {
+        return importManualBatch(file, confirmSkipInvalid, false);
     }
 
     /** 批量删除患者（级联删除） */

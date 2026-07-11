@@ -1,27 +1,37 @@
+import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
+import type { ScreeningKeyPopulationQueryParams } from "@/pages/key-population/screening/apis"
 import { request } from "@/http/axios"
 
 /** 上传疫情筛查 Excel（复用重点人群接口，sourceType=regular） */
-export function uploadScreeningRegularApi(file: File, confirmSkipInvalid = false) {
+export function uploadScreeningRegularApi(file: File, options: ImportConfirmOptions = {}) {
+  const confirmSkipInvalid = options.confirmSkipInvalid ?? false
+  const confirmSkipDuplicateInFile = options.confirmSkipDuplicateInFile ?? false
   const formData = new FormData()
   formData.append("file", file)
   formData.append("sourceType", "regular")
   formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
-  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
+  formData.append("confirmSkipDuplicateInFile", String(confirmSkipDuplicateInFile))
+  return request<ApiResponseData<ImportResultData>>({
     url: "screening/key-population/upload",
     method: "post",
     data: formData,
-    params: { confirmSkipInvalid },
+    params: { confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })
 }
 
-/** 导出疫情筛查数据 */
-export function exportScreeningRegularApi(ids?: number[]) {
+/** 导出疫情筛查数据（可按勾选 ID 或当前筛选条件导出） */
+export function exportScreeningRegularApi(params?: ScreeningKeyPopulationQueryParams & { ids?: number[] }) {
+  const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/key-population/export",
     method: "get",
-    params: ids && ids.length > 0 ? { ids: ids.join(","), sourceType: "regular" } : { sourceType: "regular" },
+    params: {
+      sourceType: "regular",
+      ...rest,
+      ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob"
   })
 }
@@ -73,25 +83,7 @@ export function getScreeningRegularDetailApi(id: number) {
 export function getScreeningRegularListApi(params: {
   page: number
   size: number
-  name?: string
-  idNumber?: string
-  phone?: string
-  district?: string
-  townshipCommunity?: string
-  crowdCategory?: string // 支持逗号分隔多选，如「老年人,糖尿病」
-  screenMethod?: string
-  isLatent?: number
-  diagnosisFirst?: string
-  entryUnit?: string
-  creatorUsername?: string
-  hasChestXray?: string
-  chestXrayResult?: string
-  columnFilters?: string
-  dateFrom?: string
-  dateTo?: string
-  createTimeFrom?: string
-  createTimeTo?: string
-}) {
+} & ScreeningKeyPopulationQueryParams) {
   return request<ApiResponseData<any>>({
     url: "screening/key-population/list",
     method: "get",

@@ -109,8 +109,9 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     @Override
     public IPage<SentNoticeVO> sentPage(Long senderId, int pageNum, int size) {
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Notice::getSenderId, senderId)
-                .orderByDesc(Notice::getSentTime);
+        wrapper.ge(Notice::getStatus, 1);
+        applySentNoticeScope(wrapper, senderId);
+        wrapper.orderByDesc(Notice::getSentTime);
         IPage<Notice> noticePage = page(new Page<>(pageNum, size), wrapper);
 
         // 批量查询发送者和接收者用户信息，避免 N+1 查询
@@ -225,6 +226,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         if (notice == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单不存在");
         }
+        assertSentNoticeAccessible(notice.getId());
         if (notice.getStatus() == 2) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单已确认接收，无需催促");
         }
@@ -260,6 +262,35 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             String title = noticeTypeText + "已接收";
             String content = String.format("【%s】%s，接收方已确认接收。", noticeTypeText, notice.getPatientName());
             sysMessageService.sendMessage(notice.getSenderId(), title, content, "notice_confirmed", notice.getId());
+        }
+    }
+
+    /**
+     * 已发送通知单列表：五级仅看自己发送的；市/县/社区等上级按辖区范围（与统计看板一致）。
+     */
+    private void applySentNoticeScope(LambdaQueryWrapper<Notice> wrapper, Long currentUserId) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role != null && role == 6) {
+            wrapper.eq(Notice::getSenderId, currentUserId);
+            return;
+        }
+        dataScopeHelper.applyNoticeScope(wrapper);
+    }
+
+    /** 催促前校验：仅允许查看辖区内已发送通知单的用户操作 */
+    private void assertSentNoticeAccessible(Long noticeId) {
+        if (noticeId == null || BaseContext.isSuperAdmin()) {
+            return;
+        }
+        LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Notice::getId, noticeId);
+        wrapper.ge(Notice::getStatus, 1);
+        applySentNoticeScope(wrapper, BaseContext.getCurrentId());
+        if (count(wrapper) == 0) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "无权限操作该通知单");
         }
     }
 

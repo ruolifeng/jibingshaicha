@@ -1,3 +1,4 @@
+import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
 /**
  * 聚合患者管理 — 公共接口
  * populationType 为空时后端返回所有来源的患者数据（含密接确诊患者）。
@@ -60,15 +61,18 @@ export function exportPatientFollowUpVisitsApi(ids: number[]) {
 }
 
 /** 批量导入在管患者（字段与新增一致） */
-export function importPatientApi(file: File, confirmSkipInvalid = false) {
+export function importPatientApi(file: File, options: ImportConfirmOptions = {}) {
+  const confirmSkipInvalid = options.confirmSkipInvalid ?? false
+  const confirmSkipDuplicateInFile = options.confirmSkipDuplicateInFile ?? false
   const formData = new FormData()
   formData.append("file", file)
   formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
-  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
+  formData.append("confirmSkipDuplicateInFile", String(confirmSkipDuplicateInFile))
+  return request<ApiResponseData<ImportResultData>>({
     url: "patient/import",
     method: "post",
     data: formData,
-    params: { confirmSkipInvalid },
+    params: { confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

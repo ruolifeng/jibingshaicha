@@ -31,6 +31,10 @@ public class FirstVisit extends BaseEntity {
     private String patientType;
     /** 痰菌情况：阳性/阴性/未查痰 */
     private String sputumStatus;
+    /** 痰培养情况（人工填写或选「未做」） */
+    private String sputumCulture;
+    /** 痰培养补充状态：null不适用 0未补充 1已补充 */
+    private Integer sputumCultureSupplementStatus;
     /** 耐药情况：耐药/非耐药/未检测 */
     private String drugResistance;
     /** 症状及体征（逗号分隔编号） */

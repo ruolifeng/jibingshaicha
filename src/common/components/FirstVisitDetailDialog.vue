@@ -78,6 +78,9 @@ const printVisible = ref(false)
         <el-descriptions-item label="痰菌情况">
           {{ visitData.sputumStatus || "-" }}
         </el-descriptions-item>
+        <el-descriptions-item label="痰培养">
+          {{ visitData.sputumCulture || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="耐药情况">
           {{ visitData.drugResistance || "-" }}
         </el-descriptions-item>

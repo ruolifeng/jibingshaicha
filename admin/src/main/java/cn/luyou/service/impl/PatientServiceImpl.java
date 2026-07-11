@@ -42,6 +42,7 @@ import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
+import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
@@ -125,7 +126,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             new String[]{"patientRemark", "备注"},
             new String[]{"firstTreatmentPlan", "首次治疗方案"},
             new String[]{"drugSensitivityR", "药敏结果：利福平（R）"},
-            new String[]{"drugSensitivityH", "药敏结果：异烟肼（H）"}
+            new String[]{"drugSensitivityH", "药敏结果：异烟肼（H）"},
+            new String[]{"cultureResult", "培养结果"}
     );
 
     private final DataScopeHelper dataScopeHelper;
@@ -877,7 +879,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
         LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
         fw.in(FirstVisit::getPatientId, patientIds)
-                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime);
+                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime,
+                        FirstVisit::getSputumCulture, FirstVisit::getSputumCultureSupplementStatus);
         Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
                 .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
         Integer currentRole = BaseContext.getCurrentRole();
@@ -887,12 +890,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setHasFirstVisit(false);
                 p.setFirstVisitStatus(null);
                 p.setFirstVisitEditable(true);
+                p.setFirstVisitSputumCulture(null);
+                p.setSputumCultureSupplementStatus(null);
                 return;
             }
             boolean completed = Integer.valueOf(1).equals(visit.getStatus());
             p.setHasFirstVisit(completed);
             p.setFirstVisitStatus(visit.getStatus());
             p.setFirstVisitEditable(isFirstVisitEditable(currentRole, visit));
+            p.setFirstVisitSputumCulture(visit.getSputumCulture());
+            p.setSputumCultureSupplementStatus(visit.getSputumCultureSupplementStatus());
         });
     }
 
@@ -1980,6 +1987,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 extra.remove(jsonKey);
             }
         }
+        // 培养结果手动录入后统一写入「培养结果」，避免与专病网「0月序培养结果」双键并存
+        if (body.containsKey("cultureResult")) {
+            String culture = body.get("cultureResult") == null ? "" : body.get("cultureResult").toString().trim();
+            if (StrUtil.isNotBlank(culture)) {
+                extra.put("培养结果", culture);
+                extra.remove("0月序培养结果");
+            } else {
+                extra.remove("培养结果");
+                extra.remove("0月序培养结果");
+            }
+        }
         try {
             patient.setEpidemicData(extra.isEmpty() ? null : objectMapper.writeValueAsString(extra));
         } catch (Exception e) {
@@ -2089,14 +2107,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         return patient.getId();
     }
 
-    @Override
     public ImportResult importManualBatch(MultipartFile file) {
         return importManualBatch(file, false);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid) {
+    public ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         List<Map<Integer, String>> allRows = new ArrayList<>();
         try {
             EasyExcel.read(file.getInputStream(), new ReadListener<Map<Integer, String>>() {
@@ -2146,7 +2163,36 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             return result;
         }
 
-        Set<String> importedKeys = new HashSet<>();
+        List<ImportDuplicateIdSupport.IdentityRow> duplicateScanRows = new ArrayList<>();
+        for (int i = 0; i < dataRows.size(); i++) {
+            Map<Integer, String> row = dataRows.get(i);
+            int rowNum = i + 2;
+            String name = getImportField(row, headerIndex, "姓名");
+            String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+            if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+                continue;
+            }
+            if (ImportIdentitySupport.isMissingBasicIdentity(name, idNumber)) {
+                continue;
+            }
+            String populationType = resolvePopulationType(getImportField(row, headerIndex, "数据来源"));
+            if (StrUtil.isBlank(populationType)) {
+                continue;
+            }
+            duplicateScanRows.add(new ImportDuplicateIdSupport.IdentityRow(
+                    rowNum,
+                    populationType + ":" + ImportDuplicateIdSupport.normalizeIdNumber(idNumber),
+                    idNumber,
+                    name));
+        }
+        if (ImportDuplicateIdSupport.blockIfDuplicateInFile(result, duplicateScanRows, confirmSkipDuplicateInFile)) {
+            return result;
+        }
+
+        Map<Integer, Integer> skipDuplicateRows = result.getDuplicateInFileCount() > 0
+                ? ImportDuplicateIdSupport.resolveSkipRowsKeepLast(duplicateScanRows)
+                : Map.of();
+
         for (int i = 0; i < dataRows.size(); i++) {
             Map<Integer, String> row = dataRows.get(i);
             int rowNum = i + 2;
@@ -2181,11 +2227,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     continue;
                 }
 
-                String dedupeKey = populationType + ":" + idNumber;
-                if (importedKeys.contains(dedupeKey)) {
-                    result.addError(rowNum, name, "该证件号在本文件中重复");
+                Integer keptRow = skipDuplicateRows.get(rowNum);
+                if (keptRow != null) {
+                    result.addDuplicateInFileWarning(rowNum, name, idNumber,
+                            "本表重复身份证，已保留第" + keptRow + "行");
                     continue;
                 }
+
                 LambdaQueryWrapper<Patient> dupWrapper = new LambdaQueryWrapper<>();
                 dupWrapper.eq(Patient::getIdNumber, idNumber)
                         .eq(Patient::getPopulationType, populationType)
@@ -2233,7 +2281,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 }
 
                 save(patient);
-                importedKeys.add(dedupeKey);
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (Exception e) {
                 result.addError(rowNum, getImportField(row, headerIndex, "姓名"), "数据解析失败：" + e.getMessage());

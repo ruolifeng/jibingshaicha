@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 重点人群 / 疫情筛查 — 按官方 49 列四级表头模板导出（与导入模板一致，可再导入）。
+ * 重点人群 / 疫情筛查 — 按官方 49 列三级表头模板导出（与导入模板一致，可再导入）。
  */
 public final class KeyPopulationScreeningExcelExportSupport {
 

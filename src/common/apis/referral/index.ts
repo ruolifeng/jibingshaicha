@@ -95,7 +95,7 @@ export function getReferralListApi(bizId: number, bizType: string) {
   })
 }
 
-/** 当前用户已发送的转诊分页列表 */
+/** 已发送的转诊分页列表（五级仅本人发送，上级按辖区） */
 export function getSentReferralListApi(params: { pageNum: number, size: number }) {
   return request<ApiResponseData<{ records: SentReferralVO[], total: number }>>({
     url: "referral/sent",

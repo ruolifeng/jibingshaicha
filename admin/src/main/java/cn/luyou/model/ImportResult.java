@@ -33,6 +33,15 @@ public class ImportResult {
     /** 是否需要用户确认后跳过无效行再继续导入 */
     private boolean requireIdentityConfirm;
 
+    /** 同一 Excel 文件内重复身份证涉及的额外行数（不含每组首行） */
+    private int duplicateInFileCount;
+
+    /** 文件内重复身份证摘要，用于导入前提醒 */
+    private List<String> duplicateInFileSummaries = new ArrayList<>();
+
+    /** 是否需要用户确认后继续导入（文件内存在重复身份证） */
+    private boolean requireDuplicateInFileConfirm;
+
     /** 错误行描述列表，格式：第N行：原因 - 姓名 */
     private List<String> errors = new ArrayList<>();
 
@@ -50,6 +59,11 @@ public class ImportResult {
         invalidIdentityCount++;
         String label = StrUtil.isNotBlank(name) ? name : (StrUtil.isNotBlank(idNumber) ? idNumber : "未知");
         errors.add(String.format("第%d行：无人员基本信息（缺少姓名或身份证） - %s", rowNum, label));
+    }
+
+    public void addDuplicateInFileWarning(int rowNum, String name, String idNumber, String reason) {
+        String label = StrUtil.isNotBlank(name) ? name : (StrUtil.isNotBlank(idNumber) ? idNumber : "未知");
+        errors.add(String.format("第%d行：%s - %s", rowNum, reason, label));
     }
 
     public boolean hasErrors() {

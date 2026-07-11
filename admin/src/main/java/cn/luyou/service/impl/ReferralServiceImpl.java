@@ -15,6 +15,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.ReferralService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.DataScopeHelper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -38,16 +39,19 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     private final UserMapper userMapper;
     private final PatientService patientService;
     private final LatentInfectionService latentInfectionService;
+    private final DataScopeHelper dataScopeHelper;
 
     public ReferralServiceImpl(
             SysMessageService sysMessageService,
             UserMapper userMapper,
             PatientService patientService,
-            @Lazy LatentInfectionService latentInfectionService) {
+            @Lazy LatentInfectionService latentInfectionService,
+            DataScopeHelper dataScopeHelper) {
         this.sysMessageService = sysMessageService;
         this.userMapper = userMapper;
         this.patientService = patientService;
         this.latentInfectionService = latentInfectionService;
+        this.dataScopeHelper = dataScopeHelper;
     }
 
     private static final Map<String, String> MODULE_LABEL = Map.of(
@@ -267,8 +271,8 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
     @Override
     public IPage<SentReferralVO> sentPage(Long senderId, int pageNum, int size) {
         LambdaQueryWrapper<Referral> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Referral::getSenderId, senderId)
-                .orderByDesc(Referral::getSentTime);
+        applySentReferralScope(wrapper, senderId);
+        wrapper.orderByDesc(Referral::getSentTime);
         IPage<Referral> page = page(new Page<>(pageNum, size), wrapper);
 
         Set<Long> userIds = page.getRecords().stream()
@@ -316,6 +320,21 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         IPage<SentReferralVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
         result.setRecords(voList);
         return result;
+    }
+
+    /**
+     * 已发送转出列表：五级仅看自己发送的；市/县/社区等上级按辖区范围（与统计看板一致）。
+     */
+    private void applySentReferralScope(LambdaQueryWrapper<Referral> wrapper, Long currentUserId) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role != null && role == 6) {
+            wrapper.eq(Referral::getSenderId, currentUserId);
+            return;
+        }
+        dataScopeHelper.applyReferralScope(wrapper);
     }
 
     /** 发起/重新发起转出时标记转出待确认 */

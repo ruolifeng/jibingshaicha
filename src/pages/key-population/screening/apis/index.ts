@@ -1,3 +1,4 @@
+import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
 import { request } from "@/http/axios"
 
 export interface ScreeningKeyPopulationImportPreview {
@@ -6,16 +7,7 @@ export interface ScreeningKeyPopulationImportPreview {
   duplicates: Array<{ name: string, idNumber: string }>
 }
 
-export interface ScreeningKeyPopulationImportResult {
-  successCount: number
-  insertCount?: number
-  updateCount?: number
-  skippedCount?: number
-  duplicateCount?: number
-  invalidIdentityCount?: number
-  requireIdentityConfirm?: boolean
-  errors: string[]
-}
+export interface ScreeningKeyPopulationImportResult extends ImportResultData {}
 
 /** 预览重点人群筛查 Excel 导入（检测与系统重复人员） */
 export function previewScreeningKeyPopulationUploadApi(file: File) {
@@ -31,26 +23,58 @@ export function previewScreeningKeyPopulationUploadApi(file: File) {
 }
 
 /** 上传重点人群筛查 Excel */
-export function uploadScreeningKeyPopulationApi(file: File, overwrite = true, confirmSkipInvalid = false) {
+export function uploadScreeningKeyPopulationApi(file: File, overwrite = true, options: ImportConfirmOptions = {}) {
+  const confirmSkipInvalid = options.confirmSkipInvalid ?? false
+  const confirmSkipDuplicateInFile = options.confirmSkipDuplicateInFile ?? false
   const formData = new FormData()
   formData.append("file", file)
   formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
+  formData.append("confirmSkipDuplicateInFile", String(confirmSkipDuplicateInFile))
   return request<ApiResponseData<ScreeningKeyPopulationImportResult>>({
     url: "screening/key-population/upload",
     method: "post",
     data: formData,
-    params: { overwrite, confirmSkipInvalid },
+    params: { overwrite, confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })
 }
 
-/** 导出重点人群筛查数据（可按勾选ID导出） */
-export function exportScreeningKeyPopulationApi(ids?: number[]) {
+/** 重点人群/疫情筛查列表与导出共用查询参数 */
+export interface ScreeningKeyPopulationQueryParams {
+  name?: string
+  idNumber?: string
+  phone?: string
+  district?: string
+  townshipCommunity?: string
+  crowdCategory?: string
+  screenMethod?: string
+  isLatent?: number
+  diagnosisFirst?: string
+  entryUnit?: string
+  creatorUsername?: string
+  hasChestXray?: string
+  chestXrayResult?: string
+  columnFilters?: string
+  dateFrom?: string
+  dateTo?: string
+  createTimeFrom?: string
+  createTimeTo?: string
+  sortField?: string
+  sortOrder?: string
+  sourceType?: string
+}
+
+/** 导出重点人群筛查数据（可按勾选 ID 或当前筛选条件导出） */
+export function exportScreeningKeyPopulationApi(params?: ScreeningKeyPopulationQueryParams & { ids?: number[] }) {
+  const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/key-population/export",
     method: "get",
-    params: ids && ids.length > 0 ? { ids: ids.join(",") } : undefined,
+    params: {
+      ...rest,
+      ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob"
   })
 }
@@ -102,25 +126,7 @@ export function getScreeningKeyPopulationDetailApi(id: number) {
 export function getScreeningKeyPopulationListApi(params: {
   page: number
   size: number
-  name?: string
-  idNumber?: string
-  phone?: string
-  district?: string
-  townshipCommunity?: string
-  crowdCategory?: string // 支持逗号分隔多选，如「老年人,糖尿病」
-  screenMethod?: string
-  isLatent?: number
-  diagnosisFirst?: string
-  entryUnit?: string
-  creatorUsername?: string
-  hasChestXray?: string
-  chestXrayResult?: string
-  columnFilters?: string
-  dateFrom?: string
-  dateTo?: string
-  createTimeFrom?: string
-  createTimeTo?: string
-}) {
+} & ScreeningKeyPopulationQueryParams) {
   return request<ApiResponseData<any>>({
     url: "screening/key-population/list",
     method: "get",

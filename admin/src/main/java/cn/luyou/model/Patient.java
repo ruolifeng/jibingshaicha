@@ -77,6 +77,14 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private Boolean firstVisitEditable;
 
+    /** 首次随访痰培养（非数据库字段） */
+    @TableField(exist = false)
+    private String firstVisitSputumCulture;
+
+    /** 痰培养补充状态（非数据库字段）：0未补充 1已补充 null不适用 */
+    @TableField(exist = false)
+    private Integer sputumCultureSupplementStatus;
+
     /** 胸片检查日期（非数据库字段，从筛查表关联填充） */
     @TableField(exist = false)
     private LocalDate chestXrayDate;

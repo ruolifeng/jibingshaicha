@@ -13,6 +13,7 @@ const ALERT_TYPE_PRIORITY: string[] = [
   "referral_tracking_receive",
   "supervision_timeout",
   "visit_timeout",
+  "sputum_culture_pending",
   "review_reminder"
 ]
 
@@ -23,6 +24,7 @@ const ALERT_TYPE_TITLE: Record<string, string> = {
   referral_tracking_receive: "待确认推介",
   supervision_timeout: "督导表超时",
   visit_timeout: "随访超时",
+  sputum_culture_pending: "痰培养未补充",
   review_reminder: "复查提醒"
 }
 

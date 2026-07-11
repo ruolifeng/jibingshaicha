@@ -1,3 +1,4 @@
+import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
 import { request } from "@/http/axios"
 
 /** 下载密接个案表导入模板（72 列官方表头） */
@@ -11,15 +12,18 @@ export function downloadCloseContactCaseTemplateApi() {
 }
 
 /** 上传密接个案表 Excel（72列官方模板） */
-export function uploadCloseContactCaseApi(file: File, confirmSkipInvalid = false) {
+export function uploadCloseContactCaseApi(file: File, options: ImportConfirmOptions = {}) {
+  const confirmSkipInvalid = options.confirmSkipInvalid ?? false
+  const confirmSkipDuplicateInFile = options.confirmSkipDuplicateInFile ?? false
   const formData = new FormData()
   formData.append("file", file)
   formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
-  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
+  formData.append("confirmSkipDuplicateInFile", String(confirmSkipDuplicateInFile))
+  return request<ApiResponseData<ImportResultData>>({
     url: "close-contact/case/upload",
     method: "post",
     data: formData,
-    params: { confirmSkipInvalid },
+    params: { confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

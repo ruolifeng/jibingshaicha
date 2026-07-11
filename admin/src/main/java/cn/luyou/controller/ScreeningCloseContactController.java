@@ -39,8 +39,9 @@ public class ScreeningCloseContactController {
     @OperationLog(type = "import", module = "screening", action = "上传密接人群筛查Excel")
     public ResultResponse<ImportResult> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
-        return ResultRes.success(screeningCloseContactService.uploadAndParse(file, confirmSkipInvalid));
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid,
+            @RequestParam(value = "confirmSkipDuplicateInFile", defaultValue = "false") boolean confirmSkipDuplicateInFile) {
+        return ResultRes.success(screeningCloseContactService.uploadAndParse(file, confirmSkipInvalid, confirmSkipDuplicateInFile));
     }
 
     @Operation(summary = "分页查询密接人群筛查数据")
