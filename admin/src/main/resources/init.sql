@@ -603,6 +603,8 @@ CREATE TABLE IF NOT EXISTS `first_visit` (
     `visit_method`          VARCHAR(16)  DEFAULT NULL COMMENT '随访方式：门诊/家庭',
     `patient_type`          VARCHAR(16)  DEFAULT NULL COMMENT '患者类型：初治/复治',
     `sputum_status`         VARCHAR(16)  DEFAULT NULL COMMENT '痰菌情况：阳性/阴性/未查痰',
+    `sputum_culture`        VARCHAR(32)  DEFAULT NULL COMMENT '痰培养情况',
+    `sputum_culture_supplement_status` TINYINT DEFAULT NULL COMMENT '痰培养补充状态：0未补充 1已补充',
     `drug_resistance`       VARCHAR(16)  DEFAULT NULL COMMENT '耐药情况：耐药/非耐药/未检测',
     `symptoms`              VARCHAR(256) DEFAULT NULL COMMENT '症状及体征（多选，逗号分隔编号）',
     `other_symptoms`        VARCHAR(256) DEFAULT NULL COMMENT '其他症状',
@@ -3314,3 +3316,30 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- V87 appended
+
+-- ==================== V88：首次入户随访痰培养及补充状态 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'first_visit' AND COLUMN_NAME = 'sputum_culture'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `first_visit` ADD COLUMN `sputum_culture` VARCHAR(32) DEFAULT NULL COMMENT ''痰培养情况'' AFTER `sputum_status`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'first_visit' AND COLUMN_NAME = 'sputum_culture_supplement_status'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `first_visit` ADD COLUMN `sputum_culture_supplement_status` TINYINT DEFAULT NULL COMMENT ''痰培养补充状态：0未补充 1已补充'' AFTER `sputum_culture`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- V88 appended

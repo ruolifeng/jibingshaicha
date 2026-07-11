@@ -275,7 +275,8 @@ export function resolveManualEpidemicFormFields(row: Record<string, any> | null 
     patientRemark: fields["备注"] || "",
     firstTreatmentPlan: fields["首次治疗方案"] || "",
     drugSensitivityR: fields["药敏结果：利福平（R）"] || "",
-    drugSensitivityH: fields["药敏结果：异烟肼（H）"] || ""
+    drugSensitivityH: fields["药敏结果：异烟肼（H）"] || "",
+    cultureResult: fields["培养结果"] || fields["0月序培养结果"] || ""
   }
 }
 

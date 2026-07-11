@@ -4,6 +4,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
@@ -11,6 +12,7 @@ import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, 
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const { defaultSort, onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 
 const genderFilterOptions = [
   { text: "男", value: "男" },
@@ -48,26 +50,38 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, entryTimeRange, entryUnit, creatorUsername, crowdCategory, hasChestXray, chestXrayResult, ...rest } = searchForm
-    const columnFiltersParam = toQueryParam()
     const { data } = await getScreeningKeyPopulationListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      ...rest,
-      ...extractDateRangeParams(dateRange),
-      ...extractCreateTimeRangeParams(entryTimeRange),
-      ...(entryUnit ? { entryUnit } : {}),
-      ...(creatorUsername ? { creatorUsername } : {}),
-      ...(hasChestXray ? { hasChestXray } : {}),
-      ...(chestXrayResult ? { chestXrayResult } : {}),
-      ...(crowdCategory.length > 0 ? { crowdCategory: crowdCategory.join(",") } : {}),
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+      ...buildListQueryParams()
     })
     tableData.value = data.records
     total.value = data.total
   } finally {
     loading.value = false
   }
+}
+
+function buildListQueryParams() {
+  const { dateRange, entryTimeRange, entryUnit, creatorUsername, crowdCategory, hasChestXray, chestXrayResult, ...rest } = searchForm
+  const columnFiltersParam = toQueryParam()
+  return {
+    ...rest,
+    ...extractDateRangeParams(dateRange),
+    ...extractCreateTimeRangeParams(entryTimeRange),
+    ...(entryUnit ? { entryUnit } : {}),
+    ...(creatorUsername ? { creatorUsername } : {}),
+    ...(hasChestXray ? { hasChestXray } : {}),
+    ...(chestXrayResult ? { chestXrayResult } : {}),
+    ...(crowdCategory.length > 0 ? { crowdCategory: crowdCategory.join(",") } : {}),
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...toSortQueryParam()
+  }
+}
+
+function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+  onSortChange(payload)
+  handleSearch()
 }
 
 function handleSearch() {
@@ -92,6 +106,7 @@ function handleReset() {
   searchForm.hasChestXray = ""
   searchForm.chestXrayResult = ""
   clearFilters()
+  resetSort()
   handleSearch()
 }
 
@@ -149,7 +164,7 @@ async function handleUpload(uploadFile: any) {
     }
 
     const data = await runImportWithIdentityConfirm(
-      (f, confirmSkipInvalid) => uploadScreeningKeyPopulationApi(f, overwrite, confirmSkipInvalid),
+      (f, options) => uploadScreeningKeyPopulationApi(f, overwrite, options),
       file
     )
     if (!data) return
@@ -167,15 +182,19 @@ function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
 
-/** 导出 Excel（支持导出全部或勾选项） */
+/** 导出 Excel（支持导出当前筛选结果或勾选项） */
 async function handleExport(ids?: number[]) {
+  const isSelected = !!ids?.length
+  const label = isSelected ? `选中的 ${ids!.length} 条` : "当前筛选条件下的全部"
   try {
-    await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
+    await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
       confirmButtonText: "确认导出",
       cancelButtonText: "取消",
       type: "warning"
     })
-    const res = await exportScreeningKeyPopulationApi(ids)
+    const res = await exportScreeningKeyPopulationApi(
+      isSelected ? { ids, ...buildListQueryParams() } : buildListQueryParams()
+    )
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -469,7 +488,7 @@ watch(
               新增数据
             </el-button>
             <el-button v-permission="'keyPopulation:screening:export'" @click="() => handleExport()">
-              导出全部
+              导出筛选结果
             </el-button>
             <el-button v-permission="'keyPopulation:screening:export'" type="warning" :disabled="selectedRows.length === 0" @click="handleExportSelected">
               导出勾选
@@ -493,9 +512,21 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/结果判定/是否转诊列（已移至潜伏感染追踪阶段），人群分类改为各独立列标签，新增预防性治疗完成情况 -->
-      <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
+      <el-table
+        v-loading="loading"
+        class="screening-data-table"
+        :data="tableData"
+        border
+        stripe
+        max-height="600"
+        row-key="id"
+        :row-class-name="getRowClass"
+        :default-sort="defaultSort"
+        @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
+      >
         <el-table-column type="selection" fixed />
-        <el-table-column prop="creatorUsername" min-width="100" fixed>
+        <el-table-column prop="creatorUsername" min-width="100" fixed sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="录入用户"
@@ -504,7 +535,7 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="name" min-width="90" fixed>
+        <el-table-column prop="name" min-width="90" fixed sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="姓名"
@@ -515,7 +546,7 @@ watch(
         </el-table-column>
         <el-table-column prop="year" label="年份" />
         <el-table-column prop="city" label="市（州）" />
-        <el-table-column prop="district" min-width="90">
+        <el-table-column prop="district" min-width="90" sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="区县"
@@ -536,7 +567,7 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="birthDate" label="出生日期" />
-        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="age" label="年龄" sortable="custom" />
         <el-table-column prop="idType" label="证件类型" />
         <el-table-column prop="idNumber" min-width="160">
           <template #header>
@@ -594,7 +625,7 @@ watch(
         </el-table-column>
         <el-table-column label="重点人群感染筛查情况">
           <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
-          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" />
+          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" sortable="custom" />
           <el-table-column prop="screenMethod" min-width="110">
             <template #header>
               <TableHeaderFilter

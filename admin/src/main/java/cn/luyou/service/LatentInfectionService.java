@@ -113,10 +113,10 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     Long createManual(Map<String, Object> body);
 
     /** 批量导入潜伏感染记录（字段与手动新增一致） */
-    ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid);
+    ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile);
 
-    default ImportResult importManualBatch(MultipartFile file) {
-        return importManualBatch(file, false);
+    default ImportResult importManualBatch(MultipartFile file, boolean confirmSkipInvalid) {
+        return importManualBatch(file, confirmSkipInvalid, false);
     }
 
     /** 级联删除潜伏感染记录及其关联数据 */

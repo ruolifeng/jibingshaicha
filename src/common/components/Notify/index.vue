@@ -25,7 +25,9 @@ const TYPE_CONFIG: Record<string, { label: string, status: NotifyItem["status"] 
   referral_tracking_receive: { label: "待确认推介", status: "warning" },
   referral_tracking_confirmed: { label: "推介已接收", status: "success" },
   referral_tracking_rejected: { label: "推介已被拒绝", status: "danger" },
-  referral_tracking_joint: { label: "共同追踪已开启", status: "success" }
+  referral_tracking_joint: { label: "共同追踪已开启", status: "success" },
+  sputum_culture_pending: { label: "痰培养未补充", status: "warning" },
+  sputum_culture_supplemented: { label: "痰培养已补充", status: "success" }
 }
 
 /** 面板宽度 */

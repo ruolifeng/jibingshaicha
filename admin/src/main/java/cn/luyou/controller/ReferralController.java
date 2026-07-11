@@ -82,7 +82,7 @@ public class ReferralController {
         return ResultRes.success(referralService.listByBiz(bizId, bizType));
     }
 
-    @Operation(summary = "当前用户已发送的分级诊疗分页列表")
+    @Operation(summary = "已发送的分级诊疗分页列表（五级仅本人发送，上级按辖区）")
     @GetMapping("/sent")
     public ResultResponse<IPage<SentReferralVO>> sent(
             @RequestParam(defaultValue = "1") int pageNum,

@@ -79,7 +79,7 @@ public class NoticeController {
         return ResultRes.success(noticeService.listByBizWithUsers(bizId, noticeType));
     }
 
-    @Operation(summary = "查询当前用户已发送的通知单列表（含发送者/接收者信息）")
+    @Operation(summary = "查询已发送的通知单列表（五级仅本人发送，上级按辖区；含发送者/接收者信息）")
     @GetMapping("/sent")
     public ResultResponse<IPage<SentNoticeVO>> sent(
             @RequestParam(defaultValue = "1") int pageNum,

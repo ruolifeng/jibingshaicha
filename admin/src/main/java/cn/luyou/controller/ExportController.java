@@ -745,7 +745,7 @@ public class ExportController {
     /** 首次入户随访导出列（不含附件） */
     private static final List<String> FIRST_VISIT_EXPORT_HEADERS = List.of(
             "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果",
-            "编号", "随访时间", "随访方式", "患者类型", "痰菌情况", "耐药情况", "症状及体征", "其他症状",
+            "编号", "随访时间", "随访方式", "患者类型", "痰菌情况", "痰培养", "痰培养补充", "耐药情况", "症状及体征", "其他症状",
             "化疗方案", "用法", "督导人员", "药品剂型", "单独居室", "通风情况", "吸烟(支/天)", "饮酒(两/天)",
             "取药地点", "取药时间", "健康教育及培训", "下次随访时间", "评估医生签名", "备注", "状态", "填写时间"
     );
@@ -836,6 +836,8 @@ public class ExportController {
                 row.put("随访方式", formatFirstVisitMethod(v.getVisitMethod(), v.getVisitMethodOther()));
                 row.put("患者类型", nullToEmpty(v.getPatientType()));
                 row.put("痰菌情况", nullToEmpty(v.getSputumStatus()));
+                row.put("痰培养", nullToEmpty(v.getSputumCulture()));
+                row.put("痰培养补充", formatSputumCultureSupplementStatus(v.getSputumCultureSupplementStatus()));
                 row.put("耐药情况", nullToEmpty(v.getDrugResistance()));
                 row.put("症状及体征", formatSymptomCodes(v.getSymptoms(), FIRST_VISIT_SYMPTOM_LABEL));
                 row.put("其他症状", nullToEmpty(v.getOtherSymptoms()));
@@ -1008,6 +1010,19 @@ public class ExportController {
         return dateTime != null
                 ? dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                 : "";
+    }
+
+    private String formatSputumCultureSupplementStatus(Integer status) {
+        if (status == null) {
+            return "";
+        }
+        if (status == 0) {
+            return "未补充";
+        }
+        if (status == 1) {
+            return "补充";
+        }
+        return "";
     }
 
     private String formatFirstVisitMethod(String method, String other) {

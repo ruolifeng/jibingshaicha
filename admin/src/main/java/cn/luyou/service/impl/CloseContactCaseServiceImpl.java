@@ -14,6 +14,7 @@ import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
@@ -69,9 +70,14 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, confirmSkipInvalid, false);
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         String batchId = IdUtil.fastSimpleUUID();
-        String creatorUsername = resolveCurrentUsername();
-        List<CloseContactCase> dataList = new ArrayList<>();
+        final String creatorUsername = resolveCurrentUsername();
+        final List<CloseContactCase> parsedList = new ArrayList<>();
         ImportResult result = new ImportResult();
         byte[] fileBytes;
         try {
@@ -115,12 +121,12 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                     data.setImportRowNo(row);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
                     data.setCreatorUsername(creatorUsername);
-                    dataList.add(data);
+                    parsedList.add(data);
                 }
 
                 @Override
                 public void doAfterAllAnalysed(AnalysisContext context) {
-                    log.info("密接个案表数据解析完成，共 {} 条", dataList.size());
+                    log.info("密接个案表数据解析完成，共 {} 条", parsedList.size());
                 }
             }).sheet().headRowNumber(headRowNumber).doRead();
         } catch (Exception e) {
@@ -130,6 +136,18 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
 
         if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
+        }
+
+        List<CloseContactCase> dataList = ImportDuplicateIdSupport.handleDuplicateInFile(
+                result,
+                parsedList,
+                d -> ImportDuplicateIdSupport.normalizeIdNumber(d.getIdNumber()),
+                CloseContactCase::getImportRowNo,
+                CloseContactCase::getIdNumber,
+                CloseContactCase::getName,
+                confirmSkipDuplicateInFile);
+        if (dataList == null) {
             return result;
         }
 

@@ -456,6 +456,12 @@ export const FOLLOW_UP_METHOD_OPTIONS = ["门诊", "家庭", "电话", VISIT_MET
 /** 痰菌情况 */
 export const SPUTUM_STATUS_OPTIONS = ["阳性", "阴性", "未查痰"]
 
+/** 痰培养选项（与通知单病原学选项一致） */
+export const SPUTUM_CULTURE_OPTIONS = PATHOGEN_RESULT_OPTIONS
+
+/** 痰培养「未做」标记值 */
+export const SPUTUM_CULTURE_NOT_DONE = "未做"
+
 /** 耐药情况 */
 export const DRUG_RESISTANCE_OPTIONS = ["耐药", "非耐药", "未检测"]
 

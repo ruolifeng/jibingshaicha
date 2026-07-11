@@ -96,8 +96,14 @@ function handlePrint() {
             <td>{{ visitData?.patientType }}</td>
             <th>痰菌情况</th>
             <td>{{ visitData?.sputumStatus }}</td>
+            <th>痰培养</th>
+            <td>{{ visitData?.sputumCulture || "—" }}</td>
+          </tr>
+          <tr>
             <th>耐药情况</th>
-            <td>{{ visitData?.drugResistance }}</td>
+            <td colspan="5">
+              {{ visitData?.drugResistance }}
+            </td>
           </tr>
           <tr>
             <th>症状及体征</th>

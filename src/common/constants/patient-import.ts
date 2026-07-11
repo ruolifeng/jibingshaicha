@@ -210,7 +210,8 @@ export const PRIORITY_DETAIL_FIELDS = [
   "备注",
   "首次治疗方案",
   "药敏结果：利福平（R）",
-  "药敏结果：异烟肼（H）"
+  "药敏结果：异烟肼（H）",
+  "培养结果"
 ] as const
 
 /** 在管患者手动批量导入表头（与新增表单字段一致；Excel 表头仍用「诊断结果」） */
@@ -237,5 +238,6 @@ export const PATIENT_MANUAL_IMPORT_FIELDS = [
   "备注",
   "首次治疗方案",
   "药敏结果：利福平（R）",
-  "药敏结果：异烟肼（H）"
+  "药敏结果：异烟肼（H）",
+  "培养结果"
 ] as const

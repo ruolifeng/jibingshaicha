@@ -10,7 +10,11 @@ import java.util.List;
 
 public interface CloseContactCaseService extends IService<CloseContactCase> {
 
-    ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid);
+    ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile);
+
+    default ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, confirmSkipInvalid, false);
+    }
 
     default ImportResult uploadAndParse(MultipartFile file) {
         return uploadAndParse(file, false);

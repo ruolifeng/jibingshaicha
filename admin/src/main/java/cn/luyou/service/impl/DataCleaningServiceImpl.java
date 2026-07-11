@@ -182,7 +182,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
 
     private int resolveHeadRows(String type, byte[] fileBytes) {
         if (TYPE_KEY.equals(type)) {
-            return 4;
+            return 3;
         }
         if (TYPE_CLOSE.equals(type)) {
             try {

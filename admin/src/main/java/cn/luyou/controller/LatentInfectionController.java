@@ -85,8 +85,9 @@ public class LatentInfectionController {
     @OperationLog(type = "import", module = "latent", action = "批量导入潜伏感染者")
     public ResultResponse<ImportResult> importManual(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
-        return ResultRes.success(latentInfectionService.importManualBatch(file, confirmSkipInvalid));
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid,
+            @RequestParam(value = "confirmSkipDuplicateInFile", defaultValue = "false") boolean confirmSkipDuplicateInFile) {
+        return ResultRes.success(latentInfectionService.importManualBatch(file, confirmSkipInvalid, confirmSkipDuplicateInFile));
     }
 
     @Operation(summary = "批量删除潜伏感染记录（级联删除）")

@@ -58,7 +58,7 @@ export interface SentNoticeVO {
   confirmedTime: string | null
 }
 
-/** 查询当前用户已发送的通知单列表 */
+/** 查询已发送的通知单列表（五级仅本人发送，上级按辖区） */
 export function getSentNoticeListApi(params: { pageNum: number, size: number }) {
   return request<ApiResponseData<{ records: SentNoticeVO[], total: number }>>({
     url: "notice/sent",
@@ -149,7 +149,7 @@ export function rejectReferralFromMessageApi(referralId: number, rejectReason?: 
   })
 }
 
-/** 查询当前用户已发送的转诊列表 */
+/** 查询已发送的转诊列表（五级仅本人发送，上级按辖区） */
 export function getSentReferralListApi(params: { pageNum: number, size: number }) {
   return request<ApiResponseData<{ records: SentReferralVO[], total: number }>>({
     url: "referral/sent",

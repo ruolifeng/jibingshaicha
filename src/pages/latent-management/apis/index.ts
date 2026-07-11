@@ -1,3 +1,4 @@
+import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
 /**
  * 聚合潜伏感染者管理 — 公共接口
  * 复用现有 latent/* 接口；populationType 为空时返回全部来源（含在管总览手动/导入的密接，排除密接筛查同步数据）。
@@ -49,15 +50,18 @@ export function exportAllLatentApi(params: Record<string, any>) {
 }
 
 /** 批量导入潜伏感染者（字段与新增一致） */
-export function importLatentApi(file: File, confirmSkipInvalid = false) {
+export function importLatentApi(file: File, options: ImportConfirmOptions = {}) {
+  const confirmSkipInvalid = options.confirmSkipInvalid ?? false
+  const confirmSkipDuplicateInFile = options.confirmSkipDuplicateInFile ?? false
   const formData = new FormData()
   formData.append("file", file)
   formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
-  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
+  formData.append("confirmSkipDuplicateInFile", String(confirmSkipDuplicateInFile))
+  return request<ApiResponseData<ImportResultData>>({
     url: "latent/import",
     method: "post",
     data: formData,
-    params: { confirmSkipInvalid },
+    params: { confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })

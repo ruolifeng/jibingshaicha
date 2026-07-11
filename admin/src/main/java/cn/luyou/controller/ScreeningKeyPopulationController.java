@@ -6,11 +6,8 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
-import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationScreeningExcelExportSupport;
-import cn.luyou.utils.ScreeningScopeHelper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,7 +27,6 @@ import java.util.List;
 public class ScreeningKeyPopulationController {
 
     private final ScreeningKeyPopulationService screeningKeyPopulationService;
-    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "上传重点人群/疫情筛查Excel（sourceType=keyPopulation|regular，默认 keyPopulation）")
     @PostMapping("/upload")
@@ -39,8 +35,10 @@ public class ScreeningKeyPopulationController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
             @RequestParam(value = "overwrite", defaultValue = "true") boolean overwrite,
-            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
-        ImportResult result = screeningKeyPopulationService.uploadAndParse(file, sourceType, overwrite, confirmSkipInvalid);
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid,
+            @RequestParam(value = "confirmSkipDuplicateInFile", defaultValue = "false") boolean confirmSkipDuplicateInFile) {
+        ImportResult result = screeningKeyPopulationService.uploadAndParse(
+                file, sourceType, overwrite, confirmSkipInvalid, confirmSkipDuplicateInFile);
         return ResultRes.success(result);
     }
 
@@ -75,11 +73,13 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String hasChestXray,
             @RequestParam(required = false) String chestXrayResult,
-            @RequestParam(required = false) String columnFilters) {
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
                 page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
-                creatorUsername, hasChestXray, chestXrayResult, columnFilters));
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, sortField, sortOrder));
     }
 
     @Operation(summary = "新增重点人群筛查记录")
@@ -121,33 +121,51 @@ public class ScreeningKeyPopulationController {
         return ResultRes.success(screeningKeyPopulationService.getById(id));
     }
 
-    @Operation(summary = "导出重点人群筛查数据")
+    @Operation(summary = "导出重点人群筛查数据（支持当前筛选条件或勾选导出）")
     @GetMapping("/export")
     @OperationLog(type = "export", module = "screening", action = "导出重点人群筛查数据")
     public void export(
             HttpServletResponse response,
             @RequestParam(required = false) String ids,
-            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) throws Exception {
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String townshipCommunity,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String screenMethod,
+            @RequestParam(required = false) Integer isLatent,
+            @RequestParam(required = false) String diagnosisFirst,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String entryUnit,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String hasChestXray,
+            @RequestParam(required = false) String chestXrayResult,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         String fileName = "regular".equals(sourceType) ? "疫情筛查数据.xlsx" : "重点人群筛查数据.xlsx";
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode(fileName, StandardCharsets.UTF_8));
-        var query = Wrappers.<ScreeningKeyPopulation>lambdaQuery();
-        query.eq(ScreeningKeyPopulation::getSourceType, sourceType);
+
+        List<Long> idList = null;
         if (ids != null && !ids.isBlank()) {
-            List<Long> idList = Arrays.stream(ids.split(","))
+            idList = Arrays.stream(ids.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty() && s.matches("\\d+"))
                     .map(Long::valueOf)
                     .toList();
-            if (!idList.isEmpty()) {
-                query.in(ScreeningKeyPopulation::getId, idList);
-            }
         }
-        screeningScopeHelper.applyDepartmentScope(
-                query, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        ImportRowOrderSupport.applyWithBatch(query);
-        List<ScreeningKeyPopulation> list = screeningKeyPopulationService.list(query);
+
+        List<ScreeningKeyPopulation> list = screeningKeyPopulationService.listForExport(
+                name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, sortField, sortOrder, idList);
         KeyPopulationScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }
 }

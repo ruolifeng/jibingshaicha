@@ -4,10 +4,10 @@ import PatientFirstVisitFormDialog from "@@/components/PatientFirstVisitFormDial
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { isPatientTransferLocked, getPatientTransferStatusLabel } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
+import { useUserStore } from "@/pinia/stores/user"
 import { exportPatientFirstVisitsApi, getFirstVisitDetailApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
-import { useUserStore } from "@/pinia/stores/user"
 
 const userStore = useUserStore()
 const canEditFirstVisitPerm = computed(() => userStore.hasPermission("patientManagement:firstVisit:edit"))
@@ -184,6 +184,22 @@ async function openPrintFirstVisit(row: any) {
             <el-tag v-else type="warning" size="small">
               待填写
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="firstVisitSputumCulture" label="痰培养">
+          <template #default="{ row }">
+            {{ row.firstVisitSputumCulture || "—" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="痰培养补充">
+          <template #default="{ row }">
+            <el-tag v-if="row.sputumCultureSupplementStatus === 0" type="warning" size="small">
+              未补充
+            </el-tag>
+            <el-tag v-else-if="row.sputumCultureSupplementStatus === 1" type="success" size="small">
+              补充
+            </el-tag>
+            <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">

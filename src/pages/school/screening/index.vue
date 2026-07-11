@@ -4,6 +4,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
@@ -11,6 +12,7 @@ import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreenin
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const { defaultSort, onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 
 const genderFilterOptions = [
   { text: "男", value: "男" },
@@ -41,23 +43,35 @@ const searchForm = reactive({
 async function fetchData() {
   loading.value = true
   try {
-    const { entryUnit, creatorUsername, year, entryTimeRange, ...rest } = searchForm
-    const columnFiltersParam = toQueryParam()
     const { data } = await getScreeningSchoolListApi({
       page: paginationData.currentPage,
       size: Math.min(paginationData.pageSize, MAX_PAGE_SIZE),
-      ...rest,
-      ...extractCreateTimeRangeParams(entryTimeRange),
-      ...(year ? { year } : {}),
-      ...(entryUnit ? { entryUnit } : {}),
-      ...(creatorUsername ? { creatorUsername } : {}),
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+      ...buildListQueryParams()
     })
     tableData.value = data.records
     total.value = data.total
   } finally {
     loading.value = false
   }
+}
+
+function buildListQueryParams() {
+  const { entryUnit, creatorUsername, year, entryTimeRange, ...rest } = searchForm
+  const columnFiltersParam = toQueryParam()
+  return {
+    ...rest,
+    ...extractCreateTimeRangeParams(entryTimeRange),
+    ...(year ? { year } : {}),
+    ...(entryUnit ? { entryUnit } : {}),
+    ...(creatorUsername ? { creatorUsername } : {}),
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...toSortQueryParam()
+  }
+}
+
+function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+  onSortChange(payload)
+  handleSearch()
 }
 
 function handleSearch() {
@@ -78,6 +92,7 @@ function handleReset() {
   searchForm.diagnosisFirst = ""
   searchForm.entryTimeRange = []
   clearFilters()
+  resetSort()
   handleSearch()
 }
 
@@ -119,16 +134,20 @@ function isRequestTimeout(err: any) {
   return err?.code === "ECONNABORTED" || String(err?.message ?? "").includes("超时")
 }
 
-/** 导出 Excel（支持导出全部或勾选项） */
+/** 导出 Excel（支持导出当前筛选结果或勾选项） */
 async function handleExport(ids?: number[]) {
+  const isSelected = !!ids?.length
+  const label = isSelected ? `选中的 ${ids!.length} 条` : "当前筛选条件下的全部"
   try {
-    await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
+    await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
       confirmButtonText: "确认导出",
       cancelButtonText: "取消",
       type: "warning"
     })
     exporting.value = true
-    const res = await exportScreeningSchoolApi(ids)
+    const res = await exportScreeningSchoolApi(
+      isSelected ? { ids, ...buildListQueryParams() } : buildListQueryParams()
+    )
     const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -371,7 +390,7 @@ watch(
               新增数据
             </el-button>
             <el-button :loading="exporting" @click="() => handleExport()">
-              导出全部
+              导出筛选结果
             </el-button>
             <el-button type="warning" :loading="exporting" :disabled="selectedRows.length === 0" @click="handleExportSelected">
               导出勾选
@@ -395,9 +414,21 @@ watch(
       </template>
 
       <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
-      <el-table v-loading="loading" class="screening-data-table" :data="tableData" border stripe max-height="600" row-key="id" :row-class-name="getRowClass" @selection-change="handleSelectionChange">
+      <el-table
+        v-loading="loading"
+        class="screening-data-table"
+        :data="tableData"
+        border
+        stripe
+        max-height="600"
+        row-key="id"
+        :row-class-name="getRowClass"
+        :default-sort="defaultSort"
+        @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
+      >
         <el-table-column type="selection" fixed />
-        <el-table-column prop="creatorUsername" min-width="100" fixed>
+        <el-table-column prop="creatorUsername" min-width="100" fixed sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="录入用户"
@@ -406,7 +437,7 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="name" min-width="90" fixed>
+        <el-table-column prop="name" min-width="90" fixed sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="姓名"
@@ -426,7 +457,7 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="age" label="年龄" />
+        <el-table-column prop="age" label="年龄" sortable="custom" />
         <el-table-column prop="idNumber" min-width="160">
           <template #header>
             <TableHeaderFilter
@@ -445,7 +476,7 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="district" min-width="90">
+        <el-table-column prop="district" min-width="90" sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="区县"
@@ -454,7 +485,7 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="schoolName" min-width="120">
+        <el-table-column prop="schoolName" min-width="120" sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="学校名称"
@@ -479,7 +510,7 @@ watch(
         <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
         <el-table-column label="学校人群感染筛查情况">
           <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
-          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" />
+          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" sortable="custom" />
           <el-table-column prop="screenMethod" label="方法" min-width="80" />
           <el-table-column label="结果（PPD：mmXmm；EC及IGRA：阳性/阴性）" min-width="140" show-overflow-tooltip>
             <template #default="{ row }">

@@ -32,9 +32,12 @@ import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -96,6 +99,22 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             "tbHistory", "closeContactHistory", "suspiciousSymptoms", "hasInfectionScreen", "screenResult"
     );
 
+    private static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
+            Map.entry("importRowNo", "import_row_no"),
+            Map.entry("createTime", "create_time"),
+            Map.entry("name", "name"),
+            Map.entry("district", "district"),
+            Map.entry("screenDate", "screen_date"),
+            Map.entry("age", "age"),
+            Map.entry("idNumber", "id_number"),
+            Map.entry("uploadBatch", "upload_batch"),
+            Map.entry("year", "year"),
+            Map.entry("city", "city"),
+            Map.entry("phone", "phone"),
+            Map.entry("schoolName", "school_name"),
+            Map.entry("creatorUsername", "creator_username")
+    );
+
     @Override
     public ImportResult uploadAndParse(MultipartFile file) {
         return uploadAndParse(file, false);
@@ -103,6 +122,11 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     @Override
     public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, confirmSkipInvalid, false);
+    }
+
+    @Override
+    public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         String batchId = UploadBatchSupport.newBatchId("学校筛查");
         List<ScreeningSchool> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
@@ -157,6 +181,18 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         }
 
         if (ImportIdentitySupport.shouldBlockImport(result, confirmSkipInvalid)) {
+            return result;
+        }
+
+        dataList = ImportDuplicateIdSupport.handleDuplicateInFile(
+                result,
+                dataList,
+                d -> ImportDuplicateIdSupport.normalizeIdNumber(d.getIdNumber()),
+                ScreeningSchool::getImportRowNo,
+                ScreeningSchool::getIdNumber,
+                ScreeningSchool::getName,
+                confirmSkipDuplicateInFile);
+        if (dataList == null) {
             return result;
         }
 
@@ -334,7 +370,40 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
                                              String phone, String year, String entryUnit,
                                              String createTimeFrom, String createTimeTo,
-                                             String creatorUsername, String columnFilters) {
+                                             String creatorUsername, String columnFilters,
+                                             String sortField, String sortOrder) {
+        LambdaQueryWrapper<ScreeningSchool> wrapper = buildListWrapper(
+                name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters);
+        applyListOrder(wrapper, sortField, sortOrder);
+        return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
+    public List<ScreeningSchool> listForExport(String name, String idNumber, String schoolName, String district,
+                                                Integer isLatent, String diagnosisFirst, String phone, String year,
+                                                String entryUnit, String createTimeFrom, String createTimeTo,
+                                                String creatorUsername, String columnFilters,
+                                                String sortField, String sortOrder, List<Long> ids) {
+        LambdaQueryWrapper<ScreeningSchool> wrapper;
+        if (ids != null && !ids.isEmpty()) {
+            wrapper = new LambdaQueryWrapper<>();
+            wrapper.in(ScreeningSchool::getId, ids);
+            screeningScopeHelper.applyDepartmentScope(
+                    wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        } else {
+            wrapper = buildListWrapper(
+                    name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
+                    createTimeFrom, createTimeTo, creatorUsername, columnFilters);
+        }
+        applyListOrder(wrapper, sortField, sortOrder);
+        return list(wrapper);
+    }
+
+    private LambdaQueryWrapper<ScreeningSchool> buildListWrapper(
+            String name, String idNumber, String schoolName, String district, Integer isLatent,
+            String diagnosisFirst, String phone, String year, String entryUnit,
+            String createTimeFrom, String createTimeTo, String creatorUsername, String columnFilters) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
@@ -354,8 +423,11 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         applyColumnFilters(wrapper, columnFilters);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
-        ImportRowOrderSupport.applyWithBatch(wrapper);
-        return page(new Page<>(page, size), wrapper);
+        return wrapper;
+    }
+
+    private void applyListOrder(LambdaQueryWrapper<ScreeningSchool> wrapper, String sortField, String sortOrder) {
+        ListSortSupport.apply(wrapper, sortField, sortOrder, SORT_COLUMNS, ImportRowOrderSupport.WITH_BATCH);
     }
 
     private void applyColumnFilters(LambdaQueryWrapper<ScreeningSchool> wrapper, String columnFilters) {
@@ -490,42 +562,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     /** 增量导入：按证件号匹配时，用最新 Excel 行覆盖筛查表字段。 */
     private void mergeSchoolImportFields(ScreeningSchool existing, ScreeningSchool incoming) {
-        if (StrUtil.isNotBlank(incoming.getYear())) existing.setYear(incoming.getYear());
-        if (StrUtil.isNotBlank(incoming.getCity())) existing.setCity(incoming.getCity());
-        if (StrUtil.isNotBlank(incoming.getDistrict())) existing.setDistrict(incoming.getDistrict());
-        if (StrUtil.isNotBlank(incoming.getName())) existing.setName(incoming.getName());
-        if (StrUtil.isNotBlank(incoming.getGender())) existing.setGender(incoming.getGender());
-        if (incoming.getBirthDate() != null) existing.setBirthDate(incoming.getBirthDate());
-        if (incoming.getAge() != null) existing.setAge(incoming.getAge());
-        if (StrUtil.isNotBlank(incoming.getIdType())) existing.setIdType(incoming.getIdType());
-        if (StrUtil.isNotBlank(incoming.getEthnicity())) existing.setEthnicity(incoming.getEthnicity());
-        if (StrUtil.isNotBlank(incoming.getPhone())) existing.setPhone(incoming.getPhone());
-        if (StrUtil.isNotBlank(incoming.getHouseholdAddress())) existing.setHouseholdAddress(incoming.getHouseholdAddress());
-        if (StrUtil.isNotBlank(incoming.getCurrentAddress())) existing.setCurrentAddress(incoming.getCurrentAddress());
-        if (StrUtil.isNotBlank(incoming.getSchoolType())) existing.setSchoolType(incoming.getSchoolType());
-        if (StrUtil.isNotBlank(incoming.getSchoolName())) existing.setSchoolName(incoming.getSchoolName());
-        if (StrUtil.isNotBlank(incoming.getClassName())) existing.setClassName(incoming.getClassName());
-        if (StrUtil.isNotBlank(incoming.getTbHistory())) existing.setTbHistory(incoming.getTbHistory());
-        if (StrUtil.isNotBlank(incoming.getCloseContactHistory())) existing.setCloseContactHistory(incoming.getCloseContactHistory());
-        if (StrUtil.isNotBlank(incoming.getSuspiciousSymptoms())) existing.setSuspiciousSymptoms(incoming.getSuspiciousSymptoms());
-        if (StrUtil.isNotBlank(incoming.getHasInfectionScreen())) existing.setHasInfectionScreen(incoming.getHasInfectionScreen());
-        if (incoming.getScreenDate() != null) existing.setScreenDate(incoming.getScreenDate());
-        if (StrUtil.isNotBlank(incoming.getScreenMethod())) existing.setScreenMethod(incoming.getScreenMethod());
-        if (StrUtil.isNotBlank(incoming.getScreenResult())) existing.setScreenResult(incoming.getScreenResult());
-        if (StrUtil.isNotBlank(incoming.getInfectionResult())) existing.setInfectionResult(incoming.getInfectionResult());
-        if (StrUtil.isNotBlank(incoming.getHasChestXray())) existing.setHasChestXray(incoming.getHasChestXray());
-        if (incoming.getChestXrayDate() != null) existing.setChestXrayDate(incoming.getChestXrayDate());
-        if (StrUtil.isNotBlank(incoming.getChestXrayResult())) existing.setChestXrayResult(incoming.getChestXrayResult());
-        if (StrUtil.isNotBlank(incoming.getSputumSmearResult())) existing.setSputumSmearResult(incoming.getSputumSmearResult());
-        if (StrUtil.isNotBlank(incoming.getMolecularBiologyResult())) existing.setMolecularBiologyResult(incoming.getMolecularBiologyResult());
-        if (StrUtil.isNotBlank(incoming.getDiagnosisFirst())) {
-            existing.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(incoming.getDiagnosisFirst()));
-        }
-        if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
-        if (StrUtil.isNotBlank(incoming.getUploadBatch())) existing.setUploadBatch(incoming.getUploadBatch());
-        if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
-        // 覆盖导入只更新业务字段与行号，保留首次录入人
-        existing.setDepartmentId(incoming.getDepartmentId());
+        ScreeningImportMergeSupport.mergeSchool(existing, incoming);
     }
 
     private Map<String, Integer> buildSchoolHeaderIndex(List<Map<Integer, String>> rows) {

@@ -36,8 +36,9 @@ public class CloseContactCaseController {
     @OperationLog(type = "import", module = "screening", action = "上传密接个案表Excel")
     public ResultResponse<ImportResult> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid) {
-        return ResultRes.success(closeContactCaseService.uploadAndParse(file, confirmSkipInvalid));
+            @RequestParam(value = "confirmSkipInvalid", defaultValue = "false") boolean confirmSkipInvalid,
+            @RequestParam(value = "confirmSkipDuplicateInFile", defaultValue = "false") boolean confirmSkipDuplicateInFile) {
+        return ResultRes.success(closeContactCaseService.uploadAndParse(file, confirmSkipInvalid, confirmSkipDuplicateInFile));
     }
 
     @Operation(summary = "分页查询密接个案表")

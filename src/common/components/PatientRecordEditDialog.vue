@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
-import { idCardRule, phoneRule } from "@@/utils/validate"
+import { CROWD_CATEGORY_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
 import { resolveManualEpidemicFormFields } from "@@/utils/patient"
+import { idCardRule, phoneRule } from "@@/utils/validate"
 import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
@@ -50,7 +50,8 @@ const form = reactive({
   patientRemark: "",
   firstTreatmentPlan: "",
   drugSensitivityR: "",
-  drugSensitivityH: ""
+  drugSensitivityH: "",
+  cultureResult: ""
 })
 
 const showSpecialDiseaseFields = computed(() =>
@@ -104,7 +105,8 @@ function resetForm() {
     patientRemark: "",
     firstTreatmentPlan: "",
     drugSensitivityR: "",
-    drugSensitivityH: ""
+    drugSensitivityH: "",
+    cultureResult: ""
   })
 }
 
@@ -368,6 +370,21 @@ async function handleSubmit() {
         <el-col :span="12">
           <el-form-item label="异烟肼（H）">
             <el-input v-model="form.drugSensitivityH" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="培养结果">
+            <el-select
+              v-model="form.cultureResult"
+              clearable
+              filterable
+              allow-create
+              default-first-option
+              placeholder="请选择或录入"
+              style="width: 100%"
+            >
+              <el-option v-for="item in SPUTUM_CULTURE_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="24">

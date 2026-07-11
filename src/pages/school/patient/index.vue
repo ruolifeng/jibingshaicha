@@ -22,6 +22,8 @@ import {
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
   PATIENT_TYPE_OPTIONS,
+  SPUTUM_CULTURE_NOT_DONE,
+  SPUTUM_CULTURE_OPTIONS,
   SPUTUM_STATUS_OPTIONS,
   SYMPTOM_OPTIONS,
   TREATMENT_PLAN_OPTIONS,
@@ -355,6 +357,7 @@ const firstVisitForm = reactive({
   visitMethodOther: "",
   patientType: "",
   sputumStatus: "",
+  sputumCulture: "",
   drugResistance: "",
   symptoms: [] as string[],
   otherSymptoms: "",
@@ -387,6 +390,7 @@ function openFirstVisitDialog(row: any) {
     visitMethodOther: "",
     patientType: "",
     sputumStatus: "",
+    sputumCulture: "",
     drugResistance: "",
     symptoms: [],
     otherSymptoms: "",
@@ -469,6 +473,21 @@ async function handleSaveFirstVisit() {
   if (firstVisitForm.visitMethod === VISIT_METHOD_OTHER && !firstVisitForm.visitMethodOther.trim()) {
     ElMessage.warning("请填写随访方式")
     return
+  }
+  if (!firstVisitForm.sputumCulture) {
+    ElMessage.warning("请选择痰培养情况")
+    return
+  }
+  if (!firstVisitCompleted.value && firstVisitForm.sputumCulture === SPUTUM_CULTURE_NOT_DONE) {
+    try {
+      await ElMessageBox.confirm(
+        "痰培养选择「未做」将生成系统提醒消息，状态显示为「未补充」，请后续及时补充痰培养结果。",
+        "痰培养未做提醒",
+        { type: "warning", confirmButtonText: "确认保存", cancelButtonText: "返回修改" }
+      )
+    } catch {
+      return
+    }
   }
   try {
     await saveFirstVisitApi(buildFirstVisitPayload())
@@ -1130,6 +1149,13 @@ watch(
             <el-form-item label="痰菌情况">
               <el-select v-model="firstVisitForm.sputumStatus" style="width: 100%">
                 <el-option v-for="item in SPUTUM_STATUS_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="痰培养">
+              <el-select v-model="firstVisitForm.sputumCulture" style="width: 100%" placeholder="请选择">
+                <el-option v-for="item in SPUTUM_CULTURE_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>

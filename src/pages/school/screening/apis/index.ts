@@ -1,25 +1,53 @@
+import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
 import { request } from "@/http/axios"
 
 /** 上传学校人群筛查 Excel */
-export function uploadScreeningSchoolApi(file: File, confirmSkipInvalid = false) {
+export function uploadScreeningSchoolApi(file: File, options: ImportConfirmOptions = {}) {
+  const confirmSkipInvalid = options.confirmSkipInvalid ?? false
+  const confirmSkipDuplicateInFile = options.confirmSkipDuplicateInFile ?? false
   const formData = new FormData()
   formData.append("file", file)
   formData.append("confirmSkipInvalid", String(confirmSkipInvalid))
-  return request<ApiResponseData<{ successCount: number, invalidIdentityCount?: number, requireIdentityConfirm?: boolean, errors: string[] }>>({
+  formData.append("confirmSkipDuplicateInFile", String(confirmSkipDuplicateInFile))
+  return request<ApiResponseData<ImportResultData>>({
     url: "screening/school/upload",
     method: "post",
     data: formData,
+    params: { confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60000
   })
 }
 
-/** 导出学校人群筛查数据（可按勾选ID导出） */
-export function exportScreeningSchoolApi(ids?: number[]) {
+/** 学校人群筛查列表与导出共用查询参数 */
+export interface ScreeningSchoolQueryParams {
+  name?: string
+  idNumber?: string
+  schoolName?: string
+  district?: string
+  isLatent?: number
+  diagnosisFirst?: string
+  phone?: string
+  entryUnit?: string
+  creatorUsername?: string
+  columnFilters?: string
+  year?: string
+  createTimeFrom?: string
+  createTimeTo?: string
+  sortField?: string
+  sortOrder?: string
+}
+
+/** 导出学校人群筛查数据（可按勾选 ID 或当前筛选条件导出） */
+export function exportScreeningSchoolApi(params?: ScreeningSchoolQueryParams & { ids?: number[] }) {
+  const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/school/export",
     method: "get",
-    params: ids && ids.length > 0 ? { ids: ids.join(",") } : undefined,
+    params: {
+      ...rest,
+      ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob",
     timeout: 120000
   })
@@ -73,20 +101,7 @@ export function getScreeningSchoolDetailApi(id: number) {
 export function getScreeningSchoolListApi(params: {
   page: number
   size: number
-  name?: string
-  idNumber?: string
-  schoolName?: string
-  district?: string
-  isLatent?: number
-  diagnosisFirst?: string
-  phone?: string
-  entryUnit?: string
-  creatorUsername?: string
-  columnFilters?: string
-  year?: string
-  createTimeFrom?: string
-  createTimeTo?: string
-}) {
+} & ScreeningSchoolQueryParams) {
   return request<ApiResponseData<any>>({
     url: "screening/school/list",
     method: "get",

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopulation> {
@@ -15,11 +16,12 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
      *
      * @param overwrite 是否与系统中同身份证号记录覆盖合并；false 时跳过重复行
      */
-    ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid);
+    ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite,
+                                boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile);
 
     /** @deprecated 兼容旧调用，默认覆盖重复、不确认跳过无效行 */
-    default ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite) {
-        return uploadAndParse(file, sourceType, overwrite, false);
+    default ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid) {
+        return uploadAndParse(file, sourceType, overwrite, confirmSkipInvalid, false);
     }
 
     /** 导入预览：检测与系统已有记录（身份证号）重复的数据 */
@@ -28,13 +30,13 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
     /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation，默认覆盖重复 */
     @Deprecated
     default ImportResult uploadAndParse(MultipartFile file) {
-        return uploadAndParse(file, "keyPopulation", true);
+        return uploadAndParse(file, "keyPopulation", true, false, false);
     }
 
     /** @deprecated 兼容旧调用，默认覆盖重复 */
     @Deprecated
     default ImportResult uploadAndParse(MultipartFile file, String sourceType) {
-        return uploadAndParse(file, sourceType, true);
+        return uploadAndParse(file, sourceType, true, false, false);
     }
 
     IPage<ScreeningKeyPopulation> queryPage(int page, int size, String name, String idNumber,
@@ -44,7 +46,20 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                              String dateFrom, String dateTo, String entryUnit,
                                              String createTimeFrom, String createTimeTo,
                                              String creatorUsername, String hasChestXray,
-                                             String chestXrayResult, String columnFilters);
+                                             String chestXrayResult, String columnFilters,
+                                             String sortField, String sortOrder);
+
+    /** 导出：ids 非空时仅导出勾选行，否则按当前筛选条件导出全部匹配数据 */
+    List<ScreeningKeyPopulation> listForExport(String name, String idNumber,
+                                                String phone, String district, String townshipCommunity,
+                                                String crowdCategory, String screenMethod, Integer isLatent,
+                                                String sourceType, String diagnosisFirst,
+                                                String dateFrom, String dateTo, String entryUnit,
+                                                String createTimeFrom, String createTimeTo,
+                                                String creatorUsername, String hasChestXray,
+                                                String chestXrayResult, String columnFilters,
+                                                String sortField, String sortOrder,
+                                                List<Long> ids);
 
     /** @deprecated 兼容旧调用 */
     @Deprecated
@@ -56,7 +71,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
                 crowdCategory, screenMethod, isLatent, sourceType, diagnosisFirst, dateFrom, dateTo,
-                entryUnit, createTimeFrom, createTimeTo, null, null, null, null);
+                entryUnit, createTimeFrom, createTimeTo, null, null, null, null, null, null);
     }
 
     /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
@@ -65,7 +80,8 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String phone, String district, String townshipCommunity,
                                                     String crowdCategory, String screenMethod, Integer isLatent) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
-                crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null, null, null, null, null, null, null, null);
+                crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null, null, null, null,
+                null, null, null, null, null, null);
     }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */
