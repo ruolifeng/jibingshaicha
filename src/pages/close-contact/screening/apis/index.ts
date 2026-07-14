@@ -51,13 +51,35 @@ export function countByResultApi() {
   })
 }
 
-/** 导出密接人群筛查 Excel（72列官方模板，可再导入） */
-export function exportScreeningCloseContactApi(ids?: number[]) {
+/** 密接人群筛查列表/导出/按筛选删除共用查询参数 */
+export interface ScreeningCloseContactQueryParams {
+  name?: string
+  idNumber?: string
+  district?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
+  createTimeFrom?: string
+  createTimeTo?: string
+  creatorUsername?: string
+  columnFilters?: string
+  ccStatus?: number
+  finalScreeningResult?: string
+  formatIssue?: string
+}
+
+/** 导出密接人群筛查 Excel（支持勾选 ID / 筛选条件 / 全部） */
+export function exportScreeningCloseContactApi(params?: ScreeningCloseContactQueryParams & { ids?: number[] }) {
+  const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/close-contact/export",
     method: "get",
-    params: ids && ids.length > 0 ? { ids: ids.join(",") } : undefined,
-    responseType: "blob"
+    params: {
+      ...rest,
+      ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
+    },
+    responseType: "blob",
+    timeout: 120000
   })
 }
 
@@ -92,7 +114,27 @@ export function batchDeleteScreeningCloseContactApi(ids: number[]) {
   return request<ApiResponseData<null>>({
     url: "screening/close-contact/batch-delete",
     method: "delete",
-    data: ids
+    data: ids,
+    timeout: 120000
+  })
+}
+
+/** 按当前筛选条件删除密接人群筛查记录（级联删除） */
+export function deleteScreeningCloseContactByFilterApi(params?: ScreeningCloseContactQueryParams) {
+  return request<ApiResponseData<number>>({
+    url: "screening/close-contact/delete-by-filter",
+    method: "delete",
+    params,
+    timeout: 300000
+  })
+}
+
+/** 删除权限范围内全部密接人群筛查记录（级联删除） */
+export function deleteAllScreeningCloseContactApi() {
+  return request<ApiResponseData<number>>({
+    url: "screening/close-contact/delete-all",
+    method: "delete",
+    timeout: 300000
   })
 }
 

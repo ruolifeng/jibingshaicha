@@ -18,6 +18,8 @@ public class UserInfoVO {
     private Integer role;
     private String roleName;
     private String orgName;
+    /** 联系电话 */
+    private String phone;
     private String avatar;
     private Long departmentId;
     /** 所属部门名称（系统部门树） */

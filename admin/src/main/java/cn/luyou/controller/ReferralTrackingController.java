@@ -19,6 +19,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import cn.hutool.core.util.StrUtil;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "推介追踪管理")
@@ -87,10 +89,11 @@ public class ReferralTrackingController {
     }
 
     @OperationLog(type = "export", module = "referral", action = "导出追踪记录")
-    @Operation(summary = "导出追踪记录")
+    @Operation(summary = "导出追踪记录（支持当前筛选条件或勾选导出）")
     @GetMapping("/export")
     public void export(
             HttpServletResponse response,
+            @RequestParam(required = false) String ids,
             @RequestParam(required = false) String bizMode,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
@@ -101,8 +104,16 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String sourceType,
             @RequestParam(required = false) String creatorOrEntryUnit) {
         userService.checkPermissionCode("referralManagement:export");
+        List<Long> idList = null;
+        if (ids != null && !ids.isBlank()) {
+            idList = Arrays.stream(ids.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && s.matches("\\d+"))
+                    .map(Long::valueOf)
+                    .toList();
+        }
         referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township,
-                dateFrom, dateTo, sourceType, creatorOrEntryUnit);
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, idList);
     }
 
     @OperationLog(type = "create", module = "referral", action = "新增推介/追踪记录")
@@ -192,6 +203,44 @@ public class ReferralTrackingController {
         String diagnosisRemark = body != null ? (String) body.get("diagnosisRemark") : null;
         referralTrackingService.saveDiagnosis(id, diagnosisResult, diagnosisRemark);
         return ResultRes.success(null);
+    }
+
+    @OperationLog(type = "delete", module = "referral", action = "批量删除推介/追踪记录")
+    @Operation(summary = "批量删除推介/追踪记录")
+    @DeleteMapping("/batch-delete")
+    public ResultResponse<Integer> batchDelete(@RequestBody List<Long> ids) {
+        userService.checkPermissionCode("referralManagement:delete");
+        return ResultRes.success(referralTrackingService.batchDelete(ids));
+    }
+
+    @OperationLog(type = "delete", module = "referral", action = "按筛选条件删除推介/追踪记录")
+    @Operation(summary = "按筛选条件删除推介/追踪记录")
+    @DeleteMapping("/delete-by-filter")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String bizMode,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String township,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String creatorOrEntryUnit,
+            @RequestParam(required = false) String columnFilters) {
+        userService.checkPermissionCode("referralManagement:delete");
+        return ResultRes.success(referralTrackingService.deleteByFilter(
+                bizMode, name, idNumber, trackingStatus, archived, phone, township,
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters));
+    }
+
+    @OperationLog(type = "delete", module = "referral", action = "删除全部推介/追踪记录")
+    @Operation(summary = "删除权限范围内全部推介/追踪记录")
+    @DeleteMapping("/delete-all")
+    public ResultResponse<Integer> deleteAll(@RequestParam(required = false) String bizMode) {
+        userService.checkPermissionCode("referralManagement:delete");
+        return ResultRes.success(referralTrackingService.deleteAll(bizMode));
     }
 
     @OperationLog(type = "delete", module = "referral", action = "删除推介/追踪记录")

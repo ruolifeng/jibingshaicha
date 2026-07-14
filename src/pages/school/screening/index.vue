@@ -1,14 +1,16 @@
 <script lang="ts" setup>
-import ReferralDialog from "@@/components/ReferralDialog.vue"
+import RecommendCreateDialog from "@@/components/RecommendCreateDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
+import { confirmDangerDelete, triggerBlobDownload } from "@@/utils/listToolbar"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
-import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteScreeningSchoolApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
+import { batchDeleteScreeningSchoolApi, createScreeningSchoolApi, deleteAllScreeningSchoolApi, deleteScreeningSchoolApi, deleteScreeningSchoolByFilterApi, exportScreeningSchoolApi, getScreeningSchoolListApi, updateScreeningSchoolApi, uploadScreeningSchoolApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
@@ -37,6 +39,11 @@ const searchForm = reactive({
   year: "" as string,
   isLatent: undefined as number | undefined,
   diagnosisFirst: "" as string,
+  hasChestXray: "" as string,
+  chestXrayResult: "" as string,
+  sputumSmearResult: "" as string,
+  molecularBiologyResult: "" as string,
+  formatIssue: "" as string,
   entryTimeRange: [] as string[]
 })
 
@@ -56,7 +63,18 @@ async function fetchData() {
 }
 
 function buildListQueryParams() {
-  const { entryUnit, creatorUsername, year, entryTimeRange, ...rest } = searchForm
+  const {
+    entryUnit,
+    creatorUsername,
+    year,
+    entryTimeRange,
+    hasChestXray,
+    chestXrayResult,
+    sputumSmearResult,
+    molecularBiologyResult,
+    formatIssue,
+    ...rest
+  } = searchForm
   const columnFiltersParam = toQueryParam()
   return {
     ...rest,
@@ -64,6 +82,11 @@ function buildListQueryParams() {
     ...(year ? { year } : {}),
     ...(entryUnit ? { entryUnit } : {}),
     ...(creatorUsername ? { creatorUsername } : {}),
+    ...(hasChestXray ? { hasChestXray } : {}),
+    ...(chestXrayResult ? { chestXrayResult } : {}),
+    ...(sputumSmearResult ? { sputumSmearResult } : {}),
+    ...(molecularBiologyResult ? { molecularBiologyResult } : {}),
+    ...(formatIssue ? { formatIssue } : {}),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...toSortQueryParam()
   }
@@ -90,6 +113,11 @@ function handleReset() {
   searchForm.year = ""
   searchForm.isLatent = undefined
   searchForm.diagnosisFirst = ""
+  searchForm.hasChestXray = ""
+  searchForm.chestXrayResult = ""
+  searchForm.sputumSmearResult = ""
+  searchForm.molecularBiologyResult = ""
+  searchForm.formatIssue = ""
   searchForm.entryTimeRange = []
   clearFilters()
   resetSort()
@@ -100,7 +128,7 @@ function getRowClass({ row }: { row: any }) {
   return isConfirmedPatientDiagnosis(row) ? "confirmed-row" : ""
 }
 
-// 转出
+// 推介（预填筛查行 → 推介追踪）
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -134,10 +162,14 @@ function isRequestTimeout(err: any) {
   return err?.code === "ECONNABORTED" || String(err?.message ?? "").includes("超时")
 }
 
-/** 导出 Excel（支持导出当前筛选结果或勾选项） */
-async function handleExport(ids?: number[]) {
-  const isSelected = !!ids?.length
-  const label = isSelected ? `选中的 ${ids!.length} 条` : "当前筛选条件下的全部"
+/** 导出 Excel：filtered=筛选结果 / selected=勾选 / all=全部 */
+async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: number[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected
+    ? `选中的 ${ids!.length} 条`
+    : mode === "all"
+      ? "全部"
+      : "当前筛选条件下的"
   try {
     await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
       confirmButtonText: "确认导出",
@@ -146,15 +178,12 @@ async function handleExport(ids?: number[]) {
     })
     exporting.value = true
     const res = await exportScreeningSchoolApi(
-      isSelected ? { ids, ...buildListQueryParams() } : buildListQueryParams()
+      isSelected ? { ids } : mode === "all" ? {} : buildListQueryParams()
     )
-    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "学校人群筛查数据.xlsx"
-    a.click()
-    URL.revokeObjectURL(url)
+    triggerBlobDownload(
+      new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      "学校人群筛查数据.xlsx"
+    )
     ElMessage.success("导出成功")
   } catch (err: any) {
     if (err !== "cancel") {
@@ -171,7 +200,45 @@ function handleExportSelected() {
     ElMessage.warning("请先勾选要导出的数据")
     return
   }
-  handleExport(ids)
+  handleExport("selected", ids)
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部筛查记录吗？删除后关联数据将一并删除，且不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteScreeningSchoolByFilterApi(buildListQueryParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    ElMessage.error(isRequestTimeout(err) ? "删除超时，请刷新后确认" : "删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteAll() {
+  const ok = await confirmDangerDelete({
+    title: "删除全部",
+    message: "确定删除权限范围内的全部筛查记录吗？此操作不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteAllScreeningSchoolApi()
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    handleReset()
+  } catch (err: any) {
+    ElMessage.error(isRequestTimeout(err) ? "删除超时，请刷新后确认" : "删除全部失败")
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 /** 编辑弹窗 */
@@ -348,6 +415,28 @@ watch(
         <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
+        <el-form-item label="格式问题">
+          <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="是否进行胸片检查">
+          <el-select v-model="searchForm.hasChestXray" placeholder="全部" clearable style="width: 120px">
+            <el-option label="是" value="是" />
+            <el-option label="否" value="否" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="胸片结果">
+          <el-select v-model="searchForm.chestXrayResult" placeholder="全部" clearable style="width: 120px">
+            <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="痰涂片结果">
+          <el-input v-model="searchForm.sputumSmearResult" placeholder="请输入" clearable style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="分子生物学结果">
+          <el-input v-model="searchForm.molecularBiologyResult" placeholder="请输入" clearable style="width: 160px" />
+        </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
             <el-option label="待确诊" :value="1" />
@@ -385,18 +474,21 @@ watch(
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">学校人群筛查数据</span>
-          <div class="flex gap-2">
+          <div class="flex gap-2 flex-wrap">
             <el-button type="success" @click="handleCreate">
               新增数据
             </el-button>
-            <el-button :loading="exporting" @click="() => handleExport()">
+            <el-button :loading="exporting" @click="() => handleExport('filtered')">
               导出筛选结果
+            </el-button>
+            <el-button type="danger" plain :loading="batchDeleting" @click="handleDeleteFiltered">
+              删除筛选结果
             </el-button>
             <el-button type="warning" :loading="exporting" :disabled="selectedRows.length === 0" @click="handleExportSelected">
               导出勾选
             </el-button>
             <el-button type="danger" :loading="batchDeleting" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
-              批量删除
+              删除勾选
             </el-button>
             <el-upload
               ref="uploadRef"
@@ -409,6 +501,12 @@ watch(
                 上传 Excel
               </el-button>
             </el-upload>
+            <el-button :loading="exporting" @click="() => handleExport('all')">
+              导出全部
+            </el-button>
+            <el-button type="danger" plain :loading="batchDeleting" @click="handleDeleteAll">
+              删除全部
+            </el-button>
           </div>
         </div>
       </template>
@@ -572,8 +670,8 @@ watch(
             <el-button type="danger" link size="small" @click="handleDelete(row)">
               删除
             </el-button>
-            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              转出
+            <el-button v-permission="['referral', 'referralManagement:create']" type="warning" link size="small" @click="openTierCare(row)">
+              推介
             </el-button>
           </template>
         </el-table-column>
@@ -926,15 +1024,11 @@ watch(
       </template>
     </el-dialog>
 
-    <!-- 转出弹窗 -->
-    <ReferralDialog
-      v-if="tierCareRow"
+    <!-- 推介弹窗 -->
+    <RecommendCreateDialog
       v-model="tierCareVisible"
-      :biz-id="tierCareRow.id"
-      biz-type="screening_school"
-      population-type="school"
-      module-type="screening"
-      :subject-name="tierCareRow.name || ''"
+      :source="tierCareRow"
+      default-crowd-category="学生"
     />
 
     <!-- 导入结果弹窗 -->

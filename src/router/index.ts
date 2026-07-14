@@ -357,7 +357,8 @@ export const constantRoutes: RouteRecordRaw[] = [
         "system:permissions",
         "permission:assign",
         "system:operationLog",
-        "system:backup"
+        "system:backup",
+        "system:sms"
       ]
     },
     children: [
@@ -378,6 +379,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/system/permissions.vue"),
         name: "SystemPermissions",
         meta: { title: "权限管理", anyPermission: ["system:permissions", "permission:assign"] }
+      },
+      {
+        path: "sms-config",
+        component: () => import("@/pages/system/sms-config.vue"),
+        name: "SystemSmsConfig",
+        meta: { title: "短信配置", roles: ["admin"], permission: "system:sms" }
       },
       {
         path: "backup",

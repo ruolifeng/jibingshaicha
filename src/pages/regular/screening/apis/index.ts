@@ -21,7 +21,7 @@ export function uploadScreeningRegularApi(file: File, options: ImportConfirmOpti
   })
 }
 
-/** 导出疫情筛查数据（可按勾选 ID 或当前筛选条件导出） */
+/** 导出疫情筛查数据（可按勾选 ID 或当前筛选条件导出；空参数=导出全部） */
 export function exportScreeningRegularApi(params?: ScreeningKeyPopulationQueryParams & { ids?: number[] }) {
   const { ids, ...rest } = params ?? {}
   return request<Blob>({
@@ -32,7 +32,8 @@ export function exportScreeningRegularApi(params?: ScreeningKeyPopulationQueryPa
       ...rest,
       ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
     },
-    responseType: "blob"
+    responseType: "blob",
+    timeout: 120000
   })
 }
 
@@ -67,7 +68,28 @@ export function batchDeleteScreeningRegularApi(ids: number[]) {
   return request<ApiResponseData<null>>({
     url: "screening/key-population/batch-delete",
     method: "delete",
-    data: ids
+    data: ids,
+    timeout: 120000
+  })
+}
+
+/** 按当前筛选条件删除疫情筛查记录 */
+export function deleteScreeningRegularByFilterApi(params?: ScreeningKeyPopulationQueryParams) {
+  return request<ApiResponseData<number>>({
+    url: "screening/key-population/delete-by-filter",
+    method: "delete",
+    params: { ...params, sourceType: "regular" },
+    timeout: 300000
+  })
+}
+
+/** 删除权限范围内全部疫情筛查记录 */
+export function deleteAllScreeningRegularApi() {
+  return request<ApiResponseData<number>>({
+    url: "screening/key-population/delete-all",
+    method: "delete",
+    params: { sourceType: "regular" },
+    timeout: 300000
   })
 }
 

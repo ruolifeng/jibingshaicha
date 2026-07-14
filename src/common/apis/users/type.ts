@@ -5,6 +5,7 @@ export interface UserInfo {
   role: number
   roleName: string
   orgName: string
+  phone?: string
   avatar?: string
   departmentId?: number | null
   departmentName?: string

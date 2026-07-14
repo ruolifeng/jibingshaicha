@@ -93,7 +93,7 @@ const rules: FormRules = {
   }],
   patientType: [{ required: true, message: "请选择患者类型", trigger: "change" }],
   sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
-  sputumCulture: [{ required: true, message: "请选择痰培养情况", trigger: "change" }],
+  sputumCulture: [{ required: true, message: "请选择或录入痰培养情况", trigger: "change" }],
   drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
   chemotherapy: [{ required: true, whitespace: true, message: "请填写化疗方案", trigger: "blur" }],
   medicationUsage: [{ required: true, message: "请选择用法", trigger: "change" }],
@@ -325,7 +325,14 @@ async function handleSave() {
         </el-col>
         <el-col :span="8">
           <el-form-item label="痰培养" prop="sputumCulture">
-            <el-select v-model="firstVisitForm.sputumCulture" style="width: 100%" placeholder="请选择">
+            <el-select
+              v-model="firstVisitForm.sputumCulture"
+              style="width: 100%"
+              placeholder="请选择或输入"
+              filterable
+              allow-create
+              default-first-option
+            >
               <el-option v-for="item in SPUTUM_CULTURE_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>

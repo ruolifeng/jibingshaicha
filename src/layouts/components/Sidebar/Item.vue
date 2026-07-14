@@ -5,6 +5,7 @@ import path from "path-browserify"
 import { useMessageStore } from "@/pinia/stores/message"
 import Link from "./Link.vue"
 
+const { item, basePath = "" } = defineProps<Props>()
 const messageStore = useMessageStore()
 const { unreadCount } = storeToRefs(messageStore)
 
@@ -12,8 +13,6 @@ interface Props {
   item: RouteRecordRaw
   basePath?: string
 }
-
-const { item, basePath = "" } = defineProps<Props>()
 
 /** 是否始终显示根菜单 */
 const alwaysShowRootMenu = computed(() => item.meta?.alwaysShow)
@@ -64,12 +63,10 @@ function resolvePath(routePath: string) {
         <template v-if="theOnlyOneChild.meta.title" #title>
           <span class="menu-title-row">
             <span class="title">{{ theOnlyOneChild.meta.title }}</span>
-            <el-badge
+            <span
               v-if="showUnreadBadge(theOnlyOneChild.meta)"
-              :value="unreadCount"
-              :max="99"
-              class="menu-title-badge"
-            />
+              class="menu-unread-count"
+            >{{ unreadCount > 99 ? "99+" : unreadCount }}</span>
           </span>
         </template>
       </el-menu-item>
@@ -112,15 +109,26 @@ function resolvePath(routePath: string) {
 }
 
 .menu-title-row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding-right: 8px;
+  max-width: 100%;
+  gap: 8px;
+  vertical-align: middle;
 }
 
-.menu-title-badge {
+.menu-unread-count {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background-color: var(--el-color-danger);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 500;
 }
-
 </style>

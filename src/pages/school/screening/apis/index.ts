@@ -30,12 +30,17 @@ export interface ScreeningSchoolQueryParams {
   phone?: string
   entryUnit?: string
   creatorUsername?: string
+  hasChestXray?: string
+  chestXrayResult?: string
+  sputumSmearResult?: string
+  molecularBiologyResult?: string
   columnFilters?: string
   year?: string
   createTimeFrom?: string
   createTimeTo?: string
   sortField?: string
   sortOrder?: string
+  formatIssue?: string
 }
 
 /** 导出学校人群筛查数据（可按勾选 ID 或当前筛选条件导出） */
@@ -86,6 +91,25 @@ export function batchDeleteScreeningSchoolApi(ids: number[]) {
     method: "delete",
     data: ids,
     timeout: 120000
+  })
+}
+
+/** 按当前筛选条件删除学校人群筛查记录 */
+export function deleteScreeningSchoolByFilterApi(params?: ScreeningSchoolQueryParams) {
+  return request<ApiResponseData<number>>({
+    url: "screening/school/delete-by-filter",
+    method: "delete",
+    params,
+    timeout: 300000
+  })
+}
+
+/** 删除权限范围内全部学校人群筛查记录 */
+export function deleteAllScreeningSchoolApi() {
+  return request<ApiResponseData<number>>({
+    url: "screening/school/delete-all",
+    method: "delete",
+    timeout: 300000
   })
 }
 

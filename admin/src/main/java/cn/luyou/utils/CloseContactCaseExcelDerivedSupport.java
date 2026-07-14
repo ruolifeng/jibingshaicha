@@ -1,16 +1,21 @@
 package cn.luyou.utils;
 
+import cn.hutool.core.util.StrUtil;
 import cn.luyou.model.CloseContactCase;
 import cn.luyou.model.ScreeningCloseContact;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 密接 Excel 自动生成列：报表填报季度、随访期限提示、年龄组；并补全 6/12/24 月随访到期日（仅导出/展示，不写库）。
  */
 public final class CloseContactCaseExcelDerivedSupport {
+
+    private static final Pattern REPORT_QUARTER_PATTERN = Pattern.compile("^(\\d{4})年Q([1-4])$");
 
     private CloseContactCaseExcelDerivedSupport() {
     }
@@ -76,6 +81,29 @@ public final class CloseContactCaseExcelDerivedSupport {
         }
         int quarter = (registrationDate.getMonthValue() - 1) / 3 + 1;
         return registrationDate.getYear() + "年Q" + quarter;
+    }
+
+    /**
+     * 将「2026年Q2」解析为登记日期季度起止 [start, end]；无法解析时返回 null。
+     */
+    public static LocalDate[] resolveReportQuarterDateRange(String reportQuarter) {
+        if (StrUtil.isBlank(reportQuarter) || isEmptyRegistrationQuarter(reportQuarter)) {
+            return null;
+        }
+        Matcher matcher = REPORT_QUARTER_PATTERN.matcher(reportQuarter.trim());
+        if (!matcher.matches()) {
+            return null;
+        }
+        int year = Integer.parseInt(matcher.group(1));
+        int quarter = Integer.parseInt(matcher.group(2));
+        LocalDate start = LocalDate.of(year, (quarter - 1) * 3 + 1, 1);
+        LocalDate end = start.plusMonths(3).minusDays(1);
+        return new LocalDate[]{start, end};
+    }
+
+    /** 是否筛选登记日期为空（报表填报季度=登记日期为空）。 */
+    public static boolean isEmptyRegistrationQuarter(String reportQuarter) {
+        return "登记日期为空".equals(StrUtil.trim(reportQuarter));
     }
 
     /** 年龄组：密接筛查按 15 岁分界；无有效年龄时为「无有效年龄」。 */

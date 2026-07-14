@@ -26,6 +26,7 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
@@ -394,26 +395,11 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                                                    String district, Integer ccStatus, String finalScreeningResult,
                                                    String phone, String dateFrom, String dateTo,
                                                    String createTimeFrom, String createTimeTo,
-                                                   String creatorUsername, String columnFilters) {
-        LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
-        LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
-        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
-        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
-        LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
-        wrapper.like(StrUtil.isNotBlank(name), ScreeningCloseContact::getName, name)
-                .eq(StrUtil.isNotBlank(idNumber), ScreeningCloseContact::getIdNumber, idNumber)
-                .eq(StrUtil.isNotBlank(district), ScreeningCloseContact::getDistrict, district)
-                .like(StrUtil.isNotBlank(phone), ScreeningCloseContact::getPhone, phone)
-                .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus)
-                .like(StrUtil.isNotBlank(creatorUsername), ScreeningCloseContact::getCreatorUsername, creatorUsername);
-        applyFinalScreeningResultFilter(wrapper, finalScreeningResult);
-        applyColumnFilters(wrapper, columnFilters);
-        wrapper.ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
-                .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
-                .ge(createFrom != null, ScreeningCloseContact::getCreateTime, createFrom)
-                .le(createTo != null, ScreeningCloseContact::getCreateTime, createTo);
+                                                   String creatorUsername, String columnFilters, String formatIssue) {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = buildListWrapper(
+                name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue);
         ImportRowOrderSupport.applyWithBatch(wrapper);
-        applyDepartmentScope(wrapper);
         IPage<ScreeningCloseContact> result = page(new Page<>(page, size), wrapper);
 
         // 补充通知单发送状态，用于前端控制"发送通知单"按钮的显示
@@ -455,6 +441,52 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             CloseContactCaseExcelDerivedSupport.applyAllScreening(records);
         }
         return result;
+    }
+
+    @Override
+    public List<ScreeningCloseContact> listForExport(String name, String idNumber, String district,
+                                                      Integer ccStatus, String finalScreeningResult, String phone,
+                                                      String dateFrom, String dateTo, String createTimeFrom,
+                                                      String createTimeTo, String creatorUsername,
+                                                      String columnFilters, String formatIssue, List<Long> ids) {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper;
+        if (ids != null && !ids.isEmpty()) {
+            wrapper = new LambdaQueryWrapper<>();
+            wrapper.in(ScreeningCloseContact::getId, ids);
+            applyDepartmentScope(wrapper);
+        } else {
+            wrapper = buildListWrapper(
+                    name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
+                    createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue);
+        }
+        ImportRowOrderSupport.applyWithBatch(wrapper);
+        return list(wrapper);
+    }
+
+    private LambdaQueryWrapper<ScreeningCloseContact> buildListWrapper(
+            String name, String idNumber, String district, Integer ccStatus, String finalScreeningResult,
+            String phone, String dateFrom, String dateTo, String createTimeFrom, String createTimeTo,
+            String creatorUsername, String columnFilters, String formatIssue) {
+        LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
+        LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
+        LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
+        LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(StrUtil.isNotBlank(name), ScreeningCloseContact::getName, name)
+                .eq(StrUtil.isNotBlank(idNumber), ScreeningCloseContact::getIdNumber, idNumber)
+                .eq(StrUtil.isNotBlank(district), ScreeningCloseContact::getDistrict, district)
+                .like(StrUtil.isNotBlank(phone), ScreeningCloseContact::getPhone, phone)
+                .eq(ccStatus != null, ScreeningCloseContact::getCcStatus, ccStatus)
+                .like(StrUtil.isNotBlank(creatorUsername), ScreeningCloseContact::getCreatorUsername, creatorUsername);
+        applyFinalScreeningResultFilter(wrapper, finalScreeningResult);
+        applyColumnFilters(wrapper, columnFilters);
+        wrapper.ge(screenFrom != null, ScreeningCloseContact::getFirstScreenDate, screenFrom)
+                .le(screenTo != null, ScreeningCloseContact::getFirstScreenDate, screenTo)
+                .ge(createFrom != null, ScreeningCloseContact::getCreateTime, createFrom)
+                .le(createTo != null, ScreeningCloseContact::getCreateTime, createTo);
+        applyDepartmentScope(wrapper);
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
+        return wrapper;
     }
 
     @Override
@@ -578,6 +610,45 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteScreeningCascade(Long id) {
+        doDeleteScreeningCascade(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchDeleteCascade(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (Long id : ids) {
+            doDeleteScreeningCascade(id);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String name, String idNumber, String district, Integer ccStatus,
+                               String finalScreeningResult, String phone, String dateFrom, String dateTo,
+                               String createTimeFrom, String createTimeTo, String creatorUsername,
+                               String columnFilters, String formatIssue) {
+        LambdaQueryWrapper<ScreeningCloseContact> wrapper = buildListWrapper(
+                name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue);
+        wrapper.select(ScreeningCloseContact::getId);
+        List<Long> ids = list(wrapper).stream().map(ScreeningCloseContact::getId).toList();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        batchDeleteCascade(ids);
+        return ids.size();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteAll() {
+        return deleteByFilter(null, null, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    private void doDeleteScreeningCascade(Long id) {
         ScreeningCloseContact existing = getById(id);
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");

@@ -13,6 +13,14 @@ export const DIAGNOSIS_RESULT_OPTIONS = [
   { label: "未发现异常", value: "未发现异常" }
 ] as const
 
+/** 报表填报季度（Q1-Q4） */
+export const REPORT_QUARTER_OPTIONS = [
+  { label: "Q1", value: "1" },
+  { label: "Q2", value: "2" },
+  { label: "Q3", value: "3" },
+  { label: "Q4", value: "4" }
+] as const
+
 /** 是否开展预防治疗（与密接潜伏感染者流程一致） */
 export const HAS_PREVENTIVE_TREATMENT_OPTIONS = [
   { label: "开展", value: "开展" },

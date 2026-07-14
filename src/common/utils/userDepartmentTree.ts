@@ -19,6 +19,7 @@ export interface UserTreeRow {
   realName?: string
   role?: number
   orgName?: string
+  phone?: string
   departmentId?: number | null
   createTime?: string
 }
@@ -29,6 +30,7 @@ export interface UserRecord {
   realName?: string
   role: number
   orgName?: string
+  phone?: string
   departmentId?: number | null
   createTime?: string
 }
@@ -55,6 +57,7 @@ function userToNode(user: UserRecord): UserTreeRow {
     realName: user.realName,
     role: user.role,
     orgName: user.orgName,
+    phone: user.phone,
     departmentId: user.departmentId,
     createTime: user.createTime
   }

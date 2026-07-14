@@ -7,9 +7,7 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningCloseContact;
 import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.utils.CloseContactCaseExcelExportSupport;
-import cn.luyou.utils.ScreeningScopeHelper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,7 +30,6 @@ import java.util.Map;
 public class ScreeningCloseContactController {
 
     private final ScreeningCloseContactService screeningCloseContactService;
-    private final ScreeningScopeHelper screeningScopeHelper;
 
     @Operation(summary = "上传密接人群筛查Excel（72列官方模板）")
     @PostMapping("/upload")
@@ -60,10 +57,11 @@ public class ScreeningCloseContactController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String creatorUsername,
-            @RequestParam(required = false) String columnFilters) {
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(screeningCloseContactService.queryPage(
                 page, size, name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
-                createTimeFrom, createTimeTo, creatorUsername, columnFilters));
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue));
     }
 
     @Operation(summary = "各最终筛查结果分类统计")
@@ -101,8 +99,37 @@ public class ScreeningCloseContactController {
     @DeleteMapping("/batch-delete")
     @OperationLog(type = "delete", module = "screening", action = "批量删除密接人群筛查记录")
     public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
-        if (ids != null) ids.forEach(screeningCloseContactService::deleteScreeningCascade);
+        screeningCloseContactService.batchDeleteCascade(ids);
         return ResultRes.success(null);
+    }
+
+    @Operation(summary = "按筛选条件删除密接人群筛查记录（级联删除）")
+    @DeleteMapping("/delete-by-filter")
+    @OperationLog(type = "delete", module = "screening", action = "按筛选条件删除密接人群筛查记录")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) Integer ccStatus,
+            @RequestParam(required = false) String finalScreeningResult,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
+        return ResultRes.success(screeningCloseContactService.deleteByFilter(
+                name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue));
+    }
+
+    @Operation(summary = "删除权限范围内全部密接人群筛查记录（级联删除）")
+    @DeleteMapping("/delete-all")
+    @OperationLog(type = "delete", module = "screening", action = "删除全部密接人群筛查记录")
+    public ResultResponse<Integer> deleteAll() {
+        return ResultRes.success(screeningCloseContactService.deleteAll());
     }
 
     @Operation(summary = "按ID查询密接人群筛查记录详情")
@@ -147,29 +174,41 @@ public class ScreeningCloseContactController {
 
     // ==================== 导出 ====================
 
-    @Operation(summary = "导出密接人群筛查数据（72列官方模板，可再导入）")
+    @Operation(summary = "导出密接人群筛查数据（支持当前筛选条件或勾选导出）")
     @GetMapping("/export")
     @OperationLog(type = "export", module = "screening", action = "导出密接人群筛查数据")
     public void export(
             HttpServletResponse response,
-            @RequestParam(required = false) String ids) throws Exception {
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) Integer ccStatus,
+            @RequestParam(required = false) String finalScreeningResult,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode("密接人群筛查数据.xlsx", StandardCharsets.UTF_8));
 
-        var query = Wrappers.<ScreeningCloseContact>lambdaQuery();
+        List<Long> idList = null;
         if (ids != null && !ids.isBlank()) {
-            List<Long> idList = Arrays.stream(ids.split(","))
+            idList = Arrays.stream(ids.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty() && s.matches("\\d+"))
                     .map(Long::valueOf)
                     .toList();
-            if (!idList.isEmpty()) query.in(ScreeningCloseContact::getId, idList);
         }
-        screeningScopeHelper.applyDepartmentScope(
-                query, ScreeningCloseContact::getDepartmentId, ScreeningCloseContact::getId, "close");
-        cn.luyou.utils.ImportRowOrderSupport.applyWithBatch(query);
-        List<ScreeningCloseContact> list = screeningCloseContactService.list(query);
+
+        List<ScreeningCloseContact> list = screeningCloseContactService.listForExport(
+                name, idNumber, district, ccStatus, finalScreeningResult, phone, dateFrom, dateTo,
+                createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue, idList);
 
         CloseContactCaseExcelExportSupport.write(
                 response.getOutputStream(), CloseContactCaseExcelExportSupport.SHEET_NAME, ScreeningCloseContact.class, list);

@@ -16,6 +16,7 @@ const submitting = ref(false)
 const formData = reactive({
   realName: "",
   orgName: "",
+  phone: "",
   avatar: "",
   password: "",
   confirmPassword: ""
@@ -31,6 +32,22 @@ const avatarPreview = computed(() => resolveFileUrl(formData.avatar))
 
 const rules: FormRules<typeof formData> = {
   realName: [{ required: true, message: "请输入真实姓名", trigger: "blur" }],
+  phone: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!value) {
+          callback()
+          return
+        }
+        if (!/^1\d{10}$/.test(String(value))) {
+          callback(new Error("请输入正确的手机号"))
+          return
+        }
+        callback()
+      },
+      trigger: "blur"
+    }
+  ],
   password: [strongPasswordRule()],
   confirmPassword: [
     {
@@ -55,6 +72,7 @@ const rules: FormRules<typeof formData> = {
 function syncFormData() {
   formData.realName = userStore.realName
   formData.orgName = userStore.orgName
+  formData.phone = userStore.phone
   formData.avatar = userStore.avatar
   formData.password = ""
   formData.confirmPassword = ""
@@ -98,6 +116,7 @@ async function handleSubmit() {
     await updateCurrentUserApi({
       realName: formData.realName,
       orgName: formData.orgName,
+      phone: formData.phone ?? "",
       avatar: formData.avatar,
       password: formData.password || undefined
     })
@@ -177,6 +196,9 @@ syncFormData()
             </el-form-item>
             <el-form-item label="所属机构">
               <el-input v-model.trim="formData.orgName" placeholder="请输入所属机构名称" />
+            </el-form-item>
+            <el-form-item label="联系电话" prop="phone">
+              <el-input v-model.trim="formData.phone" placeholder="系统消息短信接收号" maxlength="20" />
             </el-form-item>
             <el-form-item label="新密码" prop="password">
               <el-input

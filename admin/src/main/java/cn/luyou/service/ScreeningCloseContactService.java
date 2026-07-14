@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 public interface ScreeningCloseContactService extends IService<ScreeningCloseContact> {
@@ -25,21 +26,40 @@ public interface ScreeningCloseContactService extends IService<ScreeningCloseCon
                                             String district, Integer ccStatus, String finalScreeningResult,
                                             String phone, String dateFrom, String dateTo,
                                             String createTimeFrom, String createTimeTo,
-                                            String creatorUsername, String columnFilters);
+                                            String creatorUsername, String columnFilters, String formatIssue);
 
     default IPage<ScreeningCloseContact> queryPage(int page, int size, String name, String idNumber,
                                                    String district, Integer ccStatus, String finalScreeningResult,
                                                    String phone, String dateFrom, String dateTo,
                                                    String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, district, ccStatus, finalScreeningResult,
-                phone, dateFrom, dateTo, createTimeFrom, createTimeTo, null, null);
+                phone, dateFrom, dateTo, createTimeFrom, createTimeTo, null, null, null);
     }
+
+    /** 导出：ids 非空时仅导出勾选行，否则按当前筛选条件导出全部匹配数据 */
+    List<ScreeningCloseContact> listForExport(String name, String idNumber, String district,
+                                               Integer ccStatus, String finalScreeningResult, String phone,
+                                               String dateFrom, String dateTo, String createTimeFrom,
+                                               String createTimeTo, String creatorUsername,
+                                               String columnFilters, String formatIssue, List<Long> ids);
 
     /** 新增单条筛查记录 */
     void createScreening(ScreeningCloseContact data);
 
     /** 级联删除筛查记录（同步删除后续所有关联数据） */
     void deleteScreeningCascade(Long id);
+
+    /** 批量级联删除 */
+    void batchDeleteCascade(List<Long> ids);
+
+    /** 按筛选条件删除（与 list/export 同参），返回删除条数 */
+    int deleteByFilter(String name, String idNumber, String district, Integer ccStatus,
+                       String finalScreeningResult, String phone, String dateFrom, String dateTo,
+                       String createTimeFrom, String createTimeTo, String creatorUsername,
+                       String columnFilters, String formatIssue);
+
+    /** 删除权限范围内全部密接筛查记录，返回删除条数 */
+    int deleteAll();
 
     /** 更新筛查记录 */
     void updateScreening(ScreeningCloseContact data);

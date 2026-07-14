@@ -15,6 +15,7 @@ import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
@@ -231,10 +232,12 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     public IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                               String district, String phone, String creatorUsername,
-                                              String diagnosisResult, String createTimeFrom, String createTimeTo,
-                                              String columnFilters) {
+                                              String diagnosisResult, String reportQuarter,
+                                              String createTimeFrom, String createTimeTo,
+                                              String columnFilters, String formatIssue) {
         LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
-                name, idNumber, district, phone, creatorUsername, diagnosisResult, createTimeFrom, createTimeTo);
+                name, idNumber, district, phone, creatorUsername, diagnosisResult, reportQuarter,
+                createTimeFrom, createTimeTo, formatIssue);
         applyColumnFilters(wrapper, columnFilters);
         ImportRowOrderSupport.applyWithBatch(wrapper);
         applyDepartmentFilter(wrapper);
@@ -309,16 +312,43 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String name, String idNumber, String district, String phone,
+                               String creatorUsername, String diagnosisResult, String reportQuarter,
+                               String createTimeFrom, String createTimeTo, String columnFilters,
+                               String formatIssue) {
+        LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
+                name, idNumber, district, phone, creatorUsername, diagnosisResult, reportQuarter,
+                createTimeFrom, createTimeTo, formatIssue);
+        applyColumnFilters(wrapper, columnFilters);
+        applyDepartmentFilter(wrapper);
+        wrapper.select(CloseContactCase::getId);
+        List<Long> ids = list(wrapper).stream().map(CloseContactCase::getId).toList();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        batchDelete(ids);
+        return ids.size();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteAll() {
+        return deleteByFilter(null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    @Override
     public List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                                  String phone, String creatorUsername, String diagnosisResult,
-                                                 List<Long> ids, String createTimeFrom, String createTimeTo) {
+                                                 String reportQuarter, List<Long> ids,
+                                                 String createTimeFrom, String createTimeTo, String formatIssue) {
         LambdaQueryWrapper<CloseContactCase> wrapper;
         if (ids != null && !ids.isEmpty()) {
             wrapper = new LambdaQueryWrapper<>();
             wrapper.in(CloseContactCase::getId, ids);
         } else {
             wrapper = buildQueryWrapper(name, idNumber, district, phone, creatorUsername, diagnosisResult,
-                    createTimeFrom, createTimeTo);
+                    reportQuarter, createTimeFrom, createTimeTo, formatIssue);
         }
         ImportRowOrderSupport.applyWithBatch(wrapper);
         applyDepartmentFilter(wrapper);
@@ -330,7 +360,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private LambdaQueryWrapper<CloseContactCase> buildQueryWrapper(String name, String idNumber,
                                                                     String district, String phone,
                                                                     String creatorUsername, String diagnosisResult,
-                                                                    String createTimeFrom, String createTimeTo) {
+                                                                    String reportQuarter,
+                                                                    String createTimeFrom, String createTimeTo,
+                                                                    String formatIssue) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<CloseContactCase> wrapper = new LambdaQueryWrapper<>();
@@ -342,7 +374,27 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 .eq(StrUtil.isNotBlank(diagnosisResult), CloseContactCase::getFinalScreeningResult, diagnosisResult)
                 .ge(createFrom != null, CloseContactCase::getCreateTime, createFrom)
                 .le(createTo != null, CloseContactCase::getCreateTime, createTo);
+        applyReportQuarterFilter(wrapper, reportQuarter);
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         return wrapper;
+    }
+
+    /** 报表填报季度按密切接触者登记日期所在季度筛选（衍生列不落库）。 */
+    private void applyReportQuarterFilter(LambdaQueryWrapper<CloseContactCase> wrapper, String reportQuarter) {
+        if (StrUtil.isBlank(reportQuarter)) {
+            return;
+        }
+        if (CloseContactCaseExcelDerivedSupport.isEmptyRegistrationQuarter(reportQuarter)) {
+            wrapper.isNull(CloseContactCase::getRegistrationDate);
+            return;
+        }
+        java.time.LocalDate[] range = CloseContactCaseExcelDerivedSupport.resolveReportQuarterDateRange(reportQuarter);
+        if (range == null) {
+            wrapper.eq(CloseContactCase::getId, -1L);
+            return;
+        }
+        wrapper.ge(CloseContactCase::getRegistrationDate, range[0])
+                .le(CloseContactCase::getRegistrationDate, range[1]);
     }
 
     private void applyDepartmentFilter(LambdaQueryWrapper<CloseContactCase> wrapper) {

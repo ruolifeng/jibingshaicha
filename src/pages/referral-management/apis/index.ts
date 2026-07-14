@@ -103,6 +103,36 @@ export function deleteReferralTrackingApi(id: number) {
   })
 }
 
+/** 批量删除推介/追踪记录 */
+export function batchDeleteReferralTrackingApi(ids: number[]) {
+  return request<ApiResponseData<number>>({
+    url: "referral-tracking/batch-delete",
+    method: "delete",
+    data: ids,
+    timeout: 120000
+  })
+}
+
+/** 按当前筛选条件删除推介/追踪记录（参数同 list，含 bizMode） */
+export function deleteReferralTrackingByFilterApi(params: Record<string, any>) {
+  return request<ApiResponseData<number>>({
+    url: "referral-tracking/delete-by-filter",
+    method: "delete",
+    params,
+    timeout: 300000
+  })
+}
+
+/** 删除权限范围内全部推介/追踪记录 */
+export function deleteAllReferralTrackingApi(bizMode: string) {
+  return request<ApiResponseData<number>>({
+    url: "referral-tracking/delete-all",
+    method: "delete",
+    params: { bizMode },
+    timeout: 300000
+  })
+}
+
 /** 检查推介/追踪是否已有相同证件号+姓名记录 */
 export function checkReferralDuplicateApi(params: { bizMode: string, idNumber: string, name: string }) {
   return request<ApiResponseData<{ exists: boolean }>>({
@@ -140,13 +170,18 @@ export function importEpidemicTrackApi(file: File, addDuplicateRecords = false) 
   })
 }
 
-/** 导出追踪记录 */
-export function exportReferralTrackApi(params: Record<string, any>) {
+/** 导出推介/追踪记录（支持筛选 / 勾选 ids / 全部） */
+export function exportReferralTrackApi(params: Record<string, any> & { ids?: number[] } = {}) {
+  const { ids, ...rest } = params
   return request<Blob>({
     url: "referral-tracking/export",
     method: "get",
-    params,
-    responseType: "blob"
+    params: {
+      ...rest,
+      ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
+    },
+    responseType: "blob",
+    timeout: 120000
   })
 }
 

@@ -138,6 +138,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .eq(User::getId, currentUserId)
                 .set(User::getRealName, user.getRealName())
                 .set(User::getOrgName, user.getOrgName())
+                .set(User::getPhone, user.getPhone())
                 .set(User::getAvatar, user.getAvatar());
         if (StrUtil.isNotBlank(user.getPassword())) {
             PasswordValidator.assertStrongPassword(user.getPassword());
@@ -330,6 +331,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .role(user.getRole())
                 .roleName(roleName)
                 .orgName(user.getOrgName())
+                .phone(user.getPhone())
                 .avatar(user.getAvatar())
                 .departmentId(user.getDepartmentId())
                 .departmentName(departmentName)

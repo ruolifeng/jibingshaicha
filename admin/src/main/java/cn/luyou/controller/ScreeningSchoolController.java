@@ -7,7 +7,7 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningSchool;
 import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.utils.PageQueryUtil;
-import com.alibaba.excel.EasyExcel;
+import cn.luyou.utils.SchoolScreeningExcelExportSupport;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,12 +57,18 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String hasChestXray,
+            @RequestParam(required = false) String chestXrayResult,
+            @RequestParam(required = false) String sputumSmearResult,
+            @RequestParam(required = false) String molecularBiologyResult,
             @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder) {
         IPage<ScreeningSchool> result = screeningSchoolService.queryPage(
                 page, PageQueryUtil.clampSize(size), name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
-                createTimeFrom, createTimeTo, creatorUsername, columnFilters, sortField, sortOrder);
+                createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
+                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue, sortField, sortOrder);
         return ResultRes.success(result);
     }
 
@@ -99,6 +105,41 @@ public class ScreeningSchoolController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "按筛选条件删除学校人群筛查记录（级联删除）")
+    @DeleteMapping("/delete-by-filter")
+    @OperationLog(type = "delete", module = "screening", action = "按筛选条件删除学校人群筛查记录")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String schoolName,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) Integer isLatent,
+            @RequestParam(required = false) String diagnosisFirst,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String year,
+            @RequestParam(required = false) String entryUnit,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String hasChestXray,
+            @RequestParam(required = false) String chestXrayResult,
+            @RequestParam(required = false) String sputumSmearResult,
+            @RequestParam(required = false) String molecularBiologyResult,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
+        return ResultRes.success(screeningSchoolService.deleteByFilter(
+                name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
+                createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
+                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue));
+    }
+
+    @Operation(summary = "删除权限范围内全部学校人群筛查记录（级联删除）")
+    @DeleteMapping("/delete-all")
+    @OperationLog(type = "delete", module = "screening", action = "删除全部学校人群筛查记录")
+    public ResultResponse<Integer> deleteAll() {
+        return ResultRes.success(screeningSchoolService.deleteAll());
+    }
+
     @Operation(summary = "按 ID 查询学校人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningSchool> detail(@PathVariable Long id) {
@@ -123,7 +164,12 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String hasChestXray,
+            @RequestParam(required = false) String chestXrayResult,
+            @RequestParam(required = false) String sputumSmearResult,
+            @RequestParam(required = false) String molecularBiologyResult,
             @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -141,7 +187,8 @@ public class ScreeningSchoolController {
 
         List<ScreeningSchool> list = screeningSchoolService.listForExport(
                 name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
-                createTimeFrom, createTimeTo, creatorUsername, columnFilters, sortField, sortOrder, idList);
-        EasyExcel.write(response.getOutputStream(), ScreeningSchool.class).sheet("筛查数据").doWrite(list);
+                createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
+                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue, sortField, sortOrder, idList);
+        SchoolScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }
 }

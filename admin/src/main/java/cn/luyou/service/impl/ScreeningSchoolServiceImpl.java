@@ -34,6 +34,7 @@ import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
@@ -90,6 +91,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             "name", "year", "city", "district", "gender", "idNumber", "phone", "ethnicity",
             "schoolName", "className", "schoolType", "currentAddress", "householdAddress",
             "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult",
+            "sputumSmearResult", "molecularBiologyResult",
             "remark", "creatorUsername", "idType", "tbHistory", "closeContactHistory",
             "suspiciousSymptoms", "hasInfectionScreen", "screenResult"
     );
@@ -378,11 +380,13 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
                                              String phone, String year, String entryUnit,
                                              String createTimeFrom, String createTimeTo,
-                                             String creatorUsername, String columnFilters,
-                                             String sortField, String sortOrder) {
+                                             String creatorUsername, String hasChestXray, String chestXrayResult,
+                                             String sputumSmearResult, String molecularBiologyResult,
+                                             String columnFilters, String formatIssue, String sortField, String sortOrder) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = buildListWrapper(
                 name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
-                createTimeFrom, createTimeTo, creatorUsername, columnFilters);
+                createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
+                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue);
         applyListOrder(wrapper, sortField, sortOrder);
         IPage<ScreeningSchool> result = page(new Page<>(page, size), wrapper);
         CreatorUserSupport.fillMissingUsernames(
@@ -398,8 +402,10 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     public List<ScreeningSchool> listForExport(String name, String idNumber, String schoolName, String district,
                                                 Integer isLatent, String diagnosisFirst, String phone, String year,
                                                 String entryUnit, String createTimeFrom, String createTimeTo,
-                                                String creatorUsername, String columnFilters,
-                                                String sortField, String sortOrder, List<Long> ids) {
+                                                String creatorUsername, String hasChestXray, String chestXrayResult,
+                                                String sputumSmearResult, String molecularBiologyResult,
+                                                String columnFilters, String formatIssue, String sortField, String sortOrder,
+                                                List<Long> ids) {
         LambdaQueryWrapper<ScreeningSchool> wrapper;
         if (ids != null && !ids.isEmpty()) {
             wrapper = new LambdaQueryWrapper<>();
@@ -409,16 +415,26 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         } else {
             wrapper = buildListWrapper(
                     name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
-                    createTimeFrom, createTimeTo, creatorUsername, columnFilters);
+                    createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
+                    sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue);
         }
         applyListOrder(wrapper, sortField, sortOrder);
-        return list(wrapper);
+        List<ScreeningSchool> records = list(wrapper);
+        CreatorUserSupport.fillMissingUsernames(
+                userMapper,
+                records,
+                ScreeningSchool::getCreatorId,
+                ScreeningSchool::getCreatorUsername,
+                ScreeningSchool::setCreatorUsername);
+        return records;
     }
 
     private LambdaQueryWrapper<ScreeningSchool> buildListWrapper(
             String name, String idNumber, String schoolName, String district, Integer isLatent,
             String diagnosisFirst, String phone, String year, String entryUnit,
-            String createTimeFrom, String createTimeTo, String creatorUsername, String columnFilters) {
+            String createTimeFrom, String createTimeTo, String creatorUsername,
+            String hasChestXray, String chestXrayResult, String sputumSmearResult, String molecularBiologyResult,
+            String columnFilters, String formatIssue) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
@@ -429,6 +445,10 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 .like(StrUtil.isNotBlank(phone), ScreeningSchool::getPhone, phone)
                 .eq(isLatent != null, ScreeningSchool::getIsLatent, isLatent)
                 .like(StrUtil.isNotBlank(creatorUsername), ScreeningSchool::getCreatorUsername, creatorUsername)
+                .eq(StrUtil.isNotBlank(hasChestXray), ScreeningSchool::getHasChestXray, hasChestXray)
+                .eq(StrUtil.isNotBlank(chestXrayResult), ScreeningSchool::getChestXrayResult, chestXrayResult)
+                .like(StrUtil.isNotBlank(sputumSmearResult), ScreeningSchool::getSputumSmearResult, sputumSmearResult)
+                .like(StrUtil.isNotBlank(molecularBiologyResult), ScreeningSchool::getMolecularBiologyResult, molecularBiologyResult)
                 .ge(createFrom != null, ScreeningSchool::getCreateTime, createFrom)
                 .le(createTo != null, ScreeningSchool::getCreateTime, createTo);
         ScreeningDiagnosisSupport.applyScreeningDiagnosisFilter(
@@ -438,6 +458,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         applyColumnFilters(wrapper, columnFilters);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         return wrapper;
     }
 
@@ -468,6 +489,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                         wrapper, ScreeningSchool::getIsLatent, ScreeningSchool::getDiagnosisFirst, value);
                 case "hasChestXray" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getHasChestXray, value);
                 case "chestXrayResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getChestXrayResult, value);
+                case "sputumSmearResult" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getSputumSmearResult, value);
+                case "molecularBiologyResult" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getMolecularBiologyResult, value);
                 case "remark" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getRemark, value);
                 case "creatorUsername" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getCreatorUsername, value);
                 case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getIdType, value);
@@ -794,6 +817,34 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         for (Long id : ids) {
             doDeleteScreeningCascade(id);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String name, String idNumber, String schoolName, String district,
+                               Integer isLatent, String diagnosisFirst, String phone, String year,
+                               String entryUnit, String createTimeFrom, String createTimeTo,
+                               String creatorUsername, String hasChestXray, String chestXrayResult,
+                               String sputumSmearResult, String molecularBiologyResult, String columnFilters,
+                               String formatIssue) {
+        LambdaQueryWrapper<ScreeningSchool> wrapper = buildListWrapper(
+                name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
+                createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
+                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue);
+        wrapper.select(ScreeningSchool::getId);
+        List<Long> ids = list(wrapper).stream().map(ScreeningSchool::getId).toList();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        batchDeleteCascade(ids);
+        return ids.size();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteAll() {
+        return deleteByFilter(null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null);
     }
 
     private void doDeleteScreeningCascade(Long id) {

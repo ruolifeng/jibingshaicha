@@ -39,6 +39,9 @@ public class User implements Serializable {
     /** 所属机构名称 */
     private String orgName;
 
+    /** 联系电话（系统消息联动短信接收号） */
+    private String phone;
+
     /** 头像 URL */
     private String avatar;
 

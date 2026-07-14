@@ -40,8 +40,10 @@ export function getCloseContactCaseListApi(params: {
   creatorUsername?: string
   columnFilters?: string
   diagnosisResult?: string
+  reportQuarter?: string
   createTimeFrom?: string
   createTimeTo?: string
+  formatIssue?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "close-contact/case/list",
@@ -59,9 +61,11 @@ export function exportCloseContactCaseApi(params?: {
   phone?: string
   creatorUsername?: string
   diagnosisResult?: string
+  reportQuarter?: string
   createTimeFrom?: string
   createTimeTo?: string
   exportType?: "latent" | "confirmed"
+  formatIssue?: string
 }) {
   const query: Record<string, string> = {}
   if (params?.ids?.length) query.ids = params.ids.join(",")
@@ -71,9 +75,11 @@ export function exportCloseContactCaseApi(params?: {
   if (params?.phone) query.phone = params.phone
   if (params?.creatorUsername) query.creatorUsername = params.creatorUsername
   if (params?.diagnosisResult) query.diagnosisResult = params.diagnosisResult
+  if (params?.reportQuarter) query.reportQuarter = params.reportQuarter
   if (params?.createTimeFrom) query.createTimeFrom = params.createTimeFrom
   if (params?.createTimeTo) query.createTimeTo = params.createTimeTo
   if (params?.exportType) query.exportType = params.exportType
+  if (params?.formatIssue) query.formatIssue = params.formatIssue
   return request<Blob>({
     url: "close-contact/case/export",
     method: "get",
@@ -114,7 +120,39 @@ export function batchDeleteCloseContactCaseApi(ids: number[]) {
   return request<ApiResponseData<null>>({
     url: "close-contact/case/batch-delete",
     method: "delete",
-    data: ids
+    data: ids,
+    timeout: 120000
+  })
+}
+
+/** 按当前筛选条件删除密接个案 */
+export function deleteCloseContactCaseByFilterApi(params?: {
+  name?: string
+  idNumber?: string
+  district?: string
+  phone?: string
+  creatorUsername?: string
+  diagnosisResult?: string
+  reportQuarter?: string
+  createTimeFrom?: string
+  createTimeTo?: string
+  columnFilters?: string
+  formatIssue?: string
+}) {
+  return request<ApiResponseData<number>>({
+    url: "close-contact/case/delete-by-filter",
+    method: "delete",
+    params,
+    timeout: 300000
+  })
+}
+
+/** 删除权限范围内全部密接个案 */
+export function deleteAllCloseContactCaseApi() {
+  return request<ApiResponseData<number>>({
+    url: "close-contact/case/delete-all",
+    method: "delete",
+    timeout: 300000
   })
 }
 

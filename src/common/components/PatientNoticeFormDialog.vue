@@ -357,7 +357,14 @@ async function handleSaveDraft() {
         </el-col>
         <el-col :span="8">
           <el-form-item label="痰培养">
-            <el-select v-model="noticeForm.sputumCulture" style="width: 100%">
+            <el-select
+              v-model="noticeForm.sputumCulture"
+              style="width: 100%"
+              placeholder="请选择或输入"
+              filterable
+              allow-create
+              default-first-option
+            >
               <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>

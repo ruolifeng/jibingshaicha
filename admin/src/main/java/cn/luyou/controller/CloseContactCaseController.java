@@ -7,6 +7,7 @@ import cn.luyou.model.CloseContactCase;
 import cn.luyou.model.ImportResult;
 import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.utils.CloseContactCaseExcelExportSupport;
+import cn.luyou.utils.PageQueryUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -52,12 +53,14 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String reportQuarter,
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
-            @RequestParam(required = false) String columnFilters) {
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(closeContactCaseService.queryPage(
-                page, size, name, idNumber, district, phone, creatorUsername, diagnosisResult,
-                createTimeFrom, createTimeTo, columnFilters));
+                page, PageQueryUtil.clampSize(size), name, idNumber, district, phone, creatorUsername,
+                diagnosisResult, reportQuarter, createTimeFrom, createTimeTo, columnFilters, formatIssue));
     }
 
     @Operation(summary = "新增密接个案")
@@ -93,6 +96,33 @@ public class CloseContactCaseController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "按筛选条件删除密接个案")
+    @DeleteMapping("/delete-by-filter")
+    @OperationLog(type = "delete", module = "screening", action = "按筛选条件删除密接个案")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String reportQuarter,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
+        return ResultRes.success(closeContactCaseService.deleteByFilter(
+                name, idNumber, district, phone, creatorUsername, diagnosisResult, reportQuarter,
+                createTimeFrom, createTimeTo, columnFilters, formatIssue));
+    }
+
+    @Operation(summary = "删除权限范围内全部密接个案")
+    @DeleteMapping("/delete-all")
+    @OperationLog(type = "delete", module = "screening", action = "删除全部密接个案")
+    public ResultResponse<Integer> deleteAll() {
+        return ResultRes.success(closeContactCaseService.deleteAll());
+    }
+
     @Operation(summary = "导出密接个案表（支持筛选/勾选/按诊断结果导出）")
     @GetMapping("/export")
     @OperationLog(type = "export", module = "screening", action = "导出密接个案表")
@@ -105,9 +135,11 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String reportQuarter,
             @RequestParam(required = false) String exportType,
             @RequestParam(required = false) String createTimeFrom,
-            @RequestParam(required = false) String createTimeTo) throws Exception {
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String formatIssue) throws Exception {
 
         String effectiveDiagnosis = diagnosisResult;
         String fileName = "密接个案表.xlsx";
@@ -129,8 +161,8 @@ public class CloseContactCaseController {
         }
 
         List<CloseContactCase> list = closeContactCaseService.listForExport(
-                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis, idList,
-                createTimeFrom, createTimeTo);
+                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis, reportQuarter, idList,
+                createTimeFrom, createTimeTo, formatIssue);
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +

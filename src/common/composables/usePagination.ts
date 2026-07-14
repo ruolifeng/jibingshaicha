@@ -1,3 +1,7 @@
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
+
+export { MAX_PAGE_SIZE } from "@@/constants/pagination"
+
 interface PaginationData {
   total?: number
   currentPage?: number
@@ -6,15 +10,12 @@ interface PaginationData {
   layout?: string
 }
 
-/** 单页最大条数，避免一次渲染过多行导致页面卡顿 */
-export const MAX_PAGE_SIZE = 100
-
 /** 默认的分页参数 */
 const DEFAULT_PAGINATION_DATA = {
   total: 0,
   currentPage: 1,
-  pageSizes: [10, 20, 50, 100],
-  pageSize: 10,
+  pageSizes: [...PAGE_SIZE_OPTIONS],
+  pageSize: DEFAULT_PAGE_SIZE,
   layout: "total, sizes, prev, pager, next, jumper"
 }
 

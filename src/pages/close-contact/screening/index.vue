@@ -6,6 +6,7 @@ import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
 import { isSuspectedTbDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, SUSPECTED_TB_DIAGNOSIS } from "@@/constants/disease"
+import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import {
   CC_FINAL_RESULT_STAT_OPTIONS,
   CC_FINAL_SCREENING_RESULT_OPTIONS,
@@ -25,13 +26,16 @@ import {
   SCREENING_FIELD_OTHER,
   selectOptionsWithLegacy
 } from "@@/constants/screening-close-contact"
+import { confirmDangerDelete, triggerBlobDownload } from "@@/utils/listToolbar"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { useRouter } from "vue-router"
 import {
   batchDeleteScreeningCloseContactApi,
   countByResultApi,
   createScreeningCloseContactApi,
+  deleteAllScreeningCloseContactApi,
   deleteScreeningCloseContactApi,
+  deleteScreeningCloseContactByFilterApi,
   exportScreeningCloseContactApi,
   getScreeningCloseContactListApi,
   submitThreeMonthCheckApi,
@@ -46,6 +50,8 @@ const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumn
 const finalScreeningFilterOptions = CC_FINAL_SCREENING_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 
 const loading = ref(false)
+const batchDeleting = ref(false)
+const exporting = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
 
@@ -60,7 +66,8 @@ const searchForm = reactive({
   creatorUsername: "",
   dateRange: [] as string[],
   entryTimeRange: [] as string[],
-  finalScreeningResult: "" as string
+  finalScreeningResult: "" as string,
+  formatIssue: "" as string
 })
 
 type TagType = "primary" | "success" | "info" | "warning" | "danger"
@@ -122,19 +129,10 @@ const OTHER_FIELD_WATCH_PAIRS = [
 async function fetchData() {
   loading.value = true
   try {
-    const columnFiltersParam = toQueryParam()
     const listRes = await getScreeningCloseContactListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined,
-      district: searchForm.district || undefined,
-      phone: searchForm.phone || undefined,
-      creatorUsername: searchForm.creatorUsername || undefined,
-      finalScreeningResult: searchForm.finalScreeningResult || undefined,
-      ...extractDateRangeParams(searchForm.dateRange),
-      ...extractCreateTimeRangeParams(searchForm.entryTimeRange),
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+      ...buildListQueryParams()
     })
     tableData.value = listRes.data.records
     total.value = listRes.data.total
@@ -146,6 +144,22 @@ async function fetchData() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+function buildListQueryParams() {
+  const columnFiltersParam = toQueryParam()
+  return {
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    district: searchForm.district || undefined,
+    phone: searchForm.phone || undefined,
+    creatorUsername: searchForm.creatorUsername || undefined,
+    finalScreeningResult: searchForm.finalScreeningResult || undefined,
+    formatIssue: searchForm.formatIssue || undefined,
+    ...extractDateRangeParams(searchForm.dateRange),
+    ...extractCreateTimeRangeParams(searchForm.entryTimeRange),
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
   }
 }
 
@@ -162,6 +176,7 @@ function handleReset() {
   searchForm.dateRange = []
   searchForm.entryTimeRange = []
   searchForm.finalScreeningResult = ""
+  searchForm.formatIssue = ""
   clearFilters()
   handleSearch()
 }
@@ -194,24 +209,39 @@ function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
 
-async function handleExport(ids?: number[]) {
+function isRequestTimeout(err: any) {
+  return err?.code === "ECONNABORTED" || String(err?.message ?? "").includes("超时")
+}
+
+/** 导出 Excel：filtered=筛选结果 / selected=勾选 / all=全部 */
+async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: number[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected
+    ? `选中的 ${ids!.length} 条`
+    : mode === "all"
+      ? "全部"
+      : "当前筛选条件下的"
   try {
-    await ElMessageBox.confirm("确认导出当前选择的数据吗？", "导出确认", {
+    await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
       confirmButtonText: "确认导出",
       cancelButtonText: "取消",
       type: "warning"
     })
-    const res = await exportScreeningCloseContactApi(ids)
-    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "密接人群筛查数据.xlsx"
-    a.click()
-    URL.revokeObjectURL(url)
+    exporting.value = true
+    const res = await exportScreeningCloseContactApi(
+      isSelected ? { ids } : mode === "all" ? {} : buildListQueryParams()
+    )
+    triggerBlobDownload(
+      new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      "密接人群筛查数据.xlsx"
+    )
     ElMessage.success("导出成功")
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("导出失败")
+    if (err !== "cancel") {
+      ElMessage.error(isRequestTimeout(err) ? "导出超时，请稍后重试或缩小导出范围" : "导出失败")
+    }
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -221,7 +251,7 @@ function handleExportSelected() {
     ElMessage.warning("请先勾选要导出的数据")
     return
   }
-  handleExport(ids)
+  handleExport("selected", ids)
 }
 
 /** 跳转到密接潜伏感染管理页 */
@@ -433,12 +463,53 @@ async function handleBatchDelete() {
       { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
     )
     const ids = selectedRows.value.map((r: any) => r.id)
+    batchDeleting.value = true
     await batchDeleteScreeningCloseContactApi(ids)
     ElMessage.success(`成功删除 ${ids.length} 条记录`)
     selectedRows.value = []
     fetchData()
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("批量删除失败")
+    if (err !== "cancel") ElMessage.error("删除勾选失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部筛查记录吗？删除后关联数据将一并删除，且不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteScreeningCloseContactByFilterApi(buildListQueryParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    ElMessage.error(isRequestTimeout(err) ? "删除超时，请刷新后确认" : "删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteAll() {
+  const ok = await confirmDangerDelete({
+    title: "删除全部",
+    message: "确定删除权限范围内的全部筛查记录吗？此操作不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteAllScreeningCloseContactApi()
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    handleReset()
+  } catch (err: any) {
+    ElMessage.error(isRequestTimeout(err) ? "删除超时，请刷新后确认" : "删除全部失败")
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -552,6 +623,11 @@ async function handleThreeMonthSubmit() {
         <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
+        <el-form-item label="格式问题">
+          <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="筛查时间">
           <el-date-picker
             v-model="searchForm.dateRange"
@@ -593,24 +669,33 @@ async function handleThreeMonthSubmit() {
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">密接人群筛查数据</span>
-          <div class="flex gap-2">
+          <div class="flex gap-2 flex-wrap">
             <el-button v-permission="'closeContact:screening:create'" type="success" @click="handleCreate">
               新增数据
             </el-button>
-            <el-button v-permission="'closeContact:screening:export'" @click="() => handleExport()">
-              导出全部
+            <el-button v-permission="'closeContact:screening:export'" :loading="exporting" @click="() => handleExport('filtered')">
+              导出筛选结果
             </el-button>
-            <el-button v-permission="'closeContact:screening:export'" type="warning" :disabled="!selectedRows.length" @click="handleExportSelected">
+            <el-button v-permission="'closeContact:screening:delete'" type="danger" plain :loading="batchDeleting" @click="handleDeleteFiltered">
+              删除筛选结果
+            </el-button>
+            <el-button v-permission="'closeContact:screening:export'" type="warning" :loading="exporting" :disabled="!selectedRows.length" @click="handleExportSelected">
               导出勾选
             </el-button>
-            <el-button v-permission="'closeContact:screening:delete'" type="danger" :disabled="!selectedRows.length" @click="handleBatchDelete">
-              批量删除
+            <el-button v-permission="'closeContact:screening:delete'" type="danger" :loading="batchDeleting" :disabled="!selectedRows.length" @click="handleBatchDelete">
+              删除勾选
             </el-button>
             <el-upload :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="handleUpload">
               <el-button type="primary" v-permission="'closeContact:screening:upload'">
                 上传 Excel
               </el-button>
             </el-upload>
+            <el-button v-permission="'closeContact:screening:export'" :loading="exporting" @click="() => handleExport('all')">
+              导出全部
+            </el-button>
+            <el-button v-permission="'closeContact:screening:delete'" type="danger" plain :loading="batchDeleting" @click="handleDeleteAll">
+              删除全部
+            </el-button>
           </div>
         </div>
       </template>
