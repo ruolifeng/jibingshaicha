@@ -47,7 +47,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                              String createTimeFrom, String createTimeTo,
                                              String creatorUsername, String hasChestXray,
                                              String chestXrayResult, String columnFilters,
-                                             String sortField, String sortOrder);
+                                             String formatIssue, String sortField, String sortOrder);
 
     /** 导出：ids 非空时仅导出勾选行，否则按当前筛选条件导出全部匹配数据 */
     List<ScreeningKeyPopulation> listForExport(String name, String idNumber,
@@ -58,7 +58,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                 String createTimeFrom, String createTimeTo,
                                                 String creatorUsername, String hasChestXray,
                                                 String chestXrayResult, String columnFilters,
-                                                String sortField, String sortOrder,
+                                                String formatIssue, String sortField, String sortOrder,
                                                 List<Long> ids);
 
     /** @deprecated 兼容旧调用 */
@@ -71,7 +71,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
                 crowdCategory, screenMethod, isLatent, sourceType, diagnosisFirst, dateFrom, dateTo,
-                entryUnit, createTimeFrom, createTimeTo, null, null, null, null, null, null);
+                entryUnit, createTimeFrom, createTimeTo, null, null, null, null, null, null, null);
     }
 
     /** @deprecated 兼容旧调用，sourceType 默认 keyPopulation */
@@ -81,7 +81,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
                                                     String crowdCategory, String screenMethod, Integer isLatent) {
         return queryPage(page, size, name, idNumber, phone, district, townshipCommunity,
                 crowdCategory, screenMethod, isLatent, "keyPopulation", null, null, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */
@@ -89,6 +89,19 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
 
     /** 级联删除筛查记录（同步删除后续所有关联数据） */
     void deleteScreeningCascade(Long id);
+
+    /** 批量级联删除筛查记录 */
+    void batchDeleteCascade(List<Long> ids);
+
+    /** 按筛选条件删除（与 list/export 同参，含 sourceType/部门权限），返回删除条数 */
+    int deleteByFilter(String name, String idNumber, String phone, String district, String townshipCommunity,
+                       String crowdCategory, String screenMethod, Integer isLatent, String sourceType,
+                       String diagnosisFirst, String dateFrom, String dateTo, String entryUnit,
+                       String createTimeFrom, String createTimeTo, String creatorUsername,
+                       String hasChestXray, String chestXrayResult, String columnFilters, String formatIssue);
+
+    /** 删除权限范围内指定 sourceType 的全部记录，返回删除条数 */
+    int deleteAll(String sourceType);
 
     /** 更新筛查记录（同步重新计算潜伏判定结果） */
     void updateScreening(ScreeningKeyPopulation data);

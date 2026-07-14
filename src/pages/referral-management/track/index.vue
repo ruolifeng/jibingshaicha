@@ -14,6 +14,7 @@ import {
 } from "@@/constants/referral-tracking"
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
+import { confirmDangerDelete } from "@@/utils/listToolbar"
 import {
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
@@ -22,12 +23,16 @@ import {
   TRACK_STATUS_LABEL,
   TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { computed, nextTick, onMounted, reactive, ref } from "vue"
 import { useUserStore } from "@/pinia/stores/user"
 import {
+  batchDeleteReferralTrackingApi,
+  deleteAllReferralTrackingApi,
   deleteReferralTrackingApi,
+  deleteReferralTrackingByFilterApi,
   enableJointTrackingApi,
   exportReferralTrackApi,
   getReferralTrackingDetailApi,
@@ -74,9 +79,11 @@ function canEnableJointTracking(row: any) {
 // ===== 列表 =====
 const loading = ref(false)
 const exporting = ref(false)
+const batchDeleting = ref(false)
 const uploading = ref(false)
 const tableData = ref<any[]>([])
 const total = ref(0)
+const selectedRows = ref<any[]>([])
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 const genderFilterOptions = [
   { text: "男", value: "男" },
@@ -94,33 +101,42 @@ const searchForm = reactive({
   creatorOrEntryUnit: "",
   dateRange: [] as string[]
 })
+const paginationData = reactive({ currentPage: 1, pageSize: 20 })
+
+/** 列表/筛选导出/按筛删除共用查询参数（不含分页） */
+function buildFilterParams() {
+  const columnFiltersParam = toQueryParam()
+  return {
+    bizMode: "track",
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    township: searchForm.township || undefined,
+    creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
+    ...extractDateRangeParams(searchForm.dateRange),
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+  }
+}
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
 
 async function fetchList() {
   loading.value = true
   try {
-    const [dateFrom, dateTo] = searchForm.dateRange ?? []
-    const columnFiltersParam = toQueryParam()
     const res = await getReferralTrackingListApi({
-      bizMode: "track",
+      ...buildFilterParams(),
       page: paginationData.currentPage,
-      size: paginationData.pageSize,
-      name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined,
-      phone: searchForm.phone || undefined,
-      township: searchForm.township || undefined,
-      creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+      size: paginationData.pageSize
     })
     tableData.value = res.data?.records ?? []
     total.value = res.data?.total ?? 0
+    selectedRows.value = []
   } finally {
     loading.value = false
   }
 }
-
-const paginationData = reactive({ currentPage: 1, pageSize: 20 })
 
 onMounted(fetchList)
 
@@ -193,25 +209,105 @@ async function handleEpidemicFileChange(uploadFile: any) {
   }
 }
 
-async function handleExport() {
-  exporting.value = true
+/** 导出：filtered=筛选 / selected=勾选 / all=全部 */
+async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: number[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected
+    ? `选中的 ${ids!.length} 条`
+    : mode === "all"
+      ? "全部"
+      : "当前筛选条件下的"
   try {
-    const [dateFrom, dateTo] = searchForm.dateRange ?? []
-    const blob = await exportReferralTrackApi({
-      bizMode: "track",
-      name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined,
-      phone: searchForm.phone || undefined,
-      township: searchForm.township || undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined
+    await ElMessageBox.confirm(`确认导出${label}追踪数据吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
     })
+    exporting.value = true
+    const blob = await exportReferralTrackApi(
+      isSelected
+        ? { bizMode: "track", ids }
+        : mode === "all"
+          ? { bizMode: "track" }
+          : buildFilterParams()
+    )
     downloadBlob(blob as unknown as Blob, "追踪记录导出.xlsx")
     ElMessage.success("导出成功")
-  } catch {
-    ElMessage.error("导出失败")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
   } finally {
     exporting.value = false
+  }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map((item: any) => item.id).filter(Boolean)
+  if (ids.length === 0) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport("selected", ids)
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部追踪记录吗？此操作不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteReferralTrackingByFilterApi(buildFilterParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    fetchList()
+  } catch {
+    ElMessage.error("删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteAll() {
+  const ok = await confirmDangerDelete({
+    title: "删除全部",
+    message: "确定删除权限范围内的全部追踪记录吗？此操作不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteAllReferralTrackingApi("track")
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    handleReset()
+  } catch {
+    ElMessage.error("删除全部失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条追踪记录吗？此操作不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    const ids = selectedRows.value.map((r: any) => r.id)
+    batchDeleting.value = true
+    const { data } = await batchDeleteReferralTrackingApi(ids)
+    ElMessage.success(`成功删除 ${data ?? ids.length} 条记录`)
+    selectedRows.value = []
+    fetchList()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("批量删除失败")
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -520,19 +616,67 @@ function getRowClass({ row }: { row: any }) {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 16px">
-      <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px">
+      <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap">
         <el-button v-permission="'referralManagement:create'" type="primary" @click="openCreateDialog">
           新增追踪
+        </el-button>
+        <el-button v-permission="'referralManagement:export'" :loading="exporting" @click="() => handleExport('filtered')">
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'referralManagement:delete'"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="handleDeleteFiltered"
+        >
+          删除筛选结果
+        </el-button>
+        <el-button
+          v-permission="'referralManagement:export'"
+          type="warning"
+          :loading="exporting"
+          :disabled="selectedRows.length === 0"
+          @click="handleExportSelected"
+        >
+          导出勾选
+        </el-button>
+        <el-button
+          v-permission="'referralManagement:delete'"
+          type="danger"
+          :loading="batchDeleting"
+          :disabled="selectedRows.length === 0"
+          @click="handleBatchDelete"
+        >
+          删除勾选
         </el-button>
         <el-button v-permission="'referralManagement:epidemicImport'" type="success" @click="openImportDialog">
           大疫情导入
         </el-button>
-        <el-button v-permission="'referralManagement:export'" type="warning" :loading="exporting" @click="handleExport">
-          导出
+        <el-button v-permission="'referralManagement:export'" :loading="exporting" @click="() => handleExport('all')">
+          导出全部
+        </el-button>
+        <el-button
+          v-permission="'referralManagement:delete'"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="handleDeleteAll"
+        >
+          删除全部
         </el-button>
       </div>
 
-      <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getRowClass">
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        row-key="id"
+        :row-class-name="getRowClass"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" fixed />
         <el-table-column label="来源" width="100">
           <template #default="{ row }">
             <el-tag :type="isEpidemicRow(row) ? 'danger' : 'info'" size="small">

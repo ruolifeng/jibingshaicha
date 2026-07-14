@@ -74,12 +74,13 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String hasChestXray,
             @RequestParam(required = false) String chestXrayResult,
             @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
                 page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
-                creatorUsername, hasChestXray, chestXrayResult, columnFilters, sortField, sortOrder));
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue, sortField, sortOrder));
     }
 
     @Operation(summary = "新增重点人群筛查记录")
@@ -111,8 +112,46 @@ public class ScreeningKeyPopulationController {
     @DeleteMapping("/batch-delete")
     @OperationLog(type = "delete", module = "screening", action = "批量删除重点人群筛查记录")
     public ResultResponse<Void> batchDelete(@RequestBody List<Long> ids) {
-        if (ids != null) ids.forEach(screeningKeyPopulationService::deleteScreeningCascade);
+        screeningKeyPopulationService.batchDeleteCascade(ids);
         return ResultRes.success(null);
+    }
+
+    @Operation(summary = "按筛选条件删除重点人群/疫情筛查记录（级联删除）")
+    @DeleteMapping("/delete-by-filter")
+    @OperationLog(type = "delete", module = "screening", action = "按筛选条件删除重点人群筛查记录")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String townshipCommunity,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String screenMethod,
+            @RequestParam(required = false) Integer isLatent,
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType,
+            @RequestParam(required = false) String diagnosisFirst,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String entryUnit,
+            @RequestParam(required = false) String createTimeFrom,
+            @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String hasChestXray,
+            @RequestParam(required = false) String chestXrayResult,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
+        return ResultRes.success(screeningKeyPopulationService.deleteByFilter(
+                name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue));
+    }
+
+    @Operation(summary = "删除权限范围内全部重点人群/疫情筛查记录（级联删除）")
+    @DeleteMapping("/delete-all")
+    @OperationLog(type = "delete", module = "screening", action = "删除全部重点人群筛查记录")
+    public ResultResponse<Integer> deleteAll(
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
+        return ResultRes.success(screeningKeyPopulationService.deleteAll(sourceType));
     }
 
     @Operation(summary = "按 ID 查询重点人群筛查记录详情")
@@ -146,6 +185,7 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String hasChestXray,
             @RequestParam(required = false) String chestXrayResult,
             @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder) throws Exception {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -165,7 +205,7 @@ public class ScreeningKeyPopulationController {
         List<ScreeningKeyPopulation> list = screeningKeyPopulationService.listForExport(
                 name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
-                creatorUsername, hasChestXray, chestXrayResult, columnFilters, sortField, sortOrder, idList);
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue, sortField, sortOrder, idList);
         KeyPopulationScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }
 }

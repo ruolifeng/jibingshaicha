@@ -596,7 +596,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 // 学校人群通知单人群分类默认“学生”
                 latent.setCrowdCategory("学生");
             }
-            case "keyPopulation" -> {
+            // 疫情筛查与重点人群共用 ScreeningKeyPopulation 表
+            case "keyPopulation", "regular" -> {
                 ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(latent.getScreeningId());
                 if (k == null) return;
                 latent.setBirthDate(k.getBirthDate());
@@ -668,7 +669,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if ("是".equals(k.getCrowdCategoryElder())) return "老年人";
         if ("是".equals(k.getCrowdCategoryDiabetes())) return "糖尿病";
         if ("是".equals(k.getCrowdCategoryDual())) return "双感";
-        if ("是".equals(k.getCrowdCategoryTbHist())) return "既往结核";
+        // 与推介人群分类选项「既往结核史」保持一致
+        if ("是".equals(k.getCrowdCategoryTbHist())) return "既往结核史";
         if ("是".equals(k.getCrowdCategoryNormal())) return "非重点人群";
         return "";
     }

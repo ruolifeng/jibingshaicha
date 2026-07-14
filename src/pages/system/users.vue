@@ -116,6 +116,7 @@ const formData = reactive({
   realName: "",
   role: 6,
   orgName: "",
+  phone: "",
   departmentId: undefined as number | undefined
 })
 
@@ -128,6 +129,7 @@ function openCreateDialog() {
   formData.realName = ""
   formData.role = 6
   formData.orgName = ""
+  formData.phone = ""
   formData.departmentId = undefined
   dialogVisible.value = true
 }
@@ -142,6 +144,7 @@ function openEditDialog(row: UserTreeRow) {
   formData.realName = row.realName || ""
   formData.role = row.role ?? 6
   formData.orgName = row.orgName || ""
+  formData.phone = row.phone || ""
   formData.departmentId = row.departmentId || undefined
   dialogVisible.value = true
 }
@@ -162,6 +165,7 @@ async function handleSubmit() {
         realName: formData.realName,
         role: formData.role,
         orgName: formData.orgName,
+        phone: formData.phone ?? "",
         departmentId: formData.departmentId
       }
       if (formData.password) payload.password = formData.password
@@ -298,6 +302,12 @@ fetchData()
             <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
+        <el-table-column label="联系电话" width="130" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.nodeType === 'user'">{{ row.phone || "—" }}</span>
+            <span v-else class="text-muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" width="180">
           <template #default="{ row }">
             <span v-if="row.nodeType === 'user'">{{ row.createTime || "—" }}</span>
@@ -369,6 +379,9 @@ fetchData()
         </el-form-item>
         <el-form-item label="所属机构">
           <el-input v-model="formData.orgName" placeholder="请输入所属机构名称" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="formData.phone" placeholder="系统消息短信接收号" maxlength="20" />
         </el-form-item>
       </el-form>
       <template #footer>

@@ -30,6 +30,7 @@ import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
@@ -434,11 +435,11 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                     String createTimeFrom, String createTimeTo,
                                                     String creatorUsername, String hasChestXray,
                                                     String chestXrayResult, String columnFilters,
-                                                    String sortField, String sortOrder) {
+                                                    String formatIssue, String sortField, String sortOrder) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = buildListWrapper(
                 name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
-                creatorUsername, hasChestXray, chestXrayResult, columnFilters);
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue);
         applyListOrder(wrapper, sortField, sortOrder);
         IPage<ScreeningKeyPopulation> result = page(new Page<>(page, size), wrapper);
         CreatorUserSupport.fillMissingUsernames(
@@ -459,7 +460,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                                                        String createTimeFrom, String createTimeTo,
                                                        String creatorUsername, String hasChestXray,
                                                        String chestXrayResult, String columnFilters,
-                                                       String sortField, String sortOrder,
+                                                       String formatIssue, String sortField, String sortOrder,
                                                        List<Long> ids) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper;
         if (ids != null && !ids.isEmpty()) {
@@ -473,7 +474,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             wrapper = buildListWrapper(
                     name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                     sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
-                    creatorUsername, hasChestXray, chestXrayResult, columnFilters);
+                    creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue);
         }
         applyListOrder(wrapper, sortField, sortOrder);
         return list(wrapper);
@@ -484,7 +485,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             String crowdCategory, String screenMethod, Integer isLatent, String sourceType,
             String diagnosisFirst, String dateFrom, String dateTo, String entryUnit,
             String createTimeFrom, String createTimeTo, String creatorUsername,
-            String hasChestXray, String chestXrayResult, String columnFilters) {
+            String hasChestXray, String chestXrayResult, String columnFilters, String formatIssue) {
         LocalDate screenFrom = QueryDateRangeUtil.parseLocalDate(dateFrom);
         LocalDate screenTo = QueryDateRangeUtil.parseLocalDate(dateTo);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
@@ -513,6 +514,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         applyColumnFilters(wrapper, columnFilters);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         return wrapper;
     }
 
@@ -669,6 +671,48 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteScreeningCascade(Long id) {
+        doDeleteScreeningCascade(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchDeleteCascade(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        for (Long id : ids) {
+            doDeleteScreeningCascade(id);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String name, String idNumber, String phone, String district, String townshipCommunity,
+                               String crowdCategory, String screenMethod, Integer isLatent, String sourceType,
+                               String diagnosisFirst, String dateFrom, String dateTo, String entryUnit,
+                               String createTimeFrom, String createTimeTo, String creatorUsername,
+                               String hasChestXray, String chestXrayResult, String columnFilters, String formatIssue) {
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = buildListWrapper(
+                name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
+                creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue);
+        wrapper.select(ScreeningKeyPopulation::getId);
+        List<Long> ids = list(wrapper).stream().map(ScreeningKeyPopulation::getId).toList();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        batchDeleteCascade(ids);
+        return ids.size();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteAll(String sourceType) {
+        return deleteByFilter(null, null, null, null, null, null, null, null, sourceType,
+                null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    private void doDeleteScreeningCascade(Long id) {
         if (getById(id) == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
         }

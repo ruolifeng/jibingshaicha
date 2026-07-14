@@ -4,17 +4,22 @@ import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.model.SysMessage;
 import cn.luyou.mapper.SysMessageMapper;
+import cn.luyou.service.SmsService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class SysMessageServiceImpl extends ServiceImpl<SysMessageMapper, SysMessage>
         implements SysMessageService {
+
+    private final SmsService smsService;
 
     @Override
     public void sendMessage(Long receiverId, String title, String content, String type, Long bizId) {
@@ -28,6 +33,8 @@ public class SysMessageServiceImpl extends ServiceImpl<SysMessageMapper, SysMess
                 .isRead(0)
                 .build();
         save(msg);
+        // 站内消息成功后异步发短信，失败不影响业务
+        smsService.sendForMessageAsync(receiverId, title, content, type);
     }
 
     @Override

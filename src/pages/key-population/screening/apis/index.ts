@@ -63,9 +63,10 @@ export interface ScreeningKeyPopulationQueryParams {
   sortField?: string
   sortOrder?: string
   sourceType?: string
+  formatIssue?: string
 }
 
-/** 导出重点人群筛查数据（可按勾选 ID 或当前筛选条件导出） */
+/** 导出重点人群筛查数据（可按勾选 ID 或当前筛选条件导出；空参数=导出全部） */
 export function exportScreeningKeyPopulationApi(params?: ScreeningKeyPopulationQueryParams & { ids?: number[] }) {
   const { ids, ...rest } = params ?? {}
   return request<Blob>({
@@ -75,7 +76,8 @@ export function exportScreeningKeyPopulationApi(params?: ScreeningKeyPopulationQ
       ...rest,
       ...(ids && ids.length > 0 ? { ids: ids.join(",") } : {})
     },
-    responseType: "blob"
+    responseType: "blob",
+    timeout: 120000
   })
 }
 
@@ -110,7 +112,27 @@ export function batchDeleteScreeningKeyPopulationApi(ids: number[]) {
   return request<ApiResponseData<null>>({
     url: "screening/key-population/batch-delete",
     method: "delete",
-    data: ids
+    data: ids,
+    timeout: 120000
+  })
+}
+
+/** 按当前筛选条件删除重点人群筛查记录 */
+export function deleteScreeningKeyPopulationByFilterApi(params?: ScreeningKeyPopulationQueryParams) {
+  return request<ApiResponseData<number>>({
+    url: "screening/key-population/delete-by-filter",
+    method: "delete",
+    params,
+    timeout: 300000
+  })
+}
+
+/** 删除权限范围内全部重点人群筛查记录 */
+export function deleteAllScreeningKeyPopulationApi() {
+  return request<ApiResponseData<number>>({
+    url: "screening/key-population/delete-all",
+    method: "delete",
+    timeout: 300000
   })
 }
 

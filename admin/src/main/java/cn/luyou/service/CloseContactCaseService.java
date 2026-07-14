@@ -22,14 +22,15 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                       String district, String phone, String creatorUsername,
-                                      String diagnosisResult, String createTimeFrom, String createTimeTo,
-                                      String columnFilters);
+                                      String diagnosisResult, String reportQuarter,
+                                      String createTimeFrom, String createTimeTo,
+                                      String columnFilters, String formatIssue);
 
     default IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                               String district, String phone, String creatorUsername,
                                               String diagnosisResult, String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, district, phone, creatorUsername,
-                diagnosisResult, createTimeFrom, createTimeTo, null);
+                diagnosisResult, null, createTimeFrom, createTimeTo, null, null);
     }
 
     void createCase(CloseContactCase data);
@@ -40,9 +41,18 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     void batchDelete(List<Long> ids);
 
+    /** 按筛选条件删除（与 list/export 同参，含 reportQuarter），返回删除条数 */
+    int deleteByFilter(String name, String idNumber, String district, String phone,
+                       String creatorUsername, String diagnosisResult, String reportQuarter,
+                       String createTimeFrom, String createTimeTo, String columnFilters, String formatIssue);
+
+    /** 删除权限范围内全部密接个案，返回删除条数 */
+    int deleteAll();
+
     List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                          String phone, String creatorUsername, String diagnosisResult,
-                                         List<Long> ids, String createTimeFrom, String createTimeTo);
+                                         String reportQuarter, List<Long> ids,
+                                         String createTimeFrom, String createTimeTo, String formatIssue);
 
     CloseContactCase getAccessibleById(Long id);
 }

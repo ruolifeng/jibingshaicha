@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
-import ReferralDialog from "@@/components/ReferralDialog.vue"
+import RecommendCreateDialog from "@@/components/RecommendCreateDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
@@ -85,7 +85,7 @@ function handleReset() {
 
 const submitting = ref(false)
 
-// 转诊
+// 推介（预填待诊断行 → 推介追踪）
 const tierCareVisible = ref(false)
 const tierCareRow = ref<any>(null)
 function openTierCare(row: any) {
@@ -402,8 +402,8 @@ watch(
             >
               确认诊断
             </el-button>
-            <el-button v-permission="'referral'" type="warning" link size="small" @click="openTierCare(row)">
-              转诊
+            <el-button v-permission="['referral', 'referralManagement:create']" type="warning" link size="small" @click="openTierCare(row)">
+              推介
             </el-button>
           </template>
         </el-table-column>
@@ -507,15 +507,11 @@ watch(
       </template>
     </el-dialog>
 
-    <!-- 转诊弹窗 -->
-    <ReferralDialog
-      v-if="tierCareRow"
+    <!-- 推介弹窗 -->
+    <RecommendCreateDialog
       v-model="tierCareVisible"
-      :biz-id="tierCareRow.id"
-      biz-type="suspected_school"
-      population-type="school"
-      module-type="suspected"
-      :subject-name="tierCareRow.name || ''"
+      :source="tierCareRow"
+      default-crowd-category="学生"
     />
   </div>
 </template>

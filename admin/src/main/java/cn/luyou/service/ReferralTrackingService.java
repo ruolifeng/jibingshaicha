@@ -44,11 +44,19 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 按业务类型 + 证件号 + 姓名判断是否已有记录 */
     boolean existsByIdNumberAndName(String bizMode, String idNumber, String name);
 
-    /** 导出追踪记录 Excel */
+    /** 导出追踪记录 Excel（ids 非空时仅导出勾选行） */
     void exportTrack(HttpServletResponse response, String bizMode,
                      String name, String idNumber, String phone, String township,
                      String dateFrom, String dateTo, String sourceType,
-                     String creatorOrEntryUnit);
+                     String creatorOrEntryUnit, List<Long> ids);
+
+    default void exportTrack(HttpServletResponse response, String bizMode,
+                             String name, String idNumber, String phone, String township,
+                             String dateFrom, String dateTo, String sourceType,
+                             String creatorOrEntryUnit) {
+        exportTrack(response, bizMode, name, idNumber, phone, township,
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, null);
+    }
 
     /** 更新基本信息 */
     void update(Long id, Map<String, Object> params);
@@ -76,6 +84,17 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
 
     /** 删除记录（软删） */
     void deleteRecord(Long id);
+
+    /** 批量删除 */
+    int batchDelete(List<Long> ids);
+
+    /** 按筛选条件删除（与 list/export 同参，含 bizMode），返回删除条数 */
+    int deleteByFilter(String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
+                       String phone, String township, String dateFrom, String dateTo, String sourceType,
+                       String creatorOrEntryUnit, String columnFilters);
+
+    /** 删除权限范围内指定 bizMode 的全部记录，返回删除条数 */
+    int deleteAll(String bizMode);
 
     /** 首页统计：推介人数（已发送推介，与推介管理列表一致的数据权限） */
     long countRecommendSentForDashboard(Integer statYear, List<Long> filterDeptIds);

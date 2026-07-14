@@ -3,13 +3,17 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
+import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS, REPORT_QUARTER_OPTIONS } from "@@/constants/close-contact-case"
+import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { downloadBlob } from "@@/utils/download"
+import { confirmDangerDelete } from "@@/utils/listToolbar"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
 import {
   batchDeleteCloseContactCaseApi,
   createCloseContactCaseApi,
+  deleteAllCloseContactCaseApi,
   deleteCloseContactCaseApi,
+  deleteCloseContactCaseByFilterApi,
   downloadCloseContactCaseTemplateApi,
   exportCloseContactCaseApi,
   getCloseContactCaseListApi,
@@ -19,6 +23,7 @@ import {
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const batchDeleting = ref(false)
 
 const diagnosisFilterOptions = DIAGNOSIS_RESULT_OPTIONS.map(item => ({ text: item.label, value: item.value }))
 /** 支持表头筛选的列（与后端 columnFilters 白名单对齐） */
@@ -44,7 +49,16 @@ const searchForm = reactive({
   phone: "",
   creatorUsername: "",
   diagnosisResult: "",
-  entryTimeRange: [] as string[]
+  reportYear: "" as string,
+  reportQuarterNo: "" as string,
+  entryTimeRange: [] as string[],
+  formatIssue: "" as string
+})
+
+/** 组合为后端可识别的「2026年Q2」 */
+const reportQuarterParam = computed(() => {
+  if (!searchForm.reportYear || !searchForm.reportQuarterNo) return undefined
+  return `${searchForm.reportYear}年Q${searchForm.reportQuarterNo}`
 })
 
 const previewColumns = CLOSE_CONTACT_CASE_COLUMNS
@@ -61,7 +75,7 @@ function onHeaderFilterChange(field: string, value: string) {
 async function fetchData() {
   loading.value = true
   try {
-    const { entryTimeRange, ...rest } = searchForm
+    const { entryTimeRange, reportYear: _y, reportQuarterNo: _q, formatIssue, ...rest } = searchForm
     const columnFiltersParam = toQueryParam()
     const res = await getCloseContactCaseListApi({
       page: paginationData.currentPage,
@@ -73,6 +87,8 @@ async function fetchData() {
       phone: rest.phone || undefined,
       creatorUsername: rest.creatorUsername || undefined,
       diagnosisResult: rest.diagnosisResult || undefined,
+      reportQuarter: reportQuarterParam.value,
+      ...(formatIssue ? { formatIssue } : {}),
       ...extractCreateTimeRangeParams(entryTimeRange),
       ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
@@ -97,7 +113,10 @@ function handleReset() {
   searchForm.phone = ""
   searchForm.creatorUsername = ""
   searchForm.diagnosisResult = ""
+  searchForm.reportYear = ""
+  searchForm.reportQuarterNo = ""
   searchForm.entryTimeRange = []
+  searchForm.formatIssue = ""
   clearFilters()
   handleSearch()
 }
@@ -144,8 +163,9 @@ function getSelectedRows() {
   return selectedRows.value
 }
 
-function buildExportParams(exportType?: "latent" | "confirmed") {
-  const { entryTimeRange, ...rest } = searchForm
+function buildListQueryParams() {
+  const { entryTimeRange, reportYear: _y, reportQuarterNo: _q, formatIssue, ...rest } = searchForm
+  const columnFiltersParam = toQueryParam()
   return {
     name: rest.name || undefined,
     idNumber: rest.idNumber || undefined,
@@ -153,12 +173,19 @@ function buildExportParams(exportType?: "latent" | "confirmed") {
     phone: rest.phone || undefined,
     creatorUsername: rest.creatorUsername || undefined,
     diagnosisResult: rest.diagnosisResult || undefined,
+    reportQuarter: reportQuarterParam.value,
+    ...(formatIssue ? { formatIssue } : {}),
     ...extractCreateTimeRangeParams(entryTimeRange),
-    exportType
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
   }
 }
 
-async function handleExport(ids?: number[], exportType?: "latent" | "confirmed") {
+function buildExportParams(exportType?: "latent" | "confirmed") {
+  const { columnFilters: _cf, ...rest } = buildListQueryParams()
+  return { ...rest, exportType }
+}
+
+async function handleExport(ids?: number[], exportType?: "latent" | "confirmed", mode: "all" | "filtered" | "selected" = "filtered") {
   const isSelectedExport = !!ids?.length
   const label = exportType === "latent"
     ? "潜伏感染者"
@@ -166,7 +193,9 @@ async function handleExport(ids?: number[], exportType?: "latent" | "confirmed")
       ? "确诊患者"
       : isSelectedExport
         ? `选中的 ${ids!.length} 条`
-        : "全部"
+        : mode === "all"
+          ? "全部"
+          : "当前筛选条件下的"
   try {
     await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
       confirmButtonText: "确认导出",
@@ -176,7 +205,9 @@ async function handleExport(ids?: number[], exportType?: "latent" | "confirmed")
     const blob = await exportCloseContactCaseApi(
       isSelectedExport
         ? { ids }
-        : { ...buildExportParams(exportType) }
+        : mode === "all"
+          ? { exportType }
+          : { ...buildExportParams(exportType) }
     )
     const filename = exportType === "latent"
       ? "密接个案表_潜伏感染者.xlsx"
@@ -197,7 +228,7 @@ function handleExportSelected() {
     ElMessage.warning("请先勾选要导出的数据")
     return
   }
-  handleExport(ids)
+  handleExport(ids, undefined, "selected")
 }
 
 /** 编辑弹窗 */
@@ -301,11 +332,50 @@ async function handleBatchDelete() {
       { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
     )
     const ids = rows.map((r: any) => r.id)
+    batchDeleting.value = true
     await batchDeleteCloseContactCaseApi(ids)
     ElMessage.success(`成功删除 ${ids.length} 条记录`)
     fetchData()
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("批量删除失败")
+    if (err !== "cancel") ElMessage.error("删除勾选失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部个案记录吗？删除后不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteCloseContactCaseByFilterApi(buildListQueryParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    fetchData()
+  } catch {
+    ElMessage.error("删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteAll() {
+  const ok = await confirmDangerDelete({
+    title: "删除全部",
+    message: "确定删除权限范围内的全部个案记录吗？此操作不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteAllCloseContactCaseApi()
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    handleReset()
+  } catch {
+    ElMessage.error("删除全部失败")
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -350,9 +420,32 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="录入账号" clearable />
         </el-form-item>
+        <el-form-item label="格式问题">
+          <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="最终筛查结果">
           <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable style="width: 150px">
             <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="报表填报季度">
+          <el-date-picker
+            v-model="searchForm.reportYear"
+            type="year"
+            value-format="YYYY"
+            placeholder="年份"
+            clearable
+            style="width: 110px"
+          />
+          <el-select
+            v-model="searchForm.reportQuarterNo"
+            placeholder="季度"
+            clearable
+            style="width: 90px; margin-left: 8px"
+          >
+            <el-option v-for="opt in REPORT_QUARTER_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="录入时间">
@@ -388,6 +481,18 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             <el-button v-permission="'closeContact:case:create'" type="success" @click="handleCreate">
               新增
             </el-button>
+            <el-button v-permission="'closeContact:case:export'" type="primary" plain @click="() => handleExport(undefined, undefined, 'filtered')">
+              导出筛选结果
+            </el-button>
+            <el-button v-permission="'closeContact:case:delete'" type="danger" plain :loading="batchDeleting" @click="handleDeleteFiltered">
+              删除筛选结果
+            </el-button>
+            <el-button v-permission="'closeContact:case:export'" type="warning" :disabled="!selectedRows.length" @click="handleExportSelected">
+              导出勾选
+            </el-button>
+            <el-button v-permission="'closeContact:case:delete'" type="danger" :loading="batchDeleting" :disabled="!selectedRows.length" @click="handleBatchDelete">
+              删除勾选
+            </el-button>
             <el-button
               v-permission="'closeContact:case:upload'"
               type="success"
@@ -402,20 +507,17 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                 导入 Excel
               </el-button>
             </el-upload>
-            <el-button v-permission="'closeContact:case:export'" @click="() => handleExport()">
+            <el-button v-permission="'closeContact:case:export'" @click="() => handleExport(undefined, undefined, 'all')">
               导出全部
             </el-button>
-            <el-button v-permission="'closeContact:case:export'" type="warning" :disabled="!selectedRows.length" @click="handleExportSelected">
-              导出勾选
+            <el-button v-permission="'closeContact:case:delete'" type="danger" plain :loading="batchDeleting" @click="handleDeleteAll">
+              删除全部
             </el-button>
-            <el-button v-permission="'closeContact:case:export'" type="warning" plain @click="() => handleExport(undefined, 'latent')">
+            <el-button v-permission="'closeContact:case:export'" type="warning" plain @click="() => handleExport(undefined, 'latent', 'filtered')">
               导出潜伏感染者
             </el-button>
-            <el-button v-permission="'closeContact:case:export'" type="danger" plain @click="() => handleExport(undefined, 'confirmed')">
+            <el-button v-permission="'closeContact:case:export'" type="danger" plain @click="() => handleExport(undefined, 'confirmed', 'filtered')">
               导出确诊患者
-            </el-button>
-            <el-button v-permission="'closeContact:case:delete'" type="danger" :disabled="!selectedRows.length" @click="handleBatchDelete">
-              批量删除
             </el-button>
           </div>
         </div>

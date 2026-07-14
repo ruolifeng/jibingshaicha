@@ -5,7 +5,7 @@ package cn.luyou.utils;
  */
 public final class PageQueryUtil {
 
-    public static final int MAX_PAGE_SIZE = 100;
+    public static final int MAX_PAGE_SIZE = 1000;
 
     private PageQueryUtil() {
     }

@@ -408,13 +408,21 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     public void exportTrack(HttpServletResponse response, String bizMode,
                             String name, String idNumber, String phone, String township,
                             String dateFrom, String dateTo, String sourceType,
-                            String creatorOrEntryUnit) {
+                            String creatorOrEntryUnit, List<Long> ids) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
-        LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
-                bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
-        applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
-        applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
+        LambdaQueryWrapper<ReferralTracking> wrapper;
+        if (ids != null && !ids.isEmpty()) {
+            wrapper = new LambdaQueryWrapper<>();
+            wrapper.in(ReferralTracking::getId, ids);
+            applyBizModeFilter(wrapper, bizMode);
+            applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
+        } else {
+            wrapper = buildQueryWrapper(
+                    bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+            applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
+            applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
+        }
         List<ReferralTracking> records = list(wrapper);
 
         boolean recommendExport = "recommend".equals(bizMode);
@@ -1063,6 +1071,46 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         assertCanDeleteRecord(record);
         removeById(record.getId());
         log.info("推介追踪记录已删除，recordId={}", id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int batchDelete(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (Long id : ids) {
+            deleteRecord(id);
+            count++;
+        }
+        return count;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
+                               String phone, String township, String dateFrom, String dateTo, String sourceType,
+                               String creatorOrEntryUnit, String columnFilters) {
+        Integer role = BaseContext.getCurrentRole();
+        boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
+        LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
+                bizMode, name, idNumber, trackingStatus, archived, phone, township, dateFrom, dateTo, sourceType);
+        applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
+        applyColumnFilters(wrapper, columnFilters);
+        applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
+        wrapper.select(ReferralTracking::getId);
+        List<Long> ids = list(wrapper).stream().map(ReferralTracking::getId).toList();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        return batchDelete(ids);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteAll(String bizMode) {
+        return deleteByFilter(bizMode, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     // ===== 私有工具方法 =====

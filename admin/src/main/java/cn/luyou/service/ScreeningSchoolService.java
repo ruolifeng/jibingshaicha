@@ -32,22 +32,26 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
                                      String schoolName, String district, Integer isLatent, String diagnosisFirst,
                                      String phone, String year, String entryUnit,
                                      String createTimeFrom, String createTimeTo,
-                                     String creatorUsername, String columnFilters,
-                                     String sortField, String sortOrder);
+                                     String creatorUsername, String hasChestXray, String chestXrayResult,
+                                     String sputumSmearResult, String molecularBiologyResult,
+                                     String columnFilters, String formatIssue, String sortField, String sortOrder);
 
     /** 导出：ids 非空时仅导出勾选行，否则按当前筛选条件导出全部匹配数据 */
     List<ScreeningSchool> listForExport(String name, String idNumber, String schoolName, String district,
                                         Integer isLatent, String diagnosisFirst, String phone, String year,
                                         String entryUnit, String createTimeFrom, String createTimeTo,
-                                        String creatorUsername, String columnFilters,
-                                        String sortField, String sortOrder, List<Long> ids);
+                                        String creatorUsername, String hasChestXray, String chestXrayResult,
+                                        String sputumSmearResult, String molecularBiologyResult,
+                                        String columnFilters, String formatIssue, String sortField, String sortOrder,
+                                        List<Long> ids);
 
     default IPage<ScreeningSchool> queryPage(int page, int size, String name, String idNumber,
                                              String schoolName, String district, Integer isLatent, String diagnosisFirst,
                                              String phone, String year, String entryUnit,
                                              String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst,
-                phone, year, entryUnit, createTimeFrom, createTimeTo, null, null, null, null);
+                phone, year, entryUnit, createTimeFrom, createTimeTo, null, null, null, null, null,
+                null, null, null, null);
     }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */
@@ -62,6 +66,17 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
      * 批量级联删除筛查记录（单事务，减少多次提交开销）
      */
     void batchDeleteCascade(List<Long> ids);
+
+    /** 按筛选条件删除（与 list/export 同参，含部门权限），返回删除条数 */
+    int deleteByFilter(String name, String idNumber, String schoolName, String district,
+                       Integer isLatent, String diagnosisFirst, String phone, String year,
+                       String entryUnit, String createTimeFrom, String createTimeTo,
+                       String creatorUsername, String hasChestXray, String chestXrayResult,
+                       String sputumSmearResult, String molecularBiologyResult, String columnFilters,
+                       String formatIssue);
+
+    /** 删除当前用户数据权限范围内全部记录，返回删除条数 */
+    int deleteAll();
 
     /**
      * 更新筛查记录（同步重新计算潜伏判定结果）
