@@ -143,6 +143,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件读取失败: " + e.getMessage());
         }
         AtomicInteger rowNum = new AtomicInteger(headRowNumber + 1);
+        final CreatorUserSupport.CreatorSnapshot creator = CreatorUserSupport.resolveCurrentCreator(userMapper);
+        final Long uploadDepartmentId = screeningScopeHelper.resolveUploadDepartmentId();
 
         try {
             EasyExcel.read(new java.io.ByteArrayInputStream(fileBytes), ScreeningCloseContact.class, new ReadListener<ScreeningCloseContact>() {
@@ -171,8 +173,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     }
                     data.setUploadBatch(batchId);
                     data.setImportRowNo(row);
-                    CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
-                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+                    CreatorUserSupport.applyCreator(creator, data::setCreatorId, data::setCreatorUsername);
+                    data.setDepartmentId(uploadDepartmentId);
                     parsedList.add(data);
                 }
 
@@ -313,7 +315,13 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
         existing.setUploadBatch(incoming.getUploadBatch());
         if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
-        // 覆盖导入只更新业务字段与行号，保留首次录入人
+        // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
+        CreatorUserSupport.fillMissingCreator(
+                existing.getCreatorId(),
+                existing.getCreatorUsername(),
+                new CreatorUserSupport.CreatorSnapshot(incoming.getCreatorId(), incoming.getCreatorUsername()),
+                existing::setCreatorId,
+                existing::setCreatorUsername);
         existing.setDepartmentId(incoming.getDepartmentId());
     }
 
@@ -411,6 +419,12 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         // 补充通知单发送状态，用于前端控制"发送通知单"按钮的显示
         List<ScreeningCloseContact> records = result.getRecords();
         if (records != null && !records.isEmpty()) {
+            CreatorUserSupport.fillMissingUsernames(
+                    userMapper,
+                    records,
+                    ScreeningCloseContact::getCreatorId,
+                    ScreeningCloseContact::getCreatorUsername,
+                    ScreeningCloseContact::setCreatorUsername);
             List<Long> ids = records.stream()
                     .map(ScreeningCloseContact::getId)
                     .filter(java.util.Objects::nonNull)

@@ -21,7 +21,7 @@ const canManagePickup = computed(() =>
   PATIENT_MEDICATION_PICKUP_PERMISSIONS.some(code => userStore.hasPermission(code))
 )
 
-const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
+const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0)
 
 const medicationDialogVisible = ref(false)
 const medicationRow = ref<any>(null)
@@ -141,7 +141,7 @@ function viewDetail(record: Record<string, any>) {
 
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">

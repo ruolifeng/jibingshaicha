@@ -15,7 +15,7 @@ import {
 
 const userStore = useUserStore()
 
-const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -213,7 +213,7 @@ async function handleUnarchive(row: Record<string, any>) {
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" />
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">

@@ -200,6 +200,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         fillCreatorUsernames(result.getRecords());
         fillNoticeStatus(result.getRecords(), populationType);
         fillFirstVisitStatus(result.getRecords());
+        fillFollowUpCount(result.getRecords());
+        fillMedicationManagementStatus(result.getRecords());
         fillMedicationPickupSummary(result.getRecords());
         fillScreeningXrayData(result.getRecords(), populationType);
         fillEpidemicExtraFields(result.getRecords());
@@ -903,6 +905,53 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         });
     }
 
+    /** 批量统计已完成后续随访次数 */
+    private void fillFollowUpCount(List<Patient> patients) {
+        if (patients == null || patients.isEmpty()) {
+            return;
+        }
+        List<Long> patientIds = patients.stream().map(Patient::getId).filter(Objects::nonNull).toList();
+        if (patientIds.isEmpty()) {
+            return;
+        }
+        Map<Long, Integer> countMap = new HashMap<>();
+        followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
+                        .in(FollowUpVisit::getPatientId, patientIds)
+                        .eq(FollowUpVisit::getStatus, 1)
+                        .select(FollowUpVisit::getPatientId))
+                .forEach(v -> countMap.merge(v.getPatientId(), 1, Integer::sum));
+        patients.forEach(p -> p.setFollowUpCount(countMap.getOrDefault(p.getId(), 0)));
+    }
+
+    /**
+     * 批量填充服药管理完成情况：
+     * 待填写（无记录）/ 进行中（有记录未停止）/ 已完成（已填停止完成时间）
+     */
+    private void fillMedicationManagementStatus(List<Patient> patients) {
+        if (patients == null || patients.isEmpty()) {
+            return;
+        }
+        List<Long> patientIds = patients.stream().map(Patient::getId).filter(Objects::nonNull).toList();
+        if (patientIds.isEmpty()) {
+            return;
+        }
+        Map<Long, MedicationManagement> latestMap = new HashMap<>();
+        medicationManagementMapper.selectList(new LambdaQueryWrapper<MedicationManagement>()
+                        .in(MedicationManagement::getPatientId, patientIds)
+                        .orderByDesc(MedicationManagement::getId))
+                .forEach(m -> latestMap.putIfAbsent(m.getPatientId(), m));
+        patients.forEach(p -> {
+            MedicationManagement med = latestMap.get(p.getId());
+            if (med == null) {
+                p.setMedicationManagementStatus("待填写");
+            } else if (med.getStopDate() != null) {
+                p.setMedicationManagementStatus("已完成");
+            } else {
+                p.setMedicationManagementStatus("进行中");
+            }
+        });
+    }
+
     /** 批量查询领药记录摘要并填充到每条记录 */
     private void fillMedicationPickupSummary(List<Patient> patients) {
         if (patients == null || patients.isEmpty()) return;
@@ -1200,11 +1249,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public void archivePatient(Long id, String archiveRemark) {
+        dataScopeHelper.assertPatientAccessible(id);
         Patient patient = getById(id);
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
         assertPatientNotTransferLocked(patient);
+        if (Integer.valueOf(1).equals(patient.getArchived())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者已归档");
+        }
         if (ARCHIVE_REMARK_TRANSFERRED_OUT.equals(archiveRemark)
                 || ARCHIVE_REMARK_TRANSFER_PENDING.equals(archiveRemark)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请使用转出流程标记转出状态");
@@ -1899,6 +1952,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
         fillNoticeStatus(List.of(patient), patient.getPopulationType());
         fillFirstVisitStatus(List.of(patient));
+        fillFollowUpCount(List.of(patient));
+        fillMedicationManagementStatus(List.of(patient));
         fillMedicationPickupSummary(List.of(patient));
         fillScreeningXrayData(List.of(patient), patient.getPopulationType());
         fillEpidemicExtraFields(List.of(patient));

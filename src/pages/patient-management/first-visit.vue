@@ -12,7 +12,7 @@ import { usePatientList } from "./composables/usePatientList"
 const userStore = useUserStore()
 const canEditFirstVisitPerm = computed(() => userStore.hasPermission("patientManagement:firstVisit:edit"))
 
-const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { firstVisitSearch: true })
+const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { firstVisitSearch: true })
 
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
@@ -160,7 +160,7 @@ async function openPrintFirstVisit(row: any) {
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" />
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">

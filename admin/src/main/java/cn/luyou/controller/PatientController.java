@@ -156,7 +156,7 @@ public class PatientController {
     @PostMapping("/archive/{id}")
     @OperationLog(type = "update", module = "patient", action = "归档患者")
     public ResultResponse<Void> archive(@PathVariable Long id) {
-        patientService.archivePatient(id);
+        patientService.archivePatient(id, "手动归档");
         return ResultRes.success(null);
     }
 

@@ -16,7 +16,7 @@ import {
 import { deletePatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
-const { paginationData, handleCurrentChange, handleSizeChange, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { noticeSearch: true })
+const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { noticeSearch: true })
 
 const noticeDialogVisible = ref(false)
 const noticeDetailVisible = ref(false)
@@ -111,7 +111,7 @@ function getNoticeRowClass({ row }: { row: any }) {
 
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getNoticeRowClass">
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">

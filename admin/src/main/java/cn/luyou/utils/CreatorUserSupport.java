@@ -6,9 +6,13 @@ import cn.luyou.model.User;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -19,13 +23,32 @@ public final class CreatorUserSupport {
     private CreatorUserSupport() {
     }
 
-    public static String resolveCurrentUsername(UserMapper userMapper) {
+    /** 当前登录用户的录入人快照（请求内可复用，避免 Excel 回调里重复查库）。 */
+    public record CreatorSnapshot(Long creatorId, String creatorUsername) {
+        public boolean isPresent() {
+            return creatorId != null || StrUtil.isNotBlank(creatorUsername);
+        }
+    }
+
+    public static CreatorSnapshot resolveCurrentCreator(UserMapper userMapper) {
         Long userId = BaseContext.getCurrentId();
-        if (userId == null || userMapper == null) {
-            return null;
+        if (userId == null) {
+            return new CreatorSnapshot(null, null);
+        }
+        if (userMapper == null) {
+            return new CreatorSnapshot(userId, null);
         }
         User user = userMapper.selectById(userId);
-        return user != null ? user.getUsername() : null;
+        if (user == null) {
+            return new CreatorSnapshot(userId, null);
+        }
+        // 优先账号；账号为空时回退真实姓名，避免列表录入用户列空白
+        String username = StrUtil.blankToDefault(user.getUsername(), user.getRealName());
+        return new CreatorSnapshot(userId, StrUtil.blankToDefault(username, null));
+    }
+
+    public static String resolveCurrentUsername(UserMapper userMapper) {
+        return resolveCurrentCreator(userMapper).creatorUsername();
     }
 
     public static Long resolveCurrentUserId() {
@@ -36,12 +59,89 @@ public final class CreatorUserSupport {
     public static void fillCurrentCreator(UserMapper userMapper,
                                           Consumer<Long> setCreatorId,
                                           Consumer<String> setCreatorUsername) {
-        Long userId = resolveCurrentUserId();
+        applyCreator(resolveCurrentCreator(userMapper), setCreatorId, setCreatorUsername);
+    }
+
+    public static void applyCreator(CreatorSnapshot snapshot,
+                                    Consumer<Long> setCreatorId,
+                                    Consumer<String> setCreatorUsername) {
+        if (snapshot == null) {
+            return;
+        }
         if (setCreatorId != null) {
-            setCreatorId.accept(userId);
+            setCreatorId.accept(snapshot.creatorId());
         }
         if (setCreatorUsername != null) {
-            setCreatorUsername.accept(resolveCurrentUsername(userMapper));
+            setCreatorUsername.accept(snapshot.creatorUsername());
+        }
+    }
+
+    /**
+     * 仅在已有录入人缺失时回填（覆盖导入保留首次录入人；历史空值则补当前用户）。
+     */
+    public static void fillMissingCreator(Long existingCreatorId,
+                                          String existingCreatorUsername,
+                                          CreatorSnapshot current,
+                                          Consumer<Long> setCreatorId,
+                                          Consumer<String> setCreatorUsername) {
+        if (current == null || !current.isPresent()) {
+            return;
+        }
+        boolean missingId = existingCreatorId == null;
+        boolean missingName = StrUtil.isBlank(existingCreatorUsername);
+        if (!missingId && !missingName) {
+            return;
+        }
+        if (missingId && setCreatorId != null) {
+            setCreatorId.accept(current.creatorId());
+        }
+        if (missingName && setCreatorUsername != null) {
+            setCreatorUsername.accept(current.creatorUsername());
+        }
+    }
+
+    /**
+     * 列表查询兜底：creator_username 为空但有 creator_id 时，按用户表回填展示名。
+     */
+    public static <T> void fillMissingUsernames(UserMapper userMapper,
+                                                List<T> records,
+                                                Function<T, Long> getCreatorId,
+                                                Function<T, String> getCreatorUsername,
+                                                BiConsumer<T, String> setCreatorUsername) {
+        if (userMapper == null || records == null || records.isEmpty()) {
+            return;
+        }
+        List<Long> ids = records.stream()
+                .filter(r -> StrUtil.isBlank(getCreatorUsername.apply(r)))
+                .map(getCreatorId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<Long, String> nameMap = new HashMap<>();
+        for (User u : userMapper.selectBatchIds(ids)) {
+            if (u == null || u.getId() == null) {
+                continue;
+            }
+            String display = StrUtil.blankToDefault(u.getUsername(), u.getRealName());
+            if (StrUtil.isNotBlank(display)) {
+                nameMap.put(u.getId(), display);
+            }
+        }
+        for (T record : records) {
+            if (StrUtil.isNotBlank(getCreatorUsername.apply(record))) {
+                continue;
+            }
+            Long creatorId = getCreatorId.apply(record);
+            if (creatorId == null) {
+                continue;
+            }
+            String name = nameMap.get(creatorId);
+            if (StrUtil.isNotBlank(name)) {
+                setCreatorUsername.accept(record, name);
+            }
         }
     }
 

@@ -24,7 +24,7 @@ function hasMedicationUnitSearch(options?: PatientListOptions) {
 }
 
 export function usePatientList(defaultArchived?: number, options?: PatientListOptions) {
-  const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+  const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
   const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
   const loading = ref(false)
@@ -111,6 +111,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     paginationData,
     handleCurrentChange,
     handleSizeChange,
+    getTableIndex,
     loading,
     tableData,
     total,

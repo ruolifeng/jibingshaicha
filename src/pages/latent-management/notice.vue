@@ -12,7 +12,7 @@ import {
   getLatentAggregateListApi
 } from "./apis"
 
-const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -159,7 +159,7 @@ async function handleCloseCase(row: any) {
     <!-- 数据表格 -->
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
