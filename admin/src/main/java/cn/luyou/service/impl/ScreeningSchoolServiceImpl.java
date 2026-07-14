@@ -130,6 +130,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         String batchId = UploadBatchSupport.newBatchId("学校筛查");
         List<ScreeningSchool> dataList = new ArrayList<>();
         ImportResult result = new ImportResult();
+        final CreatorUserSupport.CreatorSnapshot creator = CreatorUserSupport.resolveCurrentCreator(userMapper);
+        final Long uploadDepartmentId = screeningScopeHelper.resolveUploadDepartmentId();
 
         try {
             List<Map<Integer, String>> rows = new ArrayList<>();
@@ -170,9 +172,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 }
                 data.setUploadBatch(batchId);
                 data.setImportRowNo(rowNum);
-                CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
+                CreatorUserSupport.applyCreator(creator, data::setCreatorId, data::setCreatorUsername);
                 data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
-                data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+                data.setDepartmentId(uploadDepartmentId);
                 dataList.add(data);
             }
             log.info("学校人群筛查数据解析完成，共 {} 条", dataList.size());
@@ -219,6 +221,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             if (existing != null) {
                 // 合并基本信息，以最新导入为准
                 mergeSchoolImportFields(existing, d);
+                CreatorUserSupport.fillMissingCreator(
+                        existing.getCreatorId(),
+                        existing.getCreatorUsername(),
+                        new CreatorUserSupport.CreatorSnapshot(d.getCreatorId(), d.getCreatorUsername()),
+                        existing::setCreatorId,
+                        existing::setCreatorUsername);
                 existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
                 toUpdate.add(existing);
             } else {
@@ -376,7 +384,14 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
                 createTimeFrom, createTimeTo, creatorUsername, columnFilters);
         applyListOrder(wrapper, sortField, sortOrder);
-        return page(new Page<>(page, size), wrapper);
+        IPage<ScreeningSchool> result = page(new Page<>(page, size), wrapper);
+        CreatorUserSupport.fillMissingUsernames(
+                userMapper,
+                result.getRecords(),
+                ScreeningSchool::getCreatorId,
+                ScreeningSchool::getCreatorUsername,
+                ScreeningSchool::setCreatorUsername);
+        return result;
     }
 
     @Override

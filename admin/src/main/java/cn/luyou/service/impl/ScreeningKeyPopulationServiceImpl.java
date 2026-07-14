@@ -255,6 +255,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private List<ScreeningKeyPopulation> parseExcelFile(MultipartFile file, String sourceType, String batchId,
                                                       ImportResult result, boolean confirmSkipInvalid) {
         List<ScreeningKeyPopulation> dataList = new ArrayList<>();
+        // 在 Excel 解析前固定当前录入人，避免回调路径取不到登录上下文
+        final CreatorUserSupport.CreatorSnapshot creator = CreatorUserSupport.resolveCurrentCreator(userMapper);
+        final Long uploadDepartmentId = screeningScopeHelper.resolveUploadDepartmentId();
 
         try {
             // 重点人群模板：第1行大分组，第2行字段名/子分组，第3行子字段细项，数据从第4行开始
@@ -282,9 +285,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                         data.setUploadBatch(batchId);
                     }
                     data.setImportRowNo(row);
-                    CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
+                    CreatorUserSupport.applyCreator(creator, data::setCreatorId, data::setCreatorUsername);
                     data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
-                    data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
+                    data.setDepartmentId(uploadDepartmentId);
                     data.setSourceType(sourceType);
                     dataList.add(data);
                 }
@@ -327,7 +330,13 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
     private void mergeIntoExisting(ScreeningKeyPopulation existing, ScreeningKeyPopulation imported) {
         ScreeningImportMergeSupport.mergeKeyPopulation(existing, imported);
-        // 覆盖导入只更新业务字段与行号，保留首次录入人
+        // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
+        CreatorUserSupport.fillMissingCreator(
+                existing.getCreatorId(),
+                existing.getCreatorUsername(),
+                new CreatorUserSupport.CreatorSnapshot(imported.getCreatorId(), imported.getCreatorUsername()),
+                existing::setCreatorId,
+                existing::setCreatorUsername);
         existing.setIsLatent(shouldMarkLatent(existing) ? 1 : 0);
     }
 
@@ -431,7 +440,14 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
                 creatorUsername, hasChestXray, chestXrayResult, columnFilters);
         applyListOrder(wrapper, sortField, sortOrder);
-        return page(new Page<>(page, size), wrapper);
+        IPage<ScreeningKeyPopulation> result = page(new Page<>(page, size), wrapper);
+        CreatorUserSupport.fillMissingUsernames(
+                userMapper,
+                result.getRecords(),
+                ScreeningKeyPopulation::getCreatorId,
+                ScreeningKeyPopulation::getCreatorUsername,
+                ScreeningKeyPopulation::setCreatorUsername);
+        return result;
     }
 
     @Override

@@ -12,7 +12,7 @@ import { downloadBlob } from "@@/utils/download"
 import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
-import { batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
+import { archivePatientApi, batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
@@ -22,6 +22,7 @@ const {
   paginationData,
   handleCurrentChange,
   handleSizeChange,
+  getTableIndex,
   loading,
   tableData,
   total,
@@ -90,6 +91,27 @@ const referralRow = ref<any>(null)
 function openReferral(row: any) {
   referralRow.value = row
   referralDialogVisible.value = true
+}
+
+function medicationStatusTagType(status?: string) {
+  if (status === "已完成") return "success"
+  if (status === "进行中") return "info"
+  return "warning"
+}
+
+async function handleArchive(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `确认将患者「${row.name}」归档？归档后将移入「历史患者」。`,
+      "归档确认",
+      { type: "warning", confirmButtonText: "确认归档", cancelButtonText: "取消" }
+    )
+    await archivePatientApi(row.id)
+    ElMessage.success("归档成功，已移入历史患者")
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error(err?.message || "归档失败")
+  }
 }
 
 async function handleExport() {
@@ -366,7 +388,7 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" />
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="登记号" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ resolveRegistrationNo(row) || "-" }}
@@ -473,6 +495,26 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="后续随访" min-width="100">
+          <template #default="{ row }">
+            <el-tag v-if="(row.followUpCount ?? 0) > 0" type="success" size="small">
+              已完成 {{ row.followUpCount }} 次
+            </el-tag>
+            <el-tag v-else type="warning" size="small">
+              待填写
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理完成情况" min-width="130">
+          <template #default="{ row }">
+            <el-tag
+              :type="medicationStatusTagType(row.medicationManagementStatus)"
+              size="small"
+            >
+              {{ row.medicationManagementStatus || "待填写" }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="populationType" min-width="110">
           <template #header>
             <TableHeaderFilter
@@ -534,6 +576,16 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               @click="openReferral(row)"
             >
               转出
+            </el-button>
+            <el-button
+              v-if="!isPatientTransferLocked(row)"
+              v-permission="'patientManagement:edit'"
+              type="danger"
+              link
+              size="small"
+              @click="handleArchive(row)"
+            >
+              归档
             </el-button>
           </template>
         </el-table-column>

@@ -5,7 +5,7 @@ import { getLatentAggregateListApi } from "../apis"
 
 /** 在管潜伏感染者总览列表（含手动/导入密接，排除密接筛查同步数据） */
 export function useLatentOverviewList() {
-  const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+  const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
   const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
   const loading = ref(false)
@@ -78,6 +78,7 @@ export function useLatentOverviewList() {
     paginationData,
     handleCurrentChange,
     handleSizeChange,
+    getTableIndex,
     loading,
     tableData,
     total,

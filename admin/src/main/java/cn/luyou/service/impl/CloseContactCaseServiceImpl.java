@@ -8,16 +8,16 @@ import cn.luyou.mapper.CloseContactCaseMapper;
 import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.CloseContactCase;
 import cn.luyou.model.ImportResult;
-import cn.luyou.model.User;
 import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
+import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
-import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -76,7 +76,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         String batchId = IdUtil.fastSimpleUUID();
-        final String creatorUsername = resolveCurrentUsername();
+        final String creatorUsername = CreatorUserSupport.resolveCurrentUsername(userMapper);
         final List<CloseContactCase> parsedList = new ArrayList<>();
         ImportResult result = new ImportResult();
         byte[] fileBytes;
@@ -221,7 +221,10 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
         existing.setUploadBatch(incoming.getUploadBatch());
         if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
-        // 覆盖导入只更新业务字段与行号，保留首次录入人
+        // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
+        if (StrUtil.isBlank(existing.getCreatorUsername()) && StrUtil.isNotBlank(incoming.getCreatorUsername())) {
+            existing.setCreatorUsername(incoming.getCreatorUsername());
+        }
         existing.setDepartmentId(incoming.getDepartmentId());
     }
 
@@ -271,7 +274,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
-        data.setCreatorUsername(resolveCurrentUsername());
+        data.setCreatorUsername(CreatorUserSupport.resolveCurrentUsername(userMapper));
         save(data);
     }
 
@@ -363,7 +366,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             Long currentDeptId = BaseContext.getCurrentDepartmentId();
             List<Long> deptIds = departmentService.getDescendantIds(currentDeptId);
             if (deptIds.isEmpty()) {
-                String username = resolveCurrentUsername();
+                String username = CreatorUserSupport.resolveCurrentUsername(userMapper);
                 if (StrUtil.isBlank(username)
                         || !username.equals(existing.getCreatorUsername())) {
                     throw new ServiceException(StatusEnum.PARAM_INVALID, "无权操作该个案记录");
@@ -375,13 +378,6 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             }
         }
         return existing;
-    }
-
-    private String resolveCurrentUsername() {
-        Long userId = BaseContext.getCurrentId();
-        if (userId == null) return null;
-        User user = userMapper.selectById(userId);
-        return user != null ? user.getUsername() : null;
     }
 
     private boolean isValidIdCard(String id) {

@@ -10,7 +10,7 @@ import { useUserStore } from "@/pinia/stores/user"
 import { getLatentAggregateListApi, getSupervisionListApi } from "./apis"
 
 const userStore = useUserStore()
-const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -186,7 +186,7 @@ function openPrint(row: Record<string, any>) {
 
     <el-card shadow="never" style="margin-top:10px">
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">

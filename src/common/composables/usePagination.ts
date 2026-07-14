@@ -47,5 +47,12 @@ export function usePagination(initPaginationData: PaginationData = {}) {
     paginationData.currentPage = 1
   }
 
-  return { paginationData, handleCurrentChange, handleSizeChange }
+  /** 表格序号：跨页连续（第 2 页从 11 起，而非每页从 1 起） */
+  const getTableIndex = (index: number) => {
+    const page = paginationData.currentPage || 1
+    const size = paginationData.pageSize || 10
+    return (page - 1) * size + index + 1
+  }
+
+  return { paginationData, handleCurrentChange, handleSizeChange, getTableIndex }
 }

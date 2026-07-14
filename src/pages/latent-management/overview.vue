@@ -9,13 +9,14 @@ import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
 import { downloadBlob } from "@@/utils/download"
 import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { batchDeleteLatentApi, downloadLatentTemplateApi, exportAllLatentApi, importLatentApi } from "./apis"
+import { batchDeleteLatentApi, closeCaseApi, downloadLatentTemplateApi, exportAllLatentApi, importLatentApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const {
   paginationData,
   handleCurrentChange,
   handleSizeChange,
+  getTableIndex,
   loading,
   tableData,
   total,
@@ -79,6 +80,21 @@ const referralRow = ref<any>(null)
 function openReferral(row: any) {
   referralRow.value = row
   referralDialogVisible.value = true
+}
+
+async function handleArchive(row: any) {
+  try {
+    await ElMessageBox.confirm(
+      `确认将「${row.name}」结案归档？归档后将移入「历史患者」。`,
+      "归档确认",
+      { type: "warning", confirmButtonText: "确认归档", cancelButtonText: "取消" }
+    )
+    await closeCaseApi(row.id)
+    ElMessage.success("归档成功，已移入历史患者")
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error(err?.message || "归档失败")
+  }
 }
 
 async function handleExport() {
@@ -286,7 +302,7 @@ async function handleImport(uploadFile: any) {
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" />
-        <el-table-column type="index" label="#" />
+        <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column prop="name" min-width="90">
           <template #header>
             <TableHeaderFilter
@@ -408,6 +424,15 @@ async function handleImport(uploadFile: any) {
                 @click="openReferral(row)"
               >
                 转出
+              </el-button>
+              <el-button
+                v-permission="'latentManagement:close'"
+                type="danger"
+                link
+                size="small"
+                @click="handleArchive(row)"
+              >
+                归档
               </el-button>
             </template>
           </template>
