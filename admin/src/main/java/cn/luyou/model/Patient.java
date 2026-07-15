@@ -137,6 +137,14 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private String noticeRemark;
 
+    /** 通知单发送人（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private String noticeSenderName;
+
+    /** 通知单接收人（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private String noticeReceiverName;
+
     /** 登记号（非数据库字段，专病网/大疫情导入时从 epidemicData 解析） */
     @TableField(exist = false)
     private String registrationNo;

@@ -105,6 +105,14 @@ public class LatentInfection extends BaseEntity {
     @TableField(exist = false)
     private Long noticeId;
 
+    /** 通知单发送人（非持久化，列表查询时填充） */
+    @TableField(exist = false)
+    private String noticeSenderName;
+
+    /** 通知单接收人（非持久化，列表查询时填充） */
+    @TableField(exist = false)
+    private String noticeReceiverName;
+
     /** 督导表是否已完成（status=2，非持久化字段） */
     @TableField(exist = false)
     private Boolean supervisionCompleted;

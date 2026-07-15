@@ -353,19 +353,54 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             }
 
             var update = latentInfectionService.lambdaUpdate()
-                    .eq(LatentInfection::getId, latent.getId())
-                    .set(LatentInfection::getName, d.getName())
-                    .set(LatentInfection::getIdNumber, d.getIdNumber())
-                    .set(LatentInfection::getGender, d.getGender())
-                    .set(LatentInfection::getAge, d.getAge())
-                    .set(LatentInfection::getPhone, d.getPhone())
-                    .set(LatentInfection::getInfectionResult, d.getInfectionResult())
-                    .set(LatentInfection::getHasChestXray, d.getHasChestXray())
-                    .set(LatentInfection::getChestXrayDate, d.getChestXrayDate())
-                    .set(LatentInfection::getChestXrayResult, d.getChestXrayResult())
-                    .set(LatentInfection::getDiagnosisFirst, latentDiagnosisFirst(d));
-            update.update();
-            latent.setDiagnosisFirst(latentDiagnosisFirst(d));
+                    .eq(LatentInfection::getId, latent.getId());
+            boolean changed = false;
+            // 覆盖导入：Excel 空值不覆盖潜伏表已有内容
+            if (StrUtil.isNotBlank(d.getName())) {
+                update.set(LatentInfection::getName, d.getName());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getIdNumber())) {
+                update.set(LatentInfection::getIdNumber, d.getIdNumber());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getGender())) {
+                update.set(LatentInfection::getGender, d.getGender());
+                changed = true;
+            }
+            if (d.getAge() != null) {
+                update.set(LatentInfection::getAge, d.getAge());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getPhone())) {
+                update.set(LatentInfection::getPhone, d.getPhone());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getInfectionResult())) {
+                update.set(LatentInfection::getInfectionResult, d.getInfectionResult());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getHasChestXray())) {
+                update.set(LatentInfection::getHasChestXray, d.getHasChestXray());
+                changed = true;
+            }
+            if (d.getChestXrayDate() != null) {
+                update.set(LatentInfection::getChestXrayDate, d.getChestXrayDate());
+                changed = true;
+            }
+            if (StrUtil.isNotBlank(d.getChestXrayResult())) {
+                update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
+                changed = true;
+            }
+            String diagnosisFirst = latentDiagnosisFirst(d);
+            if (StrUtil.isNotBlank(diagnosisFirst)) {
+                update.set(LatentInfection::getDiagnosisFirst, diagnosisFirst);
+                latent.setDiagnosisFirst(diagnosisFirst);
+                changed = true;
+            }
+            if (changed) {
+                update.update();
+            }
             latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
         }
     }
@@ -793,10 +828,22 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
-        // 录入用户与部门不可被前端覆盖
+        // 录入用户与部门不可被前端覆盖；历史两边都空则补当前用户，有 id 缺名则按用户表补名
         data.setCreatorId(existing.getCreatorId());
         data.setCreatorUsername(existing.getCreatorUsername());
         data.setDepartmentId(existing.getDepartmentId());
+        CreatorUserSupport.fillMissingCreator(
+                data.getCreatorId(),
+                data.getCreatorUsername(),
+                CreatorUserSupport.resolveCurrentCreator(userMapper),
+                data::setCreatorId,
+                data::setCreatorUsername);
+        CreatorUserSupport.fillMissingUsernames(
+                userMapper,
+                List.of(data),
+                ScreeningSchool::getCreatorId,
+                ScreeningSchool::getCreatorUsername,
+                ScreeningSchool::setCreatorUsername);
         updateById(data);
         ScreeningSchool updated = getById(data.getId());
         syncLatentFromScreening(List.of(updated), "school");

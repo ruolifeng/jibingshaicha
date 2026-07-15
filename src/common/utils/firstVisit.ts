@@ -1,4 +1,5 @@
-import { resolveFirstTreatmentPlan } from "@@/utils/patient"
+import { SPUTUM_STATUS_OPTIONS } from "@@/constants/disease"
+import { resolveFirstTreatmentPlan, resolveImportFields } from "@@/utils/patient"
 
 /** 五级用户（role=6）已完成首次随访的可编辑天数 */
 export const FIRST_VISIT_EDIT_DAYS_LEVEL5 = 10
@@ -29,6 +30,65 @@ export function applyFirstVisitChemotherapyDefault(
   if (form.chemotherapy?.trim()) return
   const plan = resolveFirstTreatmentPlan(patientRow)
   if (plan) form.chemotherapy = plan
+}
+
+/**
+ * 从患者病原学结果推导首次随访痰菌情况默认值：
+ * - 病原学阳性 / 阳性 → 阳性
+ * - 病原学阴性 / 阴性 → 阴性
+ * - 结核性胸膜炎 → 取详情「0月序分子生物学结果」
+ */
+export function resolveFirstVisitSputumStatusDefault(
+  patientRow: Record<string, any> | null | undefined
+): string {
+  if (!patientRow) return ""
+  const fields = resolveImportFields(patientRow)
+  const pathogen = String(
+    patientRow.diagnosisResult
+    || fields["病原学结果"]
+    || fields["诊断结果"]
+    || ""
+  ).trim()
+  if (!pathogen) return ""
+
+  if (pathogen.includes("结核性胸膜炎")) {
+    const molecular = fields["0月序分子生物学结果"]
+      || fields["0月单分子生物学结果"]
+      || ""
+    return normalizeSputumStatusOption(molecular)
+  }
+
+  if (
+    pathogen.includes("病原学阳性")
+    || pathogen.includes("病原学结果阳性")
+    || pathogen === "阳性"
+  ) {
+    return "阳性"
+  }
+  if (pathogen.includes("病原学阴性") || pathogen === "阴性") {
+    return "阴性"
+  }
+  return ""
+}
+
+/** 首次随访痰菌情况：按病原学结果预填，已有值则不覆盖 */
+export function applyFirstVisitSputumStatusDefault(
+  form: { sputumStatus?: string },
+  patientRow: Record<string, any> | null | undefined
+) {
+  if (form.sputumStatus?.trim()) return
+  const value = resolveFirstVisitSputumStatusDefault(patientRow)
+  if (value) form.sputumStatus = value
+}
+
+function normalizeSputumStatusOption(raw: string): string {
+  const text = String(raw ?? "").trim()
+  if (!text) return ""
+  if ((SPUTUM_STATUS_OPTIONS as readonly string[]).includes(text)) return text
+  if (text.includes("阳性")) return "阳性"
+  if (text.includes("阴性")) return "阴性"
+  if (text.includes("未查")) return "未查痰"
+  return ""
 }
 
 /** 五级用户：已完成首次随访记录创建后 10 天内可修改；管理员（role≠6）随时可改 */

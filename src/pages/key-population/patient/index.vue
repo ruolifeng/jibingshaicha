@@ -31,7 +31,7 @@ import {
   VISIT_METHOD_OPTIONS,
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
-import { applyFirstVisitChemotherapyDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import { isNoticeSent, resolveNoticeSputumSmearFromPatient } from "@@/utils/patient"
@@ -425,6 +425,7 @@ async function loadFirstVisitForm(patientId: number) {
     }
   } catch { /* 首次填写 */ }
   applyFirstVisitChemotherapyDefault(firstVisitForm, firstVisitRow.value)
+  applyFirstVisitSputumStatusDefault(firstVisitForm, firstVisitRow.value)
 }
 
 watch(

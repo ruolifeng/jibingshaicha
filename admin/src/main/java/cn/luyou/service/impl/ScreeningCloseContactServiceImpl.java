@@ -270,12 +270,18 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (StrUtil.isNotBlank(incoming.getContactPlaceOther())) existing.setContactPlaceOther(incoming.getContactPlaceOther());
         if (StrUtil.isNotBlank(incoming.getCurrentAddress())) existing.setCurrentAddress(incoming.getCurrentAddress());
 
-        // 初次筛查（若已有则保留，以防覆盖旧数据）
+        // 初次筛查：各字段独立合并，Excel 空值不覆盖已有明细
         if (StrUtil.isNotBlank(incoming.getFinalScreeningResult())) {
             existing.setFinalScreeningResult(
                     ScreeningDiagnosisSupport.normalizeDiagnosis(incoming.getFinalScreeningResult()));
+        }
+        if (StrUtil.isNotBlank(incoming.getInfectionCheckResult())) {
             existing.setInfectionCheckResult(incoming.getInfectionCheckResult());
+        }
+        if (StrUtil.isNotBlank(incoming.getImagingResult())) {
             existing.setImagingResult(incoming.getImagingResult());
+        }
+        if (StrUtil.isNotBlank(incoming.getSputumCheckResult())) {
             existing.setSputumCheckResult(incoming.getSputumCheckResult());
         }
 
@@ -285,36 +291,68 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (StrUtil.isNotBlank(incoming.getTreatmentCompleted())) existing.setTreatmentCompleted(incoming.getTreatmentCompleted());
         if (StrUtil.isNotBlank(incoming.getIncompleteReason())) existing.setIncompleteReason(incoming.getIncompleteReason());
 
-        // 6月随访
+        // 6月随访：各子字段独立合并，避免仅填结果时空格子清空明细
         if (StrUtil.isNotBlank(incoming.getFollowup6Result())) {
-            existing.setFollowup6DueDate(incoming.getFollowup6DueDate());
-            existing.setFollowup6ScreenDate(incoming.getFollowup6ScreenDate());
-            existing.setFollowup6Symptom1(incoming.getFollowup6Symptom1());
-            existing.setFollowup6ImagingResult(incoming.getFollowup6ImagingResult());
-            existing.setFollowup6SputumResult(incoming.getFollowup6SputumResult());
             existing.setFollowup6Result(incoming.getFollowup6Result());
+        }
+        if (incoming.getFollowup6DueDate() != null) {
+            existing.setFollowup6DueDate(incoming.getFollowup6DueDate());
+        }
+        if (incoming.getFollowup6ScreenDate() != null) {
+            existing.setFollowup6ScreenDate(incoming.getFollowup6ScreenDate());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup6Symptom1())) {
+            existing.setFollowup6Symptom1(incoming.getFollowup6Symptom1());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup6ImagingResult())) {
+            existing.setFollowup6ImagingResult(incoming.getFollowup6ImagingResult());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup6SputumResult())) {
+            existing.setFollowup6SputumResult(incoming.getFollowup6SputumResult());
         }
         // 12月随访
         if (StrUtil.isNotBlank(incoming.getFollowup12Result())) {
-            existing.setFollowup12DueDate(incoming.getFollowup12DueDate());
-            existing.setFollowup12ScreenDate(incoming.getFollowup12ScreenDate());
-            existing.setFollowup12Symptom1(incoming.getFollowup12Symptom1());
-            existing.setFollowup12ImagingResult(incoming.getFollowup12ImagingResult());
-            existing.setFollowup12SputumResult(incoming.getFollowup12SputumResult());
             existing.setFollowup12Result(incoming.getFollowup12Result());
+        }
+        if (incoming.getFollowup12DueDate() != null) {
+            existing.setFollowup12DueDate(incoming.getFollowup12DueDate());
+        }
+        if (incoming.getFollowup12ScreenDate() != null) {
+            existing.setFollowup12ScreenDate(incoming.getFollowup12ScreenDate());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup12Symptom1())) {
+            existing.setFollowup12Symptom1(incoming.getFollowup12Symptom1());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup12ImagingResult())) {
+            existing.setFollowup12ImagingResult(incoming.getFollowup12ImagingResult());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup12SputumResult())) {
+            existing.setFollowup12SputumResult(incoming.getFollowup12SputumResult());
         }
         // 24月随访
         if (StrUtil.isNotBlank(incoming.getFollowup24Result())) {
-            existing.setFollowup24DueDate(incoming.getFollowup24DueDate());
-            existing.setFollowup24ScreenDate(incoming.getFollowup24ScreenDate());
-            existing.setFollowup24Symptom1(incoming.getFollowup24Symptom1());
-            existing.setFollowup24ImagingResult(incoming.getFollowup24ImagingResult());
-            existing.setFollowup24SputumResult(incoming.getFollowup24SputumResult());
             existing.setFollowup24Result(incoming.getFollowup24Result());
+        }
+        if (incoming.getFollowup24DueDate() != null) {
+            existing.setFollowup24DueDate(incoming.getFollowup24DueDate());
+        }
+        if (incoming.getFollowup24ScreenDate() != null) {
+            existing.setFollowup24ScreenDate(incoming.getFollowup24ScreenDate());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup24Symptom1())) {
+            existing.setFollowup24Symptom1(incoming.getFollowup24Symptom1());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup24ImagingResult())) {
+            existing.setFollowup24ImagingResult(incoming.getFollowup24ImagingResult());
+        }
+        if (StrUtil.isNotBlank(incoming.getFollowup24SputumResult())) {
+            existing.setFollowup24SputumResult(incoming.getFollowup24SputumResult());
         }
 
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
-        existing.setUploadBatch(incoming.getUploadBatch());
+        if (StrUtil.isNotBlank(incoming.getUploadBatch())) {
+            existing.setUploadBatch(incoming.getUploadBatch());
+        }
         if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
         // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
         CreatorUserSupport.fillMissingCreator(
@@ -323,7 +361,10 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                 new CreatorUserSupport.CreatorSnapshot(incoming.getCreatorId(), incoming.getCreatorUsername()),
                 existing::setCreatorId,
                 existing::setCreatorUsername);
-        existing.setDepartmentId(incoming.getDepartmentId());
+        // 部门仅在原记录缺失时补齐，避免覆盖导入抢归属
+        if (existing.getDepartmentId() == null && incoming.getDepartmentId() != null) {
+            existing.setDepartmentId(incoming.getDepartmentId());
+        }
     }
 
     /**
@@ -460,7 +501,14 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     createTimeFrom, createTimeTo, creatorUsername, columnFilters, formatIssue);
         }
         ImportRowOrderSupport.applyWithBatch(wrapper);
-        return list(wrapper);
+        List<ScreeningCloseContact> records = list(wrapper);
+        CreatorUserSupport.fillMissingUsernames(
+                userMapper,
+                records,
+                ScreeningCloseContact::getCreatorId,
+                ScreeningCloseContact::getCreatorUsername,
+                ScreeningCloseContact::setCreatorUsername);
+        return records;
     }
 
     private LambdaQueryWrapper<ScreeningCloseContact> buildListWrapper(
@@ -600,10 +648,22 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (Integer.valueOf(4).equals(effectiveCcStatus)) {
             ensureFollowupDueDates(data);
         }
-        // 录入用户与部门不可被前端覆盖
+        // 录入用户与部门不可被前端覆盖；历史两边都空则补当前用户，有 id 缺名则按用户表补名
         data.setCreatorId(existing.getCreatorId());
         data.setCreatorUsername(existing.getCreatorUsername());
         data.setDepartmentId(existing.getDepartmentId());
+        CreatorUserSupport.fillMissingCreator(
+                data.getCreatorId(),
+                data.getCreatorUsername(),
+                CreatorUserSupport.resolveCurrentCreator(userMapper),
+                data::setCreatorId,
+                data::setCreatorUsername);
+        CreatorUserSupport.fillMissingUsernames(
+                userMapper,
+                List.of(data),
+                ScreeningCloseContact::getCreatorId,
+                ScreeningCloseContact::getCreatorUsername,
+                ScreeningCloseContact::setCreatorUsername);
         updateById(data);
     }
 

@@ -96,7 +96,7 @@ public interface PatientService extends IService<Patient> {
     /** 发起转出：标记为转出待确认（保留在在管列表） */
     void markTransferPending(Long id);
 
-    /** 转出确认后：标记原记录为已转出（保留在在管列表，不可操作） */
+    /** 转出确认后：标记原记录为已转出并归档退出在管（全系统在管仅保留接收方一条） */
     void markTransferredOut(Long id);
 
     /**

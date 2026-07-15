@@ -2,7 +2,6 @@
 import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
-import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
 import {
   getPatientTransferStatusLabel,
@@ -37,13 +36,6 @@ async function handleDelete(row: any) {
   await deletePatientApi(row.id)
   ElMessage.success("已删除")
   fetchData()
-}
-
-const referralDialogVisible = ref(false)
-const referralRow = ref<any>(null)
-function openReferral(row: any) {
-  referralRow.value = row
-  referralDialogVisible.value = true
 }
 
 function getNoticeRowClass({ row }: { row: any }) {
@@ -132,9 +124,19 @@ function getNoticeRowClass({ row }: { row: any }) {
             </span>
           </template>
         </el-table-column>
+        <el-table-column label="发送人" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.noticeSenderName || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="接收时间" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             {{ resolveNoticeConfirmedDisplayTime(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="接收人" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.noticeReceiverName || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
@@ -179,9 +181,6 @@ function getNoticeRowClass({ row }: { row: any }) {
                 </el-button>
               </template>
               <NoticeSentStatusButton v-else-if="isNoticeSent(row)" />
-              <el-button v-permission="'patientManagement:referral'" type="info" link size="small" @click="openReferral(row)">
-                转出
-              </el-button>
               <el-button v-permission="'patientManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">
                 删除
               </el-button>
@@ -214,17 +213,6 @@ function getNoticeRowClass({ row }: { row: any }) {
     <PatientNoticeDetailDialog
       v-model:visible="noticeDetailVisible"
       :patient-row="noticeRow"
-      @success="fetchData"
-    />
-
-    <ReferralDialog
-      v-if="referralRow"
-      v-model="referralDialogVisible"
-      :biz-id="referralRow.id"
-      biz-type="patient_aggregate"
-      module-type="patient"
-      :population-type="referralRow.populationType"
-      :subject-name="referralRow.name || ''"
       @success="fetchData"
     />
   </div>

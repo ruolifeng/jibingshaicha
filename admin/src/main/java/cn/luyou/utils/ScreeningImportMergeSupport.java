@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 
 /**
  * 筛查数据增量导入：按身份证号匹配时，用最新 Excel 行覆盖已有记录的业务字段。
+ * <p>规则：Excel 空值不覆盖已有内容；不修改录入人（由调用方 fillMissingCreator 保留/补缺）。
  */
 public final class ScreeningImportMergeSupport {
 
@@ -74,7 +75,10 @@ public final class ScreeningImportMergeSupport {
         mergeString(incoming.getRemark(), existing::setRemark);
         mergeString(incoming.getUploadBatch(), existing::setUploadBatch);
         mergeInteger(incoming.getImportRowNo(), existing::setImportRowNo);
-        existing.setDepartmentId(incoming.getDepartmentId());
+        // 部门仅缺失时补齐，覆盖导入不抢归属；录入人由 fillMissingCreator 保留
+        if (existing.getDepartmentId() == null && incoming.getDepartmentId() != null) {
+            existing.setDepartmentId(incoming.getDepartmentId());
+        }
     }
 
     public static void mergeSchool(ScreeningSchool existing, ScreeningSchool incoming) {
@@ -115,7 +119,10 @@ public final class ScreeningImportMergeSupport {
         mergeString(incoming.getRemark(), existing::setRemark);
         mergeString(incoming.getUploadBatch(), existing::setUploadBatch);
         mergeInteger(incoming.getImportRowNo(), existing::setImportRowNo);
-        existing.setDepartmentId(incoming.getDepartmentId());
+        // 部门仅缺失时补齐，覆盖导入不抢归属；录入人由 fillMissingCreator 保留
+        if (existing.getDepartmentId() == null && incoming.getDepartmentId() != null) {
+            existing.setDepartmentId(incoming.getDepartmentId());
+        }
     }
 
     private static void mergeString(String value, Consumer<String> setter) {

@@ -244,6 +244,19 @@ const detailRow = ref<any>(null)
 const editFormRef = ref()
 
 const requiredRule = [{ required: true, message: "此项为必填项", trigger: "change" }]
+/** 仅当前置「是否」选「是」时结果才必填 */
+function requiredWhenYes(getFlag: () => string) {
+  return [{
+    validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+      if (getFlag() === "是" && !value) {
+        callback(new Error("此项为必填项"))
+      } else {
+        callback()
+      }
+    },
+    trigger: "change"
+  }]
+}
 const editRules = {
   hasSuspiciousSymptoms: requiredRule,
   cough: requiredRule,
@@ -255,9 +268,21 @@ const editRules = {
   fatigue: requiredRule,
   weightLoss: requiredRule,
   hasInfectionScreen: requiredRule,
-  infectionResult: requiredRule,
+  infectionResult: requiredWhenYes(() => editForm.value.hasInfectionScreen),
   hasChestXray: requiredRule,
-  chestXrayResult: requiredRule
+  chestXrayResult: requiredWhenYes(() => editForm.value.hasChestXray)
+}
+
+function onHasInfectionScreenChange() {
+  if (editForm.value.hasInfectionScreen !== "是") {
+    editFormRef.value?.clearValidate("infectionResult")
+  }
+}
+
+function onHasChestXrayChange() {
+  if (editForm.value.hasChestXray !== "是") {
+    editFormRef.value?.clearValidate("chestXrayResult")
+  }
 }
 
 function getEmptyEditForm() {
@@ -909,7 +934,7 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="是否进行感染筛查" prop="hasInfectionScreen">
-              <el-select v-model="editForm.hasInfectionScreen" style="width:100%">
+              <el-select v-model="editForm.hasInfectionScreen" style="width:100%" @change="onHasInfectionScreenChange">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -935,8 +960,8 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="16">
-            <el-form-item label="感染筛查结果" prop="infectionResult">
-              <el-select v-model="editForm.infectionResult" style="width:100%">
+            <el-form-item label="感染筛查结果" prop="infectionResult" :required="editForm.hasInfectionScreen === '是'">
+              <el-select v-model="editForm.infectionResult" style="width:100%" clearable>
                 <el-option label="PPD阴性" value="PPD阴性" />
                 <el-option label="PPD+" value="PPD+" />
                 <el-option label="PPD++" value="PPD++" />
@@ -956,7 +981,7 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="是否进行胸片检查" prop="hasChestXray">
-              <el-select v-model="editForm.hasChestXray" style="width:100%">
+              <el-select v-model="editForm.hasChestXray" style="width:100%" @change="onHasChestXrayChange">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -968,8 +993,8 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="胸片结果" prop="chestXrayResult">
-              <el-select v-model="editForm.chestXrayResult" style="width:100%">
+            <el-form-item label="胸片结果" prop="chestXrayResult" :required="editForm.hasChestXray === '是'">
+              <el-select v-model="editForm.chestXrayResult" style="width:100%" clearable>
                 <el-option label="正常" value="正常" />
                 <el-option label="异常" value="异常" />
                 <el-option label="未查" value="未查" />
