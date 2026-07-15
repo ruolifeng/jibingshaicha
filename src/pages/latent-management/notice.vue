@@ -2,7 +2,6 @@
 import LatentNoticeDetailDialog from "@@/components/LatentNoticeDetailDialog.vue"
 import LatentNoticeFormDialog from "@@/components/LatentNoticeFormDialog.vue"
 import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
-import ReferralDialog from "@@/components/ReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
 import { isNoticeSent } from "@@/utils/patient"
@@ -70,14 +69,6 @@ function handleReset() {
 
 onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
-
-// ==================== 转出 ====================
-const referralDialogVisible = ref(false)
-const referralRow = ref<any>(null)
-function openReferral(row: any) {
-  referralRow.value = row
-  referralDialogVisible.value = true
-}
 
 // ==================== 通知单 ====================
 const noticeFormVisible = ref(false)
@@ -185,6 +176,16 @@ async function handleCloseCase(row: any) {
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
           </template>
         </el-table-column>
+        <el-table-column label="发送人" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.noticeSenderName || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="接收人" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.noticeReceiverName || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
             <el-button v-if="row.noticeStatus === 1 || row.noticeStatus === 2" type="primary" link size="small" @click="viewNotice(row)">
@@ -196,7 +197,7 @@ async function handleCloseCase(row: any) {
             <span v-else class="text-gray-400">未发送</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="220">
+        <el-table-column label="操作" fixed="right" width="180">
           <template #default="{ row }">
             <el-button
               v-if="!isNoticeSent(row)"
@@ -210,16 +211,6 @@ async function handleCloseCase(row: any) {
               {{ row.noticeStatus === 0 ? "继续填写" : "发送通知单" }}
             </el-button>
             <NoticeSentStatusButton v-else />
-            <el-button
-              v-permission="'latentManagement:referral'"
-              type="info"
-              link
-              size="small"
-              :disabled="row.archived === 1"
-              @click="openReferral(row)"
-            >
-              转出
-            </el-button>
             <el-button
               v-permission="'latentManagement:close'" type="danger" link size="small"
               :disabled="row.archived === 1"
@@ -253,17 +244,6 @@ async function handleCloseCase(row: any) {
       v-model:visible="noticeDetailVisible"
       :latent-row="noticeRow"
       @success="fetchData"
-    />
-
-    <!-- 转出弹窗 -->
-    <ReferralDialog
-      v-if="referralRow"
-      v-model="referralDialogVisible"
-      :biz-id="referralRow.id"
-      biz-type="latent_aggregate"
-      module-type="latent"
-      :population-type="referralRow.populationType"
-      :subject-name="referralRow.name || ''"
     />
   </div>
 </template>

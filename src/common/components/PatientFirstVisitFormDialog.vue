@@ -15,7 +15,7 @@ import {
   VISIT_METHOD_OPTIONS,
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
-import { applyFirstVisitChemotherapyDefault, canEditFirstVisit, FIRST_VISIT_EDIT_DAYS_LEVEL5, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_EDIT_DAYS_LEVEL5, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -165,6 +165,7 @@ async function loadExisting() {
     }
   } catch { /* 首次填写 */ }
   applyFirstVisitChemotherapyDefault(firstVisitForm, props.patientRow)
+  applyFirstVisitSputumStatusDefault(firstVisitForm, props.patientRow)
 }
 
 watch(

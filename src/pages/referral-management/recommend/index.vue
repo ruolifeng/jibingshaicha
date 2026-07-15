@@ -705,7 +705,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         <el-form-item label="录入者/录入单位">
           <el-input v-model="searchForm.creatorOrEntryUnit" placeholder="请输入" clearable style="width: 160px" />
         </el-form-item>
-        <el-form-item label="新建推介时间">
+        <el-form-item label="录入时间">
           <el-date-picker
             v-model="searchForm.dateRange"
             type="daterange"
@@ -897,6 +897,11 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         <el-table-column label="推介时间" min-width="160">
           <template #default="{ row }">
             {{ formatRecommendTime(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="录入时间" min-width="160">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createTime) }}
           </template>
         </el-table-column>
         <el-table-column label="到位时间" min-width="120">
@@ -1239,6 +1244,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-descriptions-item>
             <el-descriptions-item label="录入者">
               {{ viewDetail.creatorUserName || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="录入时间">
+              {{ viewDetail.createTime ? formatDateTime(viewDetail.createTime) : "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="录入单位" :span="2">
               {{ viewDetail.entryUnitName || "-" }}

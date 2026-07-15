@@ -311,7 +311,11 @@ public class DashboardController {
         }
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
                 .eq(LatentInfection::getPopulationType, populationType)
-                .eq(LatentInfection::getReferralResult, "latent");
+                .eq(LatentInfection::getReferralResult, "latent")
+                .eq(LatentInfection::getArchived, 0)
+                .and(w -> w.isNull(LatentInfection::getArchiveRemark)
+                        .or()
+                        .ne(LatentInfection::getArchiveRemark, LatentInfectionService.ARCHIVE_REMARK_TRANSFERRED_OUT));
         if (hasYear) {
             wrapper.in(LatentInfection::getScreeningId, ids);
         }

@@ -8,6 +8,7 @@ import cn.luyou.common.customError.ServiceException;
 import cn.luyou.constant.EpidemicTrackImportHeaders;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.ColumnFilterSupport;
+import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.StatYearPeriod;
@@ -148,19 +149,23 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             "creatorUserName", "creatorUsername"
     );
 
+    private static final DateTimeFormatter EXPORT_DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     @Override
     public IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                               String name, String idNumber,
                                               Integer trackingStatus, Integer archived,
                                               String phone, String township,
                                               String dateFrom, String dateTo, String sourceType,
-                                              String creatorOrEntryUnit, String columnFilters) {
+                                              String creatorOrEntryUnit, String columnFilters,
+                                              String createTimeFrom, String createTimeTo) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
 
         LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
                 bizMode, name, idNumber, trackingStatus, archived,
                 phone, township, dateFrom, dateTo, sourceType);
+        applyCreateTimeFilter(wrapper, createTimeFrom, createTimeTo);
         applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
         applyColumnFilters(wrapper, columnFilters);
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
@@ -408,7 +413,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     public void exportTrack(HttpServletResponse response, String bizMode,
                             String name, String idNumber, String phone, String township,
                             String dateFrom, String dateTo, String sourceType,
-                            String creatorOrEntryUnit, List<Long> ids) {
+                            String creatorOrEntryUnit, List<Long> ids,
+                            String createTimeFrom, String createTimeTo) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
         LambdaQueryWrapper<ReferralTracking> wrapper;
@@ -420,6 +426,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         } else {
             wrapper = buildQueryWrapper(
                     bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+            applyCreateTimeFilter(wrapper, createTimeFrom, createTimeTo);
             applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
             applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
         }
@@ -468,7 +475,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     List.of("推介单位名称"), List.of("填写用户名称"), List.of("推介原因"),
                     List.of("推介接收人"), List.of("推介状态"), List.of("追踪状态"), List.of("未到位次数"),
                     List.of("诊断结果"), List.of("诊断备注"), List.of("推介时间"), List.of("最新追踪时间"),
-                    List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总")
+                    List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总"),
+                    List.of("录入用户"), List.of("录入时间")
             );
         }
         return Arrays.asList(
@@ -478,7 +486,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 List.of("人群分类"), List.of("病例分类"), List.of("疾病名称"), List.of("报告单位"),
                 List.of("报告卡录入时间"), List.of("备注"), List.of("追踪原因"), List.of("追踪状态"),
                 List.of("未到位次数"), List.of("诊断结果"), List.of("诊断备注"), List.of("创建时间"),
-                List.of("最新追踪时间"), List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总")
+                List.of("最新追踪时间"), List.of("到位时间"), List.of("追踪过程明细"), List.of("未到位原因汇总"),
+                List.of("录入用户"), List.of("录入时间")
         );
     }
 
@@ -486,8 +495,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         String historyDetail = formatTrackingHistoryDetail(r.getTrackingHistoryJson());
         String failureReasons = formatFailureReasons(r.getTrackingHistoryJson());
         String latestTrackTime = formatLatestTrackTime(r.getTrackingHistoryJson());
+        String creatorName = StrUtil.blankToDefault(r.getCreatorUserName(), "");
+        String entryTime = formatExportDateTime(r.getCreateTime());
         if (recommendExport) {
-            return Arrays.asList(
+            List<Object> row = new ArrayList<>(Arrays.asList(
                     r.getName(), r.getGender(),
                     r.getBirthDate() != null ? r.getBirthDate().toString() : "",
                     r.getAge(), r.getIdType(), r.getIdNumber(), r.getEthnicity(), r.getPhone(),
@@ -504,23 +515,33 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     latestTrackTime,
                     formatArrivalTime(r),
                     historyDetail, failureReasons
-            );
+            ));
+            row.add(creatorName);
+            row.add(entryTime);
+            return row;
         }
-        return Arrays.asList(
+        List<Object> row = new ArrayList<>(Arrays.asList(
                 "epidemic".equals(r.getSourceType()) ? "大疫情导入" : "手动录入",
                 r.getCardId(), r.getName(), r.getParentName(), r.getIdNumber(), r.getGender(),
                 r.getBirthDate() != null ? r.getBirthDate().toString() : "",
                 r.getAge(), r.getWorkplace(), r.getPhone(), r.getTownship(), r.getCurrentAddress(),
                 r.getCrowdCategory(), r.getCaseCategory(), r.getDiseaseName(), r.getReportUnit(),
-                r.getReportCardTime() != null ? r.getReportCardTime().toString() : "",
+                formatExportDateTime(r.getReportCardTime()),
                 r.getEpidemicRemark(), r.getTrackReason(), trackingStatusLabel(r.getTrackingStatus()),
                 r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0,
                 r.getDiagnosisResult(), r.getDiagnosisRemark(),
-                r.getCreateTime() != null ? r.getCreateTime().toString() : "",
+                formatExportDateTime(r.getCreateTime()),
                 latestTrackTime,
                 formatArrivalTime(r),
                 historyDetail, failureReasons
-        );
+        ));
+        row.add(creatorName);
+        row.add(entryTime);
+        return row;
+    }
+
+    private static String formatExportDateTime(LocalDateTime value) {
+        return value != null ? value.format(EXPORT_DATETIME_FMT) : "";
     }
 
     /** 列表/导出展示：优先真实到位日期，否则回退系统到位时间 */
@@ -533,9 +554,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     private String formatRecommendTime(ReferralTracking r) {
         if (r.getRecommendSentTime() != null) {
-            return r.getRecommendSentTime().toString();
+            return formatExportDateTime(r.getRecommendSentTime());
         }
-        return r.getCreateTime() != null ? r.getCreateTime().toString() : "";
+        return formatExportDateTime(r.getCreateTime());
     }
 
     private String formatTrackingHistoryDetail(String json) {
@@ -1091,11 +1112,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Transactional(rollbackFor = Exception.class)
     public int deleteByFilter(String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
                                String phone, String township, String dateFrom, String dateTo, String sourceType,
-                               String creatorOrEntryUnit, String columnFilters) {
+                               String creatorOrEntryUnit, String columnFilters,
+                               String createTimeFrom, String createTimeTo) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
         LambdaQueryWrapper<ReferralTracking> wrapper = buildQueryWrapper(
                 bizMode, name, idNumber, trackingStatus, archived, phone, township, dateFrom, dateTo, sourceType);
+        applyCreateTimeFilter(wrapper, createTimeFrom, createTimeTo);
         applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
         applyColumnFilters(wrapper, columnFilters);
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
@@ -1110,7 +1133,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int deleteAll(String bizMode) {
-        return deleteByFilter(bizMode, null, null, null, null, null, null, null, null, null, null, null);
+        return deleteByFilter(bizMode, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     // ===== 私有工具方法 =====
@@ -1830,13 +1853,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             changed = true;
         }
         Integer role = BaseContext.getCurrentRole();
-        // 五级用户重新导入时认领记录，确保可见且可追踪
-        if (Integer.valueOf(6).equals(role) && currentUserId != null) {
-            if (!currentUserId.equals(existing.getCreatorId())) {
-                existing.setCreatorId(currentUserId);
-                changed = true;
-            }
-            if (currentDeptId != null && !currentDeptId.equals(existing.getDepartmentId())) {
+        // 五级重新导入：保留原录入人；仅在缺部门或需要同部门可见时可补齐/认领部门
+        if (Integer.valueOf(6).equals(role) && currentDeptId != null) {
+            if (existing.getDepartmentId() == null || !currentDeptId.equals(existing.getDepartmentId())) {
                 existing.setDepartmentId(currentDeptId);
                 changed = true;
             }
@@ -1897,11 +1916,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     private LambdaQueryWrapper<ReferralTracking> buildQueryWrapper(
             String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
             String phone, String township, String dateFrom, String dateTo, String sourceType) {
-        LocalDateTime from = parseDateTime(dateFrom);
-        LocalDateTime to = parseDateTime(dateTo);
-        if (to != null && to.toLocalTime().equals(java.time.LocalTime.MIDNIGHT)) {
-            to = to.plusDays(1).minusSeconds(1);
-        }
+        LocalDateTime from = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
+        LocalDateTime to = QueryDateRangeUtil.parseDateTimeTo(dateTo);
 
         LambdaQueryWrapper<ReferralTracking> wrapper = new LambdaQueryWrapper<>();
         applyBizModeFilter(wrapper, bizMode);
@@ -1923,6 +1939,15 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     .orderByDesc(ReferralTracking::getCreateTime);
         }
         return wrapper;
+    }
+
+    /** 录入时间（create_time）筛选，推介与追踪均可叠加使用 */
+    private void applyCreateTimeFilter(LambdaQueryWrapper<ReferralTracking> wrapper,
+                                       String createTimeFrom, String createTimeTo) {
+        LocalDateTime from = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
+        LocalDateTime to = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
+        wrapper.ge(from != null, ReferralTracking::getCreateTime, from)
+                .le(to != null, ReferralTracking::getCreateTime, to);
     }
 
     private String trackingStatusLabel(Integer status) {

@@ -24,7 +24,7 @@ import {
   TRACK_STATUS_LABEL,
   TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { computed, nextTick, onMounted, reactive, ref } from "vue"
@@ -100,7 +100,8 @@ const searchForm = reactive({
   phone: "",
   township: "",
   creatorOrEntryUnit: "",
-  dateRange: [] as string[]
+  dateRange: [] as string[],
+  createTimeRange: [] as string[]
 })
 const paginationData = reactive({ currentPage: 1, pageSize: 20 })
 
@@ -115,6 +116,7 @@ function buildFilterParams() {
     township: searchForm.township || undefined,
     creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
     ...extractDateRangeParams(searchForm.dateRange),
+    ...extractCreateTimeRangeParams(searchForm.createTimeRange),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
   }
 }
@@ -153,6 +155,7 @@ function handleReset() {
   searchForm.township = ""
   searchForm.creatorOrEntryUnit = ""
   searchForm.dateRange = []
+  searchForm.createTimeRange = []
   clearFilters()
   handleSearch()
 }
@@ -605,6 +608,16 @@ function getRowClass({ row }: { row: any }) {
             style="width: 240px"
           />
         </el-form-item>
+        <el-form-item label="录入时间">
+          <el-date-picker
+            v-model="searchForm.createTimeRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             查询
@@ -814,7 +827,7 @@ function getRowClass({ row }: { row: any }) {
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="160">
+        <el-table-column label="录入时间" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
           </template>
@@ -1040,7 +1053,7 @@ function getRowClass({ row }: { row: any }) {
             <el-descriptions-item label="未到位次数">
               {{ viewDetail.notInPlaceCount > 0 ? `${viewDetail.notInPlaceCount}次` : "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="创建时间">
+            <el-descriptions-item label="录入时间">
               {{ viewDetail.createTime ? formatDateTime(viewDetail.createTime) : "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="到位时间">

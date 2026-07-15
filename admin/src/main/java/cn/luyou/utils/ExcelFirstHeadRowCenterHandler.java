@@ -1,15 +1,14 @@
 package cn.luyou.utils;
 
+import com.alibaba.excel.metadata.data.WriteCellData;
 import com.alibaba.excel.write.handler.CellWriteHandler;
 import com.alibaba.excel.write.handler.context.CellWriteHandlerContext;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
+import com.alibaba.excel.write.metadata.style.WriteCellStyle;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
-import org.apache.poi.ss.usermodel.Workbook;
 
 /**
- * 多级表头 Excel 导出：首行分组标题水平/垂直居中。
+ * 将 Excel 第一行表头（合并分组标题）水平、垂直居中。
  */
 public class ExcelFirstHeadRowCenterHandler implements CellWriteHandler {
 
@@ -18,17 +17,16 @@ public class ExcelFirstHeadRowCenterHandler implements CellWriteHandler {
         if (!Boolean.TRUE.equals(context.getHead())) {
             return;
         }
-        Cell cell = context.getCell();
-        if (cell == null || cell.getRowIndex() != 0) {
+        Integer rowIndex = context.getRowIndex();
+        if (rowIndex == null || rowIndex != 0) {
             return;
         }
-        Workbook workbook = context.getWriteSheetHolder().getSheet().getWorkbook();
-        CellStyle style = workbook.createCellStyle();
-        if (cell.getCellStyle() != null) {
-            style.cloneStyleFrom(cell.getCellStyle());
+        WriteCellData<?> cellData = context.getFirstCellData();
+        if (cellData == null) {
+            return;
         }
-        style.setAlignment(HorizontalAlignment.CENTER);
+        WriteCellStyle style = cellData.getOrCreateStyle();
+        style.setHorizontalAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
-        cell.setCellStyle(style);
     }
 }

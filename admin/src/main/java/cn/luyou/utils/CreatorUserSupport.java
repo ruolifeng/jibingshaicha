@@ -78,6 +78,7 @@ public final class CreatorUserSupport {
 
     /**
      * 仅在已有录入人缺失时回填（覆盖导入保留首次录入人；历史空值则补当前用户）。
+     * <p>已有 creatorId、仅缺用户名时不写当前登录人（避免 id/名不一致），应由 {@link #fillMissingUsernames} 按 id 解析。
      */
     public static void fillMissingCreator(Long existingCreatorId,
                                           String existingCreatorUsername,
@@ -92,7 +93,11 @@ public final class CreatorUserSupport {
         if (!missingId && !missingName) {
             return;
         }
-        if (missingId && setCreatorId != null) {
+        // 已有录入人 ID 时勿用当前用户名覆盖，防止张冠李戴
+        if (!missingId) {
+            return;
+        }
+        if (setCreatorId != null) {
             setCreatorId.accept(current.creatorId());
         }
         if (missingName && setCreatorUsername != null) {

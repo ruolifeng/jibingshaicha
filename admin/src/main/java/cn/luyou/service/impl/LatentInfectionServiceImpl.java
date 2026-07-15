@@ -195,6 +195,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived);
+        // 在管列表排除「已转出」（兼容历史误留在 archived=0 的数据）
+        if (archived == null || Integer.valueOf(0).equals(archived)) {
+            wrapper.and(w -> w.isNull(LatentInfection::getArchiveRemark)
+                    .or()
+                    .ne(LatentInfection::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        }
         ScreeningDiagnosisSupport.applyDiagnosisFirstFilter(
                 wrapper, LatentInfection::getDiagnosisFirst, diagnosisFirst);
         wrapper
@@ -456,6 +462,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setNoticeSent(false);
                 r.setNoticeStatus(null);
                 r.setNoticeId(null);
+                r.setNoticeSenderName(null);
+                r.setNoticeReceiverName(null);
                 r.setSupervisionCompleted(false);
                 r.setSupervisionStatus(0);
                 r.setTreatmentCompletionStatus(null);
@@ -476,16 +484,29 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 java.util.LinkedHashMap::new
         ));
 
+        Set<Long> noticeUserIds = noticeMap.values().stream()
+                .flatMap(n -> java.util.stream.Stream.of(n.getSenderId(), n.getReceiverOrgId()))
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, User> noticeUserMap = noticeUserIds.isEmpty()
+                ? Map.of()
+                : userMapper.selectBatchIds(noticeUserIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+
         records.forEach(r -> {
             cn.luyou.model.Notice notice = noticeMap.get(r.getId());
             if (notice != null) {
                 r.setNoticeStatus(notice.getStatus());
                 r.setNoticeId(notice.getId());
                 r.setNoticeSent(notice.getStatus() != null && notice.getStatus() >= 1);
+                r.setNoticeSenderName(resolveNoticeUserDisplayName(noticeUserMap.get(notice.getSenderId())));
+                r.setNoticeReceiverName(resolveNoticeUserDisplayName(noticeUserMap.get(notice.getReceiverOrgId())));
             } else {
                 r.setNoticeStatus(null);
                 r.setNoticeId(null);
                 r.setNoticeSent(false);
+                r.setNoticeSenderName(null);
+                r.setNoticeReceiverName(null);
             }
         });
 
@@ -525,6 +546,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             SupervisionForm preferred = preferredSupervisionMap.get(r.getId());
             r.setTreatmentCompletionStatus(preferred != null ? preferred.getTreatmentCompletionStatus() : null);
         });
+    }
+
+    private static String resolveNoticeUserDisplayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        return StrUtil.blankToDefault(user.getRealName(), user.getUsername());
     }
 
     private SupervisionForm selectPreferredSupervisionForm(List<SupervisionForm> forms) {
@@ -1151,6 +1179,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                                     String treatmentCompletionStatus) {
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(LatentInfection::getArchived, 1)
+                // 已转出记录不进入历史患者（仅保留最新在管链路）
+                .and(w -> w.isNull(LatentInfection::getArchiveRemark)
+                        .or()
+                        .ne(LatentInfection::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT))
                 .and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
                         .or()
                         .isNull(LatentInfection::getScreeningId))
@@ -1588,10 +1620,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
-        latent.setArchiveRemark(ARCHIVE_REMARK_TRANSFERRED_OUT);
-        latent.setArchived(0);
-        latent.setArchivedTime(null);
-        updateById(latent);
+        // 已转出记录退出在管：发送方/上级不再看到；全系统在管仅保留接收方复制后的一条
+        boolean updated = lambdaUpdate()
+                .eq(LatentInfection::getId, id)
+                .set(LatentInfection::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT)
+                .set(LatentInfection::getArchived, 1)
+                .set(LatentInfection::getArchivedTime, LocalDateTime.now())
+                .update();
+        if (!updated) {
+            latent.setArchiveRemark(ARCHIVE_REMARK_TRANSFERRED_OUT);
+            latent.setArchived(1);
+            latent.setArchivedTime(LocalDateTime.now());
+            updateById(latent);
+        }
     }
 
     @Override
@@ -1631,6 +1672,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         copy.setDepartmentId(receiver.getDepartmentId());
         copy.setArchived(0);
         copy.setArchiveRemark(null);
+        copy.setArchivedTime(null);
         save(copy);
         Long newLatentId = copy.getId();
 
@@ -1638,6 +1680,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         copyLatentSupervisionForms(sourceLatentId, newLatentId, receiverUserId);
         copyLatentFollowUps(sourceLatentId, newLatentId);
         copyLatentChecks(sourceLatentId, newLatentId);
+
+        // 兜底：确保接收方记录为可操作的在管状态
+        lambdaUpdate()
+                .eq(LatentInfection::getId, newLatentId)
+                .set(LatentInfection::getArchived, 0)
+                .set(LatentInfection::getArchiveRemark, null)
+                .set(LatentInfection::getArchivedTime, null)
+                .update();
 
         log.info("转出同步：已复制潜伏感染 sourceId={} -> newId={}, receiverUserId={}, deptId={}",
                 sourceLatentId, newLatentId, receiverUserId, receiver.getDepartmentId());
@@ -1652,6 +1702,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(LatentInfection::getDepartmentId, receiverDeptId)
                 .eq(LatentInfection::getIdNumber, source.getIdNumber())
                 .eq(LatentInfection::getArchived, 0)
+                .and(w -> w.isNull(LatentInfection::getArchiveRemark)
+                        .or()
+                        .ne(LatentInfection::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT))
                 .ne(LatentInfection::getId, source.getId())
                 .count();
         if (count > 0) {

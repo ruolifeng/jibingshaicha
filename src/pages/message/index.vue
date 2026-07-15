@@ -571,6 +571,14 @@ const activeTab = ref("received")
                 {{ MODULE_TYPE_MAP[row.moduleType] || row.moduleType }}
               </template>
             </el-table-column>
+            <el-table-column prop="senderName" label="发送者" min-width="120">
+              <template #default="{ row }">
+                <div>{{ row.senderName || "—" }}</div>
+                <div class="text-xs text-gray-400">
+                  {{ row.senderOrgName }}
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="sentTime" label="发送时间" />
             <el-table-column prop="referralReason" label="转出原因" show-overflow-tooltip>
               <template #default="{ row }">

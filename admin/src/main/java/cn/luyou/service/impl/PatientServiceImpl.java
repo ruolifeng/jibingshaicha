@@ -81,6 +81,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -316,6 +317,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
                 .eq(archived != null, Patient::getArchived, archived);
+        // 在管列表排除「已转出」（兼容历史误留在 archived=0 的数据）
+        if (archived == null || Integer.valueOf(0).equals(archived)) {
+            wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
+                    .or()
+                    .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        }
         applyDiagnosisResultFilter(wrapper, diagnosisResult);
         if (hasFirstVisitFillDateRange) {
             applyPatientIdFilter(wrapper,
@@ -1115,6 +1122,14 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         n -> n,
                         (a, b) -> a.getId() > b.getId() ? a : b
                 ));
+        Set<Long> userIds = noticeMap.values().stream()
+                .flatMap(n -> Stream.of(n.getSenderId(), n.getReceiverOrgId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, User> userMap = userIds.isEmpty()
+                ? Map.of()
+                : userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
         patients.forEach(p -> {
             Notice n = noticeMap.get(p.getId());
             if (n != null) {
@@ -1124,8 +1139,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setNoticeConfirmedTime(n.getConfirmedTime());
                 p.setNoticeMedicationUnit(n.getMedicationManagementUnit());
                 p.setNoticeRemark(n.getRemark());
+                p.setNoticeSenderName(resolveUserDisplayName(userMap.get(n.getSenderId())));
+                p.setNoticeReceiverName(resolveUserDisplayName(userMap.get(n.getReceiverOrgId())));
             }
         });
+    }
+
+    private static String resolveUserDisplayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        return StrUtil.blankToDefault(user.getRealName(), user.getUsername());
     }
 
     @Override
@@ -1298,10 +1322,19 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
-        patient.setArchiveRemark(ARCHIVE_REMARK_TRANSFERRED_OUT);
-        patient.setArchived(0);
-        patient.setArchivedTime(null);
-        updateById(patient);
+        // 转出确认后原记录退出在管，保证全系统在管仅保留接收方一条
+        boolean updated = lambdaUpdate()
+                .eq(Patient::getId, id)
+                .set(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT)
+                .set(Patient::getArchived, 1)
+                .set(Patient::getArchivedTime, LocalDateTime.now())
+                .update();
+        if (!updated) {
+            patient.setArchiveRemark(ARCHIVE_REMARK_TRANSFERRED_OUT);
+            patient.setArchived(1);
+            patient.setArchivedTime(LocalDateTime.now());
+            updateById(patient);
+        }
     }
 
     @Override
@@ -1328,6 +1361,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         copy.setDepartmentId(receiver.getDepartmentId());
         copy.setArchived(0);
         copy.setArchiveRemark(null);
+        copy.setArchivedTime(null);
         save(copy);
         Long newPatientId = copy.getId();
 
@@ -1336,6 +1370,14 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         copyPatientFollowUpVisits(sourcePatientId, newPatientId);
         copyPatientMedicationManagement(sourcePatientId, newPatientId);
         copyPatientMedicationPickups(sourcePatientId, newPatientId, receiverUserId);
+
+        // 兜底：确保接收方记录为可操作的在管状态（可填通知单/首次随访/后续随访）
+        lambdaUpdate()
+                .eq(Patient::getId, newPatientId)
+                .set(Patient::getArchived, 0)
+                .set(Patient::getArchiveRemark, null)
+                .set(Patient::getArchivedTime, null)
+                .update();
 
         log.info("转出同步：已复制患者 sourceId={} -> newId={}, receiverUserId={}, deptId={}",
                 sourcePatientId, newPatientId, receiverUserId, receiver.getDepartmentId());
@@ -1350,6 +1392,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .eq(Patient::getDepartmentId, receiverDeptId)
                 .eq(Patient::getIdNumber, source.getIdNumber())
                 .eq(Patient::getArchived, 0)
+                .and(w -> w.isNull(Patient::getArchiveRemark)
+                        .or()
+                        .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT))
                 .ne(Patient::getId, source.getId())
                 .count();
         if (count > 0) {
@@ -1486,6 +1531,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .eq(Patient::getArchived, 1)
+                // 已转出记录不进入历史患者（仅保留最新在管链路）
+                .and(w -> w.isNull(Patient::getArchiveRemark)
+                        .or()
+                        .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT))
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)

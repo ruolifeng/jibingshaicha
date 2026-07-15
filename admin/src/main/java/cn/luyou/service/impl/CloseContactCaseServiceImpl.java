@@ -201,32 +201,48 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         if (StrUtil.isNotBlank(incoming.getPreventivePlan())) existing.setPreventivePlan(incoming.getPreventivePlan());
         if (StrUtil.isNotBlank(incoming.getTreatmentCompleted())) existing.setTreatmentCompleted(incoming.getTreatmentCompleted());
         if (StrUtil.isNotBlank(incoming.getFollowup6Result())) {
-            existing.setFollowup6DueDate(incoming.getFollowup6DueDate());
-            existing.setFollowup6ScreenDate(incoming.getFollowup6ScreenDate());
             existing.setFollowup6Result(incoming.getFollowup6Result());
         }
+        if (incoming.getFollowup6DueDate() != null) {
+            existing.setFollowup6DueDate(incoming.getFollowup6DueDate());
+        }
+        if (incoming.getFollowup6ScreenDate() != null) {
+            existing.setFollowup6ScreenDate(incoming.getFollowup6ScreenDate());
+        }
         if (StrUtil.isNotBlank(incoming.getFollowup12Result())) {
-            existing.setFollowup12DueDate(incoming.getFollowup12DueDate());
-            existing.setFollowup12ScreenDate(incoming.getFollowup12ScreenDate());
             existing.setFollowup12Result(incoming.getFollowup12Result());
         }
+        if (incoming.getFollowup12DueDate() != null) {
+            existing.setFollowup12DueDate(incoming.getFollowup12DueDate());
+        }
+        if (incoming.getFollowup12ScreenDate() != null) {
+            existing.setFollowup12ScreenDate(incoming.getFollowup12ScreenDate());
+        }
         if (StrUtil.isNotBlank(incoming.getFollowup24Result())) {
-            existing.setFollowup24DueDate(incoming.getFollowup24DueDate());
-            existing.setFollowup24ScreenDate(incoming.getFollowup24ScreenDate());
             existing.setFollowup24Result(incoming.getFollowup24Result());
+        }
+        if (incoming.getFollowup24DueDate() != null) {
+            existing.setFollowup24DueDate(incoming.getFollowup24DueDate());
+        }
+        if (incoming.getFollowup24ScreenDate() != null) {
+            existing.setFollowup24ScreenDate(incoming.getFollowup24ScreenDate());
         }
         if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
         if (incoming.getRegistrationDate() != null) {
             existing.setRegistrationDate(incoming.getRegistrationDate());
             existing.setYear(String.valueOf(incoming.getRegistrationDate().getYear()));
         }
-        existing.setUploadBatch(incoming.getUploadBatch());
+        if (StrUtil.isNotBlank(incoming.getUploadBatch())) {
+            existing.setUploadBatch(incoming.getUploadBatch());
+        }
         if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
         // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
         if (StrUtil.isBlank(existing.getCreatorUsername()) && StrUtil.isNotBlank(incoming.getCreatorUsername())) {
             existing.setCreatorUsername(incoming.getCreatorUsername());
         }
-        existing.setDepartmentId(incoming.getDepartmentId());
+        if (existing.getDepartmentId() == null && incoming.getDepartmentId() != null) {
+            existing.setDepartmentId(incoming.getDepartmentId());
+        }
     }
 
     @Override

@@ -123,7 +123,10 @@ public class PatientController {
     public ResultResponse<Map<String, Long>> historyStats(@RequestParam String populationType) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Patient::getArchived, 1)
-               .eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType);
+               .eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
+               .and(w -> w.isNull(Patient::getArchiveRemark)
+                       .or()
+                       .ne(Patient::getArchiveRemark, PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT));
         List<Patient> all = patientService.list(wrapper);
         Map<String, Long> stats = new HashMap<>();
         stats.put("totalCount", (long) all.size());
