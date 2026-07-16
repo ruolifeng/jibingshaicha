@@ -430,8 +430,19 @@ export function applyPatientNoticeTreatmentPlan(
 /** 患者通知单管理方式 */
 export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导", "全程管理", "未管理"]
 
-/** 病原学/病理学检查结果 */
+/** 病原学/病理学检查结果（通知单痰涂片、痰培养等表单选项） */
 export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "病原学结果阳性", "未做", "未知"]
+
+/**
+ * 患者列表「病原学结果」筛选项。
+ * 含表单标准项 + 专病网等导入常见值（结核性胸膜炎、病原学阳/阴性）。
+ */
+export const PATHOGEN_RESULT_FILTER_OPTIONS = [
+  ...PATHOGEN_RESULT_OPTIONS,
+  "结核性胸膜炎",
+  "病原学阳性",
+  "病原学阴性"
+] as const
 
 /** 感染检查方法 */
 export const INFECTION_METHOD_OPTIONS = ["PPD", "EC", "IGRA"]

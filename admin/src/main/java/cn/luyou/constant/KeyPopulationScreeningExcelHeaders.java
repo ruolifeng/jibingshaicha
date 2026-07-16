@@ -5,7 +5,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 重点人群 / 疫情筛查 Excel 表头（与官方模板「重点人群测试V1」一致：3 行表头 + 49 列）。
+ * 重点人群 / 疫情筛查 Excel 表头（与官方模板「重点人群测试V1」一致：3 行表头）。
+ * <p>导入模板 49 列；导出在末尾追加「录入用户」「录入时间」共 51 列（避免再导入列错位）。
  */
 public final class KeyPopulationScreeningExcelHeaders {
 
@@ -31,6 +32,19 @@ public final class KeyPopulationScreeningExcelHeaders {
     /** 三级表头：分组 + 子分组 + 叶子列名。 */
     private static List<String> head3(String group, String sub, String leaf) {
         return new ArrayList<>(Arrays.asList(group, sub, leaf));
+    }
+
+    /** 导入模板表头（不含录入用户/录入时间） */
+    public static List<List<String>> asTemplateHead() {
+        return asEasyExcelHead();
+    }
+
+    /** 导出表头：官方列序不变，末尾追加录入用户、录入时间 */
+    public static List<List<String>> asExportHead() {
+        List<List<String>> heads = asEasyExcelHead();
+        heads.add(head2(G_BASIC, "录入用户"));
+        heads.add(head2(G_BASIC, "录入时间"));
+        return heads;
     }
 
     public static List<List<String>> asEasyExcelHead() {

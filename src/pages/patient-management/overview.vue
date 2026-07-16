@@ -6,13 +6,13 @@ import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
-import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
 import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
-import { archivePatientApi, batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, importPatientApi } from "./apis"
+import { archivePatientApi, batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, getPatientColumnDistinctApi, importPatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
@@ -38,7 +38,7 @@ const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
 ]
-const pathogenFilterOptions = PATHOGEN_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const pathogenFilterOptions = PATHOGEN_RESULT_FILTER_OPTIONS.map(item => ({ text: item, value: item }))
 const populationTypeFilterOptions = [
   { text: "学生筛查", value: "school" },
   { text: "重点人群", value: "keyPopulation" },
@@ -48,6 +48,24 @@ const populationTypeFilterOptions = [
   { text: "密接", value: "closeContact" },
   { text: "专病网", value: "specialDisease" }
 ]
+
+/** 表头 Excel 式：服务端实际去重值 */
+const pathogenSourceValues = ref<string[]>([])
+const genderSourceValues = ref<string[]>([])
+const populationTypeSourceValues = ref<string[]>([])
+
+async function loadColumnDistinct(field: string, target: Ref<string[]>) {
+  try {
+    const { data } = await getPatientColumnDistinctApi(field, 0)
+    target.value = Array.isArray(data) ? data : []
+  } catch {
+    // 接口失败时仍可用预设选项筛选
+  }
+}
+
+const loadGenderOptions = () => loadColumnDistinct("gender", genderSourceValues)
+const loadPathogenOptions = () => loadColumnDistinct("diagnosisResult", pathogenSourceValues)
+const loadPopulationTypeOptions = () => loadColumnDistinct("populationType", populationTypeSourceValues)
 
 watch(() => searchForm.populationType, (val) => {
   if (val !== "keyPopulation") {
@@ -276,7 +294,7 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
         </el-form-item>
         <el-form-item label="病原学结果">
           <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width: 140px">
-            <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="登记日期">
@@ -414,6 +432,8 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               label="性别"
               type="select"
               :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
               :model-value="columnFilters.gender"
               @change="(v) => { setFilter('gender', v); handleSearch() }"
             />
@@ -453,6 +473,8 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               label="病原学结果"
               type="select"
               :options="pathogenFilterOptions"
+              :source-values="pathogenSourceValues"
+              :load-options="loadPathogenOptions"
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
@@ -521,6 +543,8 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               label="数据来源"
               type="select"
               :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
               :model-value="columnFilters.populationType"
               @change="(v) => { setFilter('populationType', v); handleSearch() }"
             />

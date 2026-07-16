@@ -10,6 +10,15 @@ export function getPatientListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "patient/list", method: "get", params })
 }
 
+/** 表头 Excel 式筛选：某列实际出现过的去重值 */
+export function getPatientColumnDistinctApi(field: string, archived = 0) {
+  return request<ApiResponseData<string[]>>({
+    url: "patient/column-distinct",
+    method: "get",
+    params: { field, archived }
+  })
+}
+
 /** 患者详情 */
 export function getPatientDetailApi(id: number) {
   return request<ApiResponseData<any>>({ url: `patient/${id}`, method: "get" })

@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * 学生/学校人群筛查 Excel 表头（与系统列表、导入模板一致：2 行表头）。
- * <p>导出在「序号」后追加「录入用户」；导入模板不含该系统字段。
+ * <p>导出在末尾追加「录入用户」「录入时间」；导入模板不含该系统字段。
  */
 public final class SchoolScreeningExcelHeaders {
 
@@ -31,12 +31,13 @@ public final class SchoolScreeningExcelHeaders {
         return heads;
     }
 
-    /** 导出表头：序号 + 录入用户 + 业务列（与系统字段对齐） */
+    /** 导出表头：序号 + 业务列 + 录入用户 + 录入时间（末尾追加，避免导出文件再导入时列错位） */
     public static List<List<String>> asExportHead() {
-        List<List<String>> heads = new ArrayList<>(38);
+        List<List<String>> heads = new ArrayList<>(39);
         heads.add(head("序号"));
-        heads.add(head("录入用户"));
         appendBizHeads(heads);
+        heads.add(head("录入用户"));
+        heads.add(head("录入时间"));
         return heads;
     }
 

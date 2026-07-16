@@ -63,6 +63,14 @@ public class PatientController {
         return ResultRes.success(patientService.importManualBatch(file, confirmSkipInvalid, confirmSkipDuplicateInFile));
     }
 
+    @Operation(summary = "表头筛选：某列实际去重值（Excel 式）")
+    @GetMapping("/column-distinct")
+    public ResultResponse<List<String>> columnDistinct(
+            @RequestParam String field,
+            @RequestParam(required = false, defaultValue = "0") Integer archived) {
+        return ResultRes.success(patientService.listDistinctColumnValues(field, archived));
+    }
+
     @Operation(summary = "患者详情")
     @GetMapping("/{id}")
     public ResultResponse<Patient> detail(@PathVariable Long id) {

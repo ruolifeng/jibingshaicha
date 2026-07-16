@@ -7,6 +7,7 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.ScreeningKeyPopulation;
 import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.utils.KeyPopulationScreeningExcelExportSupport;
+import cn.luyou.utils.PageQueryUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -78,7 +79,7 @@ public class ScreeningKeyPopulationController {
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder) {
         return ResultRes.success(screeningKeyPopulationService.queryPage(
-                page, size, name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
+                page, PageQueryUtil.clampSize(size), name, idNumber, phone, district, townshipCommunity, crowdCategory, screenMethod, isLatent,
                 sourceType, diagnosisFirst, dateFrom, dateTo, entryUnit, createTimeFrom, createTimeTo,
                 creatorUsername, hasChestXray, chestXrayResult, columnFilters, formatIssue, sortField, sortOrder));
     }

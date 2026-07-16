@@ -110,6 +110,8 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     public IPage<SentNoticeVO> sentPage(Long senderId, int pageNum, int size) {
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
         wrapper.ge(Notice::getStatus, 1);
+        // 转出时会把通知单复制到接收方业务上（sender 被改成接收人），已发送列表只保留真实发送记录
+        excludeTransferCopiedNotices(wrapper);
         applySentNoticeScope(wrapper, senderId);
         wrapper.orderByDesc(Notice::getSentTime);
         IPage<Notice> noticePage = page(new Page<>(pageNum, size), wrapper);
@@ -278,6 +280,23 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             return;
         }
         dataScopeHelper.applyNoticeScope(wrapper);
+    }
+
+    /**
+     * 排除挂在「转出副本」业务上的通知单（patient.source_patient_id / latent.source_latent_id 非空）。
+     * 原发送记录仍保留；副本仅供接收方业务详情使用，不应出现在「已发送通知单」。
+     */
+    private void excludeTransferCopiedNotices(LambdaQueryWrapper<Notice> wrapper) {
+        wrapper.and(w -> w
+                .nested(n -> n.eq(Notice::getNoticeType, "patient")
+                        .notInSql(Notice::getBizId,
+                                "SELECT id FROM patient WHERE source_patient_id IS NOT NULL AND deleted = 0"))
+                .or()
+                .nested(n -> n.eq(Notice::getNoticeType, "latent")
+                        .notInSql(Notice::getBizId,
+                                "SELECT id FROM latent_infection WHERE source_latent_id IS NOT NULL AND deleted = 0"))
+                .or()
+                .notIn(Notice::getNoticeType, "patient", "latent"));
     }
 
     /** 催促前校验：仅允许查看辖区内已发送通知单的用户操作 */

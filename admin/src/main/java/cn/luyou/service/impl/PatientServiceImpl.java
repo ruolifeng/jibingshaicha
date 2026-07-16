@@ -251,7 +251,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 case "phone" -> ColumnFilterSupport.like(wrapper, Patient::getPhone, value);
                 case "currentAddress" -> ColumnFilterSupport.like(wrapper, Patient::getCurrentAddress, value);
                 case "householdAddress" -> ColumnFilterSupport.like(wrapper, Patient::getHouseholdAddress, value);
-                case "diagnosisResult" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getDiagnosisResult, value);
+                case "diagnosisResult" -> applyDiagnosisResultColumnFilter(wrapper, value);
                 case "populationType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getPopulationType, value);
                 case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getEthnicity, value);
                 case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getIdType, value);
@@ -838,6 +838,80 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             return;
         }
         applyPathogenValueFilter(wrapper, diagnosisResult);
+    }
+
+    /**
+     * 表头多选病原学筛选：展开别名后按 IN 匹配主表与 epidemic_data。
+     */
+    private void applyDiagnosisResultColumnFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
+        java.util.LinkedHashSet<String> expanded = new java.util.LinkedHashSet<>();
+        for (String raw : ColumnFilterSupport.splitValues(value)) {
+            if ("阳性".equals(raw)) {
+                expanded.add("阳性");
+                expanded.add("病原学阳性");
+            } else if ("阴性".equals(raw)) {
+                expanded.add("阴性");
+                expanded.add("病原学阴性");
+            } else if ("病原学结果阳性".equals(raw)) {
+                expanded.addAll(Arrays.asList(PATHOGEN_RESULT_POSITIVE_VALUES));
+            } else {
+                expanded.add(raw);
+            }
+        }
+        if (!expanded.isEmpty()) {
+            applyPathogenValueFilter(wrapper, expanded.toArray(String[]::new));
+        }
+    }
+
+    @Override
+    public List<String> listDistinctColumnValues(String field, Integer archived) {
+        if (StrUtil.isBlank(field) || !COLUMN_FILTER_WHITELIST.contains(field)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        // 仅对枚举类列做 distinct；文本列仍走模糊输入
+        Set<String> distinctFields = Set.of(
+                "gender", "diagnosisResult", "populationType", "ethnicity", "idType", "source");
+        if (!distinctFields.contains(field)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该字段不支持按实际内容枚举筛选");
+        }
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(archived != null, Patient::getArchived, archived);
+        if (archived == null || Integer.valueOf(0).equals(archived)) {
+            wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
+                    .or()
+                    .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        }
+        applyPatientScopeFilter(wrapper);
+        switch (field) {
+            case "gender" -> wrapper.select(Patient::getGender).isNotNull(Patient::getGender)
+                    .ne(Patient::getGender, "").groupBy(Patient::getGender);
+            case "diagnosisResult" -> wrapper.select(Patient::getDiagnosisResult).isNotNull(Patient::getDiagnosisResult)
+                    .ne(Patient::getDiagnosisResult, "").groupBy(Patient::getDiagnosisResult);
+            case "populationType" -> wrapper.select(Patient::getPopulationType).isNotNull(Patient::getPopulationType)
+                    .ne(Patient::getPopulationType, "").groupBy(Patient::getPopulationType);
+            case "ethnicity" -> wrapper.select(Patient::getEthnicity).isNotNull(Patient::getEthnicity)
+                    .ne(Patient::getEthnicity, "").groupBy(Patient::getEthnicity);
+            case "idType" -> wrapper.select(Patient::getIdType).isNotNull(Patient::getIdType)
+                    .ne(Patient::getIdType, "").groupBy(Patient::getIdType);
+            case "source" -> wrapper.select(Patient::getSource).isNotNull(Patient::getSource)
+                    .ne(Patient::getSource, "").groupBy(Patient::getSource);
+            default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        return list(wrapper).stream()
+                .map(p -> switch (field) {
+                    case "gender" -> p.getGender();
+                    case "diagnosisResult" -> p.getDiagnosisResult();
+                    case "populationType" -> p.getPopulationType();
+                    case "ethnicity" -> p.getEthnicity();
+                    case "idType" -> p.getIdType();
+                    case "source" -> p.getSource();
+                    default -> null;
+                })
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     /** 病原学阳性（列表筛选项「阳性」）：兼容主表与 epidemic_data 中「病原学结果」「诊断结果」 */

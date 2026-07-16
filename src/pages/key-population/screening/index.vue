@@ -7,12 +7,15 @@ import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
+import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, triggerBlobDownload } from "@@/utils/listToolbar"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteAllScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, deleteScreeningKeyPopulationByFilterApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, previewScreeningKeyPopulationUploadApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
 
-const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { paginationData, handleCurrentChange, handleSizeChange } = usePagination({
+  pageSizes: [...PAGE_SIZE_OPTIONS]
+})
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 const { defaultSort, onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 
