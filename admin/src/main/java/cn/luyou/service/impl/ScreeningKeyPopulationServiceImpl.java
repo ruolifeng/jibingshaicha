@@ -411,7 +411,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             var update = latentInfectionService.lambdaUpdate()
                     .eq(LatentInfection::getId, latent.getId());
             boolean changed = false;
-            // 覆盖导入：Excel 空值不覆盖潜伏表已有内容
+            // 覆盖导入：筛查表字段（含 Excel 清空）同步到潜伏表
             if (StrUtil.isNotBlank(d.getName())) {
                 update.set(LatentInfection::getName, d.getName());
                 changed = true;
@@ -432,28 +432,14 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 update.set(LatentInfection::getPhone, d.getPhone());
                 changed = true;
             }
-            if (StrUtil.isNotBlank(d.getInfectionResult())) {
-                update.set(LatentInfection::getInfectionResult, d.getInfectionResult());
-                changed = true;
-            }
-            if (StrUtil.isNotBlank(d.getHasChestXray())) {
-                update.set(LatentInfection::getHasChestXray, d.getHasChestXray());
-                changed = true;
-            }
-            if (d.getChestXrayDate() != null) {
-                update.set(LatentInfection::getChestXrayDate, d.getChestXrayDate());
-                changed = true;
-            }
-            if (StrUtil.isNotBlank(d.getChestXrayResult())) {
-                update.set(LatentInfection::getChestXrayResult, d.getChestXrayResult());
-                changed = true;
-            }
+            update.set(LatentInfection::getInfectionResult, StrUtil.isBlank(d.getInfectionResult()) ? null : d.getInfectionResult().trim());
+            update.set(LatentInfection::getHasChestXray, StrUtil.isBlank(d.getHasChestXray()) ? null : d.getHasChestXray().trim());
+            update.set(LatentInfection::getChestXrayDate, d.getChestXrayDate());
+            update.set(LatentInfection::getChestXrayResult, StrUtil.isBlank(d.getChestXrayResult()) ? null : d.getChestXrayResult().trim());
             String diagnosisFirst = latentDiagnosisFirst(d);
-            if (StrUtil.isNotBlank(diagnosisFirst)) {
-                update.set(LatentInfection::getDiagnosisFirst, diagnosisFirst);
-                latent.setDiagnosisFirst(diagnosisFirst);
-                changed = true;
-            }
+            update.set(LatentInfection::getDiagnosisFirst, diagnosisFirst);
+            latent.setDiagnosisFirst(diagnosisFirst);
+            changed = true;
             if (changed) {
                 update.update();
             }

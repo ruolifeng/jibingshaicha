@@ -28,64 +28,83 @@ import java.time.LocalDate;
 public class ScreeningSchool extends BaseEntity {
 
     @ExcelProperty(value = "年度", index = 1)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String year;
 
     @ExcelProperty(value = "市/州", index = 2)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String city;
 
     @ExcelProperty(value = "区/县", index = 3)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String district;
 
     @ExcelProperty(value = "姓名", index = 4)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String name;
 
     @ExcelProperty(value = "性别", index = 5)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String gender;
 
     @ExcelProperty(value = "出生日期", index = 6, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate birthDate;
 
     @ExcelProperty(value = "年龄", index = 7)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer age;
 
     @ExcelProperty(value = "证件类型", index = 8)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String idType;
 
     @ExcelProperty(value = "证件号", index = 9)
     private String idNumber;
 
     @ExcelProperty(value = "民族", index = 10)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String ethnicity;
 
     @ExcelProperty(value = "联系电话", index = 11)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String phone;
 
     @ExcelProperty(value = "户籍地址", index = 12)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String householdAddress;
 
     @ExcelProperty(value = "现住址", index = 13)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String currentAddress;
 
     @ExcelProperty(value = "学校类型", index = 14)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String schoolType;
 
     @ExcelProperty(value = "学校名称", index = 15)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String schoolName;
 
     @ExcelProperty(value = "班级", index = 16)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String className;
 
     @ExcelProperty(value = "既往结核病史", index = 17)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String tbHistory;
 
     @ExcelProperty(value = "密切接触史", index = 18)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String closeContactHistory;
 
     @ExcelProperty(value = "有无可疑症状", index = 19)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String suspiciousSymptoms;
 
     /** 是否进行感染筛（列20） */
     @ExcelProperty(value = "是否感染筛查", index = 20)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String hasInfectionScreen;
 
     /** 感染筛查日期（列21）；编辑可清空 */
@@ -110,6 +129,7 @@ public class ScreeningSchool extends BaseEntity {
 
     // ===== 胸片、病原学与诊断（Z-AE，index 25-30）：支持 Excel 直接导入 =====
     @ExcelProperty(value = "是否进行胸片检查", index = 25)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String hasChestXray;
     @ExcelProperty(value = "胸片检查日期", index = 26, converter = FlexibleLocalDateConverter.class)
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
