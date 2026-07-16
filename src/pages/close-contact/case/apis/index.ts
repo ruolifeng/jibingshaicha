@@ -40,6 +40,7 @@ export function getCloseContactCaseListApi(params: {
   creatorUsername?: string
   columnFilters?: string
   diagnosisResult?: string
+  sourcePatientBacteriologyResult?: string
   reportQuarter?: string
   createTimeFrom?: string
   createTimeTo?: string
@@ -61,9 +62,11 @@ export function exportCloseContactCaseApi(params?: {
   phone?: string
   creatorUsername?: string
   diagnosisResult?: string
+  sourcePatientBacteriologyResult?: string
   reportQuarter?: string
   createTimeFrom?: string
   createTimeTo?: string
+  columnFilters?: string
   exportType?: "latent" | "confirmed"
   formatIssue?: string
 }) {
@@ -75,9 +78,13 @@ export function exportCloseContactCaseApi(params?: {
   if (params?.phone) query.phone = params.phone
   if (params?.creatorUsername) query.creatorUsername = params.creatorUsername
   if (params?.diagnosisResult) query.diagnosisResult = params.diagnosisResult
+  if (params?.sourcePatientBacteriologyResult) {
+    query.sourcePatientBacteriologyResult = params.sourcePatientBacteriologyResult
+  }
   if (params?.reportQuarter) query.reportQuarter = params.reportQuarter
   if (params?.createTimeFrom) query.createTimeFrom = params.createTimeFrom
   if (params?.createTimeTo) query.createTimeTo = params.createTimeTo
+  if (params?.columnFilters) query.columnFilters = params.columnFilters
   if (params?.exportType) query.exportType = params.exportType
   if (params?.formatIssue) query.formatIssue = params.formatIssue
   return request<Blob>({
@@ -133,6 +140,7 @@ export function deleteCloseContactCaseByFilterApi(params?: {
   phone?: string
   creatorUsername?: string
   diagnosisResult?: string
+  sourcePatientBacteriologyResult?: string
   reportQuarter?: string
   createTimeFrom?: string
   createTimeTo?: string

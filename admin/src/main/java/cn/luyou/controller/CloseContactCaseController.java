@@ -53,6 +53,7 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String sourcePatientBacteriologyResult,
             @RequestParam(required = false) String reportQuarter,
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
@@ -60,7 +61,8 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(closeContactCaseService.queryPage(
                 page, PageQueryUtil.clampSize(size), name, idNumber, district, phone, creatorUsername,
-                diagnosisResult, reportQuarter, createTimeFrom, createTimeTo, columnFilters, formatIssue));
+                diagnosisResult, sourcePatientBacteriologyResult, reportQuarter, createTimeFrom, createTimeTo,
+                columnFilters, formatIssue));
     }
 
     @Operation(summary = "新增密接个案")
@@ -106,13 +108,15 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String sourcePatientBacteriologyResult,
             @RequestParam(required = false) String reportQuarter,
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(closeContactCaseService.deleteByFilter(
-                name, idNumber, district, phone, creatorUsername, diagnosisResult, reportQuarter,
+                name, idNumber, district, phone, creatorUsername, diagnosisResult,
+                sourcePatientBacteriologyResult, reportQuarter,
                 createTimeFrom, createTimeTo, columnFilters, formatIssue));
     }
 
@@ -135,10 +139,12 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) String sourcePatientBacteriologyResult,
             @RequestParam(required = false) String reportQuarter,
             @RequestParam(required = false) String exportType,
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
+            @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue) throws Exception {
 
         String effectiveDiagnosis = diagnosisResult;
@@ -161,8 +167,9 @@ public class CloseContactCaseController {
         }
 
         List<CloseContactCase> list = closeContactCaseService.listForExport(
-                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis, reportQuarter, idList,
-                createTimeFrom, createTimeTo, formatIssue);
+                name, idNumber, district, phone, creatorUsername, effectiveDiagnosis,
+                sourcePatientBacteriologyResult, reportQuarter, idList,
+                createTimeFrom, createTimeTo, columnFilters, formatIssue);
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename=" +

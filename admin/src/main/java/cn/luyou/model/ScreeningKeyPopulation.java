@@ -4,6 +4,8 @@ import cn.luyou.utils.ExcelTextStringConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -94,48 +96,63 @@ public class ScreeningKeyPopulation extends BaseEntity {
     @ExcelProperty(value = "体重减轻", index = 31)
     private String weightLoss;
 
-    // 感染筛查（列32-36）
+    // 感染筛查（列32-36）；编辑可清空，需 ALWAYS 才能把 null 写入库
     @ExcelProperty(value = "是否感染筛查", index = 32)
     private String hasInfectionScreen;
     @ExcelProperty(value = "感染筛查日期", index = 33, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate screenDate;
     @ExcelProperty(value = "感染筛查方法", index = 34)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String screenMethod;
     @ExcelProperty(value = "筛查结果", index = 35)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String screenResult;
     @ExcelProperty(value = "感染筛查结果", index = 36)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String infectionResult;
 
     // ===== 胸片与诊断（列37-40）：支持 Excel 直接导入 =====
     @ExcelProperty(value = "是否胸片检查", index = 37)
     private String hasChestXray;
     @ExcelProperty(value = "胸片检查日期", index = 38, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate chestXrayDate;
     @ExcelProperty(value = "胸片检查结果", index = 39)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String chestXrayResult;
     @ExcelProperty(value = "首次诊断结果", index = 40)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisFirst;
 
     // ===== 以下字段由系统回写，不参与 Excel 导入 =====
     @ExcelProperty(index = 41)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisHalfYear;
     @ExcelProperty(index = 42)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisOneYear;
 
     @ExcelProperty(index = 43)
     private String hasPreventiveTreatment;
     @ExcelProperty(index = 44)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String preventivePlan;
     @ExcelProperty(index = 45, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate preventiveStartDate;
     @ExcelProperty(index = 46, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate preventiveEndDate;
     @ExcelProperty(index = 47)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String preventiveResult;
     @ExcelProperty(index = 48)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String preventiveManager;
 
     @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     /** 是否潜伏管理者：0否 1是 */

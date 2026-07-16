@@ -26,7 +26,7 @@ export function createReferralTrackingApi(data: Record<string, any>) {
   })
 }
 
-/** 更新基本信息 */
+/** 更新追踪记录（基本信息 / 诊断结果修正 / 追踪过程备注） */
 export function updateReferralTrackingApi(id: number, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}`,

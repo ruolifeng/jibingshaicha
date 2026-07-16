@@ -2,10 +2,8 @@ package cn.luyou.service.impl;
 
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
-import cn.luyou.mapper.UserMapper;
 import cn.luyou.model.Notice;
 import cn.luyou.mapper.NoticeMapper;
-import cn.luyou.model.User;
 import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.NoticeService;
@@ -13,6 +11,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.NoticePartyFillSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -22,8 +21,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,22 +28,22 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         implements NoticeService {
 
     private final SysMessageService sysMessageService;
-    private final UserMapper userMapper;
     private final DataScopeHelper dataScopeHelper;
     private final PatientService patientService;
     private final LatentInfectionService latentInfectionService;
+    private final NoticePartyFillSupport noticePartyFillSupport;
 
     public NoticeServiceImpl(
             SysMessageService sysMessageService,
-            UserMapper userMapper,
             DataScopeHelper dataScopeHelper,
             PatientService patientService,
-            @Lazy LatentInfectionService latentInfectionService) {
+            @Lazy LatentInfectionService latentInfectionService,
+            NoticePartyFillSupport noticePartyFillSupport) {
         this.sysMessageService = sysMessageService;
-        this.userMapper = userMapper;
         this.dataScopeHelper = dataScopeHelper;
         this.patientService = patientService;
         this.latentInfectionService = latentInfectionService;
+        this.noticePartyFillSupport = noticePartyFillSupport;
     }
 
     @Override
@@ -110,25 +107,14 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     public IPage<SentNoticeVO> sentPage(Long senderId, int pageNum, int size) {
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();
         wrapper.ge(Notice::getStatus, 1);
-        // 转出时会把通知单复制到接收方业务上（sender 被改成接收人），已发送列表只保留真实发送记录
+        // 转出副本挂在 source_* 非空业务上，已发送列表只保留真实发送记录
         excludeTransferCopiedNotices(wrapper);
         applySentNoticeScope(wrapper, senderId);
         wrapper.orderByDesc(Notice::getSentTime);
         IPage<Notice> noticePage = page(new Page<>(pageNum, size), wrapper);
 
-        // 批量查询发送者和接收者用户信息，避免 N+1 查询
-        Set<Long> userIds = noticePage.getRecords().stream()
-                .flatMap(n -> {
-                    java.util.stream.Stream.Builder<Long> b = java.util.stream.Stream.builder();
-                    if (n.getSenderId() != null) b.accept(n.getSenderId());
-                    if (n.getReceiverOrgId() != null) b.accept(n.getReceiverOrgId());
-                    return b.build();
-                })
-                .collect(Collectors.toSet());
-
-        Map<Long, User> userMap = userIds.isEmpty() ? Map.of()
-                : userMapper.selectBatchIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId, u -> u));
+        // 已发送列表同样补全姓名（含系统消息回退），与通知单管理口径一致
+        noticePartyFillSupport.fillPartyNames(noticePage.getRecords());
 
         List<SentNoticeVO> voList = noticePage.getRecords().stream().map(n -> {
             SentNoticeVO vo = new SentNoticeVO();
@@ -141,16 +127,10 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             vo.setStatus(n.getStatus());
             vo.setSentTime(n.getSentTime());
             vo.setConfirmedTime(n.getConfirmedTime());
-            User sender = userMap.get(n.getSenderId());
-            if (sender != null) {
-                vo.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());
-                vo.setSenderOrgName(sender.getOrgName());
-            }
-            User receiver = userMap.get(n.getReceiverOrgId());
-            if (receiver != null) {
-                vo.setReceiverName(receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername());
-                vo.setReceiverOrgName(receiver.getOrgName());
-            }
+            vo.setSenderName(n.getSenderName());
+            vo.setSenderOrgName(n.getSenderOrgName());
+            vo.setReceiverName(n.getReceiverName());
+            vo.setReceiverOrgName(n.getReceiverOrgName());
             return vo;
         }).collect(Collectors.toList());
 
@@ -167,32 +147,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
                 .eq(Notice::getNoticeType, noticeType)
                 .orderByDesc(Notice::getCreateTime)
                 .list();
-        if (notices.isEmpty()) {
-            return notices;
-        }
-        // 批量查询下发人与接收人信息
-        Set<Long> userIds = notices.stream()
-                .flatMap(n -> {
-                    java.util.stream.Stream.Builder<Long> b = java.util.stream.Stream.builder();
-                    if (n.getSenderId() != null) b.accept(n.getSenderId());
-                    if (n.getReceiverOrgId() != null) b.accept(n.getReceiverOrgId());
-                    return b.build();
-                })
-                .collect(Collectors.toSet());
-        Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
-                .collect(Collectors.toMap(User::getId, u -> u));
-        notices.forEach(n -> {
-            User sender = userMap.get(n.getSenderId());
-            if (sender != null) {
-                n.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());
-                n.setSenderOrgName(sender.getOrgName());
-            }
-            User receiver = userMap.get(n.getReceiverOrgId());
-            if (receiver != null) {
-                n.setReceiverName(receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername());
-                n.setReceiverOrgName(receiver.getOrgName());
-            }
-        });
+        noticePartyFillSupport.fillPartyNames(notices);
         return notices;
     }
 
@@ -202,23 +157,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         if (notice == null) {
             return null;
         }
-        Set<Long> userIds = new java.util.HashSet<>();
-        if (notice.getSenderId() != null) userIds.add(notice.getSenderId());
-        if (notice.getReceiverOrgId() != null) userIds.add(notice.getReceiverOrgId());
-        if (!userIds.isEmpty()) {
-            Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
-                    .collect(Collectors.toMap(User::getId, u -> u));
-            User sender = userMap.get(notice.getSenderId());
-            if (sender != null) {
-                notice.setSenderName(sender.getRealName() != null ? sender.getRealName() : sender.getUsername());
-                notice.setSenderOrgName(sender.getOrgName());
-            }
-            User receiver = userMap.get(notice.getReceiverOrgId());
-            if (receiver != null) {
-                notice.setReceiverName(receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername());
-                notice.setReceiverOrgName(receiver.getOrgName());
-            }
-        }
+        noticePartyFillSupport.fillPartyNames(List.of(notice));
         return notice;
     }
 

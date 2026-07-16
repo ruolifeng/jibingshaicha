@@ -146,6 +146,11 @@ export function getNoticeListByBizApi(bizId: number, noticeType: string) {
   })
 }
 
+/** 按 ID 查询通知单详情（含发送人/接收人） */
+export function getNoticeDetailApi(id: number) {
+  return request<ApiResponseData<any>>({ url: `notice/detail/${id}`, method: "get" })
+}
+
 /** 保存/更新首次随访 */
 export function saveFirstVisitApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "patient/first-visit/save", method: "post", data })

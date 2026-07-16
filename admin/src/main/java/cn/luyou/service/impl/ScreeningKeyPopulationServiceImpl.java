@@ -696,6 +696,21 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         }
         if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
             data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+        } else {
+            // 显式清空：与前端 clearable 提交的 null/"" 对齐，避免保留旧诊断
+            data.setDiagnosisFirst(null);
+        }
+        if (StrUtil.isBlank(data.getChestXrayResult())) {
+            data.setChestXrayResult(null);
+        }
+        if (StrUtil.isBlank(data.getInfectionResult())) {
+            data.setInfectionResult(null);
+        }
+        if (StrUtil.isBlank(data.getScreenMethod())) {
+            data.setScreenMethod(null);
+        }
+        if (StrUtil.isBlank(data.getScreenResult())) {
+            data.setScreenResult(null);
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         if (StrUtil.isBlank(data.getSourceType())) {

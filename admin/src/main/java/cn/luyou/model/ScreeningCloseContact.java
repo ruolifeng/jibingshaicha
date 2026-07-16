@@ -5,6 +5,7 @@ import cn.luyou.utils.FlexibleIntegerConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
@@ -125,39 +126,48 @@ public class ScreeningCloseContact extends BaseEntity {
     private String symptom2;
 
     @ExcelProperty(index = 20, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate infectionCheckDate;
 
     @ExcelProperty(index = 21)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String infectionCheckMethod;
 
     @ExcelProperty(index = 22)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String infectionCheckResult;
 
     @ExcelProperty(index = 23, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate imagingDate;
 
     @ExcelProperty(index = 24)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String imagingMethod;
 
     @ExcelIgnore
     private String imagingMethodOther;
 
     @ExcelProperty(index = 25)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String imagingResult;
 
     @ExcelIgnore
     private String imagingResultOther;
 
     @ExcelProperty(index = 26, converter = FlexibleLocalDateConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate sputumCheckDate;
 
     @ExcelProperty(index = 27)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String sputumCheckMethod;
 
     @ExcelIgnore
     private String sputumCheckMethodOther;
 
     @ExcelProperty(index = 28)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String sputumCheckResult;
 
     @ExcelIgnore
@@ -165,6 +175,7 @@ public class ScreeningCloseContact extends BaseEntity {
 
     /** 最终筛查结果（核心分类字段）：活动性肺结核/潜伏感染者/未做/未发现异常 */
     @ExcelProperty(index = 29)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String finalScreeningResult;
 
     @ExcelIgnore

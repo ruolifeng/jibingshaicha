@@ -683,6 +683,39 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             record.setReportCardTime(parseDateTime(params.get("reportCardTime").toString()));
         }
         if (getStr(params, "epidemicRemark") != null) record.setEpidemicRemark(getStr(params, "epidemicRemark"));
+
+        // 诊断结果修正（仅更新展示字段，不重新触发分流）
+        boolean clearDiagnosisRemark = false;
+        if (params.containsKey("diagnosisResult")) {
+            String diagnosisResult = getStr(params, "diagnosisResult");
+            String diagnosisRemark = getStr(params, "diagnosisRemark");
+            if (StrUtil.isBlank(diagnosisResult)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
+            }
+            if (!Set.of("排除", "确诊患者", "潜伏感染者", "其他").contains(diagnosisResult)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID,
+                        "无效的诊断结果，有效值：排除/确诊患者/潜伏感染者/其他");
+            }
+            if ("其他".equals(diagnosisResult) && StrUtil.isBlank(diagnosisRemark)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "选择其他时请填写备注");
+            }
+            if (StrUtil.isBlank(record.getDiagnosisResult())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "首次录入诊断请使用「录入诊断」功能");
+            }
+            record.setDiagnosisResult(diagnosisResult);
+            if ("其他".equals(diagnosisResult)) {
+                record.setDiagnosisRemark(diagnosisRemark.trim());
+            } else {
+                record.setDiagnosisRemark(null);
+                clearDiagnosisRemark = true;
+            }
+        }
+
+        // 追踪过程备注修正：按 attempt 回写 reason，并同步最新 trackingRemark
+        if (params.containsKey("trackingHistory")) {
+            applyTrackingHistoryRemarkUpdates(record, params.get("trackingHistory"));
+        }
+
         if ("recommend".equals(record.getBizMode())) {
             if (Integer.valueOf(1).equals(record.getArchived())) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可编辑");
@@ -722,6 +755,61 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             }
         }
         updateById(record);
+        // updateById 默认忽略 null，切换「其他」以外结果时需显式清空诊断备注
+        if (clearDiagnosisRemark) {
+            lambdaUpdate()
+                    .eq(ReferralTracking::getId, id)
+                    .set(ReferralTracking::getDiagnosisRemark, null)
+                    .update();
+        }
+    }
+
+    /**
+     * 按 attempt 合并前端提交的追踪备注，保留原有状态/时间等字段。
+     */
+    @SuppressWarnings("unchecked")
+    private void applyTrackingHistoryRemarkUpdates(ReferralTracking record, Object trackingHistoryParam) {
+        if (trackingHistoryParam == null) {
+            return;
+        }
+        List<Map<String, Object>> existing = parseTrackingHistory(record.getTrackingHistoryJson());
+        if (existing.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "暂无追踪过程可编辑");
+        }
+        List<Map<String, Object>> updates;
+        if (trackingHistoryParam instanceof List<?> list) {
+            updates = (List<Map<String, Object>>) (List<?>) list;
+        } else if (trackingHistoryParam instanceof String json && StrUtil.isNotBlank(json)) {
+            updates = parseTrackingHistory(json);
+        } else {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "追踪过程格式无效");
+        }
+        Map<Integer, String> reasonByAttempt = new HashMap<>();
+        for (Map<String, Object> item : updates) {
+            if (item == null) continue;
+            Integer attempt = toInteger(item.get("attempt"));
+            if (attempt == null) continue;
+            Object reasonObj = item.get("reason");
+            String reason = reasonObj == null ? "" : reasonObj.toString().trim();
+            if (StrUtil.isBlank(reason)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "第" + attempt + "次追踪备注不能为空");
+            }
+            reasonByAttempt.put(attempt, reason);
+        }
+        if (reasonByAttempt.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> entry : existing) {
+            Integer attempt = toInteger(entry.get("attempt"));
+            if (attempt != null && reasonByAttempt.containsKey(attempt)) {
+                entry.put("reason", reasonByAttempt.get(attempt));
+            }
+        }
+        record.setTrackingHistoryJson(JSONUtil.toJsonStr(existing));
+        Object lastReason = existing.get(existing.size() - 1).get("reason");
+        if (lastReason != null) {
+            record.setTrackingRemark(lastReason.toString());
+        }
     }
 
     @Override

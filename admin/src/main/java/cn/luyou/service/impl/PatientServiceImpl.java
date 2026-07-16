@@ -47,6 +47,7 @@ import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import cn.luyou.utils.NoticePartyFillSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.PatientAddressRegionParser;
 import cn.luyou.utils.StatYearPeriod;
@@ -81,7 +82,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -146,6 +146,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     private final ReferralService referralService;
     private final DepartmentService departmentService;
     private final DepartmentFilterSupport departmentFilterSupport;
+    private final NoticePartyFillSupport noticePartyFillSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
@@ -167,7 +168,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             UserMapper userMapper,
             @Lazy ReferralService referralService,
             DepartmentService departmentService,
-            DepartmentFilterSupport departmentFilterSupport) {
+            DepartmentFilterSupport departmentFilterSupport,
+            NoticePartyFillSupport noticePartyFillSupport) {
         this.dataScopeHelper = dataScopeHelper;
         this.epidemicReportService = epidemicReportService;
         this.objectMapper = objectMapper;
@@ -183,6 +185,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         this.referralService = referralService;
         this.departmentService = departmentService;
         this.departmentFilterSupport = departmentFilterSupport;
+        this.noticePartyFillSupport = noticePartyFillSupport;
     }
 
     @Override
@@ -1196,14 +1199,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         n -> n,
                         (a, b) -> a.getId() > b.getId() ? a : b
                 ));
-        Set<Long> userIds = noticeMap.values().stream()
-                .flatMap(n -> Stream.of(n.getSenderId(), n.getReceiverOrgId()))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<Long, User> userMap = userIds.isEmpty()
-                ? Map.of()
-                : userMapper.selectBatchIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+        noticePartyFillSupport.fillPartyNames(new ArrayList<>(noticeMap.values()));
         patients.forEach(p -> {
             Notice n = noticeMap.get(p.getId());
             if (n != null) {
@@ -1213,17 +1209,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setNoticeConfirmedTime(n.getConfirmedTime());
                 p.setNoticeMedicationUnit(n.getMedicationManagementUnit());
                 p.setNoticeRemark(n.getRemark());
-                p.setNoticeSenderName(resolveUserDisplayName(userMap.get(n.getSenderId())));
-                p.setNoticeReceiverName(resolveUserDisplayName(userMap.get(n.getReceiverOrgId())));
+                p.setNoticeSenderName(n.getSenderName());
+                p.setNoticeReceiverName(n.getReceiverName());
             }
         });
-    }
-
-    private static String resolveUserDisplayName(User user) {
-        if (user == null) {
-            return null;
-        }
-        return StrUtil.blankToDefault(user.getRealName(), user.getUsername());
     }
 
     @Override
@@ -1439,7 +1428,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         save(copy);
         Long newPatientId = copy.getId();
 
-        copyPatientNotices(sourcePatientId, newPatientId, receiverUserId, receiver);
+        copyPatientNotices(sourcePatientId, newPatientId);
         copyPatientFirstVisits(sourcePatientId, newPatientId);
         copyPatientFollowUpVisits(sourcePatientId, newPatientId);
         copyPatientMedicationManagement(sourcePatientId, newPatientId);
@@ -1477,24 +1466,16 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
     }
 
-    private void copyPatientNotices(Long sourcePatientId, Long newPatientId,
-                                    Long receiverUserId, User receiver) {
+    private void copyPatientNotices(Long sourcePatientId, Long newPatientId) {
         List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getBizId, sourcePatientId)
                 .eq(Notice::getNoticeType, "patient"));
-        String receiverName = receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername();
         for (Notice source : notices) {
             Notice copy = new Notice();
+            // 保留原始发送人/接收人，便于通知单管理展示；已发送列表会按 source_patient_id 排除副本
             BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "bizId",
-                    "senderId", "receiverOrgId", "senderName", "senderOrgName",
-                    "receiverName", "receiverOrgName");
+                    "senderName", "senderOrgName", "receiverName", "receiverOrgName");
             copy.setBizId(newPatientId);
-            copy.setSenderId(receiverUserId);
-            copy.setSenderName(receiverName);
-            copy.setSenderOrgName(receiver.getOrgName());
-            copy.setReceiverOrgId(null);
-            copy.setReceiverName(null);
-            copy.setReceiverOrgName(null);
             // 待确认通知单随转出一并视为已完成，避免接收方重复确认
             if (Integer.valueOf(1).equals(source.getStatus())) {
                 copy.setStatus(2);

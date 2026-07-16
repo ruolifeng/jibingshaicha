@@ -1,11 +1,17 @@
 <script lang="ts" setup>
+import type { FollowUpHistoryDisplayRow } from "@@/utils/followUpVisit"
+import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.vue"
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
+import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { canEditFollowUpVisit, resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
-import { followUpFormatters } from "@@/utils/followUpVisitFormat"
+import {
+  buildFollowUpHistoryDisplayList,
+  canEditFollowUpVisit
+
+} from "@@/utils/followUpVisit"
 import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
@@ -54,8 +60,7 @@ function openFollowUp(row: any) {
 }
 
 const historyVisible = ref(false)
-const historyList = ref<any[]>([])
-const historyFirstVisitNextDate = ref("")
+const historyList = ref<FollowUpHistoryDisplayRow[]>([])
 const historyPatientName = ref("")
 const historyPatient = ref<any>(null)
 const historyDialogTitle = computed(() => `${historyPatientName.value} - 随访记录`)
@@ -66,17 +71,22 @@ const editVisit = ref<Record<string, any> | null>(null)
 const detailVisible = ref(false)
 const detailData = ref<Record<string, any> | null>(null)
 
+const firstVisitDetailVisible = ref(false)
+const firstVisitDetailData = ref<Record<string, any> | null>(null)
+
 const printVisible = ref(false)
 const printData = ref<Record<string, any> | null>(null)
 const printPatientName = ref("")
+
+const firstVisitPrintVisible = ref(false)
+const firstVisitPrintData = ref<Record<string, any> | null>(null)
 
 async function loadFollowUpHistory(patientId: number) {
   const [followUpRes, firstVisitRes] = await Promise.all([
     getFollowUpVisitListApi(patientId),
     getFirstVisitDetailApi(patientId).catch(() => ({ data: null }))
   ])
-  historyList.value = followUpRes.data || []
-  historyFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
+  historyList.value = buildFollowUpHistoryDisplayList(firstVisitRes.data, followUpRes.data || [])
 }
 
 async function viewHistory(row: any) {
@@ -91,8 +101,9 @@ async function refreshHistoryList() {
   await loadFollowUpHistory(historyPatient.value.id)
 }
 
-function openEdit(record: Record<string, any>) {
-  editVisit.value = record
+function openEdit(record: FollowUpHistoryDisplayRow) {
+  if (record.recordType !== "followUp") return
+  editVisit.value = record.raw
   editDialogVisible.value = true
 }
 
@@ -101,19 +112,29 @@ async function onEditSaved() {
   fetchData()
 }
 
-function viewDetail(row: Record<string, any>) {
-  detailData.value = row
+function viewDetail(row: FollowUpHistoryDisplayRow) {
+  if (row.recordType === "firstVisit") {
+    firstVisitDetailData.value = row.raw
+    firstVisitDetailVisible.value = true
+    return
+  }
+  detailData.value = row.raw
   detailVisible.value = true
 }
 
-function openPrint(row: Record<string, any>) {
-  printData.value = row
+function openPrint(row: FollowUpHistoryDisplayRow) {
+  if (row.recordType === "firstVisit") {
+    firstVisitPrintData.value = row.raw
+    firstVisitPrintVisible.value = true
+    return
+  }
+  printData.value = row.raw
   printPatientName.value = historyPatientName.value
   printVisible.value = true
 }
 
-async function handleDelete(record: Record<string, any>) {
-  if (!historyPatient.value || !record.id) return
+async function handleDelete(record: FollowUpHistoryDisplayRow) {
+  if (!historyPatient.value || record.recordType !== "followUp" || !record.id) return
   try {
     await ElMessageBox.confirm(
       `确认删除第 ${record.visitSeq} 次后续随访记录？删除后不可恢复。`,
@@ -284,18 +305,14 @@ async function handleDelete(record: Record<string, any>) {
       append-to-body
     >
       <el-table :data="historyList" border stripe>
-        <el-table-column prop="visitSeq" label="第几次" />
+        <el-table-column prop="visitSeq" label="第几次" width="80" />
         <el-table-column prop="visitDate" label="随访日期" />
         <el-table-column prop="treatmentMonth" label="治疗月序" />
-        <el-table-column label="随访方式">
-          <template #default="{ row }">
-            {{ followUpFormatters.visitMethod(row.visitMethod, row.visitMethodOther) }}
-          </template>
-        </el-table-column>
+        <el-table-column prop="visitMethodLabel" label="随访方式" />
         <el-table-column prop="missedDoses" label="漏服次数" />
-        <el-table-column label="下次随访">
-          <template #default="{ $index }">
-            {{ resolveFollowUpListNextVisitDate(historyList, $index, historyFirstVisitNextDate) || "-" }}
+        <el-table-column prop="nextVisitDate" label="下次随访">
+          <template #default="{ row }">
+            {{ row.nextVisitDate || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
@@ -305,7 +322,7 @@ async function handleDelete(record: Record<string, any>) {
               查看详情
             </el-button>
             <el-button
-              v-if="canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
+              v-if="row.recordType === 'followUp' && canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
               v-permission="'patientManagement:followUp:edit'"
               type="warning"
               link
@@ -315,7 +332,7 @@ async function handleDelete(record: Record<string, any>) {
               修改
             </el-button>
             <el-button
-              v-if="canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
+              v-if="row.recordType === 'followUp' && canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
               v-permission="'patientManagement:followUp:edit'"
               type="danger"
               link
@@ -337,8 +354,12 @@ async function handleDelete(record: Record<string, any>) {
       v-model:visible="detailVisible"
       :visit-data="detailData"
       :patient-name="historyPatientName"
-      :follow-up-list="historyList"
-      :first-visit-next-date="historyFirstVisitNextDate"
+    />
+
+    <FirstVisitDetailDialog
+      v-model:visible="firstVisitDetailVisible"
+      :visit-data="firstVisitDetailData"
+      :patient-name="historyPatientName"
     />
 
     <PrintFollowUp
@@ -346,9 +367,14 @@ async function handleDelete(record: Record<string, any>) {
       :visible="printVisible"
       :visit-data="printData"
       :patient-name="printPatientName"
-      :follow-up-list="historyList"
-      :first-visit-next-date="historyFirstVisitNextDate"
       @update:visible="printVisible = $event"
+    />
+
+    <PrintFirstVisit
+      v-if="firstVisitPrintData"
+      v-model:visible="firstVisitPrintVisible"
+      :visit-data="firstVisitPrintData"
+      :patient-name="historyPatientName"
     />
   </div>
 </template>
