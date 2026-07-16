@@ -161,4 +161,12 @@ public interface PatientService extends IService<Patient> {
     PatientDistributionHeatmapVO buildPatientDistributionHeatmap(Integer statYear, String districtName,
                                                                List<Long> filterDeptIds);
 
+    /**
+     * 表头 Excel 式筛选：在权限范围内返回某列实际出现过的去重值。
+     *
+     * @param field    白名单字段（如 diagnosisResult、gender）
+     * @param archived 0=在管，1=历史；null 不限
+     */
+    List<String> listDistinctColumnValues(String field, Integer archived);
+
 }

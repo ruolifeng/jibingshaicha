@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS, STOP_TREATMENT_REASON_OPTIONS } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, STOP_TREATMENT_REASON_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { isStopTreatmentArchive } from "@@/utils/followUpVisit"
 import { formatStopTreatmentReason } from "@@/utils/followUpVisitFormat"
@@ -144,7 +144,7 @@ async function handleUnarchive(row: Record<string, any>) {
         </el-form-item>
         <el-form-item label="病原学结果">
           <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:140px">
-            <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="数据来源">

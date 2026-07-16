@@ -7,12 +7,16 @@ import com.alibaba.excel.annotation.ExcelProperty;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
- * 重点人群筛查 Excel 导出行（49 列，与官方模板列序一致，仅用于导出/模板下载）。
+ * 重点人群/疫情筛查 Excel 导出行（51 列：官方 49 列对齐导入模板，末尾追加录入用户/录入时间）。
  */
 @Data
 public class KeyPopulationScreeningExcelExportRow {
+
+    private static final DateTimeFormatter CREATE_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @ExcelProperty(index = 0, converter = FlexibleIntegerConverter.class)
     private Integer seq;
@@ -161,6 +165,12 @@ public class KeyPopulationScreeningExcelExportRow {
     @ExcelProperty(index = 48)
     private String preventiveManager;
 
+    @ExcelProperty(index = 49)
+    private String creatorUsername;
+
+    @ExcelProperty(index = 50)
+    private String createTime;
+
     public static KeyPopulationScreeningExcelExportRow from(ScreeningKeyPopulation source, int seq) {
         KeyPopulationScreeningExcelExportRow row = new KeyPopulationScreeningExcelExportRow();
         row.setSeq(seq);
@@ -212,6 +222,12 @@ public class KeyPopulationScreeningExcelExportRow {
         row.setPreventiveEndDate(source.getPreventiveEndDate());
         row.setPreventiveResult(source.getPreventiveResult());
         row.setPreventiveManager(source.getPreventiveManager());
+        row.setCreatorUsername(source.getCreatorUsername());
+        row.setCreateTime(formatCreateTime(source.getCreateTime()));
         return row;
+    }
+
+    private static String formatCreateTime(LocalDateTime time) {
+        return time == null ? null : time.format(CREATE_TIME_FMT);
     }
 }

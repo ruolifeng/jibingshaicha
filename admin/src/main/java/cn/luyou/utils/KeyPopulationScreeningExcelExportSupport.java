@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 重点人群 / 疫情筛查 — 按官方 49 列三级表头模板导出（与导入模板一致，可再导入）。
+ * 重点人群 / 疫情筛查 — 导出含录入用户/录入时间；导入模板仍为官方 49 列。
  */
 public final class KeyPopulationScreeningExcelExportSupport {
 
@@ -26,15 +26,17 @@ public final class KeyPopulationScreeningExcelExportSupport {
             rows.add(KeyPopulationScreeningExcelExportRow.from(record, seq++));
         }
         EasyExcel.write(outputStream, KeyPopulationScreeningExcelExportRow.class)
-                .head(KeyPopulationScreeningExcelHeaders.asEasyExcelHead())
+                .head(KeyPopulationScreeningExcelHeaders.asExportHead())
+                .registerWriteHandler(new ExcelFirstHeadRowCenterHandler())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
                 .sheet(KeyPopulationScreeningExcelHeaders.SHEET_NAME)
                 .doWrite(rows);
     }
 
     public static void writeTemplate(OutputStream outputStream) {
-        EasyExcel.write(outputStream, KeyPopulationScreeningExcelExportRow.class)
-                .head(KeyPopulationScreeningExcelHeaders.asEasyExcelHead())
+        EasyExcel.write(outputStream)
+                .head(KeyPopulationScreeningExcelHeaders.asTemplateHead())
+                .registerWriteHandler(new ExcelFirstHeadRowCenterHandler())
                 .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
                 .sheet(KeyPopulationScreeningExcelHeaders.SHEET_NAME)
                 .doWrite(Collections.emptyList());

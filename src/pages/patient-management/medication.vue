@@ -2,7 +2,7 @@
 import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PatientMedicationPickupDetailDialog from "@@/components/PatientMedicationPickupDetailDialog.vue"
 import PatientMedicationPickupDialog from "@@/components/PatientMedicationPickupDialog.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import {
   canEditMedicationPickup,
   formatMedicationPickupDrugs,
@@ -104,7 +104,7 @@ function viewDetail(record: Record<string, any>) {
         </el-form-item>
         <el-form-item label="病原学结果">
           <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:140px">
-            <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="时间段">

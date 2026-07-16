@@ -9,14 +9,19 @@ export interface HeaderFilterOption {
 const props = withDefaults(defineProps<{
   label: string
   modelValue?: string
-  /** text=模糊输入；select=枚举多选 */
+  /** text=模糊输入；select=枚举/实际内容多选 */
   type?: "text" | "select"
   options?: HeaderFilterOption[]
+  /** 按实际内容补充的去重值（如当前页或服务端 distinct） */
+  sourceValues?: string[]
   placeholder?: string
+  /** 打开时加载实际内容选项 */
+  loadOptions?: () => void | Promise<void>
 }>(), {
   modelValue: "",
   type: "text",
   options: () => [],
+  sourceValues: () => [],
   placeholder: "输入后筛选"
 })
 
@@ -28,15 +33,56 @@ const emit = defineEmits<{
 const visible = ref(false)
 const draftText = ref("")
 const draftSelect = ref<string[]>([])
+const optionKeyword = ref("")
+const loadingOptions = ref(false)
 
 const isActive = computed(() => !!props.modelValue && props.modelValue.trim() !== "")
 
-watch(visible, (open) => {
+/** 预设选项 ∪ 实际内容去重，按出现顺序保留 */
+const mergedOptions = computed<HeaderFilterOption[]>(() => {
+  const seen = new Set<string>()
+  const list: HeaderFilterOption[] = []
+  const push = (text: string, value: string) => {
+    const key = value.trim()
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    list.push({ text: text || key, value: key })
+  }
+  for (const opt of props.options || []) {
+    push(opt.text, opt.value)
+  }
+  for (const raw of props.sourceValues || []) {
+    const v = String(raw ?? "").trim()
+    if (v) push(v, v)
+  }
+  return list
+})
+
+const filteredOptions = computed(() => {
+  const kw = optionKeyword.value.trim().toLowerCase()
+  if (!kw) return mergedOptions.value
+  return mergedOptions.value.filter(opt =>
+    opt.text.toLowerCase().includes(kw) || opt.value.toLowerCase().includes(kw)
+  )
+})
+
+watch(visible, async (open) => {
   if (!open) return
+  optionKeyword.value = ""
   if (props.type === "select") {
     draftSelect.value = props.modelValue
       ? props.modelValue.split(",").map(s => s.trim()).filter(Boolean)
       : []
+    if (props.loadOptions) {
+      loadingOptions.value = true
+      try {
+        await props.loadOptions()
+      } catch {
+        // 加载失败时仍展示预设 options
+      } finally {
+        loadingOptions.value = false
+      }
+    }
   } else {
     draftText.value = props.modelValue || ""
   }
@@ -67,7 +113,7 @@ function onTextKeydown(e: Event | KeyboardEvent) {
 <template>
   <span class="table-header-filter">
     <span class="table-header-filter__label">{{ label }}</span>
-    <el-popover v-model:visible="visible" placement="bottom" :width="220" trigger="click">
+    <el-popover v-model:visible="visible" placement="bottom" :width="240" trigger="click">
       <template #reference>
         <el-icon
           class="table-header-filter__icon"
@@ -77,16 +123,25 @@ function onTextKeydown(e: Event | KeyboardEvent) {
           <Filter />
         </el-icon>
       </template>
-      <div class="table-header-filter__panel">
+      <div v-loading="loadingOptions" class="table-header-filter__panel">
         <template v-if="type === 'select'">
+          <el-input
+            v-model="optionKeyword"
+            clearable
+            size="small"
+            placeholder="搜索选项"
+          />
           <el-checkbox-group v-model="draftSelect" class="table-header-filter__checks">
             <el-checkbox
-              v-for="opt in options"
+              v-for="opt in filteredOptions"
               :key="opt.value"
-              :label="opt.value"
+              :value="opt.value"
             >
               {{ opt.text }}
             </el-checkbox>
+            <div v-if="filteredOptions.length === 0" class="table-header-filter__empty">
+              暂无可选项
+            </div>
           </el-checkbox-group>
         </template>
         <el-input
@@ -141,6 +196,7 @@ function onTextKeydown(e: Event | KeyboardEvent) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 80px;
 }
 
 .table-header-filter__checks {
@@ -149,6 +205,13 @@ function onTextKeydown(e: Event | KeyboardEvent) {
   gap: 4px;
   max-height: 220px;
   overflow: auto;
+}
+
+.table-header-filter__empty {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  padding: 8px 0;
+  text-align: center;
 }
 
 .table-header-filter__actions {

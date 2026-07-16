@@ -7,131 +7,137 @@ import com.alibaba.excel.annotation.ExcelProperty;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
- * 学生/学校人群筛查 Excel 导出行（38 列：序号 + 录入用户 + 业务列）。
+ * 学生/学校人群筛查 Excel 导出行（39 列：业务列与导入模板对齐，末尾追加录入用户/录入时间）。
  */
 @Data
 public class SchoolScreeningExcelExportRow {
+
+    private static final DateTimeFormatter CREATE_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @ExcelProperty(index = 0, converter = FlexibleIntegerConverter.class)
     private Integer seq;
 
     @ExcelProperty(index = 1)
-    private String creatorUsername;
-
-    @ExcelProperty(index = 2)
     private String year;
 
-    @ExcelProperty(index = 3)
+    @ExcelProperty(index = 2)
     private String city;
 
-    @ExcelProperty(index = 4)
+    @ExcelProperty(index = 3)
     private String district;
 
-    @ExcelProperty(index = 5)
+    @ExcelProperty(index = 4)
     private String name;
 
-    @ExcelProperty(index = 6)
+    @ExcelProperty(index = 5)
     private String gender;
 
-    @ExcelProperty(index = 7, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 6, converter = FlexibleLocalDateConverter.class)
     private LocalDate birthDate;
 
-    @ExcelProperty(index = 8, converter = FlexibleIntegerConverter.class)
+    @ExcelProperty(index = 7, converter = FlexibleIntegerConverter.class)
     private Integer age;
 
-    @ExcelProperty(index = 9)
+    @ExcelProperty(index = 8)
     private String idType;
 
-    @ExcelProperty(index = 10, converter = ExcelTextStringConverter.class)
+    @ExcelProperty(index = 9, converter = ExcelTextStringConverter.class)
     private String idNumber;
 
-    @ExcelProperty(index = 11)
+    @ExcelProperty(index = 10)
     private String ethnicity;
 
-    @ExcelProperty(index = 12, converter = ExcelTextStringConverter.class)
+    @ExcelProperty(index = 11, converter = ExcelTextStringConverter.class)
     private String phone;
 
-    @ExcelProperty(index = 13)
+    @ExcelProperty(index = 12)
     private String householdAddress;
 
-    @ExcelProperty(index = 14)
+    @ExcelProperty(index = 13)
     private String currentAddress;
 
-    @ExcelProperty(index = 15)
+    @ExcelProperty(index = 14)
     private String schoolType;
 
-    @ExcelProperty(index = 16)
+    @ExcelProperty(index = 15)
     private String schoolName;
 
-    @ExcelProperty(index = 17)
+    @ExcelProperty(index = 16)
     private String className;
 
-    @ExcelProperty(index = 18)
+    @ExcelProperty(index = 17)
     private String tbHistory;
 
-    @ExcelProperty(index = 19)
+    @ExcelProperty(index = 18)
     private String closeContactHistory;
 
-    @ExcelProperty(index = 20)
+    @ExcelProperty(index = 19)
     private String suspiciousSymptoms;
 
-    @ExcelProperty(index = 21)
+    @ExcelProperty(index = 20)
     private String hasInfectionScreen;
 
-    @ExcelProperty(index = 22, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 21, converter = FlexibleLocalDateConverter.class)
     private LocalDate screenDate;
 
-    @ExcelProperty(index = 23)
+    @ExcelProperty(index = 22)
     private String screenMethod;
 
-    @ExcelProperty(index = 24)
+    @ExcelProperty(index = 23)
     private String screenResult;
 
-    @ExcelProperty(index = 25)
+    @ExcelProperty(index = 24)
     private String infectionResult;
 
-    @ExcelProperty(index = 26)
+    @ExcelProperty(index = 25)
     private String hasChestXray;
 
-    @ExcelProperty(index = 27, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 26, converter = FlexibleLocalDateConverter.class)
     private LocalDate chestXrayDate;
 
-    @ExcelProperty(index = 28)
+    @ExcelProperty(index = 27)
     private String chestXrayResult;
 
-    @ExcelProperty(index = 29)
+    @ExcelProperty(index = 28)
     private String sputumSmearResult;
 
-    @ExcelProperty(index = 30)
+    @ExcelProperty(index = 29)
     private String molecularBiologyResult;
 
-    @ExcelProperty(index = 31)
+    @ExcelProperty(index = 30)
     private String diagnosisFirst;
 
-    @ExcelProperty(index = 32)
+    @ExcelProperty(index = 31)
     private String hasPreventiveTreatment;
 
-    @ExcelProperty(index = 33)
+    @ExcelProperty(index = 32)
     private String preventivePlan;
 
-    @ExcelProperty(index = 34, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 33, converter = FlexibleLocalDateConverter.class)
     private LocalDate preventiveStartDate;
 
-    @ExcelProperty(index = 35, converter = FlexibleLocalDateConverter.class)
+    @ExcelProperty(index = 34, converter = FlexibleLocalDateConverter.class)
     private LocalDate preventiveEndDate;
 
-    @ExcelProperty(index = 36)
+    @ExcelProperty(index = 35)
     private String preventiveResult;
 
-    @ExcelProperty(index = 37)
+    @ExcelProperty(index = 36)
     private String preventiveManager;
+
+    @ExcelProperty(index = 37)
+    private String creatorUsername;
+
+    @ExcelProperty(index = 38)
+    private String createTime;
 
     public static SchoolScreeningExcelExportRow from(ScreeningSchool source, int seq) {
         SchoolScreeningExcelExportRow row = new SchoolScreeningExcelExportRow();
         row.setSeq(seq);
-        row.setCreatorUsername(source.getCreatorUsername());
         row.setYear(source.getYear());
         row.setCity(source.getCity());
         row.setDistrict(source.getDistrict());
@@ -168,6 +174,12 @@ public class SchoolScreeningExcelExportRow {
         row.setPreventiveEndDate(source.getPreventiveEndDate());
         row.setPreventiveResult(source.getPreventiveResult());
         row.setPreventiveManager(source.getPreventiveManager());
+        row.setCreatorUsername(source.getCreatorUsername());
+        row.setCreateTime(formatCreateTime(source.getCreateTime()));
         return row;
+    }
+
+    private static String formatCreateTime(LocalDateTime time) {
+        return time == null ? null : time.format(CREATE_TIME_FMT);
     }
 }

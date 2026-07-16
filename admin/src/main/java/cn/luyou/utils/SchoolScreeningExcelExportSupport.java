@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 学生/学校人群筛查 — 按系统一致的二级表头导出（含序号、录入用户、预防治疗列）。
+ * 学生/学校人群筛查 — 按系统一致的二级表头导出（含序号、录入用户、录入时间、预防治疗列）。
  */
 public final class SchoolScreeningExcelExportSupport {
 
