@@ -637,6 +637,26 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         validateFirstScreenInfo(data);
         if (StrUtil.isNotBlank(data.getFinalScreeningResult())) {
             data.setFinalScreeningResult(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getFinalScreeningResult()));
+        } else {
+            data.setFinalScreeningResult(null);
+        }
+        if (StrUtil.isBlank(data.getImagingResult())) {
+            data.setImagingResult(null);
+        }
+        if (StrUtil.isBlank(data.getInfectionCheckResult())) {
+            data.setInfectionCheckResult(null);
+        }
+        if (StrUtil.isBlank(data.getSputumCheckResult())) {
+            data.setSputumCheckResult(null);
+        }
+        if (StrUtil.isBlank(data.getInfectionCheckMethod())) {
+            data.setInfectionCheckMethod(null);
+        }
+        if (StrUtil.isBlank(data.getImagingMethod())) {
+            data.setImagingMethod(null);
+        }
+        if (StrUtil.isBlank(data.getSputumCheckMethod())) {
+            data.setSputumCheckMethod(null);
         }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));

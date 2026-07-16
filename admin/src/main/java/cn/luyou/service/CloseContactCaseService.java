@@ -22,7 +22,8 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                       String district, String phone, String creatorUsername,
-                                      String diagnosisResult, String reportQuarter,
+                                      String diagnosisResult, String sourcePatientBacteriologyResult,
+                                      String reportQuarter,
                                       String createTimeFrom, String createTimeTo,
                                       String columnFilters, String formatIssue);
 
@@ -30,7 +31,7 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
                                               String district, String phone, String creatorUsername,
                                               String diagnosisResult, String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, district, phone, creatorUsername,
-                diagnosisResult, null, createTimeFrom, createTimeTo, null, null);
+                diagnosisResult, null, null, createTimeFrom, createTimeTo, null, null);
     }
 
     void createCase(CloseContactCase data);
@@ -43,7 +44,8 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     /** 按筛选条件删除（与 list/export 同参，含 reportQuarter），返回删除条数 */
     int deleteByFilter(String name, String idNumber, String district, String phone,
-                       String creatorUsername, String diagnosisResult, String reportQuarter,
+                       String creatorUsername, String diagnosisResult,
+                       String sourcePatientBacteriologyResult, String reportQuarter,
                        String createTimeFrom, String createTimeTo, String columnFilters, String formatIssue);
 
     /** 删除权限范围内全部密接个案，返回删除条数 */
@@ -51,8 +53,10 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
 
     List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                          String phone, String creatorUsername, String diagnosisResult,
-                                         String reportQuarter, List<Long> ids,
-                                         String createTimeFrom, String createTimeTo, String formatIssue);
+                                         String sourcePatientBacteriologyResult, String reportQuarter,
+                                         List<Long> ids,
+                                         String createTimeFrom, String createTimeTo,
+                                         String columnFilters, String formatIssue);
 
     CloseContactCase getAccessibleById(Long id);
 }

@@ -317,6 +317,7 @@ async function handleBatchDelete() {
 // ===== 编辑 =====
 const editDialogVisible = ref(false)
 const editRow = ref<any>(null)
+const editTrackingHistory = ref<{ attempt: number, status: number, trackTime: string, reason: string }[]>([])
 const editForm = reactive({
   name: "",
   gender: "",
@@ -335,10 +336,15 @@ const editForm = reactive({
   diseaseName: "",
   reportUnit: "",
   reportCardTime: "",
-  epidemicRemark: ""
+  epidemicRemark: "",
+  diagnosisResult: "",
+  diagnosisRemark: ""
 })
 
-function openEditDialog(row: any) {
+const canEditDiagnosis = computed(() => Boolean(editRow.value?.diagnosisResult))
+const canEditTrackingHistory = computed(() => editTrackingHistory.value.length > 0)
+
+async function openEditDialog(row: any) {
   editRow.value = row
   Object.assign(editForm, {
     name: row.name ?? "",
@@ -358,13 +364,74 @@ function openEditDialog(row: any) {
     diseaseName: row.diseaseName ?? "",
     reportUnit: row.reportUnit ?? "",
     reportCardTime: row.reportCardTime ?? "",
-    epidemicRemark: row.epidemicRemark ?? ""
+    epidemicRemark: row.epidemicRemark ?? "",
+    diagnosisResult: row.diagnosisResult ?? "",
+    diagnosisRemark: row.diagnosisRemark ?? ""
   })
+  editTrackingHistory.value = parseTrackingHistory(row.trackingHistoryJson).map(item => ({
+    attempt: item.attempt,
+    status: item.status,
+    trackTime: item.trackTime,
+    reason: item.reason ?? ""
+  }))
+  // 列表可能缺诊断备注/完整追踪过程，打开时拉详情补齐
   editDialogVisible.value = true
+  try {
+    const res = await getReferralTrackingDetailApi(row.id)
+    const detail = res.data
+    if (detail) {
+      editRow.value = { ...row, ...detail }
+      editForm.diagnosisResult = detail.diagnosisResult ?? editForm.diagnosisResult
+      editForm.diagnosisRemark = detail.diagnosisRemark ?? editForm.diagnosisRemark
+      editTrackingHistory.value = parseTrackingHistory(detail.trackingHistoryJson).map(item => ({
+        attempt: item.attempt,
+        status: item.status,
+        trackTime: item.trackTime,
+        reason: item.reason ?? ""
+      }))
+    }
+  } catch {
+    /* 详情失败时仍可用列表数据编辑基本信息 */
+  }
 }
 
 async function handleEditSave() {
-  await updateReferralTrackingApi(editRow.value.id, { ...editForm })
+  if (canEditDiagnosis.value) {
+    if (!editForm.diagnosisResult) {
+      ElMessage.warning("请选择诊断结果")
+      return
+    }
+    if (editForm.diagnosisResult === "其他" && !editForm.diagnosisRemark.trim()) {
+      ElMessage.warning("选择其他时请填写诊断备注")
+      return
+    }
+  }
+  if (canEditTrackingHistory.value) {
+    const emptyRemark = editTrackingHistory.value.find(item => !item.reason.trim())
+    if (emptyRemark) {
+      ElMessage.warning(`请填写第${emptyRemark.attempt}次追踪备注`)
+      return
+    }
+  }
+
+  const payload: Record<string, any> = { ...editForm }
+  if (canEditDiagnosis.value) {
+    payload.diagnosisResult = editForm.diagnosisResult
+    payload.diagnosisRemark = editForm.diagnosisResult === "其他"
+      ? editForm.diagnosisRemark.trim()
+      : ""
+  } else {
+    delete payload.diagnosisResult
+    delete payload.diagnosisRemark
+  }
+  if (canEditTrackingHistory.value) {
+    payload.trackingHistory = editTrackingHistory.value.map(item => ({
+      attempt: item.attempt,
+      reason: item.reason.trim()
+    }))
+  }
+
+  await updateReferralTrackingApi(editRow.value.id, payload)
   ElMessage.success("保存成功")
   editDialogVisible.value = false
   fetchList()
@@ -1268,6 +1335,76 @@ function getRowClass({ row }: { row: any }) {
               <el-input v-model="editForm.trackReason" type="textarea" :rows="2" />
             </el-form-item>
           </el-col>
+          <template v-if="canEditDiagnosis">
+            <el-col :span="24">
+              <el-divider content-position="left">
+                诊断结果
+              </el-divider>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item label="诊断结果" required>
+                <el-radio-group v-model="editForm.diagnosisResult">
+                  <el-radio
+                    v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
+                    :key="item.value"
+                    :value="item.value"
+                  >
+                    {{ item.label }}
+                  </el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+            <el-col v-if="editForm.diagnosisResult === '其他'" :span="24">
+              <el-form-item label="诊断备注" required>
+                <el-input
+                  v-model="editForm.diagnosisRemark"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  show-word-limit
+                  placeholder="请输入其他诊断结果说明"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-alert
+                title="修改诊断结果仅更新本页展示，不会重新触发分流（如创建潜伏感染者）"
+                type="info"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 8px"
+              />
+            </el-col>
+          </template>
+          <template v-if="canEditTrackingHistory">
+            <el-col :span="24">
+              <el-divider content-position="left">
+                追踪过程备注
+              </el-divider>
+            </el-col>
+            <el-col
+              v-for="item in editTrackingHistory"
+              :key="item.attempt"
+              :span="24"
+            >
+              <el-form-item :label="`第${item.attempt}次备注`" required>
+                <div class="edit-tracking-meta">
+                  <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                    {{ TRACK_STATUS_LABEL[item.status] || "-" }}
+                  </el-tag>
+                  <span class="edit-tracking-time">{{ formatDateTime(item.trackTime) }}</span>
+                </div>
+                <el-input
+                  v-model="item.reason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  show-word-limit
+                  placeholder="请填写追踪备注"
+                />
+              </el-form-item>
+            </el-col>
+          </template>
         </el-row>
       </el-form>
       <template #footer>
@@ -1518,6 +1655,18 @@ function getRowClass({ row }: { row: any }) {
   margin-bottom: 8px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.edit-tracking-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.edit-tracking-time {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 </style>
 

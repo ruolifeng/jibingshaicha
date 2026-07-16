@@ -4,6 +4,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS, REPORT_QUARTER_OPTIONS } from "@@/constants/close-contact-case"
+import { PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
@@ -26,6 +27,7 @@ const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumn
 const batchDeleting = ref(false)
 
 const diagnosisFilterOptions = DIAGNOSIS_RESULT_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+const pathogenFilterOptions = PATHOGEN_RESULT_FILTER_OPTIONS.map(item => ({ text: item, value: item }))
 /** 支持表头筛选的列（与后端 columnFilters 白名单对齐） */
 const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "select", options?: { text: string, value: string }[] }> = {
   creatorUsername: { label: "录入用户" },
@@ -34,6 +36,7 @@ const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "selec
   idNumber: { label: "身份证号" },
   phone: { label: "接触者电话" },
   sourcePatientName: { label: "患者姓名" },
+  sourcePatientBacteriologyResult: { label: "病原学结果", type: "select", options: pathogenFilterOptions },
   finalScreeningResult: { label: "最终筛查结果", type: "select", options: diagnosisFilterOptions }
 }
 
@@ -49,6 +52,7 @@ const searchForm = reactive({
   phone: "",
   creatorUsername: "",
   diagnosisResult: "",
+  sourcePatientBacteriologyResult: "",
   reportYear: "" as string,
   reportQuarterNo: "" as string,
   entryTimeRange: [] as string[],
@@ -87,6 +91,7 @@ async function fetchData() {
       phone: rest.phone || undefined,
       creatorUsername: rest.creatorUsername || undefined,
       diagnosisResult: rest.diagnosisResult || undefined,
+      sourcePatientBacteriologyResult: rest.sourcePatientBacteriologyResult || undefined,
       reportQuarter: reportQuarterParam.value,
       ...(formatIssue ? { formatIssue } : {}),
       ...extractCreateTimeRangeParams(entryTimeRange),
@@ -113,6 +118,7 @@ function handleReset() {
   searchForm.phone = ""
   searchForm.creatorUsername = ""
   searchForm.diagnosisResult = ""
+  searchForm.sourcePatientBacteriologyResult = ""
   searchForm.reportYear = ""
   searchForm.reportQuarterNo = ""
   searchForm.entryTimeRange = []
@@ -173,6 +179,7 @@ function buildListQueryParams() {
     phone: rest.phone || undefined,
     creatorUsername: rest.creatorUsername || undefined,
     diagnosisResult: rest.diagnosisResult || undefined,
+    sourcePatientBacteriologyResult: rest.sourcePatientBacteriologyResult || undefined,
     reportQuarter: reportQuarterParam.value,
     ...(formatIssue ? { formatIssue } : {}),
     ...extractCreateTimeRangeParams(entryTimeRange),
@@ -181,8 +188,7 @@ function buildListQueryParams() {
 }
 
 function buildExportParams(exportType?: "latent" | "confirmed") {
-  const { columnFilters: _cf, ...rest } = buildListQueryParams()
-  return { ...rest, exportType }
+  return { ...buildListQueryParams(), exportType }
 }
 
 async function handleExport(ids?: number[], exportType?: "latent" | "confirmed", mode: "all" | "filtered" | "selected" = "filtered") {
@@ -423,6 +429,17 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-form-item label="格式问题">
           <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
             <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="病原学结果">
+          <el-select
+            v-model="searchForm.sourcePatientBacteriologyResult"
+            placeholder="全部"
+            clearable
+            filterable
+            style="width: 160px"
+          >
+            <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="最终筛查结果">

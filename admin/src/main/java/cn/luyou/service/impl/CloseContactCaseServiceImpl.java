@@ -58,8 +58,8 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "year", "city", "district", "gender", "idNumber", "phone",
-            "sourcePatientName", "finalScreeningResult", "infectionCheckResult",
-            "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
+            "sourcePatientName", "sourcePatientBacteriologyResult", "finalScreeningResult",
+            "infectionCheckResult", "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
             "remark", "creatorUsername"
     );
 
@@ -248,11 +248,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     public IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                               String district, String phone, String creatorUsername,
-                                              String diagnosisResult, String reportQuarter,
+                                              String diagnosisResult, String sourcePatientBacteriologyResult,
+                                              String reportQuarter,
                                               String createTimeFrom, String createTimeTo,
                                               String columnFilters, String formatIssue) {
         LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
-                name, idNumber, district, phone, creatorUsername, diagnosisResult, reportQuarter,
+                name, idNumber, district, phone, creatorUsername, diagnosisResult,
+                sourcePatientBacteriologyResult, reportQuarter,
                 createTimeFrom, createTimeTo, formatIssue);
         applyColumnFilters(wrapper, columnFilters);
         ImportRowOrderSupport.applyWithBatch(wrapper);
@@ -274,6 +276,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 case "idNumber" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getIdNumber, value);
                 case "phone" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getPhone, value);
                 case "sourcePatientName" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getSourcePatientName, value);
+                case "sourcePatientBacteriologyResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSourcePatientBacteriologyResult, value);
                 case "finalScreeningResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getFinalScreeningResult, value);
                 case "infectionCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getInfectionCheckResult, value);
                 case "imagingResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getImagingResult, value);
@@ -330,11 +333,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int deleteByFilter(String name, String idNumber, String district, String phone,
-                               String creatorUsername, String diagnosisResult, String reportQuarter,
+                               String creatorUsername, String diagnosisResult,
+                               String sourcePatientBacteriologyResult, String reportQuarter,
                                String createTimeFrom, String createTimeTo, String columnFilters,
                                String formatIssue) {
         LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
-                name, idNumber, district, phone, creatorUsername, diagnosisResult, reportQuarter,
+                name, idNumber, district, phone, creatorUsername, diagnosisResult,
+                sourcePatientBacteriologyResult, reportQuarter,
                 createTimeFrom, createTimeTo, formatIssue);
         applyColumnFilters(wrapper, columnFilters);
         applyDepartmentFilter(wrapper);
@@ -350,21 +355,24 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int deleteAll() {
-        return deleteByFilter(null, null, null, null, null, null, null, null, null, null, null);
+        return deleteByFilter(null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
     public List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                                  String phone, String creatorUsername, String diagnosisResult,
-                                                 String reportQuarter, List<Long> ids,
-                                                 String createTimeFrom, String createTimeTo, String formatIssue) {
+                                                 String sourcePatientBacteriologyResult, String reportQuarter,
+                                                 List<Long> ids,
+                                                 String createTimeFrom, String createTimeTo,
+                                                 String columnFilters, String formatIssue) {
         LambdaQueryWrapper<CloseContactCase> wrapper;
         if (ids != null && !ids.isEmpty()) {
             wrapper = new LambdaQueryWrapper<>();
             wrapper.in(CloseContactCase::getId, ids);
         } else {
             wrapper = buildQueryWrapper(name, idNumber, district, phone, creatorUsername, diagnosisResult,
-                    reportQuarter, createTimeFrom, createTimeTo, formatIssue);
+                    sourcePatientBacteriologyResult, reportQuarter, createTimeFrom, createTimeTo, formatIssue);
+            applyColumnFilters(wrapper, columnFilters);
         }
         ImportRowOrderSupport.applyWithBatch(wrapper);
         applyDepartmentFilter(wrapper);
@@ -376,6 +384,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private LambdaQueryWrapper<CloseContactCase> buildQueryWrapper(String name, String idNumber,
                                                                     String district, String phone,
                                                                     String creatorUsername, String diagnosisResult,
+                                                                    String sourcePatientBacteriologyResult,
                                                                     String reportQuarter,
                                                                     String createTimeFrom, String createTimeTo,
                                                                     String formatIssue) {
@@ -388,6 +397,8 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 .like(StrUtil.isNotBlank(phone), CloseContactCase::getPhone, phone)
                 .like(StrUtil.isNotBlank(creatorUsername), CloseContactCase::getCreatorUsername, creatorUsername)
                 .eq(StrUtil.isNotBlank(diagnosisResult), CloseContactCase::getFinalScreeningResult, diagnosisResult)
+                .eq(StrUtil.isNotBlank(sourcePatientBacteriologyResult),
+                        CloseContactCase::getSourcePatientBacteriologyResult, sourcePatientBacteriologyResult)
                 .ge(createFrom != null, CloseContactCase::getCreateTime, createFrom)
                 .le(createTo != null, CloseContactCase::getCreateTime, createTo);
         applyReportQuarterFilter(wrapper, reportQuarter);

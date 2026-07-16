@@ -2,7 +2,6 @@
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 /** 后续随访记录 — 完整详情查看 */
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
-import { resolveFollowUpRecordNextVisitDate } from "@@/utils/followUpVisit"
 import {
   followUpFormatters,
   formatFollowUpSupervisor,
@@ -14,10 +13,6 @@ const props = defineProps<{
   visible: boolean
   visitData: Record<string, any> | null
   patientName?: string
-  /** 已完成后续随访列表，用于关联展示下次随访时间 */
-  followUpList?: Array<{ nextVisitDate?: string | null, visitSeq?: number | null }>
-  /** 首次随访填写的下次随访时间 */
-  firstVisitNextDate?: string
 }>()
 
 const emit = defineEmits<{
@@ -30,12 +25,7 @@ const d = computed(() => props.visitData)
 
 const displayNextVisitDate = computed(() => {
   if (!d.value) return "-"
-  const linked = resolveFollowUpRecordNextVisitDate(
-    d.value,
-    props.followUpList || [],
-    props.firstVisitNextDate
-  )
-  return linked || d.value.nextVisitDate || "-"
+  return d.value.nextVisitDate || "-"
 })
 </script>
 

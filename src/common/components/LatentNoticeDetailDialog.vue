@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
-import { NOTICE_STATUS_MAP, normalizeLatentTreatmentPlan } from "@@/constants/disease"
-import { confirmNoticeApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
+import { normalizeLatentTreatmentPlan, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { confirmNoticeApi, getNoticeDetailApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -21,6 +21,14 @@ const printVisible = ref(false)
 async function loadNotice() {
   if (!props.latentRow) return
   try {
+    // 优先按通知单 ID 查详情（与系统消息一致）；否则按业务 ID 列表取最新一条
+    if (props.latentRow.noticeId) {
+      const { data } = await getNoticeDetailApi(props.latentRow.noticeId)
+      if (data) {
+        noticeDetailData.value = data
+        return
+      }
+    }
     const { data } = await getNoticeListByBizApi(props.latentRow.id, "latent")
     if (data?.length > 0) {
       noticeDetailData.value = data[0]

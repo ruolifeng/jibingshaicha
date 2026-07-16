@@ -1,13 +1,18 @@
 <script lang="ts" setup>
+import type { FollowUpHistoryDisplayRow } from "@@/utils/followUpVisit"
 /** 历史患者 — 查看关联记录（首次随访、后续随访、服药管理、通知单等） */
 import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.vue"
 import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientRecordDetailDialog from "@@/components/PatientRecordDetailDialog.vue"
+import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
-import { canEditFollowUpVisit, resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
-import { followUpFormatters } from "@@/utils/followUpVisitFormat"
+import {
+  buildFollowUpHistoryDisplayList,
+  canEditFollowUpVisit
+
+} from "@@/utils/followUpVisit"
 import {
   deleteFollowUpVisitApi,
   getFirstVisitDetailApi,
@@ -26,12 +31,13 @@ const detailVisible = ref(false)
 const firstVisitDetailVisible = ref(false)
 const firstVisitDetailData = ref<Record<string, any> | null>(null)
 const followUpListVisible = ref(false)
-const followUpListData = ref<any[]>([])
-const followUpFirstVisitNextDate = ref("")
+const followUpListData = ref<FollowUpHistoryDisplayRow[]>([])
 const followUpDetailVisible = ref(false)
 const followUpDetailData = ref<Record<string, any> | null>(null)
 const followUpPrintVisible = ref(false)
 const followUpPrintData = ref<Record<string, any> | null>(null)
+const firstVisitPrintVisible = ref(false)
+const firstVisitPrintData = ref<Record<string, any> | null>(null)
 const medicationVisible = ref(false)
 const noticeVisible = ref(false)
 
@@ -57,19 +63,28 @@ async function viewFollowUpList() {
       getFollowUpVisitListApi(props.row.id),
       getFirstVisitDetailApi(props.row.id).catch(() => ({ data: null }))
     ])
-    followUpListData.value = followUpRes.data || []
-    followUpFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
+    followUpListData.value = buildFollowUpHistoryDisplayList(firstVisitRes.data, followUpRes.data || [])
     followUpListVisible.value = true
   } catch { /* handled */ }
 }
 
-function viewFollowUpDetail(record: Record<string, any>) {
-  followUpDetailData.value = record
+function viewFollowUpDetail(record: FollowUpHistoryDisplayRow) {
+  if (record.recordType === "firstVisit") {
+    firstVisitDetailData.value = record.raw
+    firstVisitDetailVisible.value = true
+    return
+  }
+  followUpDetailData.value = record.raw
   followUpDetailVisible.value = true
 }
 
-function printFollowUp(record: Record<string, any>) {
-  followUpPrintData.value = record
+function printFollowUp(record: FollowUpHistoryDisplayRow) {
+  if (record.recordType === "firstVisit") {
+    firstVisitPrintData.value = record.raw
+    firstVisitPrintVisible.value = true
+    return
+  }
+  followUpPrintData.value = record.raw
   followUpPrintVisible.value = true
 }
 
@@ -78,12 +93,11 @@ async function refreshFollowUpList() {
     getFollowUpVisitListApi(props.row.id),
     getFirstVisitDetailApi(props.row.id).catch(() => ({ data: null }))
   ])
-  followUpListData.value = followUpRes.data || []
-  followUpFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
+  followUpListData.value = buildFollowUpHistoryDisplayList(firstVisitRes.data, followUpRes.data || [])
 }
 
-async function handleDeleteFollowUp(record: Record<string, any>) {
-  if (!record.id) return
+async function handleDeleteFollowUp(record: FollowUpHistoryDisplayRow) {
+  if (record.recordType !== "followUp" || !record.id) return
   try {
     await ElMessageBox.confirm(
       `确认删除第 ${record.visitSeq} 次后续随访记录？删除后不可恢复。`,
@@ -148,18 +162,14 @@ function viewNotice() {
       append-to-body
     >
       <el-table :data="followUpListData" border stripe>
-        <el-table-column prop="visitSeq" label="第几次" />
+        <el-table-column prop="visitSeq" label="第几次" width="80" />
         <el-table-column prop="visitDate" label="随访日期" />
         <el-table-column prop="treatmentMonth" label="治疗月序" />
-        <el-table-column label="随访方式">
-          <template #default="{ row: record }">
-            {{ followUpFormatters.visitMethod(record.visitMethod, record.visitMethodOther) }}
-          </template>
-        </el-table-column>
+        <el-table-column prop="visitMethodLabel" label="随访方式" />
         <el-table-column prop="missedDoses" label="漏服次数" />
-        <el-table-column label="下次随访">
-          <template #default="{ $index }">
-            {{ resolveFollowUpListNextVisitDate(followUpListData, $index, followUpFirstVisitNextDate) || "-" }}
+        <el-table-column prop="nextVisitDate" label="下次随访">
+          <template #default="{ row: record }">
+            {{ record.nextVisitDate || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
@@ -169,7 +179,7 @@ function viewNotice() {
               查看详情
             </el-button>
             <el-button
-              v-if="canEditFollowUpVisit(userStore.userRole, record)"
+              v-if="record.recordType === 'followUp' && canEditFollowUpVisit(userStore.userRole, record)"
               v-permission="'patientManagement:followUp:edit'"
               type="danger"
               link
@@ -191,8 +201,6 @@ function viewNotice() {
       v-model:visible="followUpDetailVisible"
       :visit-data="followUpDetailData"
       :patient-name="row.name"
-      :follow-up-list="followUpListData"
-      :first-visit-next-date="followUpFirstVisitNextDate"
     />
 
     <PrintFollowUp
@@ -200,9 +208,14 @@ function viewNotice() {
       :visible="followUpPrintVisible"
       :visit-data="followUpPrintData"
       :patient-name="row.name"
-      :follow-up-list="followUpListData"
-      :first-visit-next-date="followUpFirstVisitNextDate"
       @update:visible="followUpPrintVisible = $event"
+    />
+
+    <PrintFirstVisit
+      v-if="firstVisitPrintData"
+      v-model:visible="firstVisitPrintVisible"
+      :visit-data="firstVisitPrintData"
+      :patient-name="row.name"
     />
 
     <PatientMedicationDialog

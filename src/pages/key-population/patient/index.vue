@@ -1,11 +1,14 @@
 <script lang="ts" setup>
+import type { FollowUpHistoryDisplayRow } from "@@/utils/followUpVisit"
 import { getLevel5UsersApi } from "@@/apis/users"
 import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
+import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.vue"
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import ImageUploader from "@@/components/ImageUploader.vue"
 import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PatientMedicationDialog from "@@/components/PatientMedicationDialog.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
+import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import PrintNotice from "@@/components/PrintNotice.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
@@ -32,8 +35,7 @@ import {
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
 import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
-import { resolveFollowUpListNextVisitDate } from "@@/utils/followUpVisit"
-import { followUpFormatters } from "@@/utils/followUpVisitFormat"
+import { buildFollowUpHistoryDisplayList } from "@@/utils/followUpVisit"
 import { isNoticeSent, resolveNoticeSputumSmearFromPatient } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule } from "@@/utils/validate"
@@ -495,12 +497,14 @@ async function handleSaveFirstVisit() {
 // ==================== 首次随访查看 ====================
 const firstVisitDetailVisible = ref(false)
 const firstVisitDetailData = ref<any>(null)
+const firstVisitDetailPatientName = ref("")
 
 async function viewFirstVisit(row: any) {
   try {
     const { data } = await getFirstVisitApi(row.id)
     if (data) {
       firstVisitDetailData.value = data
+      firstVisitDetailPatientName.value = row.name || ""
       firstVisitDetailVisible.value = true
     } else {
       ElMessage.info("暂无首次随访记录")
@@ -519,9 +523,12 @@ function openFollowUpDialog(row: any) {
 
 // ==================== 后续随访列表查看 ====================
 const followUpListVisible = ref(false)
-const followUpListData = ref<any[]>([])
+const followUpListData = ref<FollowUpHistoryDisplayRow[]>([])
 const followUpListPatientName = ref("")
-const followUpFirstVisitNextDate = ref("")
+const followUpHistoryDetailVisible = ref(false)
+const followUpHistoryDetailData = ref<Record<string, any> | null>(null)
+const followUpHistoryPrintVisible = ref(false)
+const followUpHistoryPrintData = ref<Record<string, any> | null>(null)
 
 async function viewFollowUpList(row: any) {
   try {
@@ -530,10 +537,31 @@ async function viewFollowUpList(row: any) {
       getFollowUpListApi(row.id),
       getFirstVisitApi(row.id).catch(() => ({ data: null }))
     ])
-    followUpListData.value = followUpRes.data || []
-    followUpFirstVisitNextDate.value = firstVisitRes.data?.nextVisitDate || ""
+    followUpListData.value = buildFollowUpHistoryDisplayList(firstVisitRes.data, followUpRes.data || [])
     followUpListVisible.value = true
   } catch { /* handled */ }
+}
+
+function viewFollowUpHistoryDetail(record: FollowUpHistoryDisplayRow) {
+  if (record.recordType === "firstVisit") {
+    firstVisitDetailData.value = record.raw
+    firstVisitDetailPatientName.value = followUpListPatientName.value
+    firstVisitDetailVisible.value = true
+    return
+  }
+  followUpHistoryDetailData.value = record.raw
+  followUpHistoryDetailVisible.value = true
+}
+
+function printFollowUpHistory(record: FollowUpHistoryDisplayRow) {
+  if (record.recordType === "firstVisit") {
+    printVisitData.value = record.raw
+    printPatientName.value = followUpListPatientName.value
+    printVisitVisible.value = true
+    return
+  }
+  followUpHistoryPrintData.value = record.raw
+  followUpHistoryPrintVisible.value = true
 }
 
 // ==================== 服药管理 ====================
@@ -1332,6 +1360,7 @@ watch(
     <FirstVisitDetailDialog
       v-model:visible="firstVisitDetailVisible"
       :visit-data="firstVisitDetailData"
+      :patient-name="firstVisitDetailPatientName"
     />
 
     <!-- 后续随访弹窗（V15：通用组件，按《后续随访服务记录表》模板） -->
@@ -1347,24 +1376,44 @@ watch(
     <!-- 后续随访记录列表 -->
     <el-dialog v-model="followUpListVisible" :title="`${followUpListPatientName} - 随访记录`" width="900px">
       <el-table :data="followUpListData" border stripe>
-        <el-table-column prop="visitSeq" label="第几次" />
+        <el-table-column prop="visitSeq" label="第几次" width="80" />
         <el-table-column prop="visitDate" label="随访日期" />
         <el-table-column prop="treatmentMonth" label="治疗月序" />
-        <el-table-column label="随访方式">
-          <template #default="{ row }">
-            {{ followUpFormatters.visitMethod(row.visitMethod, row.visitMethodOther) }}
-          </template>
-        </el-table-column>
+        <el-table-column prop="visitMethodLabel" label="随访方式" />
         <el-table-column prop="missedDoses" label="漏服次数" />
-        <el-table-column label="下次随访">
-          <template #default="{ $index }">
-            {{ resolveFollowUpListNextVisitDate(followUpListData, $index, followUpFirstVisitNextDate) || "-" }}
+        <el-table-column prop="nextVisitDate" label="下次随访">
+          <template #default="{ row }">
+            {{ row.nextVisitDate || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="doctorSignature" label="医生签名" show-overflow-tooltip />
+        <el-table-column label="操作" fixed="right" width="160">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="viewFollowUpHistoryDetail(row)">
+              查看详情
+            </el-button>
+            <el-button type="info" link size="small" @click="printFollowUpHistory(row)">
+              打印
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-empty v-if="!followUpListData.length" description="暂无随访记录" />
     </el-dialog>
+
+    <FollowUpVisitDetailDialog
+      v-model:visible="followUpHistoryDetailVisible"
+      :visit-data="followUpHistoryDetailData"
+      :patient-name="followUpListPatientName"
+    />
+
+    <PrintFollowUp
+      v-if="followUpHistoryPrintData"
+      :visible="followUpHistoryPrintVisible"
+      :visit-data="followUpHistoryPrintData"
+      :patient-name="followUpListPatientName"
+      @update:visible="followUpHistoryPrintVisible = $event"
+    />
 
     <!-- 服药管理弹窗 -->
     <PatientMedicationDialog

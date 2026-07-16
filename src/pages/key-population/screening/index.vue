@@ -317,12 +317,18 @@ const editRules = {
 function onHasInfectionScreenChange() {
   if (editForm.value.hasInfectionScreen !== "是") {
     editFormRef.value?.clearValidate("infectionResult")
+    editForm.value.screenDate = null
+    editForm.value.screenMethod = ""
+    editForm.value.screenResult = ""
+    editForm.value.infectionResult = ""
   }
 }
 
 function onHasChestXrayChange() {
   if (editForm.value.hasChestXray !== "是") {
     editFormRef.value?.clearValidate("chestXrayResult")
+    editForm.value.chestXrayDate = null
+    editForm.value.chestXrayResult = ""
   }
 }
 

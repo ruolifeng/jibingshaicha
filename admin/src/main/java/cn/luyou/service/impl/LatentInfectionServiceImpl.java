@@ -49,8 +49,9 @@ import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
-import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.LatentScreeningLinkSupport;
+import cn.luyou.utils.NoticePartyFillSupport;
+import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -107,6 +108,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final MedicationManagementService medicationManagementService;
     private final MedicationPickupService medicationPickupService;
     private final EpidemicReportService epidemicReportService;
+    private final NoticePartyFillSupport noticePartyFillSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
@@ -484,14 +486,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 java.util.LinkedHashMap::new
         ));
 
-        Set<Long> noticeUserIds = noticeMap.values().stream()
-                .flatMap(n -> java.util.stream.Stream.of(n.getSenderId(), n.getReceiverOrgId()))
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-        Map<Long, User> noticeUserMap = noticeUserIds.isEmpty()
-                ? Map.of()
-                : userMapper.selectBatchIds(noticeUserIds).stream()
-                        .collect(java.util.stream.Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+        List<cn.luyou.model.Notice> notices = new ArrayList<>(noticeMap.values());
+        noticePartyFillSupport.fillPartyNames(notices);
 
         records.forEach(r -> {
             cn.luyou.model.Notice notice = noticeMap.get(r.getId());
@@ -499,8 +495,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setNoticeStatus(notice.getStatus());
                 r.setNoticeId(notice.getId());
                 r.setNoticeSent(notice.getStatus() != null && notice.getStatus() >= 1);
-                r.setNoticeSenderName(resolveNoticeUserDisplayName(noticeUserMap.get(notice.getSenderId())));
-                r.setNoticeReceiverName(resolveNoticeUserDisplayName(noticeUserMap.get(notice.getReceiverOrgId())));
+                r.setNoticeSenderName(notice.getSenderName());
+                r.setNoticeReceiverName(notice.getReceiverName());
             } else {
                 r.setNoticeStatus(null);
                 r.setNoticeId(null);
@@ -546,13 +542,6 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             SupervisionForm preferred = preferredSupervisionMap.get(r.getId());
             r.setTreatmentCompletionStatus(preferred != null ? preferred.getTreatmentCompletionStatus() : null);
         });
-    }
-
-    private static String resolveNoticeUserDisplayName(User user) {
-        if (user == null) {
-            return null;
-        }
-        return StrUtil.blankToDefault(user.getRealName(), user.getUsername());
     }
 
     private SupervisionForm selectPreferredSupervisionForm(List<SupervisionForm> forms) {
@@ -1676,7 +1665,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         save(copy);
         Long newLatentId = copy.getId();
 
-        copyLatentNotices(sourceLatentId, newLatentId, receiverUserId, receiver);
+        copyLatentNotices(sourceLatentId, newLatentId);
         copyLatentSupervisionForms(sourceLatentId, newLatentId, receiverUserId);
         copyLatentFollowUps(sourceLatentId, newLatentId);
         copyLatentChecks(sourceLatentId, newLatentId);
@@ -1713,23 +1702,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
     }
 
-    private void copyLatentNotices(Long sourceLatentId, Long newLatentId, Long receiverUserId, User receiver) {
+    private void copyLatentNotices(Long sourceLatentId, Long newLatentId) {
         List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getBizId, sourceLatentId)
                 .eq(Notice::getNoticeType, "latent"));
-        String receiverName = receiver.getRealName() != null ? receiver.getRealName() : receiver.getUsername();
         for (Notice source : notices) {
             Notice copy = new Notice();
+            // 保留原始发送人/接收人，便于通知单管理展示；已发送列表会按 source_latent_id 排除副本
             BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "bizId",
-                    "senderId", "receiverOrgId", "senderName", "senderOrgName",
-                    "receiverName", "receiverOrgName");
+                    "senderName", "senderOrgName", "receiverName", "receiverOrgName");
             copy.setBizId(newLatentId);
-            copy.setSenderId(receiverUserId);
-            copy.setSenderName(receiverName);
-            copy.setSenderOrgName(receiver.getOrgName());
-            copy.setReceiverOrgId(null);
-            copy.setReceiverName(null);
-            copy.setReceiverOrgName(null);
             if (Integer.valueOf(1).equals(source.getStatus())) {
                 copy.setStatus(2);
             }

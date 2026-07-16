@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 /** 肺结核患者随访服务记录表 — 打印 / 保存 PDF */
 import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
-import { resolveFollowUpRecordNextVisitDate } from "@@/utils/followUpVisit"
 import {
   followUpFormatters,
   formatFollowUpSupervisor,
@@ -14,8 +13,6 @@ const props = defineProps<{
   visible: boolean
   visitData: Record<string, any> | null
   patientName?: string
-  followUpList?: Array<{ nextVisitDate?: string | null, visitSeq?: number | null }>
-  firstVisitNextDate?: string
 }>()
 
 const emit = defineEmits<{
@@ -47,9 +44,7 @@ const display = computed(() => {
     referralReason: d.referralReason || "-",
     referralTwoWeekResult: d.referralTwoWeekResult || "-",
     handlingOpinion: d.handlingOpinion || "-",
-    nextVisitDate: resolveFollowUpRecordNextVisitDate(d, props.followUpList || [], props.firstVisitNextDate)
-      || d.nextVisitDate
-      || "-",
+    nextVisitDate: d.nextVisitDate || "-",
     doctorSignature: d.doctorSignature || "-",
     stopTreatmentDate: d.stopTreatmentDate || "-",
     stopTreatment: d.stopTreatment || (d.stopTreatmentDate || d.stopTreatmentReason ? "是" : "否"),

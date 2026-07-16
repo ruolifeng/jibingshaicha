@@ -252,6 +252,22 @@ const editMode = ref<"create" | "edit">("edit")
 const detailVisible = ref(false)
 const detailRow = ref<any>(null)
 
+function onHasInfectionScreenChange() {
+  if (editForm.value.hasInfectionScreen !== "是") {
+    editForm.value.screenDate = null
+    editForm.value.screenMethod = ""
+    editForm.value.screenResult = ""
+    editForm.value.infectionResult = ""
+  }
+}
+
+function onHasChestXrayChange() {
+  if (editForm.value.hasChestXray !== "是") {
+    editForm.value.chestXrayDate = null
+    editForm.value.chestXrayResult = ""
+  }
+}
+
 function getEmptyEditForm() {
   return {
     year: "",
@@ -821,7 +837,7 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="是否进行感染筛查">
-              <el-select v-model="editForm.hasInfectionScreen" style="width:100%" clearable>
+              <el-select v-model="editForm.hasInfectionScreen" style="width:100%" clearable @change="onHasInfectionScreenChange">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -864,7 +880,7 @@ watch(
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="是否进行胸片检查">
-              <el-select v-model="editForm.hasChestXray" style="width:100%" clearable>
+              <el-select v-model="editForm.hasChestXray" style="width:100%" clearable @change="onHasChestXrayChange">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>

@@ -2,7 +2,7 @@
 import PrintNotice from "@@/components/PrintNotice.vue"
 import { NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { formatNoticeSentTime } from "@@/utils/patient"
-import { confirmNoticeApi, getNoticeListByBizApi } from "@/pages/patient-management/apis"
+import { confirmNoticeApi, getNoticeDetailApi, getNoticeListByBizApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -22,6 +22,13 @@ const printVisible = ref(false)
 async function loadNotice() {
   if (!props.patientRow) return
   try {
+    if (props.patientRow.noticeId) {
+      const { data } = await getNoticeDetailApi(props.patientRow.noticeId)
+      if (data) {
+        noticeDetailData.value = data
+        return
+      }
+    }
     const { data } = await getNoticeListByBizApi(props.patientRow.id, "patient")
     if (data?.length > 0) {
       noticeDetailData.value = data[0]

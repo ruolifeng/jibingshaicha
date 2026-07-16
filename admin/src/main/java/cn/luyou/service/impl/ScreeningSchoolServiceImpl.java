@@ -826,6 +826,26 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         // 根据感染筛查结果与诊断结果重新计算潜伏判定
         if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
             data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+        } else {
+            data.setDiagnosisFirst(null);
+        }
+        if (StrUtil.isBlank(data.getChestXrayResult())) {
+            data.setChestXrayResult(null);
+        }
+        if (StrUtil.isBlank(data.getInfectionResult())) {
+            data.setInfectionResult(null);
+        }
+        if (StrUtil.isBlank(data.getScreenMethod())) {
+            data.setScreenMethod(null);
+        }
+        if (StrUtil.isBlank(data.getScreenResult())) {
+            data.setScreenResult(null);
+        }
+        if (StrUtil.isBlank(data.getSputumSmearResult())) {
+            data.setSputumSmearResult(null);
+        }
+        if (StrUtil.isBlank(data.getMolecularBiologyResult())) {
+            data.setMolecularBiologyResult(null);
         }
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         // 录入用户与部门不可被前端覆盖；历史两边都空则补当前用户，有 id 缺名则按用户表补名
