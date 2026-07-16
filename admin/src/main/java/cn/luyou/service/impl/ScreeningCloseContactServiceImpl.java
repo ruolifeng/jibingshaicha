@@ -28,6 +28,7 @@ import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
@@ -255,105 +256,10 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     }
 
     /**
-     * 基于随访数据合并（同一接触者多次导入时，补全后续月份随访字段）
+     * 覆盖导入合并：Excel 空单元格直接清空已有字段（与页面编辑清空一致）。
      */
     private void mergeFollowupData(ScreeningCloseContact existing, ScreeningCloseContact incoming) {
-        // 原患者信息可能更新
-        if (StrUtil.isNotBlank(incoming.getSourcePatientName())) existing.setSourcePatientName(incoming.getSourcePatientName());
-
-        // 基本信息始终以最新为准
-        if (StrUtil.isNotBlank(incoming.getName())) existing.setName(incoming.getName());
-        if (StrUtil.isNotBlank(incoming.getPhone())) existing.setPhone(incoming.getPhone());
-        if (StrUtil.isNotBlank(incoming.getPhoneContactRelation())) existing.setPhoneContactRelation(incoming.getPhoneContactRelation());
-        if (StrUtil.isNotBlank(incoming.getContactType())) existing.setContactType(incoming.getContactType());
-        if (StrUtil.isNotBlank(incoming.getContactPlace())) existing.setContactPlace(incoming.getContactPlace());
-        if (StrUtil.isNotBlank(incoming.getContactPlaceOther())) existing.setContactPlaceOther(incoming.getContactPlaceOther());
-        if (StrUtil.isNotBlank(incoming.getCurrentAddress())) existing.setCurrentAddress(incoming.getCurrentAddress());
-
-        // 初次筛查：各字段独立合并，Excel 空值不覆盖已有明细
-        if (StrUtil.isNotBlank(incoming.getFinalScreeningResult())) {
-            existing.setFinalScreeningResult(
-                    ScreeningDiagnosisSupport.normalizeDiagnosis(incoming.getFinalScreeningResult()));
-        }
-        if (StrUtil.isNotBlank(incoming.getInfectionCheckResult())) {
-            existing.setInfectionCheckResult(incoming.getInfectionCheckResult());
-        }
-        if (StrUtil.isNotBlank(incoming.getImagingResult())) {
-            existing.setImagingResult(incoming.getImagingResult());
-        }
-        if (StrUtil.isNotBlank(incoming.getSputumCheckResult())) {
-            existing.setSputumCheckResult(incoming.getSputumCheckResult());
-        }
-
-        // 预防治疗情况
-        if (StrUtil.isNotBlank(incoming.getHasPreventiveTreatment())) existing.setHasPreventiveTreatment(incoming.getHasPreventiveTreatment());
-        if (StrUtil.isNotBlank(incoming.getPreventivePlan())) existing.setPreventivePlan(incoming.getPreventivePlan());
-        if (StrUtil.isNotBlank(incoming.getTreatmentCompleted())) existing.setTreatmentCompleted(incoming.getTreatmentCompleted());
-        if (StrUtil.isNotBlank(incoming.getIncompleteReason())) existing.setIncompleteReason(incoming.getIncompleteReason());
-
-        // 6月随访：各子字段独立合并，避免仅填结果时空格子清空明细
-        if (StrUtil.isNotBlank(incoming.getFollowup6Result())) {
-            existing.setFollowup6Result(incoming.getFollowup6Result());
-        }
-        if (incoming.getFollowup6DueDate() != null) {
-            existing.setFollowup6DueDate(incoming.getFollowup6DueDate());
-        }
-        if (incoming.getFollowup6ScreenDate() != null) {
-            existing.setFollowup6ScreenDate(incoming.getFollowup6ScreenDate());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup6Symptom1())) {
-            existing.setFollowup6Symptom1(incoming.getFollowup6Symptom1());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup6ImagingResult())) {
-            existing.setFollowup6ImagingResult(incoming.getFollowup6ImagingResult());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup6SputumResult())) {
-            existing.setFollowup6SputumResult(incoming.getFollowup6SputumResult());
-        }
-        // 12月随访
-        if (StrUtil.isNotBlank(incoming.getFollowup12Result())) {
-            existing.setFollowup12Result(incoming.getFollowup12Result());
-        }
-        if (incoming.getFollowup12DueDate() != null) {
-            existing.setFollowup12DueDate(incoming.getFollowup12DueDate());
-        }
-        if (incoming.getFollowup12ScreenDate() != null) {
-            existing.setFollowup12ScreenDate(incoming.getFollowup12ScreenDate());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup12Symptom1())) {
-            existing.setFollowup12Symptom1(incoming.getFollowup12Symptom1());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup12ImagingResult())) {
-            existing.setFollowup12ImagingResult(incoming.getFollowup12ImagingResult());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup12SputumResult())) {
-            existing.setFollowup12SputumResult(incoming.getFollowup12SputumResult());
-        }
-        // 24月随访
-        if (StrUtil.isNotBlank(incoming.getFollowup24Result())) {
-            existing.setFollowup24Result(incoming.getFollowup24Result());
-        }
-        if (incoming.getFollowup24DueDate() != null) {
-            existing.setFollowup24DueDate(incoming.getFollowup24DueDate());
-        }
-        if (incoming.getFollowup24ScreenDate() != null) {
-            existing.setFollowup24ScreenDate(incoming.getFollowup24ScreenDate());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup24Symptom1())) {
-            existing.setFollowup24Symptom1(incoming.getFollowup24Symptom1());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup24ImagingResult())) {
-            existing.setFollowup24ImagingResult(incoming.getFollowup24ImagingResult());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup24SputumResult())) {
-            existing.setFollowup24SputumResult(incoming.getFollowup24SputumResult());
-        }
-
-        if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
-        if (StrUtil.isNotBlank(incoming.getUploadBatch())) {
-            existing.setUploadBatch(incoming.getUploadBatch());
-        }
-        if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
+        ScreeningImportMergeSupport.mergeCloseContact(existing, incoming);
         // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
         CreatorUserSupport.fillMissingCreator(
                 existing.getCreatorId(),

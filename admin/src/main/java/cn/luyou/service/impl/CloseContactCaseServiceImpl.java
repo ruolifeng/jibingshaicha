@@ -20,6 +20,7 @@ import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -188,54 +189,8 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     }
 
     private void mergeCaseData(CloseContactCase existing, CloseContactCase incoming) {
-        if (StrUtil.isNotBlank(incoming.getSourcePatientName())) existing.setSourcePatientName(incoming.getSourcePatientName());
-        if (StrUtil.isNotBlank(incoming.getName())) existing.setName(incoming.getName());
-        if (StrUtil.isNotBlank(incoming.getPhone())) existing.setPhone(incoming.getPhone());
-        if (StrUtil.isNotBlank(incoming.getDistrict())) existing.setDistrict(incoming.getDistrict());
-        if (StrUtil.isNotBlank(incoming.getCity())) existing.setCity(incoming.getCity());
-        if (StrUtil.isNotBlank(incoming.getFinalScreeningResult())) existing.setFinalScreeningResult(incoming.getFinalScreeningResult());
-        if (StrUtil.isNotBlank(incoming.getInfectionCheckResult())) existing.setInfectionCheckResult(incoming.getInfectionCheckResult());
-        if (StrUtil.isNotBlank(incoming.getImagingResult())) existing.setImagingResult(incoming.getImagingResult());
-        if (StrUtil.isNotBlank(incoming.getSputumCheckResult())) existing.setSputumCheckResult(incoming.getSputumCheckResult());
-        if (StrUtil.isNotBlank(incoming.getHasPreventiveTreatment())) existing.setHasPreventiveTreatment(incoming.getHasPreventiveTreatment());
-        if (StrUtil.isNotBlank(incoming.getPreventivePlan())) existing.setPreventivePlan(incoming.getPreventivePlan());
-        if (StrUtil.isNotBlank(incoming.getTreatmentCompleted())) existing.setTreatmentCompleted(incoming.getTreatmentCompleted());
-        if (StrUtil.isNotBlank(incoming.getFollowup6Result())) {
-            existing.setFollowup6Result(incoming.getFollowup6Result());
-        }
-        if (incoming.getFollowup6DueDate() != null) {
-            existing.setFollowup6DueDate(incoming.getFollowup6DueDate());
-        }
-        if (incoming.getFollowup6ScreenDate() != null) {
-            existing.setFollowup6ScreenDate(incoming.getFollowup6ScreenDate());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup12Result())) {
-            existing.setFollowup12Result(incoming.getFollowup12Result());
-        }
-        if (incoming.getFollowup12DueDate() != null) {
-            existing.setFollowup12DueDate(incoming.getFollowup12DueDate());
-        }
-        if (incoming.getFollowup12ScreenDate() != null) {
-            existing.setFollowup12ScreenDate(incoming.getFollowup12ScreenDate());
-        }
-        if (StrUtil.isNotBlank(incoming.getFollowup24Result())) {
-            existing.setFollowup24Result(incoming.getFollowup24Result());
-        }
-        if (incoming.getFollowup24DueDate() != null) {
-            existing.setFollowup24DueDate(incoming.getFollowup24DueDate());
-        }
-        if (incoming.getFollowup24ScreenDate() != null) {
-            existing.setFollowup24ScreenDate(incoming.getFollowup24ScreenDate());
-        }
-        if (StrUtil.isNotBlank(incoming.getRemark())) existing.setRemark(incoming.getRemark());
-        if (incoming.getRegistrationDate() != null) {
-            existing.setRegistrationDate(incoming.getRegistrationDate());
-            existing.setYear(String.valueOf(incoming.getRegistrationDate().getYear()));
-        }
-        if (StrUtil.isNotBlank(incoming.getUploadBatch())) {
-            existing.setUploadBatch(incoming.getUploadBatch());
-        }
-        if (incoming.getImportRowNo() != null) existing.setImportRowNo(incoming.getImportRowNo());
+        // 覆盖导入：Excel 空单元格直接清空已有字段
+        ScreeningImportMergeSupport.mergeCloseContactCase(existing, incoming);
         // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
         if (StrUtil.isBlank(existing.getCreatorUsername()) && StrUtil.isNotBlank(incoming.getCreatorUsername())) {
             existing.setCreatorUsername(incoming.getCreatorUsername());
