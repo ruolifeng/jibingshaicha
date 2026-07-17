@@ -76,9 +76,30 @@ public final class FlexibleDateParseUtil {
             return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         }
         if (value instanceof Number number) {
-            return parseExcelSerial(number.doubleValue());
+            return parseNumber(number.doubleValue());
         }
         return parseText(value.toString());
+    }
+
+    /**
+     * 数值型日期：优先识别 8 位 yyyyMMdd（如 19390624），
+     * 再回退 Excel 序列号。避免把身份证式出生日期当成序列号算出公元五万多年。
+     */
+    private static LocalDate parseNumber(double number) {
+        if (Double.isNaN(number) || Double.isInfinite(number)) {
+            return null;
+        }
+        if (number == Math.rint(number)) {
+            long n = (long) number;
+            String digits = Long.toString(Math.abs(n));
+            if (n > 0 && digits.length() == 8) {
+                LocalDate ymd = parseByFormatters(digits);
+                if (ymd != null) {
+                    return ymd;
+                }
+            }
+        }
+        return parseExcelSerial(number);
     }
 
     public static LocalDate parseText(String text) {
@@ -87,12 +108,9 @@ public final class FlexibleDateParseUtil {
         }
         String val = text.trim();
 
-        for (DateTimeFormatter formatter : DATE_FORMATTERS) {
-            try {
-                return LocalDate.parse(val, formatter);
-            } catch (DateTimeParseException ignored) {
-                // try next pattern
-            }
+        LocalDate byFormatter = parseByFormatters(val);
+        if (byFormatter != null) {
+            return byFormatter;
         }
 
         if (val.length() >= 10) {
@@ -107,12 +125,31 @@ public final class FlexibleDateParseUtil {
         return parseExcelSerialString(val);
     }
 
+    private static LocalDate parseByFormatters(String val) {
+        for (DateTimeFormatter formatter : DATE_FORMATTERS) {
+            try {
+                return LocalDate.parse(val, formatter);
+            } catch (DateTimeParseException ignored) {
+                // try next pattern
+            }
+        }
+        return null;
+    }
+
     private static LocalDate parseExcelSerialString(String val) {
         if (!val.matches("^\\d+(\\.\\d+)?$")) {
             return null;
         }
         // 4 位纯数字更可能是年份字段，避免误当作 Excel 序列号
         if (val.matches("^\\d{4}$")) {
+            return null;
+        }
+        // 8 位纯数字优先按 yyyyMMdd（parseText 已尝试；此处兜底避免再当序列号）
+        if (val.matches("^\\d{8}$")) {
+            LocalDate ymd = parseByFormatters(val);
+            if (ymd != null) {
+                return ymd;
+            }
             return null;
         }
         try {
@@ -123,9 +160,15 @@ public final class FlexibleDateParseUtil {
     }
 
     private static LocalDate parseExcelSerial(double serial) {
-        if (serial <= 59) {
+        // Excel 常用日期序列约 1～60000（对应 ~1900–2064）；过大必是误判
+        if (serial <= 59 || serial > 100000) {
             return null;
         }
-        return EXCEL_EPOCH.plusDays((long) Math.floor(serial));
+        LocalDate date = EXCEL_EPOCH.plusDays((long) Math.floor(serial));
+        int year = date.getYear();
+        if (year < 1900 || year > 2100) {
+            return null;
+        }
+        return date;
     }
 }
