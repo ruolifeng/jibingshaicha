@@ -18,7 +18,8 @@ export function previewScreeningKeyPopulationUploadApi(file: File) {
     method: "post",
     data: formData,
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 60000
+    // 大表导入（数千行）预览/查重较慢，与删除类重操作对齐为 5 分钟
+    timeout: 300000
   })
 }
 
@@ -36,7 +37,8 @@ export function uploadScreeningKeyPopulationApi(file: File, overwrite = true, op
     data: formData,
     params: { overwrite, confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 60000
+    // 大表导入（数千行）解析+逐行查重+写入较慢，与删除类重操作对齐为 5 分钟
+    timeout: 300000
   })
 }
 
