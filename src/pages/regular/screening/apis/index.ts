@@ -17,7 +17,8 @@ export function uploadScreeningRegularApi(file: File, options: ImportConfirmOpti
     data: formData,
     params: { confirmSkipInvalid, confirmSkipDuplicateInFile },
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 60000
+    // 大表导入较慢，与重点人群筛查导入对齐为 5 分钟
+    timeout: 300000
   })
 }
 
