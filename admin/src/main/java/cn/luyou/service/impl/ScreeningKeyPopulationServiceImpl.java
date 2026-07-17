@@ -60,9 +60,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Slf4j
@@ -126,6 +128,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         ImportResult parseResult = new ImportResult();
         List<ScreeningKeyPopulation> dataList = parseExcelFile(file, resolvedSourceType, null, parseResult);
 
+        Map<String, ScreeningKeyPopulation> existingByIdNumber = findExistingByIdNumbers(
+                dataList.stream().map(ScreeningKeyPopulation::getIdNumber).toList(),
+                resolvedSourceType);
+
         List<Map<String, String>> duplicates = new ArrayList<>();
         int newCount = 0;
         for (ScreeningKeyPopulation data : dataList) {
@@ -133,7 +139,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 newCount++;
                 continue;
             }
-            ScreeningKeyPopulation existing = findExistingByIdNumber(data.getIdNumber(), resolvedSourceType);
+            ScreeningKeyPopulation existing = existingByIdNumber.get(data.getIdNumber());
             if (existing != null) {
                 Map<String, String> item = new LinkedHashMap<>();
                 item.put("name", StrUtil.blankToDefault(data.getName(), existing.getName()));
@@ -188,6 +194,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
         }
 
+        Map<String, ScreeningKeyPopulation> existingByIdNumber = findExistingByIdNumbers(
+                dataList.stream().map(ScreeningKeyPopulation::getIdNumber).toList(),
+                resolvedSourceType);
+
         List<ScreeningKeyPopulation> toInsert = new ArrayList<>();
         List<ScreeningKeyPopulation> toUpdate = new ArrayList<>();
         int skippedCount = 0;
@@ -201,7 +211,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 toInsert.add(d);
                 continue;
             }
-            ScreeningKeyPopulation existing = findExistingByIdNumber(d.getIdNumber(), resolvedSourceType);
+            ScreeningKeyPopulation existing = existingByIdNumber.get(d.getIdNumber());
             if (existing != null) {
                 duplicateCount++;
                 if (!overwrite) {
@@ -232,13 +242,15 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .filter(d -> d.getIsLatent() == 1)
                 .map(d -> buildLatentInfection(d))
                 .toList();
-        // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建
+        // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建（批量查已有 latent，避免逐条 exists）
+        Set<Long> existingLatentScreeningIds = findExistingLatentScreeningIds(
+                toUpdate.stream()
+                        .filter(d -> d.getIsLatent() == 1 && d.getId() != null)
+                        .map(ScreeningKeyPopulation::getId)
+                        .toList());
         List<LatentInfection> latentFromUpdated = toUpdate.stream()
-                .filter(d -> d.getIsLatent() == 1)
-                .filter(d -> !latentInfectionService.lambdaQuery()
-                        .eq(LatentInfection::getScreeningId, d.getId())
-                        .in(LatentInfection::getPopulationType, "keyPopulation", "regular")
-                        .exists())
+                .filter(d -> d.getIsLatent() == 1 && d.getId() != null)
+                .filter(d -> !existingLatentScreeningIds.contains(d.getId()))
                 .map(this::buildLatentInfection)
                 .toList();
         List<LatentInfection> allLatent = new ArrayList<>(latentList);
@@ -320,13 +332,59 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         return parseExcelFile(file, sourceType, batchId, result, false);
     }
 
-    private ScreeningKeyPopulation findExistingByIdNumber(String idNumber, String sourceType) {
-        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ScreeningKeyPopulation::getIdNumber, idNumber)
-                .eq(ScreeningKeyPopulation::getSourceType, sourceType)
-                .last("LIMIT 1");
-        screeningScopeHelper.applyImportDedupScope(wrapper, ScreeningKeyPopulation::getDepartmentId);
-        return getOne(wrapper, false);
+    private static final int IMPORT_ID_LOOKUP_BATCH = 500;
+
+    /**
+     * 按证件号批量查重：数千行导入时避免逐条 SELECT。
+     * 同一证件号多条时保留 id 最小的一条（与 LIMIT 1 行为接近）。
+     */
+    private Map<String, ScreeningKeyPopulation> findExistingByIdNumbers(List<String> idNumbers, String sourceType) {
+        Map<String, ScreeningKeyPopulation> map = new HashMap<>();
+        if (idNumbers == null || idNumbers.isEmpty()) {
+            return map;
+        }
+        List<String> uniqueIds = idNumbers.stream()
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        for (int i = 0; i < uniqueIds.size(); i += IMPORT_ID_LOOKUP_BATCH) {
+            List<String> chunk = uniqueIds.subList(i, Math.min(i + IMPORT_ID_LOOKUP_BATCH, uniqueIds.size()));
+            LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
+            wrapper.in(ScreeningKeyPopulation::getIdNumber, chunk)
+                    .eq(ScreeningKeyPopulation::getSourceType, sourceType)
+                    .orderByAsc(ScreeningKeyPopulation::getId);
+            screeningScopeHelper.applyImportDedupScope(wrapper, ScreeningKeyPopulation::getDepartmentId);
+            for (ScreeningKeyPopulation row : list(wrapper)) {
+                if (StrUtil.isNotBlank(row.getIdNumber())) {
+                    map.putIfAbsent(row.getIdNumber().trim(), row);
+                }
+            }
+        }
+        return map;
+    }
+
+    /** 批量查询已存在潜伏记录的 screeningId，供覆盖导入补建 latent 时去重 */
+    private Set<Long> findExistingLatentScreeningIds(List<Long> screeningIds) {
+        if (screeningIds == null || screeningIds.isEmpty()) {
+            return Set.of();
+        }
+        HashSet<Long> found = new HashSet<>();
+        List<Long> unique = screeningIds.stream().filter(Objects::nonNull).distinct().toList();
+        for (int i = 0; i < unique.size(); i += IMPORT_ID_LOOKUP_BATCH) {
+            List<Long> chunk = unique.subList(i, Math.min(i + IMPORT_ID_LOOKUP_BATCH, unique.size()));
+            List<LatentInfection> rows = latentInfectionService.lambdaQuery()
+                    .select(LatentInfection::getScreeningId)
+                    .in(LatentInfection::getScreeningId, chunk)
+                    .in(LatentInfection::getPopulationType, "keyPopulation", "regular")
+                    .list();
+            for (LatentInfection row : rows) {
+                if (row.getScreeningId() != null) {
+                    found.add(row.getScreeningId());
+                }
+            }
+        }
+        return found;
     }
 
     private void mergeIntoExisting(ScreeningKeyPopulation existing, ScreeningKeyPopulation imported) {
