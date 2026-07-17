@@ -182,9 +182,10 @@ async function handleUpload(uploadFile: any) {
     importResultVisible.value = true
     if (data.successCount > 0) fetchData()
   } catch (err) {
-    ElMessage.error(isRequestTimeout(err)
-      ? "上传超时：数据量较大时请稍候重试；若持续失败请联系管理员确认服务端超时配置已生效"
-      : "上传失败")
+    // 业务错误已由 axios 拦截器提示；此处仅补充超时说明
+    if (isRequestTimeout(err)) {
+      ElMessage.error("上传超时：数据量较大时请稍候重试；若持续失败请联系管理员确认服务端超时配置已生效")
+    }
   } finally {
     uploadRef.value?.clearFiles()
   }
