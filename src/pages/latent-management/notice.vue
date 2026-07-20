@@ -171,7 +171,7 @@ async function handleCloseCase(row: any) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="确认诊断">
+        <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
           </template>

@@ -1,0 +1,284 @@
+/**
+ * 打印预览 & 实际打印共用样式。
+ * 全部挂在 .print-area 下，避免污染业务页全局样式。
+ * print.ts 以 ?raw 注入 iframe；Print*.vue 通过 @import 引用。
+ */
+
+.print-area {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 190mm;
+  margin: 0 auto;
+  padding: 8px;
+  background: #fff;
+  color: #303133;
+}
+
+.print-area .print-header {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.print-area .print-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0 0 8px;
+}
+
+.print-area .print-subtitle {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: #606266;
+}
+
+.print-area .print-form-no {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 14px;
+}
+
+.print-area .visit-table,
+.print-area .notice-table,
+.print-area .info-table,
+.print-area .sup-table,
+.print-area .form-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #333;
+  table-layout: fixed;
+}
+
+.print-area .visit-table th,
+.print-area .visit-table td,
+.print-area .notice-table th,
+.print-area .notice-table td,
+.print-area .info-table th,
+.print-area .info-table td,
+.print-area .sup-table th,
+.print-area .sup-table td,
+.print-area .form-table th,
+.print-area .form-table td {
+  border: 1px solid #333;
+  padding: 7px 10px;
+  font-size: 13px;
+  vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.print-area .visit-table th,
+.print-area .notice-table th,
+.print-area .info-table th,
+.print-area .sup-table th,
+.print-area .form-table th {
+  background: #f5f7fa;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.print-area .info-table th {
+  background: #f0f0f0;
+}
+
+.print-area .visit-table th {
+  width: 100px;
+}
+
+.print-area .notice-table th {
+  width: 120px;
+}
+
+.print-area .sup-table th {
+  width: 130px;
+  vertical-align: top;
+}
+
+.print-area .form-table th {
+  width: 110px;
+  vertical-align: top;
+}
+
+.print-area .visit-table .section-header td,
+.print-area .sup-table .section-header td {
+  background: #e8f0fe;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 5px 10px;
+  color: #1a3a6b;
+}
+
+.print-area .visit-table .empty-cell,
+.print-area .sup-table .empty-cell {
+  text-align: center;
+  color: #999;
+}
+
+.print-area .print-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #303133;
+}
+
+.print-area .print-attachments {
+  margin-top: 12px;
+}
+
+.print-area .print-attachments__title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #1a3a6b;
+}
+
+.print-area .print-attachments__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.print-area .print-attachments__item {
+  margin: 0;
+  text-align: center;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.print-area .print-attachments__item img {
+  width: 100%;
+  max-width: 180px;
+  max-height: 140px;
+  object-fit: contain;
+  border: 1px solid #ddd;
+  display: block;
+  margin: 0 auto;
+}
+
+.print-area .print-attachments__item figcaption {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.print-area .med-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #333;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.print-area .med-table th,
+.print-area .med-table td {
+  border: 1px solid #333;
+  text-align: center;
+  padding: 0;
+  height: 24px;
+  line-height: 24px;
+  vertical-align: middle;
+}
+
+.print-area .med-table .th-month {
+  width: 52px;
+  background: #f0f0f0;
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 3px 2px;
+}
+
+.print-area .med-table .th-day {
+  background: #f0f0f0;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.print-area .med-table .td-month {
+  background: #f0f0f0;
+  font-weight: 600;
+}
+
+.print-area .med-table .td-invalid {
+  background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 2px, #f5f5f5 2px, #f5f5f5 8px);
+}
+
+.print-area .med-table .td-mark-x,
+.print-area .med-table .td-mark-circled {
+  color: #000;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.print-area .med-table .td-mark-circled {
+  font-size: 15px;
+}
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-area .visit-table,
+  .print-area .notice-table,
+  .print-area .info-table,
+  .print-area .sup-table,
+  .print-area .form-table,
+  .print-area .med-table,
+  .print-area .visit-table th,
+  .print-area .visit-table td,
+  .print-area .notice-table th,
+  .print-area .notice-table td,
+  .print-area .info-table th,
+  .print-area .info-table td,
+  .print-area .sup-table th,
+  .print-area .sup-table td,
+  .print-area .form-table th,
+  .print-area .form-table td,
+  .print-area .med-table th,
+  .print-area .med-table td {
+    border: 1px solid #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-area .visit-table th,
+  .print-area .notice-table th,
+  .print-area .sup-table th,
+  .print-area .form-table th {
+    background: #f5f7fa !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-area .info-table th {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-area .visit-table .section-header td,
+  .print-area .sup-table .section-header td {
+    background: #e8f0fe !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-area .med-table .th-month,
+  .print-area .med-table .th-day,
+  .print-area .med-table .td-month {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-area .med-table .td-invalid {
+    background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 2px, #f5f5f5 2px, #f5f5f5 8px) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

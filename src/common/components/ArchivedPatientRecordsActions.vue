@@ -10,8 +10,8 @@ import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
 import {
   buildFollowUpHistoryDisplayList,
-  canEditFollowUpVisit
-
+  canEditFollowUpVisit,
+  toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
 import {
   deleteFollowUpVisitApi,
@@ -74,7 +74,7 @@ function viewFollowUpDetail(record: FollowUpHistoryDisplayRow) {
     firstVisitDetailVisible.value = true
     return
   }
-  followUpDetailData.value = record.raw
+  followUpDetailData.value = toFollowUpHistoryViewData(record)
   followUpDetailVisible.value = true
 }
 
@@ -84,7 +84,7 @@ function printFollowUp(record: FollowUpHistoryDisplayRow) {
     firstVisitPrintVisible.value = true
     return
   }
-  followUpPrintData.value = record.raw
+  followUpPrintData.value = toFollowUpHistoryViewData(record)
   followUpPrintVisible.value = true
 }
 
@@ -100,7 +100,7 @@ async function handleDeleteFollowUp(record: FollowUpHistoryDisplayRow) {
   if (record.recordType !== "followUp" || !record.id) return
   try {
     await ElMessageBox.confirm(
-      `确认删除第 ${record.visitSeq} 次后续随访记录？删除后不可恢复。`,
+      `确认删除第 ${record.visitSeq} 次随访记录？删除后不可恢复。`,
       "删除确认",
       { type: "warning" }
     )

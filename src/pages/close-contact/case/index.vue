@@ -547,7 +547,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           :loading="loading"
           border
           stripe
-          height="620"
+          max-height="620"
           :row-config="{ keyField: 'id' }"
           :column-config="{ resizable: true }"
           :scroll-x="{ enabled: true, gt: 0 }"

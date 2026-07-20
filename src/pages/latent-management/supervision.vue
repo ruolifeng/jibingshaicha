@@ -5,9 +5,9 @@ import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { canEditSupervisionForm, getSupervisionStatusLabel } from "@@/utils/supervisionForm"
+import { canEditSupervisionForm, getSupervisionStatusLabel, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import { useUserStore } from "@/pinia/stores/user"
-import { getLatentAggregateListApi, getSupervisionListApi } from "./apis"
+import { getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
 
 const userStore = useUserStore()
 const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
@@ -125,13 +125,25 @@ async function onEditSaved() {
   fetchData()
 }
 
-function viewDetail(row: Record<string, any>) {
-  detailData.value = row
+async function resolveHistoryLatentProfile() {
+  const row = historyRow.value
+  if (!row?.id) return row
+  try {
+    const { data } = await getLatentDetailApi(row.id)
+    if (data) return mergeSupervisionProfileFields(row, data)
+  } catch { /* 回退列表行 */ }
+  return row
+}
+
+async function viewDetail(row: Record<string, any>) {
+  const profile = await resolveHistoryLatentProfile()
+  detailData.value = mergeSupervisionProfileFields(row, profile)
   detailVisible.value = true
 }
 
-function openPrint(row: Record<string, any>) {
-  printData.value = row
+async function openPrint(row: Record<string, any>) {
+  const profile = await resolveHistoryLatentProfile()
+  printData.value = mergeSupervisionProfileFields(row, profile)
   printPatientName.value = historyPatientName.value
   printVisible.value = true
 }
@@ -199,7 +211,7 @@ function openPrint(row: Record<string, any>) {
         <el-table-column prop="age" label="年龄" />
         <el-table-column prop="idNumber" label="证件号" />
         <el-table-column prop="phone" label="联系电话" />
-        <el-table-column label="确认诊断">
+        <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
           </template>

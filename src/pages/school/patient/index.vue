@@ -35,7 +35,7 @@ import {
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
 import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
-import { buildFollowUpHistoryDisplayList } from "@@/utils/followUpVisit"
+import { buildFollowUpHistoryDisplayList, toFollowUpHistoryViewData } from "@@/utils/followUpVisit"
 import { isNoticeSent, resolveNoticeSputumSmearFromPatient } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule } from "@@/utils/validate"
@@ -555,7 +555,7 @@ function viewFollowUpHistoryDetail(record: FollowUpHistoryDisplayRow) {
     firstVisitDetailVisible.value = true
     return
   }
-  followUpHistoryDetailData.value = record.raw
+  followUpHistoryDetailData.value = toFollowUpHistoryViewData(record)
   followUpHistoryDetailVisible.value = true
 }
 
@@ -566,7 +566,7 @@ function printFollowUpHistory(record: FollowUpHistoryDisplayRow) {
     printVisitVisible.value = true
     return
   }
-  followUpHistoryPrintData.value = record.raw
+  followUpHistoryPrintData.value = toFollowUpHistoryViewData(record)
   followUpHistoryPrintVisible.value = true
 }
 

@@ -344,7 +344,7 @@ watch(
         <el-table-column prop="notInPlaceCount" label="未到位次数" />
         <el-table-column prop="trackingRemark" label="追踪备注" />
         <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column label="确认诊断">
+        <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
           </template>

@@ -54,7 +54,22 @@ const supervisionRecords = computed(() => {
       <el-divider content-position="left">
         基本信息
       </el-divider>
-      <el-descriptions :column="3" border size="small">
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item label="姓名">
+          {{ d.patientName || patientName || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="人群分类">
+          {{ d.category || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="现居住地址" :span="2">
+          {{ d.currentAddress || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="户籍地址" :span="2">
+          {{ d.householdAddress || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="身份证">
+          {{ d.idNumber || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="性别">
           {{ d.gender || "-" }}
         </el-descriptions-item>
@@ -64,26 +79,32 @@ const supervisionRecords = computed(() => {
         <el-descriptions-item label="电话号码">
           {{ d.phone || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="电话备注" :span="3">
+        <el-descriptions-item label="电话备注" :span="2">
           {{ d.phoneRemark || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="现住址" :span="3">
-          {{ d.currentAddress || "-" }}
+        <el-descriptions-item label="出生日期">
+          {{ d.birthDate || "-" }}
         </el-descriptions-item>
-      </el-descriptions>
-
-      <el-divider content-position="left">
-        治疗方案
-      </el-divider>
-      <el-descriptions :column="2" border size="small">
-        <el-descriptions-item label="开始治疗时间">
+        <el-descriptions-item label="民族">
+          {{ d.ethnicity || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否开始预防性治疗">
+          {{ d.hasPreventiveTreatment || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗方案">
+          {{ normalizeLatentTreatmentPlan(d.treatmentPlan) || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="治疗开始时间">
           {{ d.treatmentStartDate || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="结束疗程时间">
+        <el-descriptions-item label="治疗结束时间">
           {{ d.treatmentEndDate || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="治疗方案" :span="2">
-          {{ normalizeLatentTreatmentPlan(d.treatmentPlan) || "-" }}
+        <el-descriptions-item label="管理单位">
+          {{ d.managingUnit || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="督导医生">
+          {{ d.supervisingDoctor || "-" }}
         </el-descriptions-item>
       </el-descriptions>
 
@@ -120,6 +141,9 @@ const supervisionRecords = computed(() => {
         </el-descriptions-item>
         <el-descriptions-item label="实际用药次数">
           {{ d.actualDoses ?? "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="结束疗程时间">
+          {{ d.treatmentEndDate || "-" }}
         </el-descriptions-item>
       </el-descriptions>
 
