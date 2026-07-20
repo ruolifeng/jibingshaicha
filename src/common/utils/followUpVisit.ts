@@ -18,13 +18,25 @@ export function shouldIncludeCurrentFollowUpInStats(
   return initialData.status !== 1
 }
 
-/** 后续随访化疗方案：关联病案「首次治疗方案」预填，已有值则不覆盖 */
+/**
+ * 后续随访化疗方案预填（已有值则不覆盖）：
+ * 1. 优先同步首次随访的化疗方案
+ * 2. 其次回退病案「首次治疗方案」
+ */
 export function applyFollowUpChemotherapyDefault(
   form: { chemotherapyPlan?: string },
-  patientRow: Record<string, any> | null | undefined
+  options?: {
+    firstVisitChemotherapy?: string | null
+    patientRow?: Record<string, any> | null
+  }
 ) {
   if (form.chemotherapyPlan?.trim()) return
-  const plan = resolveFirstTreatmentPlan(patientRow)
+  const fromFirstVisit = options?.firstVisitChemotherapy?.trim()
+  if (fromFirstVisit) {
+    form.chemotherapyPlan = fromFirstVisit
+    return
+  }
+  const plan = resolveFirstTreatmentPlan(options?.patientRow)
   if (plan) form.chemotherapyPlan = plan
 }
 
@@ -64,8 +76,8 @@ export function canEditFollowUpVisit(
 /** 随访记录列表行：首次随访 + 后续随访统一展示 */
 export interface FollowUpHistoryDisplayRow {
   recordType: "firstVisit" | "followUp"
-  /** 列表「第几次」：首次 或 后续 visitSeq */
-  visitSeq: string | number
+  /** 列表「第几次」：以首次为 1，后续依次为 2、3… */
+  visitSeq: number
   /** 随访日期：首次取 visitDate（非取药时间），后续取本条 visitDate */
   visitDate: string
   /** 下次随访：取本条填写的 nextVisitDate */
@@ -86,6 +98,7 @@ export interface FollowUpHistoryDisplayRow {
 /**
  * 合并「已完成首次随访 + 后续随访」为查看记录列表。
  * 首次随访的随访日期必须用 visitDate，禁止误用 medicationPickTime（取药时间）。
+ * 「第几次」以首次为 1 起计，后续随访依次为 2、3…
  */
 export function buildFollowUpHistoryDisplayList(
   firstVisit: Record<string, any> | null | undefined,
@@ -95,7 +108,7 @@ export function buildFollowUpHistoryDisplayList(
   if (firstVisit && Number(firstVisit.status) === 1) {
     rows.push({
       recordType: "firstVisit",
-      visitSeq: "首次",
+      visitSeq: 1,
       visitDate: String(firstVisit.visitDate || "").trim(),
       nextVisitDate: String(firstVisit.nextVisitDate || "").trim(),
       treatmentMonth: "-",
@@ -109,7 +122,8 @@ export function buildFollowUpHistoryDisplayList(
     if (Number(item.status) === 0) continue
     rows.push({
       recordType: "followUp",
-      visitSeq: item.visitSeq ?? "-",
+      // 临时占位，合并后按列表顺序重编号
+      visitSeq: 0,
       visitDate: String(item.visitDate || "").trim(),
       nextVisitDate: String(item.nextVisitDate || "").trim(),
       treatmentMonth: item.treatmentMonth ?? "-",
@@ -123,7 +137,12 @@ export function buildFollowUpHistoryDisplayList(
       raw: item
     })
   }
-  return rows
+  return rows.map((row, index) => ({ ...row, visitSeq: index + 1 }))
+}
+
+/** 查看详情 / 打印时带上列表展示序号（与「第几次」列一致） */
+export function toFollowUpHistoryViewData(record: FollowUpHistoryDisplayRow): Record<string, any> {
+  return { ...record.raw, visitSeq: record.visitSeq }
 }
 
 /**

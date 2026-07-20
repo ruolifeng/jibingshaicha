@@ -7,14 +7,16 @@ import {
   isLatentIndividualPlan,
   LATENT_TREATMENT_PLAN_OPTIONS,
   parseLatentSupervisionTreatmentPlan,
+  PREVENTIVE_TREATMENT_YES_NO_OPTIONS,
   SUPERVISION_CATEGORY_OPTIONS,
   SUPERVISION_MANAGER_TYPE_OPTIONS,
   SUPERVISION_METHOD_OPTIONS,
   TREATMENT_COMPLETION_STATUS_OPTIONS
 } from "@@/constants/disease"
 import { parseAttachmentUrls } from "@@/utils/attachment"
-import { canEditSupervisionForm } from "@@/utils/supervisionForm"
+import { canEditSupervisionForm, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import {
+  getLatentDetailApi,
   getSupervisionDraftApi,
   saveSupervisionApi,
   saveSupervisionDraftApi
@@ -69,10 +71,17 @@ const supervisionForm = reactive({
   phone: "",
   phoneRemark: "",
   currentAddress: "",
+  householdAddress: "",
+  idNumber: "",
+  birthDate: "",
+  ethnicity: "",
+  hasPreventiveTreatment: "",
   treatmentStartDate: "",
   treatmentEndDate: "",
   treatmentPlan: "",
   customPlanDetail: "",
+  managingUnit: "",
+  supervisingDoctor: "",
   supervisionRecords: [] as SupervisionRecord[],
   treatmentCompletionStatus: "",
   interruptMedication: "",
@@ -138,10 +147,17 @@ function resetFormFromRow(row: any) {
   supervisionForm.phone = row.phone || ""
   supervisionForm.phoneRemark = ""
   supervisionForm.currentAddress = row.currentAddress || ""
+  supervisionForm.householdAddress = row.householdAddress || ""
+  supervisionForm.idNumber = row.idNumber || ""
+  supervisionForm.birthDate = formatDateValue(row.birthDate)
+  supervisionForm.ethnicity = row.ethnicity || ""
+  supervisionForm.hasPreventiveTreatment = ""
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
   supervisionForm.treatmentPlan = ""
   supervisionForm.customPlanDetail = ""
+  supervisionForm.managingUnit = row.managingUnit || row.preventiveManager || ""
+  supervisionForm.supervisingDoctor = row.supervisingDoctor || ""
   supervisionForm.supervisionRecords = [createEmptyRecord()]
   supervisionForm.treatmentCompletionStatus = ""
   supervisionForm.interruptMedication = ""
@@ -159,15 +175,23 @@ function applyFormData(data: Record<string, any>, row: any) {
   resetFormFromRow(row)
   draftId.value = data.id
   recordCreateTime.value = data.createTime ?? null
-  supervisionForm.category = data.category ?? supervisionForm.category
-  supervisionForm.gender = data.gender ?? supervisionForm.gender
+  supervisionForm.category = data.category || supervisionForm.category
+  supervisionForm.gender = data.gender || supervisionForm.gender
   supervisionForm.age = data.age ?? supervisionForm.age
-  supervisionForm.phone = data.phone ?? supervisionForm.phone
-  supervisionForm.phoneRemark = data.phoneRemark ?? ""
-  supervisionForm.currentAddress = data.currentAddress ?? supervisionForm.currentAddress
+  supervisionForm.phone = data.phone || supervisionForm.phone
+  supervisionForm.phoneRemark = data.phoneRemark || supervisionForm.phoneRemark
+  supervisionForm.currentAddress = data.currentAddress || supervisionForm.currentAddress
+  // 空字符串不覆盖档案预填（身份证/民族等可能来自筛查回填）
+  supervisionForm.householdAddress = data.householdAddress || supervisionForm.householdAddress
+  supervisionForm.idNumber = data.idNumber || supervisionForm.idNumber
+  supervisionForm.birthDate = formatDateValue(data.birthDate) || supervisionForm.birthDate
+  supervisionForm.ethnicity = data.ethnicity || supervisionForm.ethnicity
+  supervisionForm.hasPreventiveTreatment = data.hasPreventiveTreatment || supervisionForm.hasPreventiveTreatment
   supervisionForm.treatmentStartDate = formatDateValue(data.treatmentStartDate)
   supervisionForm.treatmentEndDate = formatDateValue(data.treatmentEndDate)
   parseTreatmentPlan(data.treatmentPlan)
+  supervisionForm.managingUnit = data.managingUnit || supervisionForm.managingUnit
+  supervisionForm.supervisingDoctor = data.supervisingDoctor || supervisionForm.supervisingDoctor
   parseSupervisionRecords(data.supervisionRecords)
   supervisionForm.treatmentCompletionStatus = data.treatmentCompletionStatus ?? ""
   supervisionForm.interruptMedication = data.interruptMedication ?? ""
@@ -181,25 +205,36 @@ function applyFormData(data: Record<string, any>, row: any) {
   parseAttachmentUrlsField(data.attachmentUrls)
 }
 
+/** 拉取潜伏详情（含筛查回填的民族/出生日期），再与列表行合并 */
+async function resolveLatentProfile(row: any) {
+  try {
+    const { data } = await getLatentDetailApi(row.id)
+    if (data) return mergeSupervisionProfileFields(row, data)
+  } catch { /* 回退列表行 */ }
+  return row
+}
+
 async function loadDraft() {
   if (!props.latentRow?.id) return
-  resetFormFromRow(props.latentRow)
+  const profile = await resolveLatentProfile(props.latentRow)
+  resetFormFromRow(profile)
   try {
     const { data } = await getSupervisionDraftApi(props.latentRow.id)
     if (data) {
-      applyFormData(data, props.latentRow)
+      applyFormData(data, profile)
     }
   } catch { /* 无草稿 */ }
 }
 
-function loadInitialData() {
+async function loadInitialData() {
   if (!props.initialData || !props.latentRow) return
-  applyFormData(props.initialData, props.latentRow)
+  const profile = await resolveLatentProfile(props.latentRow)
+  applyFormData(props.initialData, profile)
 }
 
 async function initForm() {
   if (props.initialData) {
-    loadInitialData()
+    await loadInitialData()
   } else {
     await loadDraft()
   }
@@ -212,7 +247,8 @@ watch(
       initForm()
       nextTick(() => formRef.value?.clearValidate())
     }
-  }
+  },
+  { immediate: true }
 )
 
 function resolveMedicationRate() {
@@ -240,9 +276,16 @@ function buildPayload(status: number) {
     phone: supervisionForm.phone || undefined,
     phoneRemark: supervisionForm.phoneRemark || undefined,
     currentAddress: supervisionForm.currentAddress || undefined,
+    householdAddress: supervisionForm.householdAddress || undefined,
+    idNumber: supervisionForm.idNumber || undefined,
+    birthDate: supervisionForm.birthDate || undefined,
+    ethnicity: supervisionForm.ethnicity || undefined,
+    hasPreventiveTreatment: supervisionForm.hasPreventiveTreatment || undefined,
     treatmentStartDate: supervisionForm.treatmentStartDate || undefined,
     treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
     treatmentPlan: resolveTreatmentPlan() || undefined,
+    managingUnit: supervisionForm.managingUnit || undefined,
+    supervisingDoctor: supervisionForm.supervisingDoctor || undefined,
     supervisionRecords: supervisionForm.supervisionRecords.length > 0
       ? JSON.stringify(supervisionForm.supervisionRecords)
       : undefined,
@@ -346,15 +389,26 @@ async function handleArchive() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="类别">
+          <el-form-item label="人群分类">
             <el-select v-model="supervisionForm.category" placeholder="请选择" clearable style="width: 100%">
               <el-option v-for="item in SUPERVISION_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>
       </el-row>
+      <el-form-item label="现居住地址">
+        <el-input v-model="supervisionForm.currentAddress" placeholder="请输入现居住地址" />
+      </el-form-item>
+      <el-form-item label="户籍地址">
+        <el-input v-model="supervisionForm.householdAddress" placeholder="请输入户籍地址" />
+      </el-form-item>
       <el-row :gutter="12">
-        <el-col :span="8">
+        <el-col :span="12">
+          <el-form-item label="身份证">
+            <el-input v-model="supervisionForm.idNumber" placeholder="请输入身份证号" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
           <el-form-item label="性别">
             <el-select v-model="supervisionForm.gender" placeholder="请选择" clearable style="width: 100%">
               <el-option label="男" value="男" />
@@ -362,6 +416,8 @@ async function handleArchive() {
             </el-select>
           </el-form-item>
         </el-col>
+      </el-row>
+      <el-row :gutter="12">
         <el-col :span="8">
           <el-form-item label="年龄">
             <el-input-number v-model="supervisionForm.age" :min="0" :max="150" style="width: 100%" />
@@ -372,6 +428,11 @@ async function handleArchive() {
             <el-input v-model="supervisionForm.phone" placeholder="请输入" />
           </el-form-item>
         </el-col>
+        <el-col :span="8">
+          <el-form-item label="民族">
+            <el-input v-model="supervisionForm.ethnicity" placeholder="请输入民族" />
+          </el-form-item>
+        </el-col>
       </el-row>
       <el-form-item label="电话备注">
         <el-input
@@ -379,16 +440,50 @@ async function handleArchive() {
           placeholder="非本人电话时请填写说明（如与本人关系）"
         />
       </el-form-item>
-      <el-form-item label="现住址">
-        <el-input v-model="supervisionForm.currentAddress" placeholder="请输入现住址" />
-      </el-form-item>
+      <el-row :gutter="12">
+        <el-col :span="12">
+          <el-form-item label="出生日期">
+            <el-date-picker
+              v-model="supervisionForm.birthDate"
+              type="date"
+              placeholder="选择日期"
+              value-format="YYYY-MM-DD"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="是否开始预防性治疗">
+            <el-select
+              v-model="supervisionForm.hasPreventiveTreatment"
+              placeholder="请选择"
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in PREVENTIVE_TREATMENT_YES_NO_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
+      </el-row>
 
       <el-divider content-position="left">
         治疗方案
       </el-divider>
       <el-row :gutter="12">
         <el-col :span="12">
-          <el-form-item label="开始治疗时间" prop="treatmentStartDate">
+          <el-form-item label="治疗方案" prop="treatmentPlan">
+            <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" clearable style="width: 100%">
+              <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="治疗开始时间" prop="treatmentStartDate">
             <el-date-picker
               v-model="supervisionForm.treatmentStartDate"
               type="date"
@@ -398,14 +493,28 @@ async function handleArchive() {
             />
           </el-form-item>
         </el-col>
+      </el-row>
+      <el-row :gutter="12">
         <el-col :span="12">
-          <el-form-item label="治疗方案" prop="treatmentPlan">
-            <el-select v-model="supervisionForm.treatmentPlan" placeholder="请选择" clearable style="width: 100%">
-              <el-option v-for="item in LATENT_TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
-            </el-select>
+          <el-form-item label="治疗结束时间">
+            <el-date-picker
+              v-model="supervisionForm.treatmentEndDate"
+              type="date"
+              placeholder="选择日期"
+              value-format="YYYY-MM-DD"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="管理单位">
+            <el-input v-model="supervisionForm.managingUnit" placeholder="请输入管理单位" />
           </el-form-item>
         </el-col>
       </el-row>
+      <el-form-item label="督导医生">
+        <el-input v-model="supervisionForm.supervisingDoctor" placeholder="请输入督导医生" />
+      </el-form-item>
       <el-row v-if="isLatentIndividualPlan(supervisionForm.treatmentPlan)">
         <el-col :span="24">
           <el-form-item label="方案详情">
@@ -523,16 +632,6 @@ async function handleArchive() {
           </el-form-item>
         </el-col>
       </el-row>
-      <el-form-item label="结束疗程时间">
-        <el-date-picker
-          v-model="supervisionForm.treatmentEndDate"
-          type="date"
-          placeholder="选择日期"
-          value-format="YYYY-MM-DD"
-          style="width: 100%"
-        />
-      </el-form-item>
-
       <el-divider content-position="left">
         督导管理人员
       </el-divider>

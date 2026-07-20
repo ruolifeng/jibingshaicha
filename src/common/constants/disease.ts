@@ -181,6 +181,15 @@ export function isConfirmedPatientDiagnosis(row: {
     || row.diagnosisResult === "确诊患者"
 }
 
+/** 确认诊断列若误存日期，统一为 yyyy-MM-dd，避免窄列换行裁切 */
+function normalizeConfirmDiagnosisDisplay(value: string): string {
+  const text = String(value).trim()
+  const matched = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/)
+  if (!matched) return text
+  const [, year, month, day] = matched
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+}
+
 /** 获取待诊断列表「确认诊断」列展示文本 */
 export function getSuspectedConfirmDiagnosisLabel(row: {
   diagnosisFirst?: string
@@ -194,7 +203,7 @@ export function getSuspectedConfirmDiagnosisLabel(row: {
     if (draft === "确诊患者") return "确诊患者"
     const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === draft)
     if (matched) return matched.label
-    return draft
+    return normalizeConfirmDiagnosisDisplay(draft)
   }
   const referral = SUSPECTED_REFERRAL_RESULT_OPTIONS.find(o => o.value === row.referralResult)
   return referral?.label || "-"

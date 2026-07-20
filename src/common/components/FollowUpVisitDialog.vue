@@ -34,7 +34,7 @@ interface Props {
   visible: boolean
   patientId: number | null
   patientName?: string
-  /** 患者行数据，用于预填化疗方案（病案首次治疗方案） */
+  /** 患者行数据，用于化疗方案回退预填（病案首次治疗方案） */
   patientRow?: Record<string, any> | null
   populationType: "school" | "keyPopulation" | "regular" | "epidemic" | "referral" | "specialDisease" | "closeContact" | string
   /** 传入已有记录时为修改模式 */
@@ -229,20 +229,29 @@ watch(
   }
 )
 
-async function applyNextVisitDateLinkage() {
-  if (!props.patientId || isEditMode.value) return
+/** 同步首次随访化疗方案；新建时顺带联动下次随访时间 */
+async function applyFirstVisitLinkage() {
+  if (!props.patientId) return
   try {
     const [firstVisitRes, listRes] = await Promise.all([
       getFirstVisitApi(props.patientId).catch(() => ({ data: null })),
-      getFollowUpListApi(props.patientId).catch(() => ({ data: [] }))
+      isEditMode.value
+        ? Promise.resolve({ data: [] as Array<Record<string, any>> })
+        : getFollowUpListApi(props.patientId).catch(() => ({ data: [] }))
     ])
-    const completedList = (listRes.data || []).filter((item: { status?: number }) => item.status === 1)
-    const firstVisitNextDate = firstVisitRes.data?.nextVisitDate || ""
+    const firstVisit = firstVisitRes.data
+    applyFollowUpChemotherapyDefault(form, {
+      firstVisitChemotherapy: firstVisit?.chemotherapy,
+      patientRow: props.patientRow
+    })
 
-    if (!form.nextVisitDate) {
-      const linked = resolveFollowUpFormDefaultNextVisitDate(completedList, firstVisitNextDate)
-      if (linked) form.nextVisitDate = linked
-    }
+    if (isEditMode.value || form.nextVisitDate) return
+    const completedList = (listRes.data || []).filter((item: { status?: number }) => item.status === 1)
+    const linked = resolveFollowUpFormDefaultNextVisitDate(
+      completedList,
+      firstVisit?.nextVisitDate || ""
+    )
+    if (linked) form.nextVisitDate = linked
   } catch { /* handled */ }
 }
 
@@ -257,19 +266,20 @@ async function loadDraft() {
       parseDraftData(data)
     }
   } catch { /* 无草稿 */ }
-  applyFollowUpChemotherapyDefault(form, props.patientRow)
-  await applyNextVisitDateLinkage()
+  await applyFirstVisitLinkage()
 }
 
-function loadInitialData() {
+async function loadInitialData() {
   if (!props.initialData) return
   parseDraftData(props.initialData)
   visitCreateTime.value = props.initialData.createTime ?? null
+  // 历史记录化疗方案为空时，从首次随访补齐（可修改）
+  await applyFirstVisitLinkage()
 }
 
 async function initForm() {
   if (props.initialData) {
-    loadInitialData()
+    await loadInitialData()
   } else {
     await loadDraft()
   }
@@ -477,7 +487,7 @@ async function handleSave() {
       <el-row :gutter="16">
         <el-col :span="24">
           <el-form-item label="化疗方案">
-            <el-input v-model="form.chemotherapyPlan" placeholder="来自病案首次治疗方案，可修改" />
+            <el-input v-model="form.chemotherapyPlan" placeholder="来自首次随访化疗方案，可修改" />
           </el-form-item>
         </el-col>
         <el-col :span="8">

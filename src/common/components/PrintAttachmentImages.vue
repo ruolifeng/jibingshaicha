@@ -25,44 +25,4 @@ const images = computed(() => parseAttachmentUrls(props.urls).filter(isImageAtta
   </div>
 </template>
 
-<style lang="scss" scoped>
-.print-attachments {
-  margin-top: 12px;
-
-  &__title {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #1a3a6b;
-  }
-
-  &__grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  &__item {
-    margin: 0;
-    text-align: center;
-    page-break-inside: avoid;
-    break-inside: avoid;
-
-    img {
-      width: 100%;
-      max-width: 180px;
-      max-height: 140px;
-      object-fit: contain;
-      border: 1px solid #ddd;
-      display: block;
-      margin: 0 auto;
-    }
-
-    figcaption {
-      margin-top: 4px;
-      font-size: 12px;
-      color: #606266;
-    }
-  }
-}
-</style>
+<!-- 样式由 print-forms.css 提供，与实际打印一致 -->

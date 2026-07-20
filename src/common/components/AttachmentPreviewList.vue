@@ -1,17 +1,19 @@
 <script lang="ts" setup>
-import { Download, ZoomIn } from "@element-plus/icons-vue"
 import { getAttachmentLabel, isImageAttachment, parseAttachmentUrls } from "@@/utils/attachment"
+import { Download, ZoomIn } from "@element-plus/icons-vue"
 
 const props = defineProps<{
   urls?: string | string[] | null
 }>()
 
 const list = computed(() => parseAttachmentUrls(props.urls))
+const imageUrls = computed(() => list.value.filter(isImageAttachment))
 const previewVisible = ref(false)
-const previewUrl = ref("")
+const previewIndex = ref(0)
 
 function openPreview(url: string) {
-  previewUrl.value = url
+  const index = imageUrls.value.indexOf(url)
+  previewIndex.value = index >= 0 ? index : 0
   previewVisible.value = true
 }
 </script>
@@ -22,7 +24,9 @@ function openPreview(url: string) {
       <div v-if="isImageAttachment(url)" class="attachment-preview-list__thumb" @click="openPreview(url)">
         <img :src="url" :alt="getAttachmentLabel(url, index)">
         <div class="attachment-preview-list__mask">
-          <el-icon><ZoomIn /></el-icon>
+          <el-icon>
+            <ZoomIn />
+          </el-icon>
         </div>
       </div>
       <div class="attachment-preview-list__meta">
@@ -32,7 +36,9 @@ function openPreview(url: string) {
             查看
           </el-button>
           <el-link :href="url" target="_blank" rel="noopener noreferrer" type="primary" :underline="false">
-            <el-icon class="mr-1"><Download /></el-icon>
+            <el-icon class="mr-1">
+              <Download />
+            </el-icon>
             下载
           </el-link>
         </div>
@@ -41,9 +47,14 @@ function openPreview(url: string) {
   </div>
   <span v-else>-</span>
 
-  <el-dialog v-model="previewVisible" title="附件预览" width="70vw" append-to-body align-center>
-    <img v-if="previewUrl" class="attachment-preview-list__preview" :src="previewUrl" alt="preview">
-  </el-dialog>
+  <!-- 支持缩放、左右旋转（组件自动导入会带上样式） -->
+  <el-image-viewer
+    v-if="previewVisible && imageUrls.length"
+    :url-list="imageUrls"
+    :initial-index="previewIndex"
+    teleported
+    @close="previewVisible = false"
+  />
 </template>
 
 <style lang="scss" scoped>
@@ -106,14 +117,6 @@ function openPreview(url: string) {
     display: flex;
     align-items: center;
     gap: 12px;
-  }
-
-  &__preview {
-    width: 100%;
-    max-height: 75vh;
-    object-fit: contain;
-    display: block;
-    margin: 0 auto;
   }
 }
 </style>

@@ -68,7 +68,7 @@ function handlePrint() {
   <el-dialog
     :model-value="visible"
     title="预览 — 肺结核患者随访服务记录表"
-    width="900px"
+    width="860px"
     top="5vh"
     @update:model-value="emit('update:visible', $event)"
   >
@@ -269,50 +269,6 @@ function handlePrint() {
   </el-dialog>
 </template>
 
-<style lang="scss" scoped>
-.print-area {
-  padding: 8px;
-}
-
-.print-title {
-  text-align: center;
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.print-subtitle {
-  text-align: center;
-  font-size: 14px;
-  margin-bottom: 12px;
-  color: #606266;
-}
-
-.visit-table {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    border: 1px solid #ccc;
-    padding: 7px 10px;
-    font-size: 13px;
-    vertical-align: middle;
-  }
-
-  th {
-    background: #f5f7fa;
-    white-space: nowrap;
-    font-weight: 600;
-    width: 110px;
-  }
-
-  .section-header td {
-    background: #e8f0fe;
-    font-weight: bold;
-    font-size: 13px;
-    padding: 5px 10px;
-    color: #1a3a6b;
-  }
-}
+<style lang="scss">
+@import "@@/assets/styles/print-forms.css";
 </style>

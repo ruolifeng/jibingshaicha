@@ -193,10 +193,17 @@ function handleRemove(uploadFile: UploadFile) {
 // ==================== 预览 ====================
 
 const previewVisible = ref(false)
-const previewUrl = ref("")
+const previewIndex = ref(0)
 
-function handlePreview(uploadFile: UploadFile) {
-  previewUrl.value = uploadFile.url || ""
+const previewUrlList = computed(() =>
+  fileList.value.map(f => f.url).filter((url): url is string => isPersistedUrl(url) || Boolean(url))
+)
+
+function handlePreview(uploadFile: UploadFile | LocalFile) {
+  const url = uploadFile.url || ""
+  if (!url) return
+  const index = previewUrlList.value.indexOf(url)
+  previewIndex.value = index >= 0 ? index : 0
   previewVisible.value = true
 }
 
@@ -251,9 +258,13 @@ const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
       <span class="image-uploader__count">已上传 {{ uploadedCount() }} / {{ max }}</span>
     </div>
 
-    <el-dialog v-model="previewVisible" title="" width="60vw" append-to-body align-center>
-      <img v-if="previewUrl" class="preview-img" :src="previewUrl" alt="preview">
-    </el-dialog>
+    <el-image-viewer
+      v-if="previewVisible && previewUrlList.length"
+      :url-list="previewUrlList"
+      :initial-index="previewIndex"
+      teleported
+      @close="previewVisible = false"
+    />
   </div>
 </template>
 
@@ -320,14 +331,5 @@ const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
     font-size: 18px;
     cursor: pointer;
   }
-}
-
-.preview-img {
-  width: 100%;
-  height: auto;
-  max-height: 80vh;
-  object-fit: contain;
-  display: block;
-  margin: 0 auto;
 }
 </style>

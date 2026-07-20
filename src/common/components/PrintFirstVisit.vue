@@ -63,7 +63,7 @@ function handlePrint() {
   <el-dialog
     :model-value="visible"
     title="预览 — 肺结核患者第一次入户随访记录表"
-    width="820px"
+    width="860px"
     @update:model-value="emit('update:visible', $event)"
   >
     <div id="print-visit-content" class="print-area">
@@ -126,17 +126,17 @@ function handlePrint() {
           </tr>
           <tr>
             <th>化疗方案</th>
-            <td>{{ visitData?.chemotherapy }}</td>
+            <td colspan="5">
+              {{ visitData?.chemotherapy }}
+            </td>
+          </tr>
+          <tr>
             <th>用法</th>
             <td>{{ visitData?.medicationUsage }}</td>
             <th>督导人员</th>
             <td>{{ visitData?.supervisor }}</td>
-          </tr>
-          <tr>
             <th>药品剂型</th>
-            <td colspan="5">
-              {{ visitData?.drugForm }}
-            </td>
+            <td>{{ visitData?.drugForm }}</td>
           </tr>
 
           <!-- 居住环境与生活方式 -->
@@ -226,60 +226,6 @@ function handlePrint() {
   </el-dialog>
 </template>
 
-<style lang="scss" scoped>
-.print-area {
-  padding: 8px;
-}
-
-.print-header {
-  position: relative;
-  margin-bottom: 16px;
-}
-
-.print-title {
-  text-align: center;
-  font-size: 18px;
-  font-weight: bold;
-  margin: 0;
-}
-
-.print-form-no {
-  position: absolute;
-  top: 0;
-  right: 0;
-  font-size: 14px;
-}
-
-.visit-table {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    border: 1px solid #ccc;
-    padding: 7px 10px;
-    font-size: 13px;
-    vertical-align: middle;
-  }
-
-  th {
-    background: #f5f7fa;
-    white-space: nowrap;
-    font-weight: 600;
-    width: 100px;
-  }
-
-  .section-header td {
-    background: #e8f0fe;
-    font-weight: bold;
-    font-size: 13px;
-    padding: 5px 10px;
-    color: #1a3a6b;
-  }
-
-  .empty-cell {
-    text-align: center;
-    color: #999;
-  }
-}
+<style lang="scss">
+@import "@@/assets/styles/print-forms.css";
 </style>

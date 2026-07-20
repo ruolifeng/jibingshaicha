@@ -9,8 +9,8 @@ import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTE
 import { downloadBlob } from "@@/utils/download"
 import {
   buildFollowUpHistoryDisplayList,
-  canEditFollowUpVisit
-
+  canEditFollowUpVisit,
+  toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
 import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
@@ -118,7 +118,7 @@ function viewDetail(row: FollowUpHistoryDisplayRow) {
     firstVisitDetailVisible.value = true
     return
   }
-  detailData.value = row.raw
+  detailData.value = toFollowUpHistoryViewData(row)
   detailVisible.value = true
 }
 
@@ -128,7 +128,7 @@ function openPrint(row: FollowUpHistoryDisplayRow) {
     firstVisitPrintVisible.value = true
     return
   }
-  printData.value = row.raw
+  printData.value = toFollowUpHistoryViewData(row)
   printPatientName.value = historyPatientName.value
   printVisible.value = true
 }
@@ -137,7 +137,7 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
   if (!historyPatient.value || record.recordType !== "followUp" || !record.id) return
   try {
     await ElMessageBox.confirm(
-      `确认删除第 ${record.visitSeq} 次后续随访记录？删除后不可恢复。`,
+      `确认删除第 ${record.visitSeq} 次随访记录？删除后不可恢复。`,
       "删除确认",
       { type: "warning" }
     )
