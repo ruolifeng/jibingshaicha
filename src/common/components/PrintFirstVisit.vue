@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 /** 肺结核患者第一次入户随访记录表打印组件 */
 import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
-import { SYMPTOM_OPTIONS } from "@@/constants/disease"
+import { EDUCATION_ITEMS, SYMPTOM_OPTIONS } from "@@/constants/disease"
 import { formatFirstVisitMethod } from "@@/utils/firstVisit"
 import { printElement } from "@@/utils/print"
 
@@ -27,7 +27,7 @@ const symptomLabels = computed(() => {
     .join("、") || "-"
 })
 
-/** 解析教育项目（存储为 JSON 字符串） */
+/** 解析教育项目（存储为 JSON 字符串），按标准项顺序输出 */
 const parsedEducationItems = computed<[string, string][]>(() => {
   const raw = props.visitData?.educationItems
   if (!raw) return []
@@ -41,7 +41,12 @@ const parsedEducationItems = computed<[string, string][]>(() => {
   } else {
     obj = raw as Record<string, string>
   }
-  return Object.entries(obj) as [string, string][]
+  const known = new Set(EDUCATION_ITEMS)
+  const ordered: [string, string][] = EDUCATION_ITEMS
+    .filter(key => key in obj)
+    .map(key => [key, obj[key]])
+  const extra = Object.entries(obj).filter(([key]) => !known.has(key)) as [string, string][]
+  return [...ordered, ...extra]
 })
 
 /** 将教育项目每两个分为一组，用于双列渲染 */
@@ -169,17 +174,20 @@ function handlePrint() {
             </td>
           </tr>
           <template v-if="educationRows.length > 0">
-            <tr v-for="(row, rIdx) in educationRows" :key="rIdx">
-              <th>{{ row[0][0] }}</th>
+            <!-- 标签占 2 列，避免长文案在窄 th + nowrap 下溢出叠字 -->
+            <tr v-for="(row, rIdx) in educationRows" :key="rIdx" class="edu-row">
+              <th colspan="2">
+                {{ row[0][0] }}
+              </th>
               <td>{{ row[0][1] }}</td>
               <template v-if="row[1]">
-                <th>{{ row[1][0] }}</th>
-                <td colspan="3">
-                  {{ row[1][1] }}
-                </td>
+                <th colspan="2">
+                  {{ row[1][0] }}
+                </th>
+                <td>{{ row[1][1] }}</td>
               </template>
               <template v-else>
-                <td colspan="4" />
+                <td colspan="3" />
               </template>
             </tr>
           </template>

@@ -193,7 +193,7 @@ async function openPrintFirstVisit(row: any) {
         </el-table-column>
         <el-table-column label="耐药情况">
           <template #default="{ row }">
-            {{ row.firstVisitDrugResistance || row.drugResistance || "—" }}
+            {{ row.firstVisitDrugResistance || "—" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">

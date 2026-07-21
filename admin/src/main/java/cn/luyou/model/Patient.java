@@ -81,6 +81,10 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private String firstVisitSputumCulture;
 
+    /** 首次随访耐药情况（非数据库字段） */
+    @TableField(exist = false)
+    private String firstVisitDrugResistance;
+
     /** 痰培养补充状态（非数据库字段）：0未补充 1已补充 null不适用 */
     @TableField(exist = false)
     private Integer sputumCultureSupplementStatus;

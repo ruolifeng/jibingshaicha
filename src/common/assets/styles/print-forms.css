@@ -75,8 +75,16 @@
 .print-area .sup-table th,
 .print-area .form-table th {
   background: #f5f7fa;
-  white-space: nowrap;
   font-weight: 600;
+  line-height: 1.45;
+}
+
+/* 短标签表头保持单行；随访表含长文案，必须允许换行，否则打印会叠字 */
+.print-area .notice-table th,
+.print-area .info-table th,
+.print-area .sup-table th,
+.print-area .form-table th {
+  white-space: nowrap;
 }
 
 .print-area .info-table th {
@@ -84,7 +92,15 @@
 }
 
 .print-area .visit-table th {
-  width: 100px;
+  width: 110px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.print-area .visit-table .edu-row th {
+  width: auto;
+  min-width: 0;
 }
 
 .print-area .notice-table th {
@@ -253,6 +269,13 @@
     background: #f5f7fa !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* 打印时强制允许随访表长标签换行，避免窄列溢出叠字 */
+  .print-area .visit-table th {
+    white-space: normal !important;
+    height: auto !important;
+    line-height: 1.45 !important;
   }
 
   .print-area .info-table th {
