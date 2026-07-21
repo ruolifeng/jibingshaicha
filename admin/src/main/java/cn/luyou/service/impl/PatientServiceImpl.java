@@ -966,7 +966,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
         fw.in(FirstVisit::getPatientId, patientIds)
                 .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime,
-                        FirstVisit::getSputumCulture, FirstVisit::getSputumCultureSupplementStatus);
+                        FirstVisit::getSputumCulture, FirstVisit::getSputumCultureSupplementStatus,
+                        FirstVisit::getDrugResistance);
         Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
                 .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
         Integer currentRole = BaseContext.getCurrentRole();
@@ -977,6 +978,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setFirstVisitStatus(null);
                 p.setFirstVisitEditable(true);
                 p.setFirstVisitSputumCulture(null);
+                p.setFirstVisitDrugResistance(null);
                 p.setSputumCultureSupplementStatus(null);
                 return;
             }
@@ -985,6 +987,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             p.setFirstVisitStatus(visit.getStatus());
             p.setFirstVisitEditable(isFirstVisitEditable(currentRole, visit));
             p.setFirstVisitSputumCulture(visit.getSputumCulture());
+            p.setFirstVisitDrugResistance(visit.getDrugResistance());
             p.setSputumCultureSupplementStatus(visit.getSputumCultureSupplementStatus());
         });
     }
