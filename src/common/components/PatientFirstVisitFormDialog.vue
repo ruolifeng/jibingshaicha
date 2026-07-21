@@ -490,7 +490,7 @@ async function handleSave() {
         <el-input v-model="firstVisitForm.remarks" type="textarea" :rows="2" placeholder="请填写" />
       </el-form-item>
       <el-form-item label="上传10张">
-        <ImageUploader v-model="firstVisitForm.attachmentUrls" />
+        <ImageUploader v-model="firstVisitForm.attachmentUrls" :disabled="formLocked" />
       </el-form-item>
     </el-form>
     <template #footer>

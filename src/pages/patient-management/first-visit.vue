@@ -191,15 +191,9 @@ async function openPrintFirstVisit(row: any) {
             {{ row.firstVisitSputumCulture || "—" }}
           </template>
         </el-table-column>
-        <el-table-column label="痰培养补充">
+        <el-table-column label="耐药情况">
           <template #default="{ row }">
-            <el-tag v-if="row.sputumCultureSupplementStatus === 0" type="warning" size="small">
-              未补充
-            </el-tag>
-            <el-tag v-else-if="row.sputumCultureSupplementStatus === 1" type="success" size="small">
-              补充
-            </el-tag>
-            <span v-else class="text-gray-400">—</span>
+            {{ row.firstVisitDrugResistance || row.drugResistance || "—" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">
