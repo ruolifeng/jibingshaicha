@@ -186,6 +186,7 @@ const onError: UploadProps["onError"] = (_error, _uploadFile, uploadFiles) => {
 }
 
 function handleRemove(uploadFile: UploadFile) {
+  if (props.disabled) return
   fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid && f.url !== uploadFile.url)
   emitChange(true)
 }
@@ -245,10 +246,20 @@ const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
             <el-icon class="upload-thumb__icon" @click.stop="handlePreview(file)">
               <ZoomIn />
             </el-icon>
-            <el-icon class="upload-thumb__icon" @click.stop="handleRemove(file)">
+            <el-icon v-if="!disabled" class="upload-thumb__icon" @click.stop="handleRemove(file)">
               <i-ep-delete />
             </el-icon>
           </div>
+          <el-button
+            v-if="file.url && !disabled"
+            class="upload-thumb__remove-btn"
+            type="danger"
+            size="small"
+            circle
+            @click.stop="handleRemove(file)"
+          >
+            <i-ep-delete />
+          </el-button>
         </div>
       </template>
     </el-upload>
@@ -330,6 +341,13 @@ const canUpload = computed(() => !props.disabled && usedSlotCount() < props.max)
     color: #fff;
     font-size: 18px;
     cursor: pointer;
+  }
+
+  &__remove-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
   }
 }
 </style>
