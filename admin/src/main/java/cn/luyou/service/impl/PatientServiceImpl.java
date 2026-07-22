@@ -799,7 +799,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private LambdaQueryWrapper<Patient> buildManagedPatientDashboardWrapper(Integer statYear, List<Long> filterDeptIds) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(Patient::getArchived, 0, 1);
+        // 与在管列表一致：可含 archived=0/1，但排除「已转出」源记录（在管仅保留接收方副本）
+        wrapper.in(Patient::getArchived, 0, 1)
+                .and(w -> w.isNull(Patient::getArchiveRemark)
+                        .or()
+                        .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
         dataScopeHelper.applyPatientScope(wrapper);
         departmentFilterSupport.applyDepartmentIdFilter(wrapper, Patient::getDepartmentId, filterDeptIds);
         if (statYear != null) {
@@ -1475,7 +1479,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .eq(Notice::getNoticeType, "patient"));
         for (Notice source : notices) {
             Notice copy = new Notice();
-            // 保留原始发送人/接收人，便于通知单管理展示；已发送列表会按 source_patient_id 排除副本
+            // 保留原始发送人/接收人，便于通知单管理展示；已发送列表会按 source_patient_id 排除副本。
+            // 注意：DataScopeHelper 对转出副本不做 notice 扩权，避免原辖区用户继续看见已转出业务。
             BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "bizId",
                     "senderName", "senderOrgName", "receiverName", "receiverOrgName");
             copy.setBizId(newPatientId);

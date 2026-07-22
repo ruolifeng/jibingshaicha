@@ -1708,7 +1708,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(Notice::getNoticeType, "latent"));
         for (Notice source : notices) {
             Notice copy = new Notice();
-            // 保留原始发送人/接收人，便于通知单管理展示；已发送列表会按 source_latent_id 排除副本
+            // 保留原始发送人/接收人，便于通知单管理展示；已发送列表会按 source_latent_id 排除副本。
+            // 注意：DataScopeHelper 对转出副本不做 notice 扩权，避免原辖区用户继续看见已转出业务。
             BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "bizId",
                     "senderName", "senderOrgName", "receiverName", "receiverOrgName");
             copy.setBizId(newLatentId);
