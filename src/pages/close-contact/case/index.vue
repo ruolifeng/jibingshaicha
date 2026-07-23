@@ -7,7 +7,7 @@ import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TR
 import { PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { downloadBlob } from "@@/utils/download"
-import { confirmDangerDelete } from "@@/utils/listToolbar"
+import { confirmDangerDelete, confirmEditChange } from "@@/utils/listToolbar"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
 import {
   batchDeleteCloseContactCaseApi,
@@ -292,6 +292,11 @@ function handleEdit(row: any) {
 }
 
 async function handleSave() {
+  if (editMode.value === "edit") {
+    const name = editForm.value.name?.trim() || "该个案"
+    const confirmed = await confirmEditChange(`「${name}」信息`)
+    if (!confirmed) return
+  }
   editSaving.value = true
   try {
     if (editMode.value === "create") {

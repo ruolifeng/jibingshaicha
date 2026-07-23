@@ -26,6 +26,7 @@ import {
   YES_NO_OPTIONS
 } from "@@/constants/disease"
 import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, resolveFollowUpFormDefaultNextVisitDate, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitApi, getFollowUpCaseClosureStatsApi, getFollowUpDraftApi, getFollowUpListApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import { useUserStore } from "@/pinia/stores/user"
 import ImageUploader from "./ImageUploader.vue"
@@ -368,6 +369,11 @@ async function handleSave() {
     } catch {
       return
     }
+  }
+  if (isEditMode.value) {
+    const name = props.patientName?.trim() || "该患者"
+    const confirmed = await confirmEditChange(`「${name}」的后续随访`)
+    if (!confirmed) return
   }
   if (submitting.value) return
   submitting.value = true

@@ -162,7 +162,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     }
 
     @Override
-    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid) {
+    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean cwonfirmSkipInvalid) {
         return uploadAndParse(file, sourceType, overwrite, confirmSkipInvalid, false);
     }
 

@@ -26,7 +26,7 @@ import {
   SCREENING_FIELD_OTHER,
   selectOptionsWithLegacy
 } from "@@/constants/screening-close-contact"
-import { confirmDangerDelete, triggerBlobDownload } from "@@/utils/listToolbar"
+import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { useRouter } from "vue-router"
 import {
@@ -402,6 +402,11 @@ async function handleSave() {
   }
   if (!validateFirstScreenManual()) {
     return
+  }
+  if (editMode.value === "edit") {
+    const name = editForm.value.name?.trim() || "该筛查记录"
+    const confirmed = await confirmEditChange(`「${name}」信息`)
+    if (!confirmed) return
   }
   const payload = sanitizeScreeningOtherFields(editForm.value)
   editSaving.value = true

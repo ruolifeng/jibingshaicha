@@ -36,6 +36,7 @@ import {
 } from "@@/constants/disease"
 import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, isValidFirstVisitFormNo, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { buildFollowUpHistoryDisplayList, toFollowUpHistoryViewData } from "@@/utils/followUpVisit"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import { isNoticeSent, resolveNoticeSputumSmearFromPatient } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule } from "@@/utils/validate"
@@ -485,6 +486,11 @@ async function handleSaveFirstVisit() {
     } catch {
       return
     }
+  }
+  if (firstVisitCompleted.value) {
+    const name = firstVisitRow.value?.name?.trim() || "该患者"
+    const confirmed = await confirmEditChange(`「${name}」的首次随访`)
+    if (!confirmed) return
   }
   try {
     await saveFirstVisitApi(buildFirstVisitPayload())

@@ -102,11 +102,13 @@ public class PatientController {
             @RequestParam(required = false) String medicationManagementUnit,
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String creatorUsername,
-            @RequestParam(required = false) String columnFilters) {
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder) {
         return ResultRes.success(patientService.queryPage(
                 page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
                 dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters));
+                creatorUsername, columnFilters, sortField, sortOrder));
     }
 
     @Operation(summary = "历史患者列表")

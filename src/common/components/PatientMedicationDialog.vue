@@ -8,6 +8,7 @@ import {
   SPUTUM_RESULT_OPTIONS,
   SUPERVISOR_OPTIONS
 } from "@@/constants/disease"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import {
   applyMedicationFormDefaults,
   MEDICATION_LOCKED_MANAGEMENT_METHOD,
@@ -148,6 +149,11 @@ async function handleSaveDraft() {
 
 async function handleSave() {
   if (!props.patientRow || saving.value) return
+  if (formId.value) {
+    const name = props.patientRow.name?.trim() || "该患者"
+    const confirmed = await confirmEditChange(`「${name}」的服药管理`)
+    if (!confirmed) return
+  }
   saving.value = true
   try {
     const saveData = buildSaveData()

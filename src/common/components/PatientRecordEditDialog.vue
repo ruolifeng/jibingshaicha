@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { CROWD_CATEGORY_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import { resolveManualEpidemicFormFields } from "@@/utils/patient"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
@@ -181,6 +182,11 @@ async function handleSubmit() {
     await formRef.value?.validate()
   } catch {
     return
+  }
+  if (!isCreate.value) {
+    const name = form.name?.trim() || "该患者"
+    const confirmed = await confirmEditChange(`患者「${name}」信息`)
+    if (!confirmed) return
   }
   submitting.value = true
   try {

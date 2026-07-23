@@ -12,14 +12,28 @@ import {
   canEditFollowUpVisit,
   toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
-import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
 
-const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { followUpSearch: true })
+const {
+  paginationData,
+  handleCurrentChange,
+  handleSizeChange,
+  getTableIndex,
+  loading,
+  tableData,
+  total,
+  searchForm,
+  defaultSort,
+  handleSortChange,
+  fetchData,
+  handleSearch,
+  handleReset
+} = usePatientList(0, { followUpSearch: true })
 
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
@@ -223,10 +237,17 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
         v-loading="loading"
         border
         stripe
+        :default-sort="defaultSort"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
+        <el-table-column prop="registrationNo" label="登记号" min-width="120" show-overflow-tooltip sortable="custom">
+          <template #default="{ row }">
+            {{ resolveRegistrationNo(row) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">

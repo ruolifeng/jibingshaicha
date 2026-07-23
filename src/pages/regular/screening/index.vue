@@ -8,7 +8,7 @@ import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
-import { confirmDangerDelete, triggerBlobDownload } from "@@/utils/listToolbar"
+import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningRegularApi, createScreeningRegularApi, deleteAllScreeningRegularApi, deleteScreeningRegularApi, deleteScreeningRegularByFilterApi, exportScreeningRegularApi, getScreeningRegularListApi, updateScreeningRegularApi, uploadScreeningRegularApi } from "./apis"
@@ -362,6 +362,11 @@ async function handleSave() {
     await editFormRef.value?.validate()
   } catch {
     return
+  }
+  if (editMode.value === "edit") {
+    const name = editForm.value.name?.trim() || "该筛查记录"
+    const confirmed = await confirmEditChange(`「${name}」信息`)
+    if (!confirmed) return
   }
   editSaving.value = true
   try {

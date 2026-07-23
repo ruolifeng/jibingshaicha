@@ -4,6 +4,7 @@
  */
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getPatientListApi } from "../apis"
 
@@ -26,6 +27,12 @@ function hasMedicationUnitSearch(options?: PatientListOptions) {
 export function usePatientList(defaultArchived?: number, options?: PatientListOptions) {
   const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
   const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+  const {
+    defaultSort,
+    onSortChange,
+    resetSort,
+    toQueryParam: toSortQueryParam
+  } = useServerTableSort()
 
   const loading = ref(false)
   const tableData = ref<any[]>([])
@@ -58,7 +65,8 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
         ...(keyPopulationSubCategories.length > 0
           ? { crowdCategory: keyPopulationSubCategories.join(",") }
           : {}),
-        ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+        ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+        ...toSortQueryParam()
       }
       if (options?.overviewSearch) {
         params.dateFilterBy = "registrationDate"
@@ -101,6 +109,12 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
       searchForm.medicationManagementUnit = ""
     }
     clearFilters()
+    resetSort()
+    handleSearch()
+  }
+
+  function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+    onSortChange(payload)
     handleSearch()
   }
 
@@ -120,6 +134,8 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     setFilter,
     clearFilters,
     toQueryParam,
+    defaultSort,
+    handleSortChange,
     fetchData,
     handleSearch,
     handleReset,
