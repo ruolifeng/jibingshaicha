@@ -16,6 +16,7 @@ import {
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
 import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_EDIT_DAYS_LEVEL5, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -237,6 +238,11 @@ async function handleSave() {
     } catch {
       return
     }
+  }
+  if (firstVisitCompleted.value) {
+    const name = props.patientRow.name?.trim() || "该患者"
+    const confirmed = await confirmEditChange(`「${name}」的首次随访`)
+    if (!confirmed) return
   }
   saving.value = true
   try {

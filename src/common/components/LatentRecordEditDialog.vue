@@ -5,6 +5,7 @@ import {
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS
 } from "@@/constants/disease"
 import { CONTACT_TYPE_OPTIONS } from "@@/constants/screening-close-contact"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { createLatentApi, getLatentDetailApi, updateLatentApi } from "@/pages/latent-management/apis"
 
@@ -180,6 +181,11 @@ async function handleSubmit() {
     await formRef.value?.validate()
   } catch {
     return
+  }
+  if (!isCreate.value) {
+    const name = form.name?.trim() || "该潜伏感染者"
+    const confirmed = await confirmEditChange(`「${name}」信息`)
+    if (!confirmed) return
   }
   submitting.value = true
   try {

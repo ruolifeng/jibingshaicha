@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
 import { MEDICATION_PICKUP_DRUG_OPTIONS, MEDICATION_PICKUP_UNIT_OPTIONS } from "@@/constants/disease"
+import { confirmEditChange } from "@@/utils/listToolbar"
 import { MEDICATION_PICKUP_EDIT_DAYS_LEVEL5, parseMedicationPickupDrugs } from "@@/utils/medicationPickup"
 import { saveMedicationPickupApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -153,6 +154,12 @@ async function handleSave() {
   if (!props.patientRow || formLocked.value || saving.value) return
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid || !validateDrugRows()) return
+
+  if (isEditMode.value) {
+    const name = props.patientRow.name?.trim() || "该患者"
+    const confirmed = await confirmEditChange(`「${name}」的领药记录`)
+    if (!confirmed) return
+  }
 
   saving.value = true
   try {

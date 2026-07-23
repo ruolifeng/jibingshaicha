@@ -46,6 +46,7 @@ import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
+import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.NoticePartyFillSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -98,12 +99,23 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     );
 
     private static final String EPIDEMIC_JSON_REGISTRATION_DATE = "$.\"登记日期\"";
+    private static final String EPIDEMIC_JSON_REGISTRATION_NO = "$.\"登记号\"";
     private static final String EPIDEMIC_JSON_PATHOGEN_RESULT = "$.\"病原学结果\"";
     private static final String EPIDEMIC_JSON_DIAGNOSIS_RESULT = "$.\"诊断结果\"";
     private static final String[] PATHOGEN_RESULT_POSITIVE_VALUES = {
             "阳性", "病原学阳性", "病原学结果阳性"
     };
     private static final String EPIDEMIC_JSON_MEDICATION_UNIT = "$.\"服药管理单位\"";
+    /** 登记号（传报号）排序表达式：取自 epidemic_data JSON */
+    private static final String REGISTRATION_NO_SQL_EXPR =
+            "JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '" + EPIDEMIC_JSON_REGISTRATION_NO + "'))";
+    private static final Map<String, String> SORT_COLUMNS = Map.of(
+            "registrationNo", REGISTRATION_NO_SQL_EXPR,
+            "importRowNo", "import_row_no",
+            "name", "name",
+            "idNumber", "id_number",
+            "createTime", "create_time"
+    );
     /** 后续随访中停止治疗原因为「完成疗程」的患者（去重） */
     private static final String TREATMENT_SUCCESS_FOLLOW_UP_SQL =
             "SELECT DISTINCT patient_id FROM follow_up_visit WHERE deleted = 0 "
@@ -193,13 +205,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                      String name, String idNumber, String phone, String currentAddress,
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory,
-                                     String creatorUsername, String columnFilters) {
+                                     String creatorUsername, String columnFilters, String sortField, String sortOrder) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
                 dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory);
         applyCreatorUsernameFilter(wrapper, creatorUsername);
         applyColumnFilters(wrapper, columnFilters);
-        ImportRowOrderSupport.applyWithoutBatch(wrapper);
+        ListSortSupport.apply(wrapper, sortField, sortOrder, SORT_COLUMNS, ImportRowOrderSupport.WITHOUT_BATCH);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillCreatorUsernames(result.getRecords());
         fillNoticeStatus(result.getRecords(), populationType);

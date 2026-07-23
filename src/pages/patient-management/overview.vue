@@ -29,6 +29,8 @@ const {
   searchForm,
   columnFilters,
   setFilter,
+  defaultSort,
+  handleSortChange,
   fetchData,
   handleSearch,
   handleReset
@@ -402,12 +404,14 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
         border
         stripe
         row-key="id"
+        :default-sort="defaultSort"
         :row-class-name="({ row }) => (isRetreatmentPatient(row) ? 'retreatment-row' : '')"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="登记号" min-width="120" show-overflow-tooltip>
+        <el-table-column prop="registrationNo" label="登记号" min-width="120" show-overflow-tooltip sortable="custom">
           <template #default="{ row }">
             {{ resolveRegistrationNo(row) || "-" }}
           </template>

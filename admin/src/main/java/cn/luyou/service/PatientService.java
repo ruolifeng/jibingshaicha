@@ -49,7 +49,17 @@ public interface PatientService extends IService<Patient> {
                               String name, String idNumber, String phone, String currentAddress,
                               String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                               String dateFilterBy, String medicationManagementUnit, String crowdCategory,
-                              String creatorUsername, String columnFilters);
+                              String creatorUsername, String columnFilters, String sortField, String sortOrder);
+
+    default IPage<Patient> queryPage(int page, int size, String populationType,
+                                     String name, String idNumber, String phone, String currentAddress,
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory,
+                                     String creatorUsername, String columnFilters) {
+        return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
+                diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                creatorUsername, columnFilters, null, null);
+    }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
@@ -57,7 +67,7 @@ public interface PatientService extends IService<Patient> {
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                null, null);
+                null, null, null, null);
     }
 
     /** 手动新增在管患者（在管总览） */

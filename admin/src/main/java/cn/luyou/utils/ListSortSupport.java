@@ -49,6 +49,6 @@ public final class ListSortSupport {
 
     /** 可空字段排序时 NULL 置后 */
     private static final Set<String> NULLS_LAST_FIELDS = Set.of(
-            "importRowNo", "screenDate", "birthDate", "chestXrayDate", "age"
+            "importRowNo", "screenDate", "birthDate", "chestXrayDate", "age", "registrationNo"
     );
 }

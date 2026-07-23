@@ -4,7 +4,7 @@ import PatientFirstVisitFormDialog from "@@/components/PatientFirstVisitFormDial
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { getPatientTransferStatusLabel, isPatientTransferLocked } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { exportPatientFirstVisitsApi, getFirstVisitDetailApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
@@ -12,7 +12,21 @@ import { usePatientList } from "./composables/usePatientList"
 const userStore = useUserStore()
 const canEditFirstVisitPerm = computed(() => userStore.hasPermission("patientManagement:firstVisit:edit"))
 
-const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { firstVisitSearch: true })
+const {
+  paginationData,
+  handleCurrentChange,
+  handleSizeChange,
+  getTableIndex,
+  loading,
+  tableData,
+  total,
+  searchForm,
+  defaultSort,
+  handleSortChange,
+  fetchData,
+  handleSearch,
+  handleReset
+} = usePatientList(0, { firstVisitSearch: true })
 
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
@@ -157,10 +171,17 @@ async function openPrintFirstVisit(row: any) {
         v-loading="loading"
         border
         stripe
+        :default-sort="defaultSort"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
+        <el-table-column prop="registrationNo" label="登记号" min-width="120" show-overflow-tooltip sortable="custom">
+          <template #default="{ row }">
+            {{ resolveRegistrationNo(row) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="数据来源">
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
