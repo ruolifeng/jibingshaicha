@@ -119,12 +119,14 @@ async function handleConfirmNotice(noticeId: number) {
         {{ noticeDetailData.issuedTime || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="下发人">
-        {{ noticeDetailData.senderName || "-" }}
-        <span v-if="noticeDetailData.senderOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.senderOrgName }}）</span>
+        <span class="party-inline">
+          {{ noticeDetailData.senderName || "-" }}<template v-if="noticeDetailData.senderOrgName">（{{ noticeDetailData.senderOrgName }}）</template>
+        </span>
       </el-descriptions-item>
       <el-descriptions-item label="接收人">
-        {{ noticeDetailData.receiverName || "-" }}
-        <span v-if="noticeDetailData.receiverOrgName" class="text-gray-400 ml-1">（{{ noticeDetailData.receiverOrgName }}）</span>
+        <span class="party-inline">
+          {{ noticeDetailData.receiverName || "-" }}<template v-if="noticeDetailData.receiverOrgName">（{{ noticeDetailData.receiverOrgName }}）</template>
+        </span>
       </el-descriptions-item>
       <el-descriptions-item label="发送时间">
         {{ noticeDetailData.sentTime }}
@@ -161,3 +163,10 @@ async function handleConfirmNotice(noticeId: number) {
     @update:visible="printVisible = $event"
   />
 </template>
+
+<style scoped>
+.party-inline {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+</style>
