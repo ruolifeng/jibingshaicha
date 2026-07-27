@@ -110,7 +110,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
             "gender", "district", "city", "year", "ethnicity", "idType", "screenMethod",
-            "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult", "townshipCommunity"
+            "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult", "townshipCommunity",
+            "creatorUsername", "entryUnit"
     );
 
     private static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
@@ -912,6 +913,24 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         wrapper.eq(ScreeningKeyPopulation::getSourceType, resolvedSource);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        if ("entryUnit".equals(field)) {
+            wrapper.select(ScreeningKeyPopulation::getDepartmentId)
+                    .isNotNull(ScreeningKeyPopulation::getDepartmentId)
+                    .groupBy(ScreeningKeyPopulation::getDepartmentId);
+            List<Long> deptIds = list(wrapper).stream()
+                    .map(ScreeningKeyPopulation::getDepartmentId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            if (deptIds.isEmpty()) {
+                return List.of();
+            }
+            return ColumnDistinctSupport.normalize(
+                    departmentService.listByIds(deptIds).stream()
+                            .map(dept -> dept == null ? null : dept.getName())
+                            .toList()
+            );
+        }
         applyDistinctSelect(wrapper, field);
         return ColumnDistinctSupport.normalize(list(wrapper).stream()
                 .map(row -> extractDistinctValue(row, field))
@@ -956,6 +975,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             case "townshipCommunity" -> wrapper.select(ScreeningKeyPopulation::getTownshipCommunity)
                     .isNotNull(ScreeningKeyPopulation::getTownshipCommunity).ne(ScreeningKeyPopulation::getTownshipCommunity, "")
                     .groupBy(ScreeningKeyPopulation::getTownshipCommunity);
+            case "creatorUsername" -> wrapper.select(ScreeningKeyPopulation::getCreatorUsername)
+                    .isNotNull(ScreeningKeyPopulation::getCreatorUsername).ne(ScreeningKeyPopulation::getCreatorUsername, "")
+                    .groupBy(ScreeningKeyPopulation::getCreatorUsername);
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
         }
     }
@@ -974,6 +996,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             case "hasChestXray" -> row.getHasChestXray();
             case "chestXrayResult" -> row.getChestXrayResult();
             case "townshipCommunity" -> row.getTownshipCommunity();
+            case "creatorUsername" -> row.getCreatorUsername();
             default -> null;
         };
     }
