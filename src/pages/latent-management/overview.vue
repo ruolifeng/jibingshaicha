@@ -3,13 +3,14 @@ import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, LATENT_MANUAL_POPULATION_TYPE_OPTIONS } from "@@/constants/disease"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
 import { downloadBlob } from "@@/utils/download"
 import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { batchDeleteLatentApi, closeCaseApi, downloadLatentTemplateApi, exportAllLatentApi, importLatentApi } from "./apis"
+import { batchDeleteLatentApi, closeCaseApi, downloadLatentTemplateApi, exportAllLatentApi, getLatentColumnDistinctApi, importLatentApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const {
@@ -37,7 +38,16 @@ const populationTypeFilterOptions = LATENT_MANUAL_POPULATION_TYPE_OPTIONS.map(it
   value: item.value
 }))
 
+const { load: loadDistinct, sourceValues: distinctValues, clearCache } = useColumnDistinct(async (field) => {
+  const { data } = await getLatentColumnDistinctApi(field, searchForm.populationType || undefined)
+  return Array.isArray(data) ? data : []
+})
+const loadGenderOptions = () => loadDistinct("gender")
+const loadPopulationTypeOptions = () => loadDistinct("populationType")
+const loadInfectionResultOptions = () => loadDistinct("infectionResult")
+
 watch(() => searchForm.populationType, (val) => {
+  clearCache()
   if (val !== "keyPopulation") {
     searchForm.keyPopulationSubCategories = []
   }
@@ -318,6 +328,8 @@ async function handleImport(uploadFile: any) {
               label="性别"
               type="select"
               :options="genderFilterOptions"
+              :source-values="distinctValues('gender').value"
+              :load-options="loadGenderOptions"
               :model-value="columnFilters.gender"
               @change="(v) => { setFilter('gender', v); handleSearch() }"
             />
@@ -346,6 +358,9 @@ async function handleImport(uploadFile: any) {
           <template #header>
             <TableHeaderFilter
               label="感染筛查结果"
+              type="select"
+              :source-values="distinctValues('infectionResult').value"
+              :load-options="loadInfectionResultOptions"
               :model-value="columnFilters.infectionResult"
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
@@ -379,6 +394,8 @@ async function handleImport(uploadFile: any) {
               label="数据来源"
               type="select"
               :options="populationTypeFilterOptions"
+              :source-values="distinctValues('populationType').value"
+              :load-options="loadPopulationTypeOptions"
               :model-value="columnFilters.populationType"
               @change="(v) => { setFilter('populationType', v); handleSearch() }"
             />

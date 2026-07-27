@@ -149,9 +149,9 @@ function handlePrint() {
         </tbody>
       </table>
       <div class="print-footer">
-        <div>发送单位：___________</div>
-        <div>接收单位签收：___________</div>
-        <div>签收日期：___________</div>
+        <div>发送单位：{{ noticeData?.senderOrgName || '___________' }}</div>
+        <div>接收单位签收：{{ noticeData?.receiverOrgName || noticeData?.receiverName || '___________' }}</div>
+        <div>签收日期：{{ formatNoticeSentTime(noticeData?.confirmedTime) || '___________' }}</div>
       </div>
     </div>
     <template #footer>

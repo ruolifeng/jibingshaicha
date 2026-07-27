@@ -29,6 +29,15 @@ export function uploadCloseContactCaseApi(file: File, options: ImportConfirmOpti
   })
 }
 
+/** 表头 Excel 式筛选：某列实际出现过的去重值 */
+export function getCloseContactCaseColumnDistinctApi(field: string) {
+  return request<ApiResponseData<string[]>>({
+    url: "close-contact/case/column-distinct",
+    method: "get",
+    params: { field }
+  })
+}
+
 /** 分页查询密接个案表 */
 export function getCloseContactCaseListApi(params: {
   page: number

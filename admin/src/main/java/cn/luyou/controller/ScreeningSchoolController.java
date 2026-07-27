@@ -140,6 +140,12 @@ public class ScreeningSchoolController {
         return ResultRes.success(screeningSchoolService.deleteAll());
     }
 
+    @Operation(summary = "表头筛选：某列实际去重值（Excel 式）")
+    @GetMapping("/column-distinct")
+    public ResultResponse<List<String>> columnDistinct(@RequestParam String field) {
+        return ResultRes.success(screeningSchoolService.listDistinctColumnValues(field));
+    }
+
     @Operation(summary = "按 ID 查询学校人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningSchool> detail(@PathVariable Long id) {

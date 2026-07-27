@@ -28,6 +28,7 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
@@ -975,5 +976,99 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             sysMessageService.lambdaUpdate().in(SysMessage::getBizId, referralIds).remove();
             referralService.lambdaUpdate().eq(Referral::getBizId, bizId).remove();
         }
+    }
+
+    @Override
+    public List<String> listDistinctColumnValues(String field) {
+        if (StrUtil.isBlank(field) || !COLUMN_FILTER_EQ_FIELDS.contains(field)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
+        applyDistinctSelect(wrapper, field);
+        return ColumnDistinctSupport.normalize(list(wrapper).stream()
+                .map(row -> extractDistinctValue(row, field))
+                .toList());
+    }
+
+    private void applyDistinctSelect(LambdaQueryWrapper<ScreeningSchool> wrapper, String field) {
+        switch (field) {
+            case "gender" -> wrapper.select(ScreeningSchool::getGender)
+                    .isNotNull(ScreeningSchool::getGender).ne(ScreeningSchool::getGender, "")
+                    .groupBy(ScreeningSchool::getGender);
+            case "year" -> wrapper.select(ScreeningSchool::getYear)
+                    .isNotNull(ScreeningSchool::getYear).ne(ScreeningSchool::getYear, "")
+                    .groupBy(ScreeningSchool::getYear);
+            case "city" -> wrapper.select(ScreeningSchool::getCity)
+                    .isNotNull(ScreeningSchool::getCity).ne(ScreeningSchool::getCity, "")
+                    .groupBy(ScreeningSchool::getCity);
+            case "district" -> wrapper.select(ScreeningSchool::getDistrict)
+                    .isNotNull(ScreeningSchool::getDistrict).ne(ScreeningSchool::getDistrict, "")
+                    .groupBy(ScreeningSchool::getDistrict);
+            case "ethnicity" -> wrapper.select(ScreeningSchool::getEthnicity)
+                    .isNotNull(ScreeningSchool::getEthnicity).ne(ScreeningSchool::getEthnicity, "")
+                    .groupBy(ScreeningSchool::getEthnicity);
+            case "idType" -> wrapper.select(ScreeningSchool::getIdType)
+                    .isNotNull(ScreeningSchool::getIdType).ne(ScreeningSchool::getIdType, "")
+                    .groupBy(ScreeningSchool::getIdType);
+            case "schoolType" -> wrapper.select(ScreeningSchool::getSchoolType)
+                    .isNotNull(ScreeningSchool::getSchoolType).ne(ScreeningSchool::getSchoolType, "")
+                    .groupBy(ScreeningSchool::getSchoolType);
+            case "screenMethod" -> wrapper.select(ScreeningSchool::getScreenMethod)
+                    .isNotNull(ScreeningSchool::getScreenMethod).ne(ScreeningSchool::getScreenMethod, "")
+                    .groupBy(ScreeningSchool::getScreenMethod);
+            case "infectionResult" -> wrapper.select(ScreeningSchool::getInfectionResult)
+                    .isNotNull(ScreeningSchool::getInfectionResult).ne(ScreeningSchool::getInfectionResult, "")
+                    .groupBy(ScreeningSchool::getInfectionResult);
+            case "diagnosisFirst" -> wrapper.select(ScreeningSchool::getDiagnosisFirst)
+                    .isNotNull(ScreeningSchool::getDiagnosisFirst).ne(ScreeningSchool::getDiagnosisFirst, "")
+                    .groupBy(ScreeningSchool::getDiagnosisFirst);
+            case "hasChestXray" -> wrapper.select(ScreeningSchool::getHasChestXray)
+                    .isNotNull(ScreeningSchool::getHasChestXray).ne(ScreeningSchool::getHasChestXray, "")
+                    .groupBy(ScreeningSchool::getHasChestXray);
+            case "chestXrayResult" -> wrapper.select(ScreeningSchool::getChestXrayResult)
+                    .isNotNull(ScreeningSchool::getChestXrayResult).ne(ScreeningSchool::getChestXrayResult, "")
+                    .groupBy(ScreeningSchool::getChestXrayResult);
+            case "tbHistory" -> wrapper.select(ScreeningSchool::getTbHistory)
+                    .isNotNull(ScreeningSchool::getTbHistory).ne(ScreeningSchool::getTbHistory, "")
+                    .groupBy(ScreeningSchool::getTbHistory);
+            case "closeContactHistory" -> wrapper.select(ScreeningSchool::getCloseContactHistory)
+                    .isNotNull(ScreeningSchool::getCloseContactHistory).ne(ScreeningSchool::getCloseContactHistory, "")
+                    .groupBy(ScreeningSchool::getCloseContactHistory);
+            case "suspiciousSymptoms" -> wrapper.select(ScreeningSchool::getSuspiciousSymptoms)
+                    .isNotNull(ScreeningSchool::getSuspiciousSymptoms).ne(ScreeningSchool::getSuspiciousSymptoms, "")
+                    .groupBy(ScreeningSchool::getSuspiciousSymptoms);
+            case "hasInfectionScreen" -> wrapper.select(ScreeningSchool::getHasInfectionScreen)
+                    .isNotNull(ScreeningSchool::getHasInfectionScreen).ne(ScreeningSchool::getHasInfectionScreen, "")
+                    .groupBy(ScreeningSchool::getHasInfectionScreen);
+            case "screenResult" -> wrapper.select(ScreeningSchool::getScreenResult)
+                    .isNotNull(ScreeningSchool::getScreenResult).ne(ScreeningSchool::getScreenResult, "")
+                    .groupBy(ScreeningSchool::getScreenResult);
+            default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+    }
+
+    private String extractDistinctValue(ScreeningSchool row, String field) {
+        return switch (field) {
+            case "gender" -> row.getGender();
+            case "year" -> row.getYear();
+            case "city" -> row.getCity();
+            case "district" -> row.getDistrict();
+            case "ethnicity" -> row.getEthnicity();
+            case "idType" -> row.getIdType();
+            case "schoolType" -> row.getSchoolType();
+            case "screenMethod" -> row.getScreenMethod();
+            case "infectionResult" -> row.getInfectionResult();
+            case "diagnosisFirst" -> row.getDiagnosisFirst();
+            case "hasChestXray" -> row.getHasChestXray();
+            case "chestXrayResult" -> row.getChestXrayResult();
+            case "tbHistory" -> row.getTbHistory();
+            case "closeContactHistory" -> row.getCloseContactHistory();
+            case "suspiciousSymptoms" -> row.getSuspiciousSymptoms();
+            case "hasInfectionScreen" -> row.getHasInfectionScreen();
+            case "screenResult" -> row.getScreenResult();
+            default -> null;
+        };
     }
 }

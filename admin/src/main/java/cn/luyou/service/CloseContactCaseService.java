@@ -59,4 +59,7 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
                                          String columnFilters, String formatIssue);
 
     CloseContactCase getAccessibleById(Long id);
+
+    /** 表头 Excel 式筛选：某列实际去重值（叠加密接个案权限范围） */
+    List<String> listDistinctColumnValues(String field);
 }

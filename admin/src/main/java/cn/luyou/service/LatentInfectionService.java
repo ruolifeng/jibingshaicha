@@ -125,6 +125,13 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /** 批量级联删除潜伏感染记录 */
     void batchDeleteCascade(List<Long> ids);
 
+    /** 表头 Excel 式筛选：某列实际去重值（叠加潜伏权限与 populationType 范围） */
+    List<String> listDistinctColumnValues(String field, String populationType, Integer archived, String referralResult);
+
+    default List<String> listDistinctColumnValues(String field, String populationType, Integer archived) {
+        return listDistinctColumnValues(field, populationType, archived, null);
+    }
+
     String ARCHIVE_REMARK_TRANSFERRED_OUT = "已转出";
     String ARCHIVE_REMARK_TRANSFER_PENDING = "转出待确认";
 

@@ -28,6 +28,7 @@ import cn.luyou.service.ScreeningKeyPopulationService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.IdentityFormatFilterSupport;
@@ -101,10 +102,15 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     );
     private static final Set<String> COLUMN_FILTER_EQ_FIELDS = Set.of(
             "gender", "diagnosisFirst", "infectionResult", "hasChestXray", "chestXrayResult",
-            "screenMethod", "year", "city", "district", "ethnicity", "idType",
+            "screenMethod", "year", "city", "district", "ethnicity", "idType", "townshipCommunity",
             "crowdCategoryClose", "crowdCategoryStudent", "crowdCategoryTeacher",
             "crowdCategoryElder", "crowdCategoryDiabetes", "crowdCategoryDual",
             "crowdCategoryTbHist", "crowdCategoryNormal", "hasSuspiciousSymptoms", "screenResult"
+    );
+    /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
+    private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
+            "gender", "district", "city", "year", "ethnicity", "idType", "screenMethod",
+            "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult", "townshipCommunity"
     );
 
     private static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
@@ -162,7 +168,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     }
 
     @Override
-    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean cwonfirmSkipInvalid) {
+    public ImportResult uploadAndParse(MultipartFile file, String sourceType, boolean overwrite, boolean confirmSkipInvalid) {
         return uploadAndParse(file, sourceType, overwrite, confirmSkipInvalid, false);
     }
 
@@ -583,8 +589,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 .eq(StrUtil.isNotBlank(idNumber), ScreeningKeyPopulation::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), ScreeningKeyPopulation::getPhone, phone)
                 .eq(StrUtil.isNotBlank(district), ScreeningKeyPopulation::getDistrict, district)
-                .like(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
-                .like(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
+                .eq(StrUtil.isNotBlank(townshipCommunity), ScreeningKeyPopulation::getTownshipCommunity, townshipCommunity)
+                .eq(StrUtil.isNotBlank(screenMethod), ScreeningKeyPopulation::getScreenMethod, screenMethod)
                 .eq(isLatent != null, ScreeningKeyPopulation::getIsLatent, isLatent)
                 .like(StrUtil.isNotBlank(creatorUsername), ScreeningKeyPopulation::getCreatorUsername, creatorUsername)
                 .eq(StrUtil.isNotBlank(hasChestXray), ScreeningKeyPopulation::getHasChestXray, hasChestXray)
@@ -621,7 +627,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 case "idNumber" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getIdNumber, value);
                 case "phone" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getPhone, value);
                 case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getEthnicity, value);
-                case "townshipCommunity" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getTownshipCommunity, value);
+                case "townshipCommunity" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getTownshipCommunity, value);
                 case "currentAddress" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getCurrentAddress, value);
                 case "householdAddress" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getHouseholdAddress, value);
                 case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getIdType, value);
@@ -894,5 +900,81 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
 
     private boolean isBlankKeyPopulationRow(ScreeningKeyPopulation data) {
         return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
+    }
+
+    @Override
+    public List<String> listDistinctColumnValues(String field, String sourceType) {
+        if (StrUtil.isBlank(field) || !COLUMN_DISTINCT_FIELDS.contains(field)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        String resolvedSource = StrUtil.isBlank(sourceType) ? "keyPopulation" : sourceType;
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ScreeningKeyPopulation::getSourceType, resolvedSource);
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        applyDistinctSelect(wrapper, field);
+        return ColumnDistinctSupport.normalize(list(wrapper).stream()
+                .map(row -> extractDistinctValue(row, field))
+                .toList());
+    }
+
+    private void applyDistinctSelect(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String field) {
+        switch (field) {
+            case "gender" -> wrapper.select(ScreeningKeyPopulation::getGender)
+                    .isNotNull(ScreeningKeyPopulation::getGender).ne(ScreeningKeyPopulation::getGender, "")
+                    .groupBy(ScreeningKeyPopulation::getGender);
+            case "district" -> wrapper.select(ScreeningKeyPopulation::getDistrict)
+                    .isNotNull(ScreeningKeyPopulation::getDistrict).ne(ScreeningKeyPopulation::getDistrict, "")
+                    .groupBy(ScreeningKeyPopulation::getDistrict);
+            case "city" -> wrapper.select(ScreeningKeyPopulation::getCity)
+                    .isNotNull(ScreeningKeyPopulation::getCity).ne(ScreeningKeyPopulation::getCity, "")
+                    .groupBy(ScreeningKeyPopulation::getCity);
+            case "year" -> wrapper.select(ScreeningKeyPopulation::getYear)
+                    .isNotNull(ScreeningKeyPopulation::getYear).ne(ScreeningKeyPopulation::getYear, "")
+                    .groupBy(ScreeningKeyPopulation::getYear);
+            case "ethnicity" -> wrapper.select(ScreeningKeyPopulation::getEthnicity)
+                    .isNotNull(ScreeningKeyPopulation::getEthnicity).ne(ScreeningKeyPopulation::getEthnicity, "")
+                    .groupBy(ScreeningKeyPopulation::getEthnicity);
+            case "idType" -> wrapper.select(ScreeningKeyPopulation::getIdType)
+                    .isNotNull(ScreeningKeyPopulation::getIdType).ne(ScreeningKeyPopulation::getIdType, "")
+                    .groupBy(ScreeningKeyPopulation::getIdType);
+            case "screenMethod" -> wrapper.select(ScreeningKeyPopulation::getScreenMethod)
+                    .isNotNull(ScreeningKeyPopulation::getScreenMethod).ne(ScreeningKeyPopulation::getScreenMethod, "")
+                    .groupBy(ScreeningKeyPopulation::getScreenMethod);
+            case "infectionResult" -> wrapper.select(ScreeningKeyPopulation::getInfectionResult)
+                    .isNotNull(ScreeningKeyPopulation::getInfectionResult).ne(ScreeningKeyPopulation::getInfectionResult, "")
+                    .groupBy(ScreeningKeyPopulation::getInfectionResult);
+            case "diagnosisFirst" -> wrapper.select(ScreeningKeyPopulation::getDiagnosisFirst)
+                    .isNotNull(ScreeningKeyPopulation::getDiagnosisFirst).ne(ScreeningKeyPopulation::getDiagnosisFirst, "")
+                    .groupBy(ScreeningKeyPopulation::getDiagnosisFirst);
+            case "hasChestXray" -> wrapper.select(ScreeningKeyPopulation::getHasChestXray)
+                    .isNotNull(ScreeningKeyPopulation::getHasChestXray).ne(ScreeningKeyPopulation::getHasChestXray, "")
+                    .groupBy(ScreeningKeyPopulation::getHasChestXray);
+            case "chestXrayResult" -> wrapper.select(ScreeningKeyPopulation::getChestXrayResult)
+                    .isNotNull(ScreeningKeyPopulation::getChestXrayResult).ne(ScreeningKeyPopulation::getChestXrayResult, "")
+                    .groupBy(ScreeningKeyPopulation::getChestXrayResult);
+            case "townshipCommunity" -> wrapper.select(ScreeningKeyPopulation::getTownshipCommunity)
+                    .isNotNull(ScreeningKeyPopulation::getTownshipCommunity).ne(ScreeningKeyPopulation::getTownshipCommunity, "")
+                    .groupBy(ScreeningKeyPopulation::getTownshipCommunity);
+            default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+    }
+
+    private String extractDistinctValue(ScreeningKeyPopulation row, String field) {
+        return switch (field) {
+            case "gender" -> row.getGender();
+            case "district" -> row.getDistrict();
+            case "city" -> row.getCity();
+            case "year" -> row.getYear();
+            case "ethnicity" -> row.getEthnicity();
+            case "idType" -> row.getIdType();
+            case "screenMethod" -> row.getScreenMethod();
+            case "infectionResult" -> row.getInfectionResult();
+            case "diagnosisFirst" -> row.getDiagnosisFirst();
+            case "hasChestXray" -> row.getHasChestXray();
+            case "chestXrayResult" -> row.getChestXrayResult();
+            case "townshipCommunity" -> row.getTownshipCommunity();
+            default -> null;
+        };
     }
 }

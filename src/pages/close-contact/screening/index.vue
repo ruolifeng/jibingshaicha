@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
@@ -37,6 +38,7 @@ import {
   deleteScreeningCloseContactApi,
   deleteScreeningCloseContactByFilterApi,
   exportScreeningCloseContactApi,
+  getScreeningCloseContactColumnDistinctApi,
   getScreeningCloseContactListApi,
   submitThreeMonthCheckApi,
   updateScreeningCloseContactApi,
@@ -48,6 +50,13 @@ const { paginationData, handleCurrentChange, handleSizeChange } = usePagination(
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
 const finalScreeningFilterOptions = CC_FINAL_SCREENING_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+
+const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
+  const { data } = await getScreeningCloseContactColumnDistinctApi(field)
+  return Array.isArray(data) ? data : []
+})
+const loadDistrictOptions = () => loadDistinct("district")
+const loadFinalScreeningOptions = () => loadDistinct("finalScreeningResult")
 
 const loading = ref(false)
 const batchDeleting = ref(false)
@@ -620,7 +629,16 @@ async function handleThreeMonthSubmit() {
           <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
         </el-form-item>
         <el-form-item label="区县">
-          <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
+          <el-select
+            v-model="searchForm.district"
+            filterable
+            clearable
+            placeholder="请选择区县"
+            style="width: 160px"
+            @visible-change="(v: boolean) => v && loadDistrictOptions()"
+          >
+            <el-option v-for="item in distinctValues('district').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="联系电话">
           <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
@@ -741,6 +759,9 @@ async function handleThreeMonthSubmit() {
             <template #header>
               <TableHeaderFilter
                 label="区/县"
+                type="select"
+                :source-values="distinctValues('district').value"
+                :load-options="loadDistrictOptions"
                 :model-value="columnFilters.district"
                 @change="(v) => { setFilter('district', v); handleSearch() }"
               />
@@ -797,6 +818,8 @@ async function handleThreeMonthSubmit() {
                 label="最终筛查结果"
                 type="select"
                 :options="finalScreeningFilterOptions"
+                :source-values="distinctValues('finalScreeningResult').value"
+                :load-options="loadFinalScreeningOptions"
                 :model-value="columnFilters.finalScreeningResult"
                 @change="(v) => { setFilter('finalScreeningResult', v); handleSearch() }"
               />

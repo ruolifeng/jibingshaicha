@@ -146,6 +146,15 @@ export function getScreeningKeyPopulationDetailApi(id: number) {
   })
 }
 
+/** 表头 Excel 式筛选：某列实际出现过的去重值 */
+export function getScreeningKeyPopulationColumnDistinctApi(field: string, sourceType = "keyPopulation") {
+  return request<ApiResponseData<string[]>>({
+    url: "screening/key-population/column-distinct",
+    method: "get",
+    params: { field, sourceType }
+  })
+}
+
 /** 分页查询重点人群筛查数据 */
 export function getScreeningKeyPopulationListApi(params: {
   page: number

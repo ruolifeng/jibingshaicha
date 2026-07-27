@@ -132,6 +132,12 @@ public class ScreeningCloseContactController {
         return ResultRes.success(screeningCloseContactService.deleteAll());
     }
 
+    @Operation(summary = "表头筛选：某列实际去重值（Excel 式）")
+    @GetMapping("/column-distinct")
+    public ResultResponse<List<String>> columnDistinct(@RequestParam String field) {
+        return ResultRes.success(screeningCloseContactService.listDistinctColumnValues(field));
+    }
+
     @Operation(summary = "按ID查询密接人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningCloseContact> detail(@PathVariable Long id) {

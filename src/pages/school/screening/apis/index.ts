@@ -121,6 +121,15 @@ export function getScreeningSchoolDetailApi(id: number) {
   })
 }
 
+/** 表头 Excel 式筛选：某列实际出现过的去重值 */
+export function getScreeningSchoolColumnDistinctApi(field: string) {
+  return request<ApiResponseData<string[]>>({
+    url: "screening/school/column-distinct",
+    method: "get",
+    params: { field }
+  })
+}
+
 /** 分页查询学校人群筛查数据 */
 export function getScreeningSchoolListApi(params: {
   page: number

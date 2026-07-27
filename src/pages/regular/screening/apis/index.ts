@@ -1,6 +1,7 @@
 import type { ImportConfirmOptions, ImportResultData } from "@@/composables/useImportIdentityConfirm"
 import type { ScreeningKeyPopulationQueryParams } from "@/pages/key-population/screening/apis"
 import { request } from "@/http/axios"
+import { getScreeningKeyPopulationColumnDistinctApi } from "@/pages/key-population/screening/apis"
 
 /** 上传疫情筛查 Excel（复用重点人群接口，sourceType=regular） */
 export function uploadScreeningRegularApi(file: File, options: ImportConfirmOptions = {}) {
@@ -100,6 +101,11 @@ export function getScreeningRegularDetailApi(id: number) {
     url: `screening/key-population/${id}`,
     method: "get"
   })
+}
+
+/** 表头 Excel 式筛选：某列实际出现过的去重值（sourceType=regular） */
+export function getScreeningRegularColumnDistinctApi(field: string) {
+  return getScreeningKeyPopulationColumnDistinctApi(field, "regular")
 }
 
 /** 分页查询疫情筛查数据 */
