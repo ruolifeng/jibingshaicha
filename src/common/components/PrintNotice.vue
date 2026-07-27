@@ -176,24 +176,20 @@ function handlePrint() {
           </tr>
         </tbody>
       </table>
-      <table class="notice-footer-table" border="0" cellspacing="0" cellpadding="0">
-        <tbody>
-          <tr>
-            <td>
-              <span class="footer-label">发送单位：</span>
-              <span class="party-text">{{ noticeData?.senderOrgName || senderParty || "___________" }}</span>
-            </td>
-            <td>
-              <span class="footer-label">接收单位签收：</span>
-              <span class="party-text">{{ noticeData?.receiverOrgName || receiverParty || "___________" }}</span>
-            </td>
-            <td>
-              <span class="footer-label">签收日期：</span>
-              <span class="party-text">{{ formatNoticeSentTime(noticeData?.confirmedTime) || "___________" }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="notice-footer">
+        <div class="notice-footer__item notice-footer__item--wide">
+          <span class="footer-label">发送单位：</span>
+          <span class="party-text">{{ noticeData?.senderOrgName || senderParty || "___________" }}</span>
+        </div>
+        <div class="notice-footer__item notice-footer__item--wide">
+          <span class="footer-label">接收单位签收：</span>
+          <span class="party-text">{{ noticeData?.receiverOrgName || receiverParty || "___________" }}</span>
+        </div>
+        <div class="notice-footer__item notice-footer__item--date">
+          <span class="footer-label">签收日期：</span>
+          <span class="party-text">{{ formatNoticeSentTime(noticeData?.confirmedTime) || "___________" }}</span>
+        </div>
+      </div>
     </div>
     <template #footer>
       <el-button @click="emit('update:visible', false)">
@@ -244,29 +240,34 @@ function handlePrint() {
   }
 }
 
-.notice-footer-table {
-  width: 100%;
+.notice-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   margin-top: 24px;
-  border-collapse: collapse;
-  table-layout: fixed;
+  font-size: 12px;
+  line-height: 1.5;
+}
 
-  td {
-    width: 33.33%;
-    padding: 4px 8px 4px 0;
-    font-size: 13px;
-    vertical-align: top;
-    word-break: keep-all;
-    overflow-wrap: break-word;
-  }
+.notice-footer__item {
+  min-width: 0;
+}
 
-  .footer-label {
-    white-space: nowrap;
-    font-weight: 500;
-  }
+.notice-footer__item--wide {
+  flex: 1 1 0;
+}
 
-  .party-text {
-    word-break: keep-all;
-    overflow-wrap: break-word;
-  }
+.notice-footer__item--date {
+  flex: 0 0 150px;
+}
+
+.footer-label {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.party-text {
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 </style>

@@ -38,6 +38,8 @@ const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(a
 const loadDistrictOptions = () => loadDistinct("district")
 const loadGenderOptions = () => loadDistinct("gender")
 const loadTownshipOptions = () => loadDistinct("townshipCommunity")
+const loadEntryUnitOptions = () => loadDistinct("entryUnit")
+const loadCreatorOptions = () => loadDistinct("creatorUsername")
 const loadScreenMethodOptions = () => loadDistinct("screenMethod")
 const loadInfectionResultOptions = () => loadDistinct("infectionResult")
 const loadDiagnosisFirstOptions = () => loadDistinct("diagnosisFirst")
@@ -546,10 +548,28 @@ watch(
           />
         </el-form-item>
         <el-form-item label="录入单位">
-          <el-input v-model="searchForm.entryUnit" placeholder="请输入" clearable style="width: 160px" />
+          <el-select
+            v-model="searchForm.entryUnit"
+            filterable
+            clearable
+            placeholder="请选择录入单位"
+            style="width: 180px"
+            @visible-change="(v: boolean) => v && loadEntryUnitOptions()"
+          >
+            <el-option v-for="item in distinctValues('entryUnit').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="录入用户">
-          <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 160px" />
+          <el-select
+            v-model="searchForm.creatorUsername"
+            filterable
+            clearable
+            placeholder="请选择录入用户"
+            style="width: 180px"
+            @visible-change="(v: boolean) => v && loadCreatorOptions()"
+          >
+            <el-option v-for="item in distinctValues('creatorUsername').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="格式问题">
           <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
@@ -685,6 +705,9 @@ watch(
           <template #header>
             <TableHeaderFilter
               label="录入用户"
+              type="select"
+              :source-values="distinctValues('creatorUsername').value"
+              :load-options="loadCreatorOptions"
               :model-value="columnFilters.creatorUsername"
               @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
             />
