@@ -65,8 +65,8 @@
   padding: 7px 10px;
   font-size: 13px;
   vertical-align: middle;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .print-area .visit-table th,
@@ -135,9 +135,35 @@
 .print-area .print-footer {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   margin-top: 20px;
   font-size: 13px;
   color: #303133;
+  flex-wrap: nowrap;
+}
+
+.print-area .print-footer > div {
+  flex: 1 1 0;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.print-area .notice-footer-table {
+  width: 100%;
+  margin-top: 20px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.print-area .notice-footer-table td {
+  width: 33.33%;
+  padding: 4px 8px 4px 0;
+  font-size: 13px;
+  vertical-align: top;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  border: none;
 }
 
 .print-area .print-attachments {

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { formatNoticeSentTime } from "@@/utils/patient"
 import { printElement } from "@@/utils/print"
+import "@@/assets/styles/print-forms.css"
 
 /** 通用通知单打印组件（潜伏者通知单 / 患者通知单） */
 const props = defineProps<{
@@ -15,6 +16,17 @@ const emit = defineEmits<{
 
 const title = computed(() => props.noticeType === "patient" ? "肺结核患者管理通知单" : "结核病潜伏感染者预防性治疗通知单")
 const isPatient = computed(() => props.noticeType === "patient")
+
+/** 姓名（单位）展示，与详情弹窗一致 */
+function formatParty(name?: string | null, org?: string | null): string {
+  const n = (name || "").trim()
+  const o = (org || "").trim()
+  if (n && o) return `${n}（${o}）`
+  return n || o || ""
+}
+
+const senderParty = computed(() => formatParty(props.noticeData?.senderName, props.noticeData?.senderOrgName))
+const receiverParty = computed(() => formatParty(props.noticeData?.receiverName, props.noticeData?.receiverOrgName))
 
 function handlePrint() {
   printElement("print-notice-content", title.value)
@@ -48,7 +60,7 @@ function handlePrint() {
           </tr>
           <tr>
             <th>身份证号</th>
-            <td colspan="3">
+            <td colspan="3" class="party-cell">
               {{ noticeData?.idNumber }}
             </td>
           </tr>
@@ -60,13 +72,13 @@ function handlePrint() {
           </tr>
           <tr>
             <th>现居住地址</th>
-            <td colspan="3">
+            <td colspan="3" class="party-cell">
               {{ noticeData?.currentAddress }}
             </td>
           </tr>
           <tr>
             <th>户籍地址</th>
-            <td colspan="3">
+            <td colspan="3" class="party-cell">
               {{ noticeData?.householdAddress }}
             </td>
           </tr>
@@ -74,7 +86,9 @@ function handlePrint() {
             <th>人群分类</th>
             <td>{{ noticeData?.crowdCategory }}</td>
             <th>治疗方案</th>
-            <td>{{ noticeData?.treatmentPlan }}</td>
+            <td class="party-cell">
+              {{ noticeData?.treatmentPlan }}
+            </td>
           </tr>
           <template v-if="isPatient">
             <tr>
@@ -105,7 +119,9 @@ function handlePrint() {
             </tr>
             <tr>
               <th>检查结果</th>
-              <td>{{ noticeData?.infectionResultValue }}</td>
+              <td class="party-cell">
+                {{ noticeData?.infectionResultValue }}
+              </td>
               <th>胸片日期</th>
               <td>{{ noticeData?.chestXrayDate }}</td>
             </tr>
@@ -114,11 +130,13 @@ function handlePrint() {
             <th>胸片结果</th>
             <td>{{ noticeData?.chestXrayResult }}</td>
             <th>治疗机构</th>
-            <td>{{ noticeData?.treatmentInstitution }}</td>
+            <td class="party-cell">
+              {{ noticeData?.treatmentInstitution }}
+            </td>
           </tr>
           <tr v-if="isPatient">
             <th>服药管理单位</th>
-            <td colspan="3">
+            <td colspan="3" class="party-cell">
               {{ noticeData?.medicationManagementUnit }}
             </td>
           </tr>
@@ -128,6 +146,16 @@ function handlePrint() {
             <th>发送时间</th>
             <td>{{ formatNoticeSentTime(noticeData?.sentTime) }}</td>
           </tr>
+          <tr>
+            <th>下发人</th>
+            <td class="party-cell">
+              {{ senderParty || "—" }}
+            </td>
+            <th>接收人</th>
+            <td class="party-cell">
+              {{ receiverParty || "—" }}
+            </td>
+          </tr>
           <tr v-if="noticeData?.confirmedTime">
             <th>接收时间</th>
             <td colspan="3">
@@ -136,23 +164,36 @@ function handlePrint() {
           </tr>
           <tr v-if="isPatient">
             <th>备注</th>
-            <td colspan="3">
+            <td colspan="3" class="party-cell">
               {{ noticeData?.remark || "" }}
             </td>
           </tr>
           <tr v-if="noticeData?.otherNotes">
             <th>其他注意事项</th>
-            <td colspan="3">
+            <td colspan="3" class="party-cell">
               {{ noticeData?.otherNotes }}
             </td>
           </tr>
         </tbody>
       </table>
-      <div class="print-footer">
-        <div>发送单位：{{ noticeData?.senderOrgName || '___________' }}</div>
-        <div>接收单位签收：{{ noticeData?.receiverOrgName || noticeData?.receiverName || '___________' }}</div>
-        <div>签收日期：{{ formatNoticeSentTime(noticeData?.confirmedTime) || '___________' }}</div>
-      </div>
+      <table class="notice-footer-table" border="0" cellspacing="0" cellpadding="0">
+        <tbody>
+          <tr>
+            <td>
+              <span class="footer-label">发送单位：</span>
+              <span class="party-text">{{ noticeData?.senderOrgName || senderParty || "___________" }}</span>
+            </td>
+            <td>
+              <span class="footer-label">接收单位签收：</span>
+              <span class="party-text">{{ noticeData?.receiverOrgName || receiverParty || "___________" }}</span>
+            </td>
+            <td>
+              <span class="footer-label">签收日期：</span>
+              <span class="party-text">{{ formatNoticeSentTime(noticeData?.confirmedTime) || "___________" }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <template #footer>
       <el-button @click="emit('update:visible', false)">
@@ -180,26 +221,52 @@ function handlePrint() {
 .notice-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 
   th,
   td {
-    border: 1px solid #ddd;
-    padding: 8px 12px;
-    font-size: 14px;
+    border: 1px solid #333;
+    padding: 8px 10px;
+    font-size: 13px;
+    vertical-align: middle;
   }
 
   th {
     background: #f5f7fa;
-    width: 120px;
+    width: 88px;
     white-space: nowrap;
+  }
+
+  /* 避免中文姓名/单位被逐字拆断换行 */
+  .party-cell {
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
 }
 
-.print-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 32px;
-  font-size: 14px;
-  color: #303133;
+.notice-footer-table {
+  width: 100%;
+  margin-top: 24px;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  td {
+    width: 33.33%;
+    padding: 4px 8px 4px 0;
+    font-size: 13px;
+    vertical-align: top;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  .footer-label {
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .party-text {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
 }
 </style>
