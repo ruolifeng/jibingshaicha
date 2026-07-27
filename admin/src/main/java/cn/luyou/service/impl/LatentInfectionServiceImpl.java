@@ -43,6 +43,7 @@ import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
@@ -114,6 +115,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
             "infectionResult", "diagnosisFirst", "diagnosisResult", "populationType",
             "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark"
+    );
+    /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
+    private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
+            "gender", "populationType", "infectionResult", "diagnosisFirst", "diagnosisResult",
+            "hasChestXray", "chestXrayResult", "crowdCategory"
     );
 
     private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
@@ -1979,5 +1985,91 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             }
         }
         return headerIndex;
+    }
+
+    @Override
+    public List<String> listDistinctColumnValues(String field, String populationType, Integer archived, String referralResult) {
+        if (StrUtil.isBlank(field) || !COLUMN_DISTINCT_FIELDS.contains(field)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        int resolvedArchived = archived != null ? archived : 0;
+        LambdaQueryWrapper<LatentInfection> wrapper = buildDistinctScopeWrapper(populationType, resolvedArchived, referralResult);
+        applyDistinctSelect(wrapper, field);
+        return ColumnDistinctSupport.normalize(list(wrapper).stream()
+                .map(row -> extractDistinctValue(row, field))
+                .toList());
+    }
+
+    /** distinct 查询的基础权限与列表范围（与 queryPage 在管列表一致） */
+    private LambdaQueryWrapper<LatentInfection> buildDistinctScopeWrapper(String populationType, int archived, String referralResult) {
+        LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
+        if (StrUtil.isNotBlank(populationType)) {
+            wrapper.eq(LatentInfection::getPopulationType, populationType);
+        } else {
+            wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                    .or()
+                    .isNull(LatentInfection::getScreeningId));
+        }
+        wrapper.eq(LatentInfection::getArchived, archived);
+        if (archived == 0) {
+            wrapper.and(w -> w.isNull(LatentInfection::getArchiveRemark)
+                    .or()
+                    .ne(LatentInfection::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        }
+        wrapper.and(w -> w.isNull(LatentInfection::getDiagnosisResult)
+                .or()
+                .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
+        if ("pending".equals(referralResult)) {
+            wrapper.isNull(LatentInfection::getReferralResult);
+        } else if (StrUtil.isNotBlank(referralResult)) {
+            wrapper.eq(LatentInfection::getReferralResult, referralResult);
+        }
+        LatentScreeningLinkSupport.applyLinkedScreeningExistsFilter(wrapper);
+        dataScopeHelper.applyLatentScope(wrapper);
+        return wrapper;
+    }
+
+    private void applyDistinctSelect(LambdaQueryWrapper<LatentInfection> wrapper, String field) {
+        switch (field) {
+            case "gender" -> wrapper.select(LatentInfection::getGender)
+                    .isNotNull(LatentInfection::getGender).ne(LatentInfection::getGender, "")
+                    .groupBy(LatentInfection::getGender);
+            case "populationType" -> wrapper.select(LatentInfection::getPopulationType)
+                    .isNotNull(LatentInfection::getPopulationType).ne(LatentInfection::getPopulationType, "")
+                    .groupBy(LatentInfection::getPopulationType);
+            case "infectionResult" -> wrapper.select(LatentInfection::getInfectionResult)
+                    .isNotNull(LatentInfection::getInfectionResult).ne(LatentInfection::getInfectionResult, "")
+                    .groupBy(LatentInfection::getInfectionResult);
+            case "diagnosisFirst" -> wrapper.select(LatentInfection::getDiagnosisFirst)
+                    .isNotNull(LatentInfection::getDiagnosisFirst).ne(LatentInfection::getDiagnosisFirst, "")
+                    .groupBy(LatentInfection::getDiagnosisFirst);
+            case "diagnosisResult" -> wrapper.select(LatentInfection::getDiagnosisResult)
+                    .isNotNull(LatentInfection::getDiagnosisResult).ne(LatentInfection::getDiagnosisResult, "")
+                    .groupBy(LatentInfection::getDiagnosisResult);
+            case "hasChestXray" -> wrapper.select(LatentInfection::getHasChestXray)
+                    .isNotNull(LatentInfection::getHasChestXray).ne(LatentInfection::getHasChestXray, "")
+                    .groupBy(LatentInfection::getHasChestXray);
+            case "chestXrayResult" -> wrapper.select(LatentInfection::getChestXrayResult)
+                    .isNotNull(LatentInfection::getChestXrayResult).ne(LatentInfection::getChestXrayResult, "")
+                    .groupBy(LatentInfection::getChestXrayResult);
+            case "crowdCategory" -> wrapper.select(LatentInfection::getCrowdCategory)
+                    .isNotNull(LatentInfection::getCrowdCategory).ne(LatentInfection::getCrowdCategory, "")
+                    .groupBy(LatentInfection::getCrowdCategory);
+            default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+    }
+
+    private String extractDistinctValue(LatentInfection row, String field) {
+        return switch (field) {
+            case "gender" -> row.getGender();
+            case "populationType" -> row.getPopulationType();
+            case "infectionResult" -> row.getInfectionResult();
+            case "diagnosisFirst" -> row.getDiagnosisFirst();
+            case "diagnosisResult" -> row.getDiagnosisResult();
+            case "hasChestXray" -> row.getHasChestXray();
+            case "chestXrayResult" -> row.getChestXrayResult();
+            case "crowdCategory" -> row.getCrowdCategory();
+            default -> null;
+        };
     }
 }

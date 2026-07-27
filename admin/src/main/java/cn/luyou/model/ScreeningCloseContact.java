@@ -460,8 +460,8 @@ public class ScreeningCloseContact extends BaseEntity {
     @ExcelIgnore
     private Long creatorId;
 
-    /** 录入用户名 */
-    @ExcelIgnore
+    /** 录入用户名（导出末尾追加列，导入模板不含） */
+    @ExcelProperty(index = 72)
     private String creatorUsername;
 
     /** 是否已发送通知单（非数据库字段，查询时动态填充） */

@@ -14,6 +14,19 @@ export function getLatentAggregateListApi(params: Record<string, any>) {
   })
 }
 
+/** 表头 Excel 式筛选：某列实际出现过的去重值 */
+export function getLatentColumnDistinctApi(
+  field: string,
+  populationType?: string,
+  referralResult = "latent"
+) {
+  return request<ApiResponseData<string[]>>({
+    url: "latent/column-distinct",
+    method: "get",
+    params: { field, populationType, archived: 0, referralResult }
+  })
+}
+
 /** 潜伏感染详情 */
 export function getLatentDetailApi(id: number) {
   return request<ApiResponseData<any>>({ url: `latent/${id}`, method: "get" })

@@ -105,4 +105,7 @@ public interface ScreeningKeyPopulationService extends IService<ScreeningKeyPopu
 
     /** 更新筛查记录（同步重新计算潜伏判定结果） */
     void updateScreening(ScreeningKeyPopulation data);
+
+    /** 表头 Excel 式筛选：某列实际去重值（叠加部门权限与 sourceType） */
+    List<String> listDistinctColumnValues(String field, String sourceType);
 }

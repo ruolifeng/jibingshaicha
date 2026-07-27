@@ -155,6 +155,14 @@ public class ScreeningKeyPopulationController {
         return ResultRes.success(screeningKeyPopulationService.deleteAll(sourceType));
     }
 
+    @Operation(summary = "表头筛选：某列实际去重值（Excel 式）")
+    @GetMapping("/column-distinct")
+    public ResultResponse<List<String>> columnDistinct(
+            @RequestParam String field,
+            @RequestParam(value = "sourceType", defaultValue = "keyPopulation") String sourceType) {
+        return ResultRes.success(screeningKeyPopulationService.listDistinctColumnValues(field, sourceType));
+    }
+
     @Operation(summary = "按 ID 查询重点人群筛查记录详情")
     @GetMapping("/{id}")
     public ResultResponse<ScreeningKeyPopulation> detail(@PathVariable Long id) {

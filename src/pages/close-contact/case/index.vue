@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
@@ -17,6 +18,7 @@ import {
   deleteCloseContactCaseByFilterApi,
   downloadCloseContactCaseTemplateApi,
   exportCloseContactCaseApi,
+  getCloseContactCaseColumnDistinctApi,
   getCloseContactCaseListApi,
   updateCloseContactCaseApi,
   uploadCloseContactCaseApi
@@ -31,14 +33,48 @@ const pathogenFilterOptions = PATHOGEN_RESULT_FILTER_OPTIONS.map(item => ({ text
 /** 支持表头筛选的列（与后端 columnFilters 白名单对齐） */
 const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "select", options?: { text: string, value: string }[] }> = {
   creatorUsername: { label: "录入用户" },
-  district: { label: "区/县" },
+  district: { label: "区/县", type: "select" },
   name: { label: "接触者姓名" },
   idNumber: { label: "身份证号" },
   phone: { label: "接触者电话" },
   sourcePatientName: { label: "患者姓名" },
   sourcePatientBacteriologyResult: { label: "病原学结果", type: "select", options: pathogenFilterOptions },
-  finalScreeningResult: { label: "最终筛查结果", type: "select", options: diagnosisFilterOptions }
+  finalScreeningResult: { label: "最终筛查结果", type: "select", options: diagnosisFilterOptions },
+  infectionCheckResult: { label: "感染检测结果", type: "select" },
+  imagingResult: { label: "影像结果", type: "select" },
+  sputumCheckResult: { label: "痰检结果", type: "select" },
+  hasPreventiveTreatment: { label: "是否预防性治疗", type: "select", options: HAS_PREVENTIVE_TREATMENT_OPTIONS.map(item => ({ text: item.label, value: item.value })) }
 }
+
+const DISTINCT_SELECT_FIELDS = new Set([
+  "district",
+  "city",
+  "year",
+  "gender",
+  "sourcePatientBacteriologyResult",
+  "finalScreeningResult",
+  "infectionCheckResult",
+  "imagingResult",
+  "sputumCheckResult",
+  "hasPreventiveTreatment"
+])
+
+const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
+  const { data } = await getCloseContactCaseColumnDistinctApi(field)
+  return Array.isArray(data) ? data : []
+})
+
+function getDistinctSourceValues(field: string) {
+  return DISTINCT_SELECT_FIELDS.has(field) ? distinctValues(field).value : []
+}
+
+function loadDistinctField(field: string) {
+  if (DISTINCT_SELECT_FIELDS.has(field)) {
+    return loadDistinct(field)
+  }
+}
+
+const loadDistrictSearchOptions = () => loadDistinct("district")
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -426,7 +462,16 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <el-input v-model="searchForm.phone" placeholder="接触者电话" clearable />
         </el-form-item>
         <el-form-item label="区县">
-          <el-input v-model="searchForm.district" placeholder="区/县" clearable />
+          <el-select
+            v-model="searchForm.district"
+            filterable
+            clearable
+            placeholder="请选择区/县"
+            style="width: 160px"
+            @visible-change="(v: boolean) => v && loadDistrictSearchOptions()"
+          >
+            <el-option v-for="item in distinctValues('district').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="录入账号" clearable />
@@ -576,6 +621,8 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                 :label="getHeaderFilter(col.field)!.label"
                 :type="getHeaderFilter(col.field)!.type || 'text'"
                 :options="getHeaderFilter(col.field)!.options || []"
+                :source-values="getDistinctSourceValues(col.field)"
+                :load-options="() => loadDistinctField(col.field)"
                 :model-value="columnFilters[col.field]"
                 @change="(v) => onHeaderFilterChange(col.field, v)"
               />

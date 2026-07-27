@@ -11,7 +11,7 @@ DB_NAME="${DB_NAME:-disease_monitor}"
 DB_USER="${DB_USER:-root}"
 DB_PASSWORD="${DB_PASSWORD:?请设置 DB_PASSWORD 环境变量}"
 
-MYSQL=(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME")
+MYSQL=(mysql --default-character-set=utf8mb4 -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME")
 
 if [ ! -d "$MIGRATION_DIR" ]; then
   echo "迁移目录不存在: $MIGRATION_DIR" >&2

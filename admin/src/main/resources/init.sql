@@ -1544,7 +1544,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (426, 'patientManagement:history',      '历史患者',             1, 420, 6),
 (427, 'patientManagement:referral',     '转出',                 2, 462, 2),
 (475, 'patientManagement:notice:fill',  '填写通知单',           2, 421, 1),
-(428, 'patientManagement:delete',       '删除患者',             2, 421, 2),
+(428, 'patientManagement:delete',       '删除患者',             2, 462, 3),
 (468, 'patientManagement:pickup',       '填写领药',             2, 420, 7);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
@@ -3006,6 +3006,20 @@ UPDATE `permission` child
 SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 2, child.`name` = '删除患者'
 WHERE child.`code` = 'patientManagement:delete';
 
+-- V93：删除患者挂到在管总览（覆盖上方 V67 挂载位置）
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:overview'
+SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 3, child.`name` = '删除患者'
+WHERE child.`code` = 'patientManagement:delete';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE parent.`code` = 'patientManagement:overview'
+  AND p.`code` = 'patientManagement:delete';
+
 INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
 SELECT DISTINCT rp.role, p.id
 FROM `role_permission` rp
@@ -3512,3 +3526,26 @@ WHERE `deleted` = 0
   AND (`archived` = 0 OR `archived` IS NULL);
 
 -- V92 appended
+
+-- ==================== V93：删除患者挂到在管总览 ====================
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'patientManagement:overview'
+SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 3, child.`name` = '删除患者'
+WHERE child.`code` = 'patientManagement:delete';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id
+         CROSS JOIN `permission` p
+WHERE parent.`code` = 'patientManagement:overview'
+  AND p.`code` = 'patientManagement:delete';
+
+-- V93 appended
+
+-- ==================== V94：修复短信配置权限名称乱码 ====================
+UPDATE `permission`
+SET `name` = '短信配置'
+WHERE `code` = 'system:sms';
+
+-- V94 appended

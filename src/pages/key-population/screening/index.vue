@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import RecommendCreateDialog from "@@/components/RecommendCreateDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
@@ -11,7 +12,7 @@ import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
-import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteAllScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, deleteScreeningKeyPopulationByFilterApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationListApi, previewScreeningKeyPopulationUploadApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
+import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteAllScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, deleteScreeningKeyPopulationByFilterApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationColumnDistinctApi, getScreeningKeyPopulationListApi, previewScreeningKeyPopulationUploadApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination({
   pageSizes: [...PAGE_SIZE_OPTIONS]
@@ -29,6 +30,17 @@ const screenMethodFilterOptions = [
   { text: "IGRA", value: "IGRA" },
   { text: "EC", value: "EC" }
 ]
+
+const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
+  const { data } = await getScreeningKeyPopulationColumnDistinctApi(field)
+  return Array.isArray(data) ? data : []
+})
+const loadDistrictOptions = () => loadDistinct("district")
+const loadGenderOptions = () => loadDistinct("gender")
+const loadTownshipOptions = () => loadDistinct("townshipCommunity")
+const loadScreenMethodOptions = () => loadDistinct("screenMethod")
+const loadInfectionResultOptions = () => loadDistinct("infectionResult")
+const loadDiagnosisFirstOptions = () => loadDistinct("diagnosisFirst")
 
 const loading = ref(false)
 const batchDeleting = ref(false)
@@ -500,10 +512,28 @@ watch(
           <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
         </el-form-item>
         <el-form-item label="区县">
-          <el-input v-model="searchForm.district" placeholder="请输入区县" clearable />
+          <el-select
+            v-model="searchForm.district"
+            filterable
+            clearable
+            placeholder="请选择区县"
+            style="width: 160px"
+            @visible-change="(v: boolean) => v && loadDistrictOptions()"
+          >
+            <el-option v-for="item in distinctValues('district').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="乡镇/社区">
-          <el-input v-model="searchForm.townshipCommunity" placeholder="请输入乡镇/社区" clearable />
+          <el-select
+            v-model="searchForm.townshipCommunity"
+            filterable
+            clearable
+            placeholder="请选择乡镇/社区"
+            style="width: 180px"
+            @visible-change="(v: boolean) => v && loadTownshipOptions()"
+          >
+            <el-option v-for="item in distinctValues('townshipCommunity').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="感染筛查时间">
           <el-date-picker
@@ -675,6 +705,9 @@ watch(
           <template #header>
             <TableHeaderFilter
               label="区县"
+              type="select"
+              :source-values="distinctValues('district').value"
+              :load-options="loadDistrictOptions"
               :model-value="columnFilters.district"
               @change="(v) => { setFilter('district', v); handleSearch() }"
             />
@@ -686,6 +719,8 @@ watch(
               label="性别"
               type="select"
               :options="genderFilterOptions"
+              :source-values="distinctValues('gender').value"
+              :load-options="loadGenderOptions"
               :model-value="columnFilters.gender"
               @change="(v) => { setFilter('gender', v); handleSearch() }"
             />
@@ -718,6 +753,9 @@ watch(
           <template #header>
             <TableHeaderFilter
               label="乡镇/社区"
+              type="select"
+              :source-values="distinctValues('townshipCommunity').value"
+              :load-options="loadTownshipOptions"
               :model-value="columnFilters.townshipCommunity"
               @change="(v) => { setFilter('townshipCommunity', v); handleSearch() }"
             />
@@ -757,6 +795,8 @@ watch(
                 label="感染筛查方法"
                 type="select"
                 :options="screenMethodFilterOptions"
+                :source-values="distinctValues('screenMethod').value"
+                :load-options="loadScreenMethodOptions"
                 :model-value="columnFilters.screenMethod"
                 @change="(v) => { setFilter('screenMethod', v); handleSearch() }"
               />
@@ -771,6 +811,9 @@ watch(
             <template #header>
               <TableHeaderFilter
                 label="感染筛查结果"
+                type="select"
+                :source-values="distinctValues('infectionResult').value"
+                :load-options="loadInfectionResultOptions"
                 :model-value="columnFilters.infectionResult"
                 @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
               />
@@ -789,6 +832,8 @@ watch(
                 label="首次"
                 type="select"
                 :options="diagnosisFilterOptions"
+                :source-values="distinctValues('diagnosisFirst').value"
+                :load-options="loadDiagnosisFirstOptions"
                 :model-value="columnFilters.diagnosisFirst"
                 @change="(v) => { setFilter('diagnosisFirst', v); handleSearch() }"
               />

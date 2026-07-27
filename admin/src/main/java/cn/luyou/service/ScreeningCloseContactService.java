@@ -78,4 +78,7 @@ public interface ScreeningCloseContactService extends IService<ScreeningCloseCon
 
     /** 查询详情并补全随访到期日等衍生字段 */
     ScreeningCloseContact getEnrichedById(Long id);
+
+    /** 表头 Excel 式筛选：某列实际去重值（叠加部门权限） */
+    List<String> listDistinctColumnValues(String field);
 }

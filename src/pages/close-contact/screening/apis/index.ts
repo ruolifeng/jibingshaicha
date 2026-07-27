@@ -19,6 +19,15 @@ export function uploadScreeningCloseContactApi(file: File, options: ImportConfir
   })
 }
 
+/** 表头 Excel 式筛选：某列实际出现过的去重值 */
+export function getScreeningCloseContactColumnDistinctApi(field: string) {
+  return request<ApiResponseData<string[]>>({
+    url: "screening/close-contact/column-distinct",
+    method: "get",
+    params: { field }
+  })
+}
+
 /** 分页查询密接人群筛查数据 */
 export function getScreeningCloseContactListApi(params: {
   page: number

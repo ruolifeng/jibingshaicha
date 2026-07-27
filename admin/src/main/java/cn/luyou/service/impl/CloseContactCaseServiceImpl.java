@@ -13,6 +13,7 @@ import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
+import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.IdentityFormatFilterSupport;
@@ -62,6 +63,12 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             "sourcePatientName", "sourcePatientBacteriologyResult", "finalScreeningResult",
             "infectionCheckResult", "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
             "remark", "creatorUsername"
+    );
+    /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
+    private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
+            "district", "city", "year", "gender", "sourcePatientBacteriologyResult",
+            "finalScreeningResult", "infectionCheckResult", "imagingResult",
+            "sputumCheckResult", "hasPreventiveTreatment"
     );
 
     @Override
@@ -430,5 +437,71 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 && StrUtil.isBlank(data.getIdNumber())
                 && StrUtil.isBlank(data.getCity())
                 && StrUtil.isBlank(data.getDistrict()));
+    }
+
+    @Override
+    public List<String> listDistinctColumnValues(String field) {
+        if (StrUtil.isBlank(field) || !COLUMN_DISTINCT_FIELDS.contains(field)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        LambdaQueryWrapper<CloseContactCase> wrapper = new LambdaQueryWrapper<>();
+        applyDepartmentFilter(wrapper);
+        applyDistinctSelect(wrapper, field);
+        return ColumnDistinctSupport.normalize(list(wrapper).stream()
+                .map(row -> extractDistinctValue(row, field))
+                .toList());
+    }
+
+    private void applyDistinctSelect(LambdaQueryWrapper<CloseContactCase> wrapper, String field) {
+        switch (field) {
+            case "district" -> wrapper.select(CloseContactCase::getDistrict)
+                    .isNotNull(CloseContactCase::getDistrict).ne(CloseContactCase::getDistrict, "")
+                    .groupBy(CloseContactCase::getDistrict);
+            case "city" -> wrapper.select(CloseContactCase::getCity)
+                    .isNotNull(CloseContactCase::getCity).ne(CloseContactCase::getCity, "")
+                    .groupBy(CloseContactCase::getCity);
+            case "year" -> wrapper.select(CloseContactCase::getYear)
+                    .isNotNull(CloseContactCase::getYear).ne(CloseContactCase::getYear, "")
+                    .groupBy(CloseContactCase::getYear);
+            case "gender" -> wrapper.select(CloseContactCase::getGender)
+                    .isNotNull(CloseContactCase::getGender).ne(CloseContactCase::getGender, "")
+                    .groupBy(CloseContactCase::getGender);
+            case "sourcePatientBacteriologyResult" -> wrapper.select(CloseContactCase::getSourcePatientBacteriologyResult)
+                    .isNotNull(CloseContactCase::getSourcePatientBacteriologyResult)
+                    .ne(CloseContactCase::getSourcePatientBacteriologyResult, "")
+                    .groupBy(CloseContactCase::getSourcePatientBacteriologyResult);
+            case "finalScreeningResult" -> wrapper.select(CloseContactCase::getFinalScreeningResult)
+                    .isNotNull(CloseContactCase::getFinalScreeningResult).ne(CloseContactCase::getFinalScreeningResult, "")
+                    .groupBy(CloseContactCase::getFinalScreeningResult);
+            case "infectionCheckResult" -> wrapper.select(CloseContactCase::getInfectionCheckResult)
+                    .isNotNull(CloseContactCase::getInfectionCheckResult).ne(CloseContactCase::getInfectionCheckResult, "")
+                    .groupBy(CloseContactCase::getInfectionCheckResult);
+            case "imagingResult" -> wrapper.select(CloseContactCase::getImagingResult)
+                    .isNotNull(CloseContactCase::getImagingResult).ne(CloseContactCase::getImagingResult, "")
+                    .groupBy(CloseContactCase::getImagingResult);
+            case "sputumCheckResult" -> wrapper.select(CloseContactCase::getSputumCheckResult)
+                    .isNotNull(CloseContactCase::getSputumCheckResult).ne(CloseContactCase::getSputumCheckResult, "")
+                    .groupBy(CloseContactCase::getSputumCheckResult);
+            case "hasPreventiveTreatment" -> wrapper.select(CloseContactCase::getHasPreventiveTreatment)
+                    .isNotNull(CloseContactCase::getHasPreventiveTreatment).ne(CloseContactCase::getHasPreventiveTreatment, "")
+                    .groupBy(CloseContactCase::getHasPreventiveTreatment);
+            default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+    }
+
+    private String extractDistinctValue(CloseContactCase row, String field) {
+        return switch (field) {
+            case "district" -> row.getDistrict();
+            case "city" -> row.getCity();
+            case "year" -> row.getYear();
+            case "gender" -> row.getGender();
+            case "sourcePatientBacteriologyResult" -> row.getSourcePatientBacteriologyResult();
+            case "finalScreeningResult" -> row.getFinalScreeningResult();
+            case "infectionCheckResult" -> row.getInfectionCheckResult();
+            case "imagingResult" -> row.getImagingResult();
+            case "sputumCheckResult" -> row.getSputumCheckResult();
+            case "hasPreventiveTreatment" -> row.getHasPreventiveTreatment();
+            default -> null;
+        };
     }
 }

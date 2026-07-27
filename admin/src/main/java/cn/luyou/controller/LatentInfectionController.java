@@ -51,6 +51,17 @@ public class LatentInfectionController {
                 page, size, populationType, name, idNumber, phone, startTime, endTime, treatmentCompletionStatus));
     }
 
+    @Operation(summary = "表头筛选：某列实际去重值（Excel 式）")
+    @GetMapping("/column-distinct")
+    public ResultResponse<List<String>> columnDistinct(
+            @RequestParam String field,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false, defaultValue = "0") Integer archived,
+            @RequestParam(required = false) String referralResult) {
+        return ResultRes.success(latentInfectionService.listDistinctColumnValues(
+                field, populationType, archived, referralResult));
+    }
+
     @Operation(summary = "潜伏感染详情")
     @GetMapping("/{id}")
     public ResultResponse<LatentInfection> detail(@PathVariable Long id) {
