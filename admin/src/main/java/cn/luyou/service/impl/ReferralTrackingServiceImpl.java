@@ -230,9 +230,18 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         List<Map<String, String>> duplicates = new ArrayList<>();
         int newCount = 0;
         int updateCount = 0;
+        int skipped = 0;
+        Long currentDeptId = BaseContext.getCurrentDepartmentId();
+        Integer role = BaseContext.getCurrentRole();
 
         for (EpidemicImportRow row : rows) {
-            ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId());
+            Long targetDeptId = resolveTrackDepartmentId(row.township(), currentDeptId);
+            if (Integer.valueOf(6).equals(role) && currentDeptId != null
+                    && targetDeptId != null && !currentDeptId.equals(targetDeptId)) {
+                skipped++;
+                continue;
+            }
+            ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId(), targetDeptId);
             if (existingByCard != null) {
                 updateCount++;
                 continue;
@@ -251,6 +260,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 "duplicateCount", duplicates.size(),
                 "newCount", newCount,
                 "updateCount", updateCount,
+                "skipped", skipped,
                 "duplicates", duplicates
         );
     }
@@ -266,15 +276,25 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         Long currentUserId = BaseContext.getCurrentId();
         Long currentDeptId = BaseContext.getCurrentDepartmentId();
+        Integer role = BaseContext.getCurrentRole();
         int count = 0;
         int updated = 0;
         int skipped = 0;
 
         for (EpidemicImportRow row : rows) {
-            ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId());
+            // 按乡镇字段归属部门，避免全县 Excel 全部挂到导入人部门导致镇级数据串扰
+            Long targetDeptId = resolveTrackDepartmentId(row.township(), currentDeptId);
+            if (Integer.valueOf(6).equals(role) && currentDeptId != null
+                    && targetDeptId != null && !currentDeptId.equals(targetDeptId)) {
+                // 五级仅可写入本镇数据，跳过其它乡镇行
+                skipped++;
+                continue;
+            }
+
+            ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId(), targetDeptId);
             if (existingByCard != null) {
                 if (mergeEpidemicImportFields(existingByCard, row.reportCardTime(), row.currentAddress(),
-                        row.township(), currentUserId, currentDeptId, row.importRowNo())) {
+                        row.township(), currentUserId, targetDeptId, row.importRowNo())) {
                     updateById(existingByCard);
                     updated++;
                 }
@@ -288,7 +308,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 }
             }
 
-            ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, currentDeptId);
+            ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, targetDeptId);
             save(entity);
             count++;
         }
@@ -452,7 +472,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
     }
 
-    private ReferralTracking findEpidemicRecordByCardId(String cardId) {
+    /**
+     * 按卡片ID查找大疫情追踪记录。
+     * 必须限定部门，避免跨镇命中后在合并时改写 department_id。
+     */
+    private ReferralTracking findEpidemicRecordByCardId(String cardId, Long departmentId) {
         if (StrUtil.isBlank(cardId)) {
             return null;
         }
@@ -460,8 +484,54 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .eq(ReferralTracking::getBizMode, "track")
                 .eq(ReferralTracking::getSourceType, "epidemic")
                 .eq(ReferralTracking::getCardId, cardId)
+                .eq(departmentId != null, ReferralTracking::getDepartmentId, departmentId)
+                .isNull(departmentId == null, ReferralTracking::getDepartmentId)
                 .last("LIMIT 1")
                 .one();
+    }
+
+    /**
+     * 按乡镇名称匹配部门；同名多条时优先与当前用户同区县的下级乡镇。
+     * 匹配不到时回退到导入人部门。
+     */
+    private Long resolveTrackDepartmentId(String township, Long fallbackDeptId) {
+        if (StrUtil.isBlank(township)) {
+            return fallbackDeptId;
+        }
+        String name = township.trim();
+        List<Department> matches = departmentService.lambdaQuery()
+                .eq(Department::getName, name)
+                .list();
+        if (matches.isEmpty()) {
+            return fallbackDeptId;
+        }
+        if (matches.size() == 1) {
+            return matches.get(0).getId();
+        }
+        Long preferredCountyId = resolveCountyId(fallbackDeptId);
+        if (preferredCountyId != null) {
+            for (Department dept : matches) {
+                if (preferredCountyId.equals(dept.getParentId())) {
+                    return dept.getId();
+                }
+            }
+        }
+        return matches.get(0).getId();
+    }
+
+    /** 解析所属区县 ID：区县本身返回自身，乡镇返回 parentId */
+    private Long resolveCountyId(Long deptId) {
+        if (deptId == null) {
+            return null;
+        }
+        Department dept = departmentService.getById(deptId);
+        if (dept == null) {
+            return null;
+        }
+        if (Integer.valueOf(2).equals(dept.getLevel())) {
+            return dept.getId();
+        }
+        return dept.getParentId();
     }
 
     private List<List<String>> buildExportHead(boolean recommendExport) {
@@ -1911,10 +1981,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .one();
     }
 
-    /** 重复导入时补全报告卡录入时间、录入人等信息 */
+    /** 重复导入时补全报告卡录入时间、录入人等信息（不得跨镇改写 department_id） */
     private boolean mergeEpidemicImportFields(ReferralTracking existing, LocalDateTime reportCardTime,
                                               String currentAddress, String township,
-                                              Long currentUserId, Long currentDeptId, Integer importRowNo) {
+                                              Long currentUserId, Long targetDeptId, Integer importRowNo) {
         boolean changed = false;
         if (reportCardTime != null && existing.getReportCardTime() == null) {
             existing.setReportCardTime(reportCardTime);
@@ -1936,17 +2006,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             existing.setImportRowNo(importRowNo);
             changed = true;
         }
-        if (existing.getDepartmentId() == null && currentDeptId != null) {
-            existing.setDepartmentId(currentDeptId);
+        // 仅补齐空部门，禁止把其它镇已归属记录抢到本镇
+        if (existing.getDepartmentId() == null && targetDeptId != null) {
+            existing.setDepartmentId(targetDeptId);
             changed = true;
-        }
-        Integer role = BaseContext.getCurrentRole();
-        // 五级重新导入：保留原录入人；仅在缺部门或需要同部门可见时可补齐/认领部门
-        if (Integer.valueOf(6).equals(role) && currentDeptId != null) {
-            if (existing.getDepartmentId() == null || !currentDeptId.equals(existing.getDepartmentId())) {
-                existing.setDepartmentId(currentDeptId);
-                changed = true;
-            }
         }
         return changed;
     }
