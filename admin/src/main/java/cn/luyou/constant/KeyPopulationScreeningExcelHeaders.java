@@ -101,7 +101,7 @@ public final class KeyPopulationScreeningExcelHeaders {
         // 43-48 预防性治疗
         heads.add(head2(G_PREVENT, "是否进预防性治疗"));
         heads.add(head2(G_PREVENT, "预防性治疗方案"));
-        heads.add(head2(G_PREVENT, "预防性治疗完成时间（年月日）"));
+        heads.add(head2(G_PREVENT, "预防性治疗开始时间（年月日）"));
         heads.add(head2(G_PREVENT, "预防性治疗完成时间（年月日）"));
         heads.add(head2(G_PREVENT, "预防性治疗结果"));
         heads.add(head2(G_PREVENT, "预防性治疗期间随访管理人员"));
