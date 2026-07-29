@@ -316,15 +316,6 @@ function requiredWhenYes(getFlag: () => string) {
   }]
 }
 const editRules = {
-  hasSuspiciousSymptoms: requiredRule,
-  cough: requiredRule,
-  hemoptysis: requiredRule,
-  fever: requiredRule,
-  chestPain: requiredRule,
-  nightSweats: requiredRule,
-  appetiteLoss: requiredRule,
-  fatigue: requiredRule,
-  weightLoss: requiredRule,
   hasInfectionScreen: requiredRule,
   infectionResult: requiredWhenYes(() => editForm.value.hasInfectionScreen),
   hasChestXray: requiredRule,
