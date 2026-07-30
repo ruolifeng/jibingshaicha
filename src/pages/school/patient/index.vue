@@ -195,6 +195,7 @@ const noticeForm = reactive({
   patientType: "",
   managementMethod: "",
   treatmentPlan: "",
+  drugResistance: "",
   customPlanDetail: "",
   sputumSmear: "",
   sputumCulture: "",
@@ -231,6 +232,7 @@ function openNoticeDialog(row: any) {
           patientType: notice.patientType || "",
           managementMethod: notice.managementMethod || "",
           treatmentPlan: notice.treatmentPlan || "",
+          drugResistance: notice.drugResistance || row.firstVisitDrugResistance || "",
           customPlanDetail: notice.customPlanDetail || "",
           sputumSmear: notice.sputumSmear || resolveNoticeSputumSmearFromPatient(noticeRow.value),
           sputumCulture: notice.sputumCulture || "",
@@ -262,6 +264,7 @@ function openNoticeDialog(row: any) {
       patientType: "",
       managementMethod: "",
       treatmentPlan: "",
+      drugResistance: row.firstVisitDrugResistance || "",
       customPlanDetail: "",
       sputumSmear: resolveNoticeSputumSmearFromPatient(row),
       sputumCulture: "",
@@ -289,6 +292,7 @@ async function handleSendNotice() {
       bizId: noticeRow.value.id,
       patientName: noticeRow.value.name,
       ...noticeForm,
+      drugResistance: noticeForm.drugResistance || "",
       treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
       senderId: userStore.userId
     })
@@ -310,6 +314,7 @@ async function handleSaveDraft() {
       bizId: noticeRow.value.id,
       patientName: noticeRow.value.name,
       ...noticeForm,
+      drugResistance: noticeForm.drugResistance || "",
       treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
       senderId: userStore.userId
     })
@@ -954,11 +959,22 @@ watch(
         <el-divider content-position="left">
           治疗方案
         </el-divider>
-        <el-form-item label="治疗方案">
-          <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
-            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="治疗方案">
+              <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
+                <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="耐药情况">
+              <el-select v-model="noticeForm.drugResistance" clearable style="width: 100%">
+                <el-option v-for="item in DRUG_RESISTANCE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
           <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" />
         </el-form-item>
@@ -1079,8 +1095,11 @@ watch(
         <el-descriptions-item label="胸片检查结果">
           {{ noticeDetailData.chestXrayResult || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="治疗方案" :span="2">
+        <el-descriptions-item label="治疗方案">
           {{ noticeDetailData.treatmentPlan || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="耐药情况">
+          {{ noticeDetailData.drugResistance || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="痰涂片">
           {{ noticeDetailData.sputumSmear || "-" }}

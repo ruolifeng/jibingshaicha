@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
@@ -66,6 +67,9 @@ public class Notice extends BaseEntity {
     private String managementMethod;
     /** 治疗方案（患者，FDC-2HRZE/4HR 等7个方案） */
     private String treatmentPlan;
+    /** 耐药情况：耐药/非耐药/未检测（患者通知单） */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String drugResistance;
     /** 个体化方案详情 */
     private String customPlanDetail;
     /** 痰涂片：未出结果/阴性/阳性/未做/未知 */

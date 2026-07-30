@@ -84,10 +84,24 @@ function handlePrint() {
           </tr>
           <tr>
             <th>人群分类</th>
-            <td>{{ noticeData?.crowdCategory }}</td>
+            <td :colspan="isPatient ? 3 : 1">
+              {{ noticeData?.crowdCategory }}
+            </td>
+            <template v-if="!isPatient">
+              <th>治疗方案</th>
+              <td class="party-cell">
+                {{ noticeData?.treatmentPlan }}
+              </td>
+            </template>
+          </tr>
+          <tr v-if="isPatient">
             <th>治疗方案</th>
             <td class="party-cell">
               {{ noticeData?.treatmentPlan }}
+            </td>
+            <th>耐药情况</th>
+            <td>
+              {{ noticeData?.drugResistance }}
             </td>
           </tr>
           <template v-if="isPatient">

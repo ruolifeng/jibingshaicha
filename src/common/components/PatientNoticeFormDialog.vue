@@ -4,6 +4,7 @@ import {
   applyPatientNoticeTreatmentPlan,
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
+  DRUG_RESISTANCE_OPTIONS,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
   PATIENT_TYPE_OPTIONS,
@@ -62,6 +63,7 @@ const noticeForm = reactive({
   patientType: "",
   managementMethod: "",
   treatmentPlan: "",
+  drugResistance: "",
   customPlanDetail: "",
   sputumSmear: "",
   sputumCulture: "",
@@ -72,6 +74,10 @@ const noticeForm = reactive({
   remark: "",
   receiverOrgId: undefined as number | undefined
 })
+
+function resolveNoticeDrugResistance(row: Record<string, any>): string {
+  return row.firstVisitDrugResistance || row.drugResistance || ""
+}
 
 function resetFormFromRow(row: Record<string, any>) {
   Object.assign(noticeForm, {
@@ -91,6 +97,7 @@ function resetFormFromRow(row: Record<string, any>) {
     patientType: resolveNoticePatientType(row),
     managementMethod: "",
     treatmentPlan: "",
+    drugResistance: resolveNoticeDrugResistance(row),
     customPlanDetail: "",
     sputumSmear: resolveNoticeSputumSmearFromPatient(row),
     sputumCulture: "",
@@ -121,6 +128,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     issuedTime: notice.issuedTime || new Date().toISOString().slice(0, 10),
     patientType: notice.patientType || resolveNoticePatientType(row),
     managementMethod: notice.managementMethod || "",
+    drugResistance: notice.drugResistance || resolveNoticeDrugResistance(row),
     sputumSmear: notice.sputumSmear || resolveNoticeSputumSmearFromPatient(row),
     sputumCulture: notice.sputumCulture || "",
     molecularTest: notice.molecularTest || "",
@@ -177,6 +185,7 @@ function buildPayload() {
     bizId: row.id,
     patientName: row.name,
     ...noticeForm,
+    drugResistance: noticeForm.drugResistance || "",
     treatmentPlan: noticeForm.treatmentPlan === "个体化方案"
       ? noticeForm.customPlanDetail
       : noticeForm.treatmentPlan,
@@ -335,11 +344,22 @@ async function handleSaveDraft() {
       <el-divider content-position="left">
         治疗方案
       </el-divider>
-      <el-form-item label="治疗方案">
-        <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
-          <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
-        </el-select>
-      </el-form-item>
+      <el-row :gutter="12">
+        <el-col :span="12">
+          <el-form-item label="治疗方案">
+            <el-select v-model="noticeForm.treatmentPlan" style="width: 100%">
+              <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="耐药情况">
+            <el-select v-model="noticeForm.drugResistance" clearable style="width: 100%">
+              <el-option v-for="item in DRUG_RESISTANCE_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+      </el-row>
       <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
         <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" />
       </el-form-item>

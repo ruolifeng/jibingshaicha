@@ -1,16 +1,26 @@
 <script lang="ts" setup>
+import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue"
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
+import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
-import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, LATENT_MANUAL_POPULATION_TYPE_OPTIONS } from "@@/constants/disease"
+import {
+  getLatentPopulationDisplayLabel,
+  getPopulationTypeTagType,
+  LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
+  LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
+  TRACKING_STATUS_MAP
+} from "@@/constants/disease"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
 import { downloadBlob } from "@@/utils/download"
 import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
+import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { batchDeleteLatentApi, closeCaseApi, downloadLatentTemplateApi, exportAllLatentApi, getLatentColumnDistinctApi, importLatentApi } from "./apis"
+import { batchDeleteLatentApi, closeCaseApi, downloadLatentTemplateApi, exportAllLatentApi, getLatentColumnDistinctApi, importLatentApi, trackLatentApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const {
@@ -90,6 +100,70 @@ const referralRow = ref<any>(null)
 function openReferral(row: any) {
   referralRow.value = row
   referralDialogVisible.value = true
+}
+
+// ==================== 追踪 ====================
+const trackDialogVisible = ref(false)
+const trackRow = ref<any>(null)
+const historyViewVisible = ref(false)
+const historyViewRow = ref<any>(null)
+const trackSubmitting = ref(false)
+
+function canTrack(row: any) {
+  if (!row || row.archived === 1 || isLatentTransferLocked(row)) return false
+  const status = row.trackingStatus
+  return status == null || status === 0 || status === 2
+}
+
+function trackingStatusTagType(status: number | null | undefined) {
+  if (status === 1) return "success"
+  if (status === 2) return "danger"
+  if (status === 3 || status === 4) return "info"
+  return "warning"
+}
+
+function hasTrackingHistory(row: any) {
+  return parseTrackingHistory(row?.trackingHistoryJson).length > 0 || !!row?.trackingRemark?.trim()
+}
+
+function openHistoryView(row: any) {
+  historyViewRow.value = row
+  historyViewVisible.value = true
+}
+
+function openTrackDialog(row: any) {
+  trackRow.value = row
+  trackDialogVisible.value = true
+}
+
+async function handleTrack(payload: TrackConfirmPayload) {
+  if (trackSubmitting.value || !trackRow.value) return
+  trackSubmitting.value = true
+  try {
+    await trackLatentApi({
+      id: trackRow.value.id,
+      status: payload.status,
+      remark: payload.remark,
+      actualArrivalDate: payload.actualArrivalDate
+    })
+    ElMessage.success("追踪操作已保存")
+    trackDialogVisible.value = false
+    fetchData()
+  } catch { /* handled */ } finally {
+    trackSubmitting.value = false
+  }
+}
+
+function noticeConfirmStatusLabel(status: number | null | undefined) {
+  if (status === 2) return "已确认"
+  if (status === 1) return "待确认"
+  return "—"
+}
+
+function noticeConfirmStatusType(status: number | null | undefined) {
+  if (status === 2) return "success"
+  if (status === 1) return "warning"
+  return "info"
 }
 
 async function handleArchive(row: any) {
@@ -375,7 +449,14 @@ async function handleImport(uploadFile: any) {
             />
           </template>
         </el-table-column>
-        <el-table-column label="通知单">
+        <el-table-column label="追踪状态" min-width="100">
+          <template #default="{ row }">
+            <el-tag :type="trackingStatusTagType(row.trackingStatus)" size="small">
+              {{ TRACKING_STATUS_MAP[row.trackingStatus] ?? "待追踪" }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="通知单" min-width="90">
           <template #default="{ row }">
             <el-tag v-if="row.noticeStatus === 1 || row.noticeStatus === 2" type="success" size="small">
               已发送
@@ -383,9 +464,19 @@ async function handleImport(uploadFile: any) {
             <el-tag v-else-if="row.noticeStatus === 0" type="info" size="small">
               草稿
             </el-tag>
-            <el-tag v-else type="info" size="small">
-              未发送
+            <span v-else class="text-gray-400">未发送</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="通知单确认状态" min-width="120">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.noticeStatus === 1 || row.noticeStatus === 2"
+              :type="noticeConfirmStatusType(row.noticeStatus)"
+              size="small"
+            >
+              {{ noticeConfirmStatusLabel(row.noticeStatus) }}
             </el-tag>
+            <span v-else class="text-gray-400">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="populationType" min-width="110">
@@ -418,12 +509,31 @@ async function handleImport(uploadFile: any) {
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right">
+        <el-table-column label="操作" fixed="right" min-width="260">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="openDetail(row)">
               查看详情
             </el-button>
+            <el-button
+              v-if="hasTrackingHistory(row)"
+              type="info"
+              link
+              size="small"
+              @click="openHistoryView(row)"
+            >
+              追踪记录
+            </el-button>
             <template v-if="!isLatentTransferLocked(row)">
+              <el-button
+                v-if="canTrack(row)"
+                v-permission="'latentManagement:track'"
+                type="primary"
+                link
+                size="small"
+                @click="openTrackDialog(row)"
+              >
+                追踪
+              </el-button>
               <el-button
                 v-permission="'latentManagement:edit'"
                 type="warning"
@@ -489,6 +599,32 @@ async function handleImport(uploadFile: any) {
       :subject-name="referralRow.name || ''"
       @success="fetchData"
     />
+
+    <TrackingOperationDialog
+      v-model="trackDialogVisible"
+      :history-json="trackRow?.trackingHistoryJson"
+      :not-in-place-count="trackRow?.notInPlaceCount ?? 0"
+      :loading="trackSubmitting"
+      @confirm="handleTrack"
+    />
+
+    <el-dialog v-model="historyViewVisible" title="追踪记录" width="520px">
+      <TrackingHistoryPanel
+        v-if="parseTrackingHistory(historyViewRow?.trackingHistoryJson).length"
+        :history-json="historyViewRow?.trackingHistoryJson"
+      />
+      <p v-else-if="historyViewRow?.trackingRemark">
+        {{ historyViewRow.trackingRemark }}
+      </p>
+      <p v-else class="text-secondary">
+        暂无追踪记录
+      </p>
+      <template #footer>
+        <el-button @click="historyViewVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="importDialogVisible" title="批量导入潜伏感染者" width="560px">
       <el-alert
