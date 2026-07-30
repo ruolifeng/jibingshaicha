@@ -106,8 +106,11 @@ async function handleConfirmNotice(noticeId: number) {
       <el-descriptions-item label="胸片检查结果">
         {{ noticeDetailData.chestXrayResult || "-" }}
       </el-descriptions-item>
-      <el-descriptions-item label="治疗方案" :span="2">
+      <el-descriptions-item label="治疗方案">
         {{ noticeDetailData.treatmentPlan || "-" }}
+      </el-descriptions-item>
+      <el-descriptions-item label="耐药情况">
+        {{ noticeDetailData.drugResistance || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="痰涂片">
         {{ noticeDetailData.sputumSmear || "-" }}

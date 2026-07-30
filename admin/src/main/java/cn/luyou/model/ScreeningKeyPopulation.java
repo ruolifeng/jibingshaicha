@@ -157,7 +157,7 @@ public class ScreeningKeyPopulation extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisFirst;
 
-    // ===== 以下字段由系统回写，不参与 Excel 导入 =====
+    // ===== 诊断复查与预防治疗（模板 41-48）：支持 Excel 导入/覆盖；督导表归档时也会回写 =====
     @ExcelProperty(index = 41)
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisHalfYear;

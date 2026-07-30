@@ -63,7 +63,15 @@ public final class ScreeningImportMergeSupport {
         overwriteDate(incoming.getChestXrayDate(), existing::setChestXrayDate);
         overwriteString(incoming.getChestXrayResult(), existing::setChestXrayResult);
         overwriteDiagnosis(incoming.getDiagnosisFirst(), existing::setDiagnosisFirst);
-        // 半年/一年诊断与预防治疗由系统回写，覆盖导入不覆盖（避免 Excel 空列误清督导数据）
+        // 半年/一年诊断、预防治疗均在官方模板列内，覆盖导入按 Excel 全量写入（含空单元格清空）
+        overwriteString(incoming.getDiagnosisHalfYear(), existing::setDiagnosisHalfYear);
+        overwriteString(incoming.getDiagnosisOneYear(), existing::setDiagnosisOneYear);
+        overwriteString(incoming.getHasPreventiveTreatment(), existing::setHasPreventiveTreatment);
+        overwriteString(incoming.getPreventivePlan(), existing::setPreventivePlan);
+        overwriteDate(incoming.getPreventiveStartDate(), existing::setPreventiveStartDate);
+        overwriteDate(incoming.getPreventiveEndDate(), existing::setPreventiveEndDate);
+        overwriteString(incoming.getPreventiveResult(), existing::setPreventiveResult);
+        overwriteString(incoming.getPreventiveManager(), existing::setPreventiveManager);
 
         // remark 为 ExcelIgnore，模板不读该列，覆盖导入时保留原备注
         overwriteString(incoming.getUploadBatch(), existing::setUploadBatch);
