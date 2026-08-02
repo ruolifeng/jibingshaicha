@@ -1056,13 +1056,22 @@ CREATE TABLE IF NOT EXISTS `department` (
     UNIQUE KEY `uk_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='部门表';
 
--- 为各主表添加 department_id 字段（若列已存在会报错，忽略即可）
-ALTER TABLE `user`                     ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
-ALTER TABLE `screening_school`         ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
-ALTER TABLE `screening_key_population` ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
-ALTER TABLE `screening_close_contact`  ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
-ALTER TABLE `latent_infection`         ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
-ALTER TABLE `patient`                  ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+-- 为各主表添加 department_id 字段（幂等：列已存在则忽略 1060）
+DROP PROCEDURE IF EXISTS `_v8_add_department_id`;
+DELIMITER $$
+CREATE PROCEDURE `_v8_add_department_id`()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
+    ALTER TABLE `user`                     ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+    ALTER TABLE `screening_school`         ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+    ALTER TABLE `screening_key_population` ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+    ALTER TABLE `screening_close_contact`  ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+    ALTER TABLE `latent_infection`         ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+    ALTER TABLE `patient`                  ADD COLUMN `department_id` BIGINT DEFAULT NULL COMMENT '所属部门ID';
+END$$
+DELIMITER ;
+CALL `_v8_add_department_id`();
+DROP PROCEDURE IF EXISTS `_v8_add_department_id`;
 
 -- 新增部门管理权限码（id=62，挂在 system=6 下）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
@@ -1241,9 +1250,18 @@ CREATE TABLE IF NOT EXISTS `department` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='部门表';
 
--- 为已存在的部门表补充字段（若列已存在会报错，忽略即可）
-ALTER TABLE `department` ADD COLUMN `parent_id` BIGINT DEFAULT NULL COMMENT '上级部门ID，NULL表示市级顶级';
-ALTER TABLE `department` ADD COLUMN `level` TINYINT NOT NULL DEFAULT 1 COMMENT '1市级 2区县 3社区';
+-- 为已存在的部门表补充字段（幂等：列已存在则忽略 1060）
+DROP PROCEDURE IF EXISTS `_v8_add_department_hierarchy`;
+DELIMITER $$
+CREATE PROCEDURE `_v8_add_department_hierarchy`()
+BEGIN
+    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
+    ALTER TABLE `department` ADD COLUMN `parent_id` BIGINT DEFAULT NULL COMMENT '上级部门ID，NULL表示市级顶级';
+    ALTER TABLE `department` ADD COLUMN `level` TINYINT NOT NULL DEFAULT 1 COMMENT '1市级 2区县 3社区';
+END$$
+DELIMITER ;
+CALL `_v8_add_department_hierarchy`();
+DROP PROCEDURE IF EXISTS `_v8_add_department_hierarchy`;
 
 CREATE TABLE IF NOT EXISTS `user_permission` (
     `id`             BIGINT   NOT NULL AUTO_INCREMENT,
