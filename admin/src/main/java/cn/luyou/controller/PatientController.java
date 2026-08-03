@@ -729,9 +729,7 @@ public class PatientController {
     @PostMapping("/medication/save")
     @OperationLog(type = "update", module = "patient", action = "保存服药管理")
     public ResultResponse<Void> saveMedication(@RequestBody MedicationManagement medication) {
-        if (medication.getPatientId() != null) {
-            patientService.assertPatientOperable(medication.getPatientId());
-        }
+        preparePatientMedication(medication);
         medicationManagementService.saveOrUpdate(medication);
         return ResultRes.success(null);
     }
@@ -750,13 +748,39 @@ public class PatientController {
     @PostMapping("/medication/complete")
     @OperationLog(type = "update", module = "patient", action = "完成服药管理")
     public ResultResponse<Void> completeMedication(@RequestBody MedicationManagement medication) {
-        if (medication.getPatientId() != null) {
-            patientService.assertPatientOperable(medication.getPatientId());
-        }
+        preparePatientMedication(medication);
         medicationManagementService.saveOrUpdate(medication);
         if (medication.getStopDate() != null) {
             patientService.archivePatient(medication.getPatientId());
         }
         return ResultRes.success(null);
+    }
+
+    /** 校验归属、补齐人群类型，并确保不会误绑潜伏感染记录 */
+    private void preparePatientMedication(MedicationManagement medication) {
+        if (medication.getPatientId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
+        }
+        patientService.assertPatientOperable(medication.getPatientId());
+        if (medication.getId() != null) {
+            MedicationManagement existing = medicationManagementService.getById(medication.getId());
+            if (existing == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "服药管理记录不存在");
+            }
+            if (existing.getPatientId() == null
+                    || !existing.getPatientId().equals(medication.getPatientId())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "患者与服药管理记录不匹配");
+            }
+        }
+        if (StrUtil.isBlank(medication.getPopulationType())) {
+            Patient patient = patientService.getById(medication.getPatientId());
+            if (patient != null) {
+                medication.setPopulationType(patient.getPopulationType());
+            }
+        }
+        if (StrUtil.isBlank(medication.getPopulationType())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少人群类型");
+        }
+        medication.setLatentInfectionId(null);
     }
 }

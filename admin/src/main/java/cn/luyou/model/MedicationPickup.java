@@ -19,7 +19,10 @@ import java.time.LocalDate;
 @TableName("medication_pickup")
 public class MedicationPickup extends BaseEntity {
 
+    /** 关联患者ID（潜伏感染领药记录为空） */
     private Long patientId;
+    /** 关联潜伏感染者ID（患者领药记录为空） */
+    private Long latentInfectionId;
     private String populationType;
     /** 第几次领药（后端自动累加） */
     private Integer pickupSeq;

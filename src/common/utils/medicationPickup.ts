@@ -14,6 +14,16 @@ export const PATIENT_MEDICATION_PAGE_PERMISSIONS = [
   "closeContact:patient:medication"
 ] as const
 
+/** 潜伏感染者 — 服药管理页 */
+export const LATENT_MEDICATION_PAGE_PERMISSIONS = [
+  "latentManagement:medication"
+] as const
+
+/** 潜伏感染者 — 填写领药 */
+export const LATENT_MEDICATION_PICKUP_PERMISSIONS = [
+  "latentManagement:pickup"
+] as const
+
 /** 五级用户：领药记录创建后 10 天内可修改；管理员（role≠6）随时可改 */
 export function canEditMedicationPickup(
   userRole: number,

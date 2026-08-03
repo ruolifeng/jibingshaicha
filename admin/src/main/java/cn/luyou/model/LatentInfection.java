@@ -142,4 +142,68 @@ public class LatentInfection extends BaseEntity {
     /** 预防性治疗方案（通知单展示，来自筛查表） */
     @TableField(exist = false)
     private String preventivePlan;
+
+    // ===== 领药摘要（非持久化，服药管理列表填充）=====
+    @TableField(exist = false)
+    private Integer medicationPickupCount;
+    @TableField(exist = false)
+    private String medicationPickTime;
+    @TableField(exist = false)
+    private String medicationChemotherapy;
+    @TableField(exist = false)
+    private String medicationDrugForm;
+
+    // ===== 密接个案表回填（非持久化，详情展示）=====
+    @TableField(exist = false)
+    private Long closeContactCaseId;
+    @TableField(exist = false)
+    private String sourcePatientName;
+    @TableField(exist = false)
+    private String sourcePatientCaseNo;
+    @TableField(exist = false)
+    private String sourcePatientBacteriologyResult;
+    @TableField(exist = false)
+    private String sourcePatientPhone;
+    @TableField(exist = false)
+    private String contactType;
+    @TableField(exist = false)
+    private String contactPlace;
+    @TableField(exist = false)
+    private LocalDate registrationDate;
+    @TableField(exist = false)
+    private LocalDate reportDate;
+    @TableField(exist = false)
+    private String city;
+    @TableField(exist = false)
+    private String district;
+    @TableField(exist = false)
+    private String hasContraindication;
+    @TableField(exist = false)
+    private String noTreatmentReason;
+    @TableField(exist = false)
+    private String contraindicationRemark;
+    @TableField(exist = false)
+    private String hasPreventiveTreatment;
+    @TableField(exist = false)
+    private String preventivePlanRemark;
+    @TableField(exist = false)
+    private String treatmentCompleted;
+    @TableField(exist = false)
+    private String incompleteReason;
+    @TableField(exist = false)
+    private LocalDate sputumCheckDate;
+    @TableField(exist = false)
+    private String sputumCheckMethod;
+    @TableField(exist = false)
+    private String sputumCheckResult;
+    @TableField(exist = false)
+    private String imagingMethod;
+    @TableField(exist = false)
+    private String followup6Result;
+    @TableField(exist = false)
+    private String followup12Result;
+    @TableField(exist = false)
+    private String followup24Result;
+    @TableField(exist = false)
+    private String finalScreeningResult;
 }

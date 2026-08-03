@@ -17,7 +17,10 @@ import java.time.LocalDate;
 @TableName("medication_management")
 public class MedicationManagement extends BaseEntity {
 
+    /** 关联患者ID（潜伏感染服药记录为空） */
     private Long patientId;
+    /** 关联潜伏感染者ID（患者服药记录为空） */
+    private Long latentInfectionId;
     private String populationType;
     private String managementMethod;
     private String supervisor;

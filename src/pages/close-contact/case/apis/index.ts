@@ -173,6 +173,15 @@ export function deleteAllCloseContactCaseApi() {
   })
 }
 
+/** 同步终筛为潜伏感染者的个案到潜伏感染在管 */
+export function syncCloseContactCaseLatentApi() {
+  return request<ApiResponseData<number>>({
+    url: "close-contact/case/sync-latent",
+    method: "post",
+    timeout: 300000
+  })
+}
+
 /** 按 ID 查询密接个案详情 */
 export function getCloseContactCaseDetailApi(id: string) {
   return request<ApiResponseData<any>>({

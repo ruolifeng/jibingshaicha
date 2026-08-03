@@ -20,6 +20,7 @@ import {
   exportCloseContactCaseApi,
   getCloseContactCaseColumnDistinctApi,
   getCloseContactCaseListApi,
+  syncCloseContactCaseLatentApi,
   updateCloseContactCaseApi,
   uploadCloseContactCaseApi
 } from "./apis"
@@ -78,6 +79,7 @@ const loadDistrictSearchOptions = () => loadDistinct("district")
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
+const syncingLatent = ref(false)
 const total = ref(0)
 const tableRef = ref<any>()
 
@@ -198,6 +200,27 @@ async function handleUpload(uploadFile: any) {
     if (data.successCount > 0) fetchData()
   } catch (err: any) {
     ElMessage.error(err?.message || "上传失败")
+  }
+}
+
+async function handleSyncLatent() {
+  try {
+    await ElMessageBox.confirm(
+      "将把最终筛查结果为「潜伏感染者」的个案同步到潜伏感染者在管：已手工录入的按证件号补充空白字段，未录入的自动新建。是否继续？",
+      "同步潜伏在管",
+      { confirmButtonText: "确认同步", cancelButtonText: "取消", type: "info" }
+    )
+  } catch {
+    return
+  }
+  syncingLatent.value = true
+  try {
+    const { data } = await syncCloseContactCaseLatentApi()
+    ElMessage.success(`同步完成，共处理 ${data ?? 0} 条`)
+  } catch (err: any) {
+    ElMessage.error(err?.message || "同步失败")
+  } finally {
+    syncingLatent.value = false
   }
 }
 
@@ -435,6 +458,11 @@ function viewDetail(row: any) {
   detailVisible.value = true
 }
 
+function formatDetailValue(val: unknown) {
+  if (val === null || val === undefined || val === "") return "—"
+  return String(val)
+}
+
 type TagType = "primary" | "success" | "info" | "warning" | "danger"
 
 function getDiagnosisTag(result: string): TagType {
@@ -574,6 +602,15 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                 导入 Excel
               </el-button>
             </el-upload>
+            <el-button
+              v-permission="'closeContact:case:upload'"
+              type="warning"
+              plain
+              :loading="syncingLatent"
+              @click="handleSyncLatent"
+            >
+              同步潜伏在管
+            </el-button>
             <el-button v-permission="'closeContact:case:export'" @click="() => handleExport(undefined, undefined, 'all')">
               导出全部
             </el-button>
@@ -837,62 +874,36 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       </template>
     </el-dialog>
 
-    <!-- 详情弹窗 -->
-    <el-dialog v-model="detailVisible" :title="`${detailRow?.name} — 密接个案详情`" width="900px">
-      <el-descriptions v-if="detailRow" :column="3" border>
-        <el-descriptions-item label="录入用户">
-          {{ detailRow.creatorUsername || '—' }}
+    <!-- 详情弹窗：展示全部字段（与表格列一致），手动新增表单字段保持不变 -->
+    <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} — 密接个案详情`" width="960px" top="5vh">
+      <el-descriptions v-if="detailRow" :column="2" border class="case-detail-desc">
+        <el-descriptions-item
+          v-for="col in CLOSE_CONTACT_CASE_COLUMNS"
+          :key="col.field"
+          :label="col.title"
+          :span="['remark', 'contraindicationRemark', 'preventivePlanRemark', 'createTime'].includes(col.field) ? 2 : 1"
+        >
+          <template v-if="col.field === 'finalScreeningResult'">
+            <el-tag v-if="detailRow.finalScreeningResult" :type="getDiagnosisTag(detailRow.finalScreeningResult)">
+              {{ detailRow.finalScreeningResult }}
+            </el-tag>
+            <span v-else>—</span>
+          </template>
+          <template v-else>
+            {{ formatDetailValue(detailRow[col.field]) }}
+          </template>
         </el-descriptions-item>
-        <el-descriptions-item label="接触者姓名">
-          {{ detailRow.name }}
+        <el-descriptions-item v-if="detailRow.gender" label="性别">
+          {{ detailRow.gender }}
         </el-descriptions-item>
-        <el-descriptions-item label="身份证号">
-          {{ detailRow.idNumber }}
+        <el-descriptions-item v-if="detailRow.ethnicity" label="民族">
+          {{ detailRow.ethnicity }}
         </el-descriptions-item>
-        <el-descriptions-item label="联系电话">
-          {{ detailRow.phone }}
+        <el-descriptions-item v-if="detailRow.householdAddress" label="户籍地址" :span="2">
+          {{ detailRow.householdAddress }}
         </el-descriptions-item>
-        <el-descriptions-item label="市/州">
-          {{ detailRow.city }}
-        </el-descriptions-item>
-        <el-descriptions-item label="区/县">
-          {{ detailRow.district }}
-        </el-descriptions-item>
-        <el-descriptions-item label="患者姓名">
-          {{ detailRow.sourcePatientName }}
-        </el-descriptions-item>
-        <el-descriptions-item label="密切接触者登记日期">
-          {{ detailRow.registrationDate }}
-        </el-descriptions-item>
-        <el-descriptions-item label="最终筛查结果" :span="3">
-          <el-tag v-if="detailRow.finalScreeningResult" :type="getDiagnosisTag(detailRow.finalScreeningResult)">
-            {{ detailRow.finalScreeningResult }}
-          </el-tag>
-          <span v-else>—</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="感染检测方法">
-          {{ detailRow.infectionCheckMethod }}
-        </el-descriptions-item>
-        <el-descriptions-item label="结果判定">
-          {{ detailRow.infectionCheckResult }}
-        </el-descriptions-item>
-        <el-descriptions-item label="影像结果">
-          {{ detailRow.imagingResult }}
-        </el-descriptions-item>
-        <el-descriptions-item label="6月随访结果">
-          {{ detailRow.followup6Result || '—' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="12月随访结果">
-          {{ detailRow.followup12Result || '—' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="24月随访结果">
-          {{ detailRow.followup24Result || '—' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="备注" :span="3">
-          {{ detailRow.remark || '—' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="录入时间" :span="3">
-          {{ detailRow.createTime }}
+        <el-descriptions-item v-if="detailRow.currentAddress" label="现住址" :span="2">
+          {{ detailRow.currentAddress }}
         </el-descriptions-item>
       </el-descriptions>
       <template #footer>
@@ -934,5 +945,10 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
     background-color: var(--el-fill-color-light);
     font-weight: 600;
   }
+}
+
+.case-detail-desc {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 </style>

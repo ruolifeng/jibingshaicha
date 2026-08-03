@@ -27,6 +27,19 @@ export function mapFirstVisitSupervisorToMedication(supervisor?: string | null):
   return mapping[supervisor] ?? supervisor
 }
 
+/** 督导表「督导管理人员」→ 服药管理「督导人员」 */
+export function mapSupervisionManagerToMedication(managerType?: string | null): string {
+  if (!managerType) return ""
+  const mapping: Record<string, string> = {
+    医务人员: "医生",
+    家庭成员: "家属",
+    志愿者: "志愿者",
+    患者本人: "患者本人",
+    其他: "其他"
+  }
+  return mapping[managerType] ?? managerType
+}
+
 export interface MedicationFormFields {
   managementMethod: string
   supervisor: string
@@ -73,6 +86,45 @@ export function applyMedicationFormDefaults(
     }
     if (!form.sputumResult && firstVisit.sputumStatus) {
       form.sputumResult = mapFirstVisitSputumToMedication(firstVisit.sputumStatus)
+    }
+  }
+
+  if (!form.startTreatmentDate) {
+    form.startTreatmentDate = getEarliestMedicationMarkedDate(form.dayMarks)
+  }
+}
+
+/**
+ * 潜伏感染者服药管理默认值：优先已保存记录，其次督导表
+ * （开始治疗日期 / 停止完成时间 / 督导人员）。
+ */
+export function applyLatentMedicationFormDefaults(
+  form: MedicationFormFields,
+  options: {
+    saved?: Record<string, any> | null
+    supervision?: Record<string, any> | null
+  }
+) {
+  form.managementMethod = MEDICATION_LOCKED_MANAGEMENT_METHOD
+
+  const saved = options.saved
+  if (saved) {
+    form.supervisor = saved.supervisor || form.supervisor
+    form.sputumResult = saved.sputumResult || form.sputumResult
+    form.stopDate = saved.stopDate || ""
+    form.startTreatmentDate = resolveStartTreatmentDate(saved.startTreatmentDate, form.dayMarks)
+  }
+
+  const supervision = options.supervision
+  if (supervision) {
+    if (!form.supervisor && supervision.managerType) {
+      form.supervisor = mapSupervisionManagerToMedication(supervision.managerType)
+    }
+    if (!form.startTreatmentDate && supervision.treatmentStartDate) {
+      form.startTreatmentDate = supervision.treatmentStartDate
+    }
+    if (!form.stopDate && supervision.treatmentEndDate) {
+      form.stopDate = supervision.treatmentEndDate
     }
   }
 

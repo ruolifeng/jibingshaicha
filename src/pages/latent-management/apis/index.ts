@@ -201,3 +201,28 @@ export function submitXrayOnlyApi(data: {
 export function submitDiagnosisApi(data: { id: string, diagnosisFirst: string }) {
   return request<ApiResponseData<null>>({ url: "latent/diagnosis", method: "post", data })
 }
+
+/** 保存潜伏感染者服药管理 */
+export function saveLatentMedicationApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: "latent/medication/save", method: "post", data })
+}
+
+/** 查询潜伏感染者服药管理 */
+export function getLatentMedicationApi(latentInfectionId: string) {
+  return request<ApiResponseData<any>>({ url: `latent/medication/${latentInfectionId}`, method: "get" })
+}
+
+/** 完成潜伏感染者服药管理（归档） */
+export function completeLatentMedicationApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: "latent/medication/complete", method: "post", data })
+}
+
+/** 保存潜伏感染者领药记录 */
+export function saveLatentMedicationPickupApi(data: Record<string, any>) {
+  return request<ApiResponseData<null>>({ url: "latent/medication-pickup/save", method: "post", data })
+}
+
+/** 潜伏感染者领药记录列表 */
+export function getLatentMedicationPickupListApi(latentInfectionId: string) {
+  return request<ApiResponseData<any[]>>({ url: `latent/medication-pickup/list/${latentInfectionId}`, method: "get" })
+}

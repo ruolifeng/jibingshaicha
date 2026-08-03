@@ -55,6 +55,7 @@ const { load: loadDistinct, sourceValues: distinctValues, clearCache } = useColu
 const loadGenderOptions = () => loadDistinct("gender")
 const loadPopulationTypeOptions = () => loadDistinct("populationType")
 const loadInfectionResultOptions = () => loadDistinct("infectionResult")
+const loadCreatorOptions = () => loadDistinct("creatorUsername")
 
 watch(() => searchForm.populationType, (val) => {
   clearCache()
@@ -444,6 +445,9 @@ async function handleImport(uploadFile: any) {
           <template #header>
             <TableHeaderFilter
               label="录入用户"
+              type="select"
+              :source-values="distinctValues('creatorUsername').value"
+              :load-options="loadCreatorOptions"
               :model-value="columnFilters.creatorUsername"
               @change="(v) => { setFilter('creatorUsername', v); handleSearch() }"
             />
@@ -641,7 +645,7 @@ async function handleImport(uploadFile: any) {
           数据来源可填写：{{ LATENT_MANUAL_POPULATION_TYPE_OPTIONS.map(item => item.label).join("、") }}；亦可用「重点人群-老年人」「密接-家庭内」等格式
         </p>
         <p class="text-sm text-gray-500 mt-2">
-          人群分类：重点人群填写老年人/糖尿病/双感（可多选，用顿号分隔）；密接填写家庭内/家庭外
+          人群分类：重点人群填写老年人/糖尿病/双感（可多选，用顿号分隔）；数据来源已填「密接-家庭内」「密接-家庭外」时无需再填
         </p>
         <p class="text-sm text-gray-500 mt-2">
           证件号、联系电话列建议设为「文本」格式，避免 Excel 自动转换导致校验失败

@@ -127,6 +127,13 @@ public class CloseContactCaseController {
         return ResultRes.success(closeContactCaseService.deleteAll());
     }
 
+    @Operation(summary = "同步潜伏感染在管（终筛为潜伏感染者）")
+    @PostMapping("/sync-latent")
+    @OperationLog(type = "update", module = "screening", action = "密接个案同步潜伏在管")
+    public ResultResponse<Integer> syncLatent() {
+        return ResultRes.success(closeContactCaseService.syncLatentFromCases());
+    }
+
     @Operation(summary = "导出密接个案表（支持筛选/勾选/按诊断结果导出）")
     @GetMapping("/export")
     @OperationLog(type = "export", module = "screening", action = "导出密接个案表")
