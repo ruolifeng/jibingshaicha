@@ -18,7 +18,7 @@ import {
 import QuestionnairePanel from "./components/QuestionnairePanel.vue"
 import WorkbenchStatsPanel from "./components/WorkbenchStatsPanel.vue"
 
-defineOptions({ name: "Statistics" })
+defineOptions({ name: "StatisticsOverview" })
 
 const userStore = useUserStore()
 const canQuestionnaire = computed(() => userStore.hasPermission("statistics:questionnaire"))
@@ -36,6 +36,8 @@ const filterForm = reactive({
 
 const districtOptions = ref<string[]>([])
 const yearOptions = buildStatYearOptions()
+/** 有可选部门时才展示「部门」筛选项 */
+const showDepartmentFilter = ref(false)
 
 async function loadDistrictOptions() {
   try {
@@ -312,8 +314,11 @@ onMounted(() => {
     <!-- 筛选条件（问卷 Tab 不需要年份/区县筛选） -->
     <el-card v-if="activeTab !== 'questionnaire'" shadow="never" class="mb-4">
       <el-form :model="filterForm" inline>
-        <el-form-item label="部门">
-          <ScopedDepartmentMultiSelect v-model="filterForm.departmentIds" />
+        <el-form-item v-show="showDepartmentFilter" label="部门">
+          <ScopedDepartmentMultiSelect
+            v-model="filterForm.departmentIds"
+            @visibility-change="showDepartmentFilter = $event"
+          />
         </el-form-item>
         <el-form-item v-if="activeTab !== 'workbench'" label="年份">
           <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">

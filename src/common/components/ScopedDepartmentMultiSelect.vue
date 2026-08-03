@@ -16,6 +16,8 @@ withDefaults(defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: string[]]
+  /** 是否有可选部门（无选项时父级应隐藏「部门」表单项，避免只剩空标签） */
+  "visibilityChange": [visible: boolean]
 }>()
 
 const loading = ref(false)
@@ -35,6 +37,7 @@ async function loadOptions() {
     visible.value = false
   } finally {
     loading.value = false
+    emit("visibilityChange", visible.value)
   }
 }
 

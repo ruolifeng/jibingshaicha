@@ -301,13 +301,29 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: "/statistics",
     component: Layouts,
-    meta: { permission: "statistics" },
+    redirect: "/statistics/overview",
+    name: "Statistics",
+    meta: {
+      title: "统计分析",
+      elIcon: "DataAnalysis",
+      alwaysShow: true,
+      anyPermission: ["statistics", "statistics:keyPopulationTbSymptomReferral", "statistics:questionnaire"]
+    },
     children: [
       {
-        path: "",
+        path: "overview",
         component: () => import("@/pages/statistics/index.vue"),
-        name: "Statistics",
-        meta: { title: "统计分析", elIcon: "DataAnalysis", permission: "statistics" }
+        name: "StatisticsOverview",
+        meta: { title: "综合统计", permission: "statistics" }
+      },
+      {
+        path: "key-population-tb-symptom-referral",
+        component: () => import("@/pages/statistics/key-population-tb-symptom-referral/index.vue"),
+        name: "StatisticsKeyPopulationTbSymptomReferral",
+        meta: {
+          title: "重点人群结核症状筛查推介",
+          permission: "statistics:keyPopulationTbSymptomReferral"
+        }
       }
     ]
   },

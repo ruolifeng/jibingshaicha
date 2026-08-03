@@ -3,12 +3,14 @@ package cn.luyou.controller;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.vo.DistrictStatisticsVO;
+import cn.luyou.model.vo.KeyPopulationTbSymptomReferralStatisticsVO;
 import cn.luyou.model.vo.PatientDistributionHeatmapVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.StatisticsService;
 import cn.luyou.service.WorkbenchStatisticsService;
 import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.KeyPopulationTbSymptomReferralExcelExportSupport;
 import com.alibaba.excel.EasyExcel;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -61,6 +63,17 @@ public class StatisticsController {
         return ResultRes.success(statisticsService.getDistrictStatistics(year, district, filterDeptIds));
     }
 
+    @Operation(summary = "重点人群肺结核可疑症状筛查和推介情况报表")
+    @GetMapping("/key-population-tb-symptom-referral")
+    public ResultResponse<List<KeyPopulationTbSymptomReferralStatisticsVO>> keyPopulationTbSymptomReferral(
+            @RequestParam(required = false) String year,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(statisticsService.getKeyPopulationTbSymptomReferralStatistics(
+                year, district, filterDeptIds));
+    }
+
     @Operation(summary = "我的工作台年度统计")
     @GetMapping("/workbench")
     public ResultResponse<Map<String, Object>> workbenchStatistics(
@@ -108,6 +121,20 @@ public class StatisticsController {
         EasyExcel.write(response.getOutputStream(), DistrictStatisticsVO.class)
                 .sheet("区县统计表")
                 .doWrite(data);
+    }
+
+    @Operation(summary = "导出重点人群肺结核可疑症状筛查和推介情况报表")
+    @GetMapping("/key-population-tb-symptom-referral/export")
+    public void exportKeyPopulationTbSymptomReferral(
+            @RequestParam(required = false) String year,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String departmentIds,
+            HttpServletResponse response) throws IOException {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<KeyPopulationTbSymptomReferralStatisticsVO> data =
+                statisticsService.getKeyPopulationTbSymptomReferralStatistics(year, district, filterDeptIds);
+        setExcelResponse(response, "重点人群肺结核可疑症状筛查和推介情况报表");
+        KeyPopulationTbSymptomReferralExcelExportSupport.write(response.getOutputStream(), year, data);
     }
 
     private void setExcelResponse(HttpServletResponse response, String fileName) {
