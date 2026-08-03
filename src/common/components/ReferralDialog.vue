@@ -14,7 +14,7 @@ interface Props {
   /** 是否显示弹窗 */
   modelValue: boolean
   /** 业务记录ID */
-  bizId: number
+  bizId: string
   /** 业务类型，格式：{module}_{populationType}，如 screening_school */
   bizType: string
   /** 人群类型：school / key / close */
@@ -70,7 +70,7 @@ const populationLabel = computed(() =>
 
 // ====== 发起推送表单 ======
 const sendForm = reactive({
-  receiverOrgId: undefined as number | undefined,
+  receiverOrgId: undefined as string | undefined,
   referralReason: ""
 })
 const sending = ref(false)

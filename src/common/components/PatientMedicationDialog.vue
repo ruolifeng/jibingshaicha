@@ -52,7 +52,7 @@ const medicationForm = reactive({
 const saving = ref(false)
 const draftSaving = ref(false)
 const printVisible = ref(false)
-const formId = ref<number | undefined>(undefined)
+const formId = ref<string | undefined>(undefined)
 const startTreatmentDateManual = ref(false)
 
 const supervisorOptions = computed(() =>

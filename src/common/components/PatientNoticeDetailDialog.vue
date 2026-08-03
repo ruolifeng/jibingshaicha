@@ -47,7 +47,7 @@ watch(
   }
 )
 
-async function handleConfirmNotice(noticeId: number) {
+async function handleConfirmNotice(noticeId: string) {
   try {
     await ElMessageBox.confirm("确认接收此患者通知单吗？", "提示", { type: "info" })
     await confirmNoticeApi(noticeId)

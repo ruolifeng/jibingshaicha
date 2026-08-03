@@ -55,17 +55,17 @@ function isJointTrackingEnabled(row: any) {
 /** 有接收人时仅接收人可操作；共同追踪时发起方与接收方均可；无接收人时创建人或辖区一至五级用户可操作 */
 function canOperateTrack(row: any) {
   if (userStore.userRole === 1) return true
-  const uid = Number(userStore.userId)
+  const uid = String(userStore.userId)
   if (isFromRecommend(row) && row.receiverUserId) {
     if (isJointTrackingEnabled(row)) {
-      return uid === Number(row.receiverUserId) || uid === Number(row.creatorId)
+      return uid === String(row.receiverUserId) || uid === String(row.creatorId)
     }
-    return uid === Number(row.receiverUserId)
+    return uid === String(row.receiverUserId)
   }
   if (row.receiverUserId) {
-    return uid === Number(row.receiverUserId)
+    return uid === String(row.receiverUserId)
   }
-  if (uid === Number(row.creatorId)) return true
+  if (uid === String(row.creatorId)) return true
   // 追踪/大疫情：辖区一至五级用户对可见记录均可操作
   return userStore.userRole >= 2 && userStore.userRole <= 6
 }
@@ -73,7 +73,7 @@ function canOperateTrack(row: any) {
 /** 接收方在推介确认后可开启共同追踪 */
 function canEnableJointTracking(row: any) {
   if (row.archived || row.recommendStatus !== 2 || isJointTrackingEnabled(row)) return false
-  return Number(row.receiverUserId) === Number(userStore.userId) || userStore.userRole === 1
+  return String(row.receiverUserId) === String(userStore.userId) || userStore.userRole === 1
 }
 
 // ===== 列表 =====
@@ -213,7 +213,7 @@ async function handleEpidemicFileChange(uploadFile: any) {
 }
 
 /** 导出：filtered=筛选 / selected=勾选 / all=全部 */
-async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: number[]) {
+async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: string[]) {
   const isSelected = mode === "selected"
   const label = isSelected
     ? `选中的 ${ids!.length} 条`

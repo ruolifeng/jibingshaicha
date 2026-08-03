@@ -31,7 +31,7 @@ const activeTab = ref("workbench")
 const filterForm = reactive({
   year: String(getCurrentStatYear()),
   district: "",
-  departmentIds: [] as number[]
+  departmentIds: [] as string[]
 })
 
 const districtOptions = ref<string[]>([])

@@ -1,12 +1,11 @@
 <script lang="ts" setup>
+import type { DepartmentUserSelectNode } from "@@/utils/userDepartmentTree"
 import { getDepartmentListApi } from "@@/apis/department"
 import { getReferralReceiverUsersApi } from "@@/apis/users"
 import {
-  buildDepartmentUserSelectTree,
-  type DepartmentUserSelectNode
-} from "@@/utils/userDepartmentTree"
+  buildDepartmentUserSelectTree
 
-const modelValue = defineModel<number | undefined>()
+} from "@@/utils/userDepartmentTree"
 
 const props = withDefaults(defineProps<{
   placeholder?: string
@@ -16,6 +15,8 @@ const props = withDefaults(defineProps<{
   placeholder: "请选择部门下的接收用户",
   active: true
 })
+
+const modelValue = defineModel<string | undefined>()
 
 const loading = ref(false)
 const treeData = ref<DepartmentUserSelectNode[]>([])
@@ -60,7 +61,7 @@ watch(
       label: 'label',
       value: 'value',
       children: 'children',
-      disabled: 'disabled'
+      disabled: 'disabled',
     }"
   />
 </template>

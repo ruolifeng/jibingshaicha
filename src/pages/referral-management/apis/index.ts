@@ -1,7 +1,7 @@
 import { request } from "@/http/axios"
 
 /** 查询推介/追踪记录详情 */
-export function getReferralTrackingDetailApi(id: number) {
+export function getReferralTrackingDetailApi(id: string) {
   return request<ApiResponseData<any>>({
     url: `referral-tracking/${id}`,
     method: "get"
@@ -27,7 +27,7 @@ export function createReferralTrackingApi(data: Record<string, any>) {
 }
 
 /** 更新追踪记录（基本信息 / 诊断结果修正 / 追踪过程备注） */
-export function updateReferralTrackingApi(id: number, data: Record<string, any>) {
+export function updateReferralTrackingApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}`,
     method: "put",
@@ -36,7 +36,7 @@ export function updateReferralTrackingApi(id: number, data: Record<string, any>)
 }
 
 /** 发送推介通知（bizMode=recommend） */
-export function sendRecommendApi(id: number) {
+export function sendRecommendApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/send`,
     method: "post"
@@ -44,7 +44,7 @@ export function sendRecommendApi(id: number) {
 }
 
 /** 接收方确认接受推介通知单 */
-export function confirmRecommendApi(id: number) {
+export function confirmRecommendApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/confirm`,
     method: "post"
@@ -52,7 +52,7 @@ export function confirmRecommendApi(id: number) {
 }
 
 /** 接收方拒绝推介通知单 */
-export function rejectRecommendApi(id: number, reason?: string) {
+export function rejectRecommendApi(id: string, reason?: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/reject`,
     method: "post",
@@ -61,7 +61,7 @@ export function rejectRecommendApi(id: number, reason?: string) {
 }
 
 /** 接收方开启共同追踪（发起方与接收方均可追踪，次数合并计算） */
-export function enableJointTrackingApi(id: number) {
+export function enableJointTrackingApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/joint-tracking`,
     method: "post"
@@ -69,7 +69,7 @@ export function enableJointTrackingApi(id: number) {
 }
 
 /** 追踪操作（status: 1到位 2未到位 3其他） */
-export function trackReferralApi(id: number, status: number, remark?: string, actualArrivalDate?: string) {
+export function trackReferralApi(id: string, status: number, remark?: string, actualArrivalDate?: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/track`,
     method: "post",
@@ -78,7 +78,7 @@ export function trackReferralApi(id: number, status: number, remark?: string, ac
 }
 
 /** 保存到位后的感染筛查+胸片信息 */
-export function saveScreeningInfoApi(id: number, data: Record<string, any>) {
+export function saveScreeningInfoApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/screening`,
     method: "post",
@@ -87,7 +87,7 @@ export function saveScreeningInfoApi(id: number, data: Record<string, any>) {
 }
 
 /** 保存诊断结果并分流 */
-export function saveDiagnosisApi(id: number, diagnosisResult: string, diagnosisRemark?: string) {
+export function saveDiagnosisApi(id: string, diagnosisResult: string, diagnosisRemark?: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/diagnosis`,
     method: "post",
@@ -96,7 +96,7 @@ export function saveDiagnosisApi(id: number, diagnosisResult: string, diagnosisR
 }
 
 /** 删除推介/追踪记录 */
-export function deleteReferralTrackingApi(id: number) {
+export function deleteReferralTrackingApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}`,
     method: "delete"
@@ -104,7 +104,7 @@ export function deleteReferralTrackingApi(id: number) {
 }
 
 /** 批量删除推介/追踪记录 */
-export function batchDeleteReferralTrackingApi(ids: number[]) {
+export function batchDeleteReferralTrackingApi(ids: string[]) {
   return request<ApiResponseData<number>>({
     url: "referral-tracking/batch-delete",
     method: "delete",
@@ -171,7 +171,7 @@ export function importEpidemicTrackApi(file: File, addDuplicateRecords = false) 
 }
 
 /** 导出推介/追踪记录（支持筛选 / 勾选 ids / 全部） */
-export function exportReferralTrackApi(params: Record<string, any> & { ids?: number[] } = {}) {
+export function exportReferralTrackApi(params: Record<string, any> & { ids?: string[] } = {}) {
   const { ids, ...rest } = params
   return request<Blob>({
     url: "referral-tracking/export",

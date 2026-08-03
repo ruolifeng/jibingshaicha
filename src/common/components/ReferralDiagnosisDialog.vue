@@ -5,7 +5,7 @@ import { saveDiagnosisApi } from "@/pages/referral-management/apis"
 
 const props = defineProps<{
   visible: boolean
-  recordId?: number | null
+  recordId?: string | null
 }>()
 
 const emit = defineEmits<{

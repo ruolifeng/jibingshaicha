@@ -62,9 +62,9 @@ function isJointTrackingEnabled(row: any) {
 function canOperateRecommendTrack(row: any) {
   if (row.archived || row.recommendStatus !== 2) return false
   if (userStore.userRole === 1) return true
-  const uid = Number(userStore.userId)
-  if (uid === Number(row.receiverUserId)) return true
-  if (isJointTrackingEnabled(row) && uid === Number(row.creatorId)) return true
+  const uid = String(userStore.userId)
+  if (uid === String(row.receiverUserId)) return true
+  if (isJointTrackingEnabled(row) && uid === String(row.creatorId)) return true
   return false
 }
 
@@ -155,7 +155,7 @@ function handleReset() {
 }
 
 /** 导出：filtered=筛选 / selected=勾选 / all=全部 */
-async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: number[]) {
+async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: string[]) {
   const isSelected = mode === "selected"
   const label = isSelected
     ? `选中的 ${ids!.length} 条`
@@ -279,7 +279,7 @@ const createForm = reactive({
   recommendUnitName: "",
   fillUserName: "",
   recommendReason: "",
-  receiverUserId: undefined as number | undefined
+  receiverUserId: undefined as string | undefined
 })
 const createFormRef = ref()
 const sendingRecommend = ref(false)
@@ -335,9 +335,9 @@ function resolveRecommendUnitName() {
   return userStore.orgName || ""
 }
 
-function resolveReceiverUserName(receiverUserId?: number) {
+function resolveReceiverUserName(receiverUserId?: string) {
   if (!receiverUserId) return ""
-  const receiver = level34Users.value.find(u => Number(u.id) === Number(receiverUserId))
+  const receiver = level34Users.value.find(u => String(u.id) === String(receiverUserId))
   return receiver ? formatLevel34UserLabel(receiver) : ""
 }
 
@@ -393,12 +393,12 @@ function formatLevel34UserLabel(u: any) {
 
 /** 当前用户是否为推介创建人 */
 function isCreator(row: any) {
-  return Number(row.creatorId) === Number(userStore.userId)
+  return String(row.creatorId) === String(userStore.userId)
 }
 
 /** 当前用户是否为推介接收人 */
 function isReceiver(row: any) {
-  return Number(row.receiverUserId) === Number(userStore.userId)
+  return String(row.receiverUserId) === String(userStore.userId)
 }
 
 function canEditRecommend(row: any) {

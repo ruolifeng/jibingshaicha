@@ -5,11 +5,11 @@ import { request } from "@/http/axios"
 interface StatParams {
   year?: string
   district?: string
-  departmentIds?: number[]
+  departmentIds?: string[]
 }
 
 /** 获取区县选项列表（从实际数据动态获取） */
-export function getDistrictOptionsApi(departmentIds?: number[]) {
+export function getDistrictOptionsApi(departmentIds?: string[]) {
   return request<ApiResponseData<string[]>>({
     url: "statistics/district-options",
     method: "get",
@@ -36,7 +36,7 @@ export function getDistrictStatisticsApi(params: StatParams) {
 }
 
 /** 我的工作台年度统计 */
-export function getWorkbenchStatisticsApi(year?: number | string, departmentIds?: number[]) {
+export function getWorkbenchStatisticsApi(year?: number | string, departmentIds?: string[]) {
   return request<ApiResponseData<DashboardSummaryData>>({
     url: "statistics/workbench",
     method: "get",
@@ -67,7 +67,7 @@ export interface PatientHeatmapData {
   regions?: PatientHeatmapRegion[]
 }
 
-export function getPatientHeatmapApi(year?: number | string, district?: string, departmentIds?: number[]) {
+export function getPatientHeatmapApi(year?: number | string, district?: string, departmentIds?: string[]) {
   return request<ApiResponseData<PatientHeatmapData>>({
     url: "statistics/patient-heatmap",
     method: "get",
@@ -102,7 +102,7 @@ export function exportDistrictStatisticsApi(params: StatParams) {
 }
 
 /** 大汇总表导出（三类人群合并） */
-export function exportWideTableApi(year?: string, departmentIds?: number[]) {
+export function exportWideTableApi(year?: string, departmentIds?: string[]) {
   return request<Blob>({
     url: "export/wide-table",
     method: "get",
@@ -112,7 +112,7 @@ export function exportWideTableApi(year?: string, departmentIds?: number[]) {
 }
 
 /** 分类汇总表导出 */
-export function exportCategoryTableApi(populationType: string, year?: string, departmentIds?: number[]) {
+export function exportCategoryTableApi(populationType: string, year?: string, departmentIds?: string[]) {
   return request<Blob>({
     url: "export/category-table",
     method: "get",
@@ -122,7 +122,7 @@ export function exportCategoryTableApi(populationType: string, year?: string, de
 }
 
 /** 自定义字段导出 */
-export function exportCustomApi(populationType: string, fields: string, year?: string, departmentIds?: number[]) {
+export function exportCustomApi(populationType: string, fields: string, year?: string, departmentIds?: string[]) {
   return request<Blob>({
     url: "export/custom",
     method: "get",
@@ -137,7 +137,7 @@ export function exportAllPatientsApi(params?: {
   name?: string
   idNumber?: string
   archived?: number
-  departmentIds?: number[]
+  departmentIds?: string[]
 }) {
   return request<Blob>({
     url: "export/all-patients",
@@ -153,7 +153,7 @@ export function exportAllLatentApi(params?: {
   name?: string
   idNumber?: string
   archived?: number
-  departmentIds?: number[]
+  departmentIds?: string[]
 }) {
   return request<Blob>({
     url: "export/all-latent",

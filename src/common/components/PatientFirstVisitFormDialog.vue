@@ -36,7 +36,7 @@ function createEmptyForm() {
     educationItems[item] = ""
   })
   return {
-    id: undefined as number | undefined,
+    id: undefined as string | undefined,
     formNo: "",
     visitDate: "",
     visitMethod: "",

@@ -11,7 +11,7 @@ import { createLatentApi, getLatentDetailApi, updateLatentApi } from "@/pages/la
 
 const props = defineProps<{
   visible: boolean
-  latentId: number | null
+  latentId: string | null
 }>()
 
 const emit = defineEmits<{
@@ -20,7 +20,7 @@ const emit = defineEmits<{
 }>()
 
 const isCreate = computed(() => props.latentId == null)
-const screeningId = ref<number | null>(null)
+const screeningId = ref<string | null>(null)
 const showCrowdCategoryFields = computed(() => isCreate.value || screeningId.value == null)
 const showKeyPopulationSubCategories = computed(() =>
   showCrowdCategoryFields.value && form.populationType === "keyPopulation"

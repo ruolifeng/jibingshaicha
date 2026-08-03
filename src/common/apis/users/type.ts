@@ -1,5 +1,5 @@
 export interface UserInfo {
-  id: number
+  id: string
   username: string
   realName: string
   role: number
@@ -7,7 +7,7 @@ export interface UserInfo {
   orgName: string
   phone?: string
   avatar?: string
-  departmentId?: number | null
+  departmentId?: string | null
   departmentName?: string
   roles: string[]
   permissions: string[]

@@ -23,7 +23,7 @@ export function getSuspectedListApi(params: {
 }
 
 /** 追踪操作 */
-export function trackSuspectedApi(data: { id: number, status: number, remark?: string, actualArrivalDate?: string }) {
+export function trackSuspectedApi(data: { id: string, status: number, remark?: string, actualArrivalDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/track",
     method: "post",
@@ -32,7 +32,7 @@ export function trackSuspectedApi(data: { id: number, status: number, remark?: s
 }
 
 /** 转诊操作 */
-export function referralSuspectedApi(data: { id: number, result: string, remark?: string, actualReferralDate?: string }) {
+export function referralSuspectedApi(data: { id: string, result: string, remark?: string, actualReferralDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/referral",
     method: "post",
@@ -45,7 +45,7 @@ export function referralSuspectedApi(data: { id: number, result: string, remark?
  * 仅追踪到位且胸片结果未录入时可用。
  */
 export function submitXrayOnlyApi(data: {
-  id: number
+  id: string
   hasChestXray: string
   chestXrayDate?: string
   chestXrayResult?: string
@@ -62,7 +62,7 @@ export function submitXrayOnlyApi(data: {
  * 仅追踪到位且诊断结果未录入时可用；提交后按映射自动驱动转诊。
  */
 export function submitDiagnosisApi(data: {
-  id: number
+  id: string
   diagnosisFirst: string
 }) {
   return request<ApiResponseData<null>>({
@@ -77,7 +77,7 @@ export function submitDiagnosisApi(data: {
  *             本方法保留仅用于兼容旧前端代码。
  */
 export function submitXrayApi(data: {
-  id: number
+  id: string
   hasChestXray: string
   chestXrayDate?: string
   chestXrayResult?: string

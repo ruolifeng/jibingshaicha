@@ -52,6 +52,11 @@ knife4j:
 app:
   upload:
     dir: ./data/uploads
+  snowflake:
+    worker-id: 1
+    datacenter-id: 1
+  # 仅停机迁移存量自增 ID → 雪花 ID 时设为 true，跑完必须改回 false
+  migrate-snowflake-ids: false
 
 # Redis 配置（按需启用）
 #  data:

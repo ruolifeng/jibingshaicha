@@ -69,7 +69,7 @@ export interface ScreeningKeyPopulationQueryParams {
 }
 
 /** 导出重点人群筛查数据（可按勾选 ID 或当前筛选条件导出；空参数=导出全部） */
-export function exportScreeningKeyPopulationApi(params?: ScreeningKeyPopulationQueryParams & { ids?: number[] }) {
+export function exportScreeningKeyPopulationApi(params?: ScreeningKeyPopulationQueryParams & { ids?: string[] }) {
   const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/key-population/export",
@@ -84,7 +84,7 @@ export function exportScreeningKeyPopulationApi(params?: ScreeningKeyPopulationQ
 }
 
 /** 更新重点人群筛查记录 */
-export function updateScreeningKeyPopulationApi(id: number, data: Record<string, any>) {
+export function updateScreeningKeyPopulationApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `screening/key-population/update/${id}`,
     method: "put",
@@ -102,7 +102,7 @@ export function createScreeningKeyPopulationApi(data: Record<string, any>) {
 }
 
 /** 删除重点人群筛查记录（级联删除后续所有关联数据） */
-export function deleteScreeningKeyPopulationApi(id: number) {
+export function deleteScreeningKeyPopulationApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `screening/key-population/delete/${id}`,
     method: "delete"
@@ -110,7 +110,7 @@ export function deleteScreeningKeyPopulationApi(id: number) {
 }
 
 /** 批量删除重点人群筛查记录（级联删除） */
-export function batchDeleteScreeningKeyPopulationApi(ids: number[]) {
+export function batchDeleteScreeningKeyPopulationApi(ids: string[]) {
   return request<ApiResponseData<null>>({
     url: "screening/key-population/batch-delete",
     method: "delete",
@@ -139,7 +139,7 @@ export function deleteAllScreeningKeyPopulationApi() {
 }
 
 /** 按 ID 查询重点人群筛查记录详情 */
-export function getScreeningKeyPopulationDetailApi(id: number) {
+export function getScreeningKeyPopulationDetailApi(id: string) {
   return request<ApiResponseData<any>>({
     url: `screening/key-population/${id}`,
     method: "get"

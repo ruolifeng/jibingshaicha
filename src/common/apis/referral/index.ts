@@ -1,15 +1,15 @@
 import { request } from "@/http/axios"
 
 export interface SentReferralVO {
-  id: number
+  id: string
   bizType: string
   populationType: string
   moduleType: string
   subjectName: string
-  senderId: number
+  senderId: string
   senderName: string
   senderOrgName: string
-  receiverOrgId: number
+  receiverOrgId: string
   receiverName: string
   receiverOrgName: string
   /** 1=待确认  2=已接收  3=已拒绝 */
@@ -23,8 +23,8 @@ export interface SentReferralVO {
 }
 
 export interface ReferralRecord {
-  id: number
-  bizId: number
+  id: string
+  bizId: string
   bizType: string
   populationType: string
   moduleType: string
@@ -39,7 +39,7 @@ export interface ReferralRecord {
 }
 
 export interface SendReferralParams {
-  bizId: number
+  bizId: string
   bizType: string
   populationType: string
   moduleType: string
@@ -48,7 +48,7 @@ export interface SendReferralParams {
   summary?: string
   /** 转诊原因 */
   referralReason?: string
-  receiverOrgId: number
+  receiverOrgId: string
 }
 
 /** 发起转诊推送 */
@@ -61,7 +61,7 @@ export function sendReferralApi(data: SendReferralParams) {
 }
 
 /** 接收方确认接收 */
-export function confirmReferralApi(id: number, actualReferralDate?: string) {
+export function confirmReferralApi(id: string, actualReferralDate?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/confirm/${id}`,
     method: "post",
@@ -70,7 +70,7 @@ export function confirmReferralApi(id: number, actualReferralDate?: string) {
 }
 
 /** 接收方拒绝 */
-export function rejectReferralApi(id: number, rejectReason?: string) {
+export function rejectReferralApi(id: string, rejectReason?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/reject/${id}`,
     method: "post",
@@ -79,7 +79,7 @@ export function rejectReferralApi(id: number, rejectReason?: string) {
 }
 
 /** 发送方重新发起（仅拒绝后可用） */
-export function resendReferralApi(id: number) {
+export function resendReferralApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `referral/resend/${id}`,
     method: "post"
@@ -87,7 +87,7 @@ export function resendReferralApi(id: number) {
 }
 
 /** 查询某条业务关联的转诊列表 */
-export function getReferralListApi(bizId: number, bizType: string) {
+export function getReferralListApi(bizId: string, bizType: string) {
   return request<ApiResponseData<ReferralRecord[]>>({
     url: "referral/list",
     method: "get",

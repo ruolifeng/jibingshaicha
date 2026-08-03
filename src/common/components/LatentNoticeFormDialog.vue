@@ -53,7 +53,7 @@ const noticeForm = reactive({
   customPlanDetail: "",
   treatmentInstitution: "",
   issuedTime: "",
-  receiverOrgId: undefined as number | undefined
+  receiverOrgId: undefined as string | undefined
 })
 
 function getNowDateStr() {

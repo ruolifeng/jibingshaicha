@@ -19,7 +19,7 @@ export function getSuspectedListApi(params: {
 }
 
 /** 追踪操作 */
-export function trackSuspectedApi(data: { id: number, status: number, remark?: string, actualArrivalDate?: string }) {
+export function trackSuspectedApi(data: { id: string, status: number, remark?: string, actualArrivalDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/track",
     method: "post",
@@ -28,7 +28,7 @@ export function trackSuspectedApi(data: { id: number, status: number, remark?: s
 }
 
 /** 转诊操作 */
-export function referralSuspectedApi(data: { id: number, result: string, remark?: string, actualReferralDate?: string }) {
+export function referralSuspectedApi(data: { id: string, result: string, remark?: string, actualReferralDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/referral",
     method: "post",
@@ -38,7 +38,7 @@ export function referralSuspectedApi(data: { id: number, result: string, remark?
 
 /** 手动录入胸片检查与首次诊断结果（追踪到位后） */
 export function submitXrayApi(data: {
-  id: number
+  id: string
   hasChestXray: string
   chestXrayDate?: string
   chestXrayResult?: string

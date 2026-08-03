@@ -253,7 +253,7 @@ const noticeForm = reactive({
   customPlanDetail: "",
   treatmentInstitution: "",
   issuedTime: "",
-  receiverOrgId: undefined as number | undefined
+  receiverOrgId: undefined as string | undefined
 })
 
 function getNowDateStr() {
@@ -325,7 +325,7 @@ async function viewNotice(row: any) {
   } catch { /* handled */ }
 }
 
-async function handleConfirmNotice(noticeId: number) {
+async function handleConfirmNotice(noticeId: string) {
   try {
     await ElMessageBox.confirm("确认接收此通知单吗？", "提示", { type: "info" })
     await confirmNoticeApi(noticeId)

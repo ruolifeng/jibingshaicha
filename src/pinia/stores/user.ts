@@ -27,7 +27,7 @@ export const useUserStore = defineStore("user", () => {
 
   const avatar = ref<string>("")
 
-  const userId = ref<number>(0)
+  const userId = ref<string>("")
 
   const permissions = ref<string[]>([])
 
@@ -52,7 +52,7 @@ export const useUserStore = defineStore("user", () => {
     departmentName.value = data.departmentName || ""
     phone.value = data.phone || ""
     avatar.value = data.avatar || ""
-    userId.value = data.id || 0
+    userId.value = data.id != null ? String(data.id) : ""
     permissions.value = data.permissions || []
     roles.value = data.roles?.length > 0 ? data.roles : routerConfig.defaultRoles
   }

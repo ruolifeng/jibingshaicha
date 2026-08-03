@@ -40,9 +40,9 @@ async function loadRolePermissions() {
 
 async function handleSaveRole() {
   if (!treeRef.value) return
-  const checked = treeRef.value.getCheckedKeys() as number[]
-  const halfChecked = treeRef.value.getHalfCheckedKeys() as number[]
-  const allIds = [...checked, ...halfChecked]
+  const checked = treeRef.value.getCheckedKeys() as Array<string | number>
+  const halfChecked = treeRef.value.getHalfCheckedKeys() as Array<string | number>
+  const allIds = [...checked, ...halfChecked].map(id => String(id))
   try {
     await assignRolePermissionsApi(selectedRole.value, allIds)
     ElMessage.success("角色权限已保存")
@@ -57,7 +57,7 @@ watch(selectedRole, () => {
 
 // ---------- 用户额外权限（与角色权限合并） ----------
 const userList = ref<any[]>([])
-const selectedUserId = ref<number | undefined>()
+const selectedUserId = ref<string | undefined>()
 const userTreeRef = ref<any>(null)
 
 async function loadUserOptions() {
@@ -85,9 +85,9 @@ async function handleSaveUserPerms() {
     ElMessage.warning("请先选择用户")
     return
   }
-  const checked = userTreeRef.value.getCheckedKeys() as number[]
-  const halfChecked = userTreeRef.value.getHalfCheckedKeys() as number[]
-  const allIds = [...checked, ...halfChecked]
+  const checked = userTreeRef.value.getCheckedKeys() as string[]
+  const halfChecked = userTreeRef.value.getHalfCheckedKeys() as string[]
+  const allIds = [...checked, ...halfChecked].map(id => String(id))
   try {
     await assignUserPermissionsApi(selectedUserId.value, allIds)
     ElMessage.success("用户额外权限已保存（登录后生效）")
@@ -112,12 +112,14 @@ function userLabel(row: any) {
 }
 
 /** 只勾选叶子节点 ID（el-tree 父子联动展示；半选父节点由 halfChecked 保存） */
-function filterLeafIds(tree: any[], allIds: number[]): number[] {
-  const leafIds: number[] = []
+function filterLeafIds(tree: any[], allIds: Array<string | number>): string[] {
+  const idSet = new Set(allIds.map(id => String(id)))
+  const leafIds: string[] = []
   function walk(nodes: any[]) {
     for (const node of nodes) {
       if (!node.children || node.children.length === 0) {
-        if (allIds.includes(node.id)) leafIds.push(node.id)
+        const nid = String(node.id)
+        if (idSet.has(nid)) leafIds.push(nid)
       } else {
         walk(node.children)
       }

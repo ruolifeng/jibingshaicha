@@ -12,7 +12,7 @@ import { getPatientDetailApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
   visible: boolean
-  patientId: number | null
+  patientId: string | null
 }>()
 
 const emit = defineEmits<{
@@ -204,21 +204,21 @@ watch(() => props.visible, (val) => {
           {{ importSectionTitle }}（全部）
         </div>
         <el-descriptions v-if="hasImportFields" :column="2" border class="import-fields">
-            <el-descriptions-item
-              v-for="item in allImportFields"
-              :key="item.label"
-              :label="item.label"
-              :span="item.label === '备注' || item.label.length > 16 ? 2 : 1"
+          <el-descriptions-item
+            v-for="item in allImportFields"
+            :key="item.label"
+            :label="item.label"
+            :span="item.label === '备注' || item.label.length > 16 ? 2 : 1"
+          >
+            <span
+              v-if="item.label === '治疗分类'"
+              :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(detail) }"
             >
-              <span
-                v-if="item.label === '治疗分类'"
-                :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(detail) }"
-              >
-                {{ item.value }}
-              </span>
-              <span v-else>{{ item.value }}</span>
-            </el-descriptions-item>
-          </el-descriptions>
+              {{ item.value }}
+            </span>
+            <span v-else>{{ item.value }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
       </template>
     </div>
   </el-dialog>

@@ -78,7 +78,7 @@ export interface ScreeningCloseContactQueryParams {
 }
 
 /** 导出密接人群筛查 Excel（支持勾选 ID / 筛选条件 / 全部） */
-export function exportScreeningCloseContactApi(params?: ScreeningCloseContactQueryParams & { ids?: number[] }) {
+export function exportScreeningCloseContactApi(params?: ScreeningCloseContactQueryParams & { ids?: string[] }) {
   const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/close-contact/export",
@@ -102,7 +102,7 @@ export function createScreeningCloseContactApi(data: Record<string, any>) {
 }
 
 /** 更新密接人群筛查记录 */
-export function updateScreeningCloseContactApi(id: number, data: Record<string, any>) {
+export function updateScreeningCloseContactApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `screening/close-contact/update/${id}`,
     method: "put",
@@ -111,7 +111,7 @@ export function updateScreeningCloseContactApi(id: number, data: Record<string, 
 }
 
 /** 删除密接人群筛查记录（级联删除） */
-export function deleteScreeningCloseContactApi(id: number) {
+export function deleteScreeningCloseContactApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `screening/close-contact/delete/${id}`,
     method: "delete"
@@ -119,7 +119,7 @@ export function deleteScreeningCloseContactApi(id: number) {
 }
 
 /** 批量删除密接人群筛查记录（级联删除） */
-export function batchDeleteScreeningCloseContactApi(ids: number[]) {
+export function batchDeleteScreeningCloseContactApi(ids: string[]) {
   return request<ApiResponseData<null>>({
     url: "screening/close-contact/batch-delete",
     method: "delete",
@@ -148,7 +148,7 @@ export function deleteAllScreeningCloseContactApi() {
 }
 
 /** 按 ID 查询密接人群筛查记录详情 */
-export function getScreeningCloseContactDetailApi(id: number) {
+export function getScreeningCloseContactDetailApi(id: string) {
   return request<ApiResponseData<any>>({
     url: `screening/close-contact/${id}`,
     method: "get"
@@ -156,7 +156,7 @@ export function getScreeningCloseContactDetailApi(id: number) {
 }
 
 /** 设置预计完成治疗时间 */
-export function setExpectedEndDateApi(id: number, expectedDate: string) {
+export function setExpectedEndDateApi(id: string, expectedDate: string) {
   return request<ApiResponseData<null>>({
     url: `screening/close-contact/${id}/expected-end-date`,
     method: "post",
@@ -165,7 +165,7 @@ export function setExpectedEndDateApi(id: number, expectedDate: string) {
 }
 
 /** 确认治疗是否完成 */
-export function confirmTreatmentApi(id: number, done: boolean) {
+export function confirmTreatmentApi(id: string, done: boolean) {
   return request<ApiResponseData<null>>({
     url: `screening/close-contact/${id}/confirm-treatment`,
     method: "post",
@@ -174,7 +174,7 @@ export function confirmTreatmentApi(id: number, done: boolean) {
 }
 
 /** 提交3月复查结果（未发现异常流程） */
-export function submitThreeMonthCheckApi(id: number, data: {
+export function submitThreeMonthCheckApi(id: string, data: {
   checkDate: string
   checkResult: string
   finalResult: string

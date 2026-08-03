@@ -6,7 +6,7 @@ import { Bell, Calendar, FirstAidKit, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
-const selectedDepartmentIds = ref<number[]>([])
+const selectedDepartmentIds = ref<string[]>([])
 const yearOptions = buildStatYearOptions()
 const summaryLoading = ref(false)
 const summary = ref<DashboardSummaryData>({

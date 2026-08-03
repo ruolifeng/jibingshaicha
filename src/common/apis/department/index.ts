@@ -2,10 +2,10 @@ import { request } from "@/http/axios"
 
 /** 部门层级：1 市级 → 2 区县 → 3 社区（数据范围按上级可见全部下级，同级区县互不可见） */
 export interface Department {
-  id?: number
+  id?: string
   name: string
   description?: string
-  parentId?: number | null
+  parentId?: string | null
   /** 1 市级 2 区县 3 社区 */
   level?: number
   createTime?: string
@@ -13,17 +13,17 @@ export interface Department {
 
 /** 统计分析部门筛选树节点 */
 export interface DepartmentFilterOption {
-  id: number
+  id: string
   name: string
   level?: number
-  parentId?: number | null
+  parentId?: string | null
   children?: DepartmentFilterOption[]
 }
 
 export interface DepartmentPayload {
   name: string
   description?: string
-  parentId?: number | null
+  parentId?: string | null
   level: number
 }
 
@@ -66,7 +66,7 @@ export function createDepartmentApi(data: DepartmentPayload) {
 }
 
 /** 更新部门 */
-export function updateDepartmentApi(data: DepartmentPayload & { id: number }) {
+export function updateDepartmentApi(data: DepartmentPayload & { id: string }) {
   return request<ApiResponseData<null>>({
     url: "department/update",
     method: "put",
@@ -75,7 +75,7 @@ export function updateDepartmentApi(data: DepartmentPayload & { id: number }) {
 }
 
 /** 删除部门 */
-export function deleteDepartmentApi(id: number) {
+export function deleteDepartmentApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `department/delete/${id}`,
     method: "delete"

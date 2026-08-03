@@ -24,7 +24,7 @@ import {
 } from "../apis"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
-const selectedDepartmentIds = ref<number[]>([])
+const selectedDepartmentIds = ref<string[]>([])
 const yearOptions = buildStatYearOptions()
 
 const summaryLoading = ref(false)

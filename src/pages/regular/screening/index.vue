@@ -173,7 +173,7 @@ function isRequestTimeout(err: any) {
 }
 
 /** 导出 Excel：filtered=筛选结果 / selected=勾选 / all=全部 */
-async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: number[]) {
+async function handleExport(mode: "filtered" | "selected" | "all" = "filtered", ids?: string[]) {
   const isSelected = mode === "selected"
   const label = isSelected
     ? `选中的 ${ids!.length} 条`

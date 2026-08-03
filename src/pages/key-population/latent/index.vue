@@ -308,7 +308,7 @@ const noticeForm = reactive({
   customPlanDetail: "",
   treatmentInstitution: "",
   issuedTime: "",
-  receiverOrgId: undefined as number | undefined
+  receiverOrgId: undefined as string | undefined
 })
 
 function getNowDateStr() {
@@ -429,7 +429,7 @@ async function handleSendNotice() {
 }
 
 // ==================== 确认接收通知单 ====================
-async function handleConfirmNotice(noticeId: number) {
+async function handleConfirmNotice(noticeId: string) {
   try {
     await ElMessageBox.confirm("确认接收此通知单吗？", "提示", { type: "info" })
     await confirmNoticeApi(noticeId)
@@ -513,14 +513,14 @@ async function openTreatmentDialog(row: any) {
   await Promise.all([loadFollowUps(row.id), loadChecks(row.id)])
 }
 
-async function loadFollowUps(latentId: number) {
+async function loadFollowUps(latentId: string) {
   try {
     const { data } = await getFollowUpListApi(latentId)
     followUpList.value = data || []
   } catch { /* handled */ }
 }
 
-async function loadChecks(latentId: number) {
+async function loadChecks(latentId: string) {
   try {
     const { data } = await getCheckListApi(latentId)
     checkList.value = data || []

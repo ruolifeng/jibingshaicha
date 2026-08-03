@@ -197,7 +197,7 @@ const noticeForm = reactive({
   molecularTest: "",
   pathologyTest: "",
   otherNotes: "",
-  receiverOrgId: undefined as number | undefined
+  receiverOrgId: undefined as string | undefined
 })
 
 function openNoticeDialog(row: any) {
@@ -321,7 +321,7 @@ async function handleSaveDraft() {
 }
 
 // ==================== 确认接收患者通知单 ====================
-async function handleConfirmNotice(noticeId: number) {
+async function handleConfirmNotice(noticeId: string) {
   try {
     await ElMessageBox.confirm("确认接收此患者通知单吗？", "提示", { type: "info" })
     await confirmNoticeApi(noticeId)
@@ -352,7 +352,7 @@ const firstVisitDialogVisible = ref(false)
 const firstVisitRow = ref<any>(null)
 const firstVisitCompleted = ref(false)
 const firstVisitForm = reactive({
-  id: undefined as number | undefined,
+  id: undefined as string | undefined,
   formNo: "",
   visitDate: "",
   visitMethod: "",
@@ -416,7 +416,7 @@ function openFirstVisitDialog(row: any) {
   loadFirstVisitForm(row.id)
 }
 
-async function loadFirstVisitForm(patientId: number) {
+async function loadFirstVisitForm(patientId: string) {
   try {
     const { data } = await getFirstVisitApi(patientId)
     if (data) {

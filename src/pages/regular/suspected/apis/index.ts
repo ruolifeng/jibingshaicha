@@ -23,7 +23,7 @@ export function getSuspectedListApi(params: {
 }
 
 /** 追踪操作 */
-export function trackSuspectedApi(data: { id: number, status: number, remark?: string, actualArrivalDate?: string }) {
+export function trackSuspectedApi(data: { id: string, status: number, remark?: string, actualArrivalDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/track",
     method: "post",
@@ -32,7 +32,7 @@ export function trackSuspectedApi(data: { id: number, status: number, remark?: s
 }
 
 /** 转诊操作 */
-export function referralSuspectedApi(data: { id: number, result: string, remark?: string, actualReferralDate?: string }) {
+export function referralSuspectedApi(data: { id: string, result: string, remark?: string, actualReferralDate?: string }) {
   return request<ApiResponseData<null>>({
     url: "latent/referral",
     method: "post",
@@ -44,7 +44,7 @@ export function referralSuspectedApi(data: { id: number, result: string, remark?
  * 录入胸片检查结果（V13 拆分：仅胸片字段）
  */
 export function submitXrayOnlyApi(data: {
-  id: number
+  id: string
   hasChestXray: string
   chestXrayDate?: string
   chestXrayResult?: string
@@ -60,7 +60,7 @@ export function submitXrayOnlyApi(data: {
  * 录入首次诊断结果（V13 拆分：仅诊断字段；提交后自动驱动转诊）
  */
 export function submitDiagnosisApi(data: {
-  id: number
+  id: string
   diagnosisFirst: string
 }) {
   return request<ApiResponseData<null>>({
@@ -74,7 +74,7 @@ export function submitDiagnosisApi(data: {
  * @deprecated V13 起请改用 {@link submitXrayOnlyApi} + {@link submitDiagnosisApi}
  */
 export function submitXrayApi(data: {
-  id: number
+  id: string
   hasChestXray: string
   chestXrayDate?: string
   chestXrayResult?: string

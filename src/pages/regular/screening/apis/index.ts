@@ -24,7 +24,7 @@ export function uploadScreeningRegularApi(file: File, options: ImportConfirmOpti
 }
 
 /** 导出疫情筛查数据（可按勾选 ID 或当前筛选条件导出；空参数=导出全部） */
-export function exportScreeningRegularApi(params?: ScreeningKeyPopulationQueryParams & { ids?: number[] }) {
+export function exportScreeningRegularApi(params?: ScreeningKeyPopulationQueryParams & { ids?: string[] }) {
   const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/key-population/export",
@@ -40,7 +40,7 @@ export function exportScreeningRegularApi(params?: ScreeningKeyPopulationQueryPa
 }
 
 /** 更新疫情筛查记录 */
-export function updateScreeningRegularApi(id: number, data: Record<string, any>) {
+export function updateScreeningRegularApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `screening/key-population/update/${id}`,
     method: "put",
@@ -58,7 +58,7 @@ export function createScreeningRegularApi(data: Record<string, any>) {
 }
 
 /** 删除疫情筛查记录（级联删除后续所有关联数据） */
-export function deleteScreeningRegularApi(id: number) {
+export function deleteScreeningRegularApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `screening/key-population/delete/${id}`,
     method: "delete"
@@ -66,7 +66,7 @@ export function deleteScreeningRegularApi(id: number) {
 }
 
 /** 批量删除疫情筛查记录 */
-export function batchDeleteScreeningRegularApi(ids: number[]) {
+export function batchDeleteScreeningRegularApi(ids: string[]) {
   return request<ApiResponseData<null>>({
     url: "screening/key-population/batch-delete",
     method: "delete",
@@ -96,7 +96,7 @@ export function deleteAllScreeningRegularApi() {
 }
 
 /** 按 ID 查询疫情筛查记录详情 */
-export function getScreeningRegularDetailApi(id: number) {
+export function getScreeningRegularDetailApi(id: string) {
   return request<ApiResponseData<any>>({
     url: `screening/key-population/${id}`,
     method: "get"

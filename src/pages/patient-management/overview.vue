@@ -77,7 +77,7 @@ watch(() => searchForm.populationType, (val) => {
 
 const detailVisible = ref(false)
 const editVisible = ref(false)
-const currentId = ref<number | null>(null)
+const currentId = ref<string | null>(null)
 const exporting = ref(false)
 const importing = ref(false)
 const templateDownloading = ref(false)
@@ -233,7 +233,7 @@ async function handleImport(uploadFile: any) {
 }
 
 const confirmTransferDialogVisible = ref(false)
-const confirmTransferPending = ref<{ id: number, name: string } | null>(null)
+const confirmTransferPending = ref<{ id: string, name: string } | null>(null)
 const confirmTransferLoading = ref(false)
 
 async function handleAdminConfirmTransfer(row: any) {

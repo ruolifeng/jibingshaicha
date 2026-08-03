@@ -95,7 +95,7 @@ const printPatientName = ref("")
 const firstVisitPrintVisible = ref(false)
 const firstVisitPrintData = ref<Record<string, any> | null>(null)
 
-async function loadFollowUpHistory(patientId: number) {
+async function loadFollowUpHistory(patientId: string) {
   const [followUpRes, firstVisitRes] = await Promise.all([
     getFollowUpVisitListApi(patientId),
     getFirstVisitDetailApi(patientId).catch(() => ({ data: null }))

@@ -20,12 +20,12 @@ export function getPatientColumnDistinctApi(field: string, archived = 0) {
 }
 
 /** 患者详情 */
-export function getPatientDetailApi(id: number) {
+export function getPatientDetailApi(id: string) {
   return request<ApiResponseData<any>>({ url: `patient/${id}`, method: "get" })
 }
 
 /** 更新患者基本信息 */
-export function updatePatientApi(id: number, data: Record<string, any>) {
+export function updatePatientApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: `patient/${id}`, method: "put", data })
 }
 
@@ -35,7 +35,7 @@ export function createPatientApi(data: Record<string, any>) {
 }
 
 /** 批量删除患者（级联删除） */
-export function batchDeletePatientsApi(ids: number[]) {
+export function batchDeletePatientsApi(ids: string[]) {
   return request<ApiResponseData<null>>({ url: "patient/batch-delete", method: "delete", data: { ids } })
 }
 
@@ -50,7 +50,7 @@ export function exportAllPatientsApi(params: Record<string, any>) {
 }
 
 /** 导出勾选患者的首次入户随访信息 */
-export function exportPatientFirstVisitsApi(ids: number[]) {
+export function exportPatientFirstVisitsApi(ids: string[]) {
   return request<Blob>({
     url: "export/patient-first-visits",
     method: "get",
@@ -60,7 +60,7 @@ export function exportPatientFirstVisitsApi(ids: number[]) {
 }
 
 /** 导出勾选患者的后续随访信息 */
-export function exportPatientFollowUpVisitsApi(ids: number[]) {
+export function exportPatientFollowUpVisitsApi(ids: string[]) {
   return request<Blob>({
     url: "export/patient-follow-up-visits",
     method: "get",
@@ -113,17 +113,17 @@ export function getPatientHistoryListApi(params: Record<string, any>) {
 }
 
 /** 删除患者（级联删除） */
-export function deletePatientApi(id: number) {
+export function deletePatientApi(id: string) {
   return request<ApiResponseData<null>>({ url: `patient/${id}`, method: "delete" })
 }
 
 /** 归档患者 */
-export function archivePatientApi(id: number) {
+export function archivePatientApi(id: string) {
   return request<ApiResponseData<null>>({ url: `patient/archive/${id}`, method: "post" })
 }
 
 /** 解锁停止治疗归档的患者（管理员） */
-export function unarchivePatientFromStopTreatmentApi(id: number) {
+export function unarchivePatientFromStopTreatmentApi(id: string) {
   return request<ApiResponseData<null>>({ url: `patient/unarchive/${id}`, method: "post" })
 }
 
@@ -133,12 +133,12 @@ export function sendPatientNoticeApi(data: Record<string, any>) {
 }
 
 /** 确认接收通知单 */
-export function confirmNoticeApi(id: number) {
+export function confirmNoticeApi(id: string) {
   return request<ApiResponseData<null>>({ url: `notice/confirm/${id}`, method: "post" })
 }
 
 /** 查询业务关联通知单列表 */
-export function getNoticeListByBizApi(bizId: number, noticeType: string) {
+export function getNoticeListByBizApi(bizId: string, noticeType: string) {
   return request<ApiResponseData<any[]>>({
     url: "notice/list",
     method: "get",
@@ -147,7 +147,7 @@ export function getNoticeListByBizApi(bizId: number, noticeType: string) {
 }
 
 /** 按 ID 查询通知单详情（含发送人/接收人） */
-export function getNoticeDetailApi(id: number) {
+export function getNoticeDetailApi(id: string) {
   return request<ApiResponseData<any>>({ url: `notice/detail/${id}`, method: "get" })
 }
 
@@ -162,7 +162,7 @@ export function saveMedicationPickupApi(data: Record<string, any>) {
 }
 
 /** 查询领药记录列表 */
-export function getMedicationPickupListApi(patientId: number) {
+export function getMedicationPickupListApi(patientId: string) {
   return request<ApiResponseData<any[]>>({ url: `patient/medication-pickup/list/${patientId}`, method: "get" })
 }
 
@@ -172,7 +172,7 @@ export function saveFirstVisitDraftApi(data: Record<string, any>) {
 }
 
 /** 查询首次随访详情 */
-export function getFirstVisitDetailApi(patientId: number) {
+export function getFirstVisitDetailApi(patientId: string) {
   return request<ApiResponseData<any>>({ url: `patient/first-visit/${patientId}`, method: "get" })
 }
 
@@ -187,17 +187,17 @@ export function saveFollowUpDraftApi(data: Record<string, any>) {
 }
 
 /** 查询后续随访草稿 */
-export function getFollowUpDraftApi(patientId: number) {
+export function getFollowUpDraftApi(patientId: string) {
   return request<ApiResponseData<any>>({ url: `patient/follow-up/draft/${patientId}`, method: "get" })
 }
 
 /** 查询后续随访列表 */
-export function getFollowUpVisitListApi(patientId: number) {
+export function getFollowUpVisitListApi(patientId: string) {
   return request<ApiResponseData<any[]>>({ url: `patient/follow-up/list/${patientId}`, method: "get" })
 }
 
 /** 删除单条后续随访记录 */
-export function deleteFollowUpVisitApi(id: number) {
+export function deleteFollowUpVisitApi(id: string) {
   return request<ApiResponseData<null>>({ url: `patient/follow-up/${id}`, method: "delete" })
 }
 
@@ -207,12 +207,12 @@ export function saveMedicationApi(data: Record<string, any>) {
 }
 
 /** 查询服药管理 */
-export function getMedicationDetailApi(patientId: number) {
+export function getMedicationDetailApi(patientId: string) {
   return request<ApiResponseData<any>>({ url: `patient/medication/${patientId}`, method: "get" })
 }
 
 /** 转诊操作（患者） */
-export function referralPatientApi(data: { id: number, result: string, remark?: string }) {
+export function referralPatientApi(data: { id: string, result: string, remark?: string }) {
   return request<ApiResponseData<null>>({ url: "patient/referral", method: "post", data })
 }
 

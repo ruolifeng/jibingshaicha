@@ -35,7 +35,7 @@ const form = reactive({
   crowdCategory: "",
   treatmentPlan: "",
   customPlanDetail: "",
-  receiverOrgId: undefined as number | undefined
+  receiverOrgId: undefined as string | undefined
 })
 
 const rules = {
@@ -46,7 +46,7 @@ const rules = {
 }
 
 // 5级用户列表
-const receiverUsers = ref<{ id: number, realName: string, username: string, orgName: string }[]>([])
+const receiverUsers = ref<{ id: string, realName: string, username: string, orgName: string }[]>([])
 
 async function loadReceiverUsers() {
   try {

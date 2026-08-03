@@ -110,14 +110,14 @@ const dialogVisible = ref(false)
 const dialogTitle = ref("新增用户")
 const isEdit = ref(false)
 const formData = reactive({
-  id: null as number | null,
+  id: null as string | null,
   username: "",
   password: "",
   realName: "",
   role: 6,
   orgName: "",
   phone: "",
-  departmentId: undefined as number | undefined
+  departmentId: undefined as string | undefined
 })
 
 function openCreateDialog() {

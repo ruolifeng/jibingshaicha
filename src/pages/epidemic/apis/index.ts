@@ -26,7 +26,7 @@ export function getEpidemicListApi(params: Record<string, any>) {
 }
 
 /** 追踪操作 */
-export function trackEpidemicApi(data: { id: number, status: number, remark?: string }) {
+export function trackEpidemicApi(data: { id: string, status: number, remark?: string }) {
   return request<ApiResponseData<null>>({
     url: "epidemic/track",
     method: "post",
@@ -36,7 +36,7 @@ export function trackEpidemicApi(data: { id: number, status: number, remark?: st
 
 /** 录入胸片结果 */
 export function submitEpidemicXrayApi(data: {
-  id: number
+  id: string
   hasChestXray: string
   chestXrayDate?: string
   chestXrayResult?: string
@@ -49,7 +49,7 @@ export function submitEpidemicXrayApi(data: {
 }
 
 /** 录入诊断并触发自动分流 */
-export function submitEpidemicDiagnosisApi(data: { id: number, diagnosisResult: string }) {
+export function submitEpidemicDiagnosisApi(data: { id: string, diagnosisResult: string }) {
   return request<ApiResponseData<null>>({
     url: "epidemic/diagnosis",
     method: "post",

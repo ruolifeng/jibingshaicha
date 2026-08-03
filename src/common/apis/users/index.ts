@@ -46,7 +46,7 @@ export function updateCurrentUserApi(data: Record<string, any>) {
 }
 
 /** 删除用户 */
-export function deleteUserApi(id: number) {
+export function deleteUserApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `user/delete/${id}`,
     method: "delete"
