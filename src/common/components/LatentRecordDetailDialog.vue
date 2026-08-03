@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import { TRACKING_STATUS_MAP, getPopulationTypeLabel } from "@@/constants/disease"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
+import { getPopulationTypeLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
 import { getLatentDetailApi } from "@/pages/latent-management/apis"
 
 const props = defineProps<{
   visible: boolean
-  latentId: number | null
+  latentId: string | null
 }>()
 
 const emit = defineEmits<{

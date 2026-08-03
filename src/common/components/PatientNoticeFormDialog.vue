@@ -72,7 +72,7 @@ const noticeForm = reactive({
   otherNotes: "",
   medicationManagementUnit: "",
   remark: "",
-  receiverOrgId: undefined as number | undefined
+  receiverOrgId: undefined as string | undefined
 })
 
 function resolveNoticeDrugResistance(row: Record<string, any>): string {

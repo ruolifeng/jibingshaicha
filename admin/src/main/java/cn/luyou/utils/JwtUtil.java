@@ -27,8 +27,9 @@ public class JwtUtil {
      * @return JWT Token 字符串
      */
     public String generateToken(Long userId) {
+        // 以字符串写入，避免雪花 ID 在 JSON number 中精度丢失
         return JWT.create()
-                .setPayload("userId", userId)
+                .setPayload("userId", String.valueOf(userId))
                 .setExpiresAt(new java.util.Date(System.currentTimeMillis() + expire))
                 .setKey(secret.getBytes())
                 .sign();

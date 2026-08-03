@@ -10,7 +10,7 @@ export function getMessageListApi(params: { page: number, size: number, isRead?:
 }
 
 /** 标记已读 */
-export function markMessageReadApi(id: number) {
+export function markMessageReadApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `message/read/${id}`,
     method: "post"
@@ -18,7 +18,7 @@ export function markMessageReadApi(id: number) {
 }
 
 /** 在消息页确认接收通知单 */
-export function confirmNoticeFromMessageApi(noticeId: number) {
+export function confirmNoticeFromMessageApi(noticeId: string) {
   return request<ApiResponseData<null>>({
     url: `notice/confirm/${noticeId}`,
     method: "post"
@@ -34,7 +34,7 @@ export function getUnreadCountApi() {
 }
 
 /** 删除消息 */
-export function deleteMessageApi(id: number) {
+export function deleteMessageApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `message/${id}`,
     method: "delete"
@@ -42,14 +42,14 @@ export function deleteMessageApi(id: number) {
 }
 
 export interface SentNoticeVO {
-  id: number
+  id: string
   noticeType: string
   populationType: string
   patientName: string
-  senderId: number
+  senderId: string
   senderName: string
   senderOrgName: string
-  receiverOrgId: number
+  receiverOrgId: string
   receiverName: string
   receiverOrgName: string
   /** 1=已发送 2=已确认 */
@@ -68,7 +68,7 @@ export function getSentNoticeListApi(params: { pageNum: number, size: number }) 
 }
 
 /** 催促接收方接收通知单 */
-export function remindNoticeApi(id: number) {
+export function remindNoticeApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `notice/remind/${id}`,
     method: "post"
@@ -78,15 +78,15 @@ export function remindNoticeApi(id: number) {
 // ====== 转诊相关 ======
 
 export interface SentReferralVO {
-  id: number
+  id: string
   bizType: string
   populationType: string
   moduleType: string
   subjectName: string
-  senderId: number
+  senderId: string
   senderName: string
   senderOrgName: string
-  receiverOrgId: number
+  receiverOrgId: string
   receiverName: string
   receiverOrgName: string
   /** 1=待确认  2=已接收  3=已拒绝 */
@@ -100,17 +100,17 @@ export interface SentReferralVO {
 }
 
 export interface ReferralDetailVO {
-  id: number
+  id: string
   bizType: string
   populationType: string
   moduleType: string
   subjectName: string
   /** 业务摘要 JSON 字符串 */
   summary: string | null
-  senderId: number
+  senderId: string
   senderName: string
   senderOrgName: string
-  receiverOrgId: number
+  receiverOrgId: string
   receiverName: string
   receiverOrgName: string
   /** 1=待确认  2=已接收  3=已拒绝 */
@@ -124,7 +124,7 @@ export interface ReferralDetailVO {
 }
 
 /** 查询转诊详情（含发送方信息） */
-export function getReferralDetailApi(id: number) {
+export function getReferralDetailApi(id: string) {
   return request<ApiResponseData<ReferralDetailVO>>({
     url: `referral/${id}`,
     method: "get"
@@ -132,7 +132,7 @@ export function getReferralDetailApi(id: number) {
 }
 
 /** 在消息页确认接收转诊 */
-export function confirmReferralFromMessageApi(referralId: number, actualReferralDate?: string) {
+export function confirmReferralFromMessageApi(referralId: string, actualReferralDate?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/confirm/${referralId}`,
     method: "post",
@@ -141,7 +141,7 @@ export function confirmReferralFromMessageApi(referralId: number, actualReferral
 }
 
 /** 在消息页拒绝转诊 */
-export function rejectReferralFromMessageApi(referralId: number, rejectReason?: string) {
+export function rejectReferralFromMessageApi(referralId: string, rejectReason?: string) {
   return request<ApiResponseData<null>>({
     url: `referral/reject/${referralId}`,
     method: "post",

@@ -35,16 +35,16 @@ const isExpandAll = ref(true)
 const importLoading = ref(false)
 
 function buildDepartmentTree(list: Department[]): DepartmentTree[] {
-  const map = new Map<number, DepartmentTree>()
+  const map = new Map<string, DepartmentTree>()
   const roots: DepartmentTree[] = []
 
   for (const item of list) {
     if (item.id == null) continue
-    map.set(item.id, { ...item, children: [] })
+    map.set(String(item.id), { ...item, children: [] })
   }
 
   for (const node of map.values()) {
-    const parentId = node.parentId
+    const parentId = node.parentId != null ? String(node.parentId) : null
     if (parentId != null && map.has(parentId)) {
       map.get(parentId)!.children!.push(node)
     } else {
@@ -53,7 +53,7 @@ function buildDepartmentTree(list: Department[]): DepartmentTree[] {
   }
 
   const sortNodes = (nodes: DepartmentTree[]) => {
-    nodes.sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || (a.id ?? 0) - (b.id ?? 0))
+    nodes.sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || String(a.id ?? "").localeCompare(String(b.id ?? "")))
     nodes.forEach((node) => {
       if (node.children?.length) {
         sortNodes(node.children)
@@ -97,11 +97,11 @@ const dialogTitle = ref("新增部门")
 const isEdit = ref(false)
 const formRef = ref()
 const formData = reactive<{
-  id: number | null
+  id: string | null
   name: string
   description: string
   level: number
-  parentId: number | undefined
+  parentId: string | undefined
 }>({
   id: null,
   name: "",
@@ -118,17 +118,17 @@ const rules = {
 /** 当前可选的上级：区县只能选市级；社区只能选区县 */
 const parentOptions = computed(() => {
   const selfId = formData.id
-  const rows = tableData.value.filter((d: Department): d is Department & { id: number } => d.id != null)
+  const rows = tableData.value.filter((d: Department): d is Department & { id: string } => d.id != null)
   if (formData.level === 2) {
-    return rows.filter((d: Department & { id: number }) => d.id !== selfId && d.level === 1).map((d: Department & { id: number }) => ({ id: d.id, name: d.name }))
+    return rows.filter((d: Department & { id: string }) => d.id !== selfId && d.level === 1).map((d: Department & { id: string }) => ({ id: d.id, name: d.name }))
   }
   if (formData.level === 3) {
-    return rows.filter((d: Department & { id: number }) => d.id !== selfId && d.level === 2).map((d: Department & { id: number }) => ({ id: d.id, name: d.name }))
+    return rows.filter((d: Department & { id: string }) => d.id !== selfId && d.level === 2).map((d: Department & { id: string }) => ({ id: d.id, name: d.name }))
   }
-  return [] as { id: number, name: string }[]
+  return [] as { id: string, name: string }[]
 })
 
-function resetForm(level = 1, parentId?: number) {
+function resetForm(level = 1, parentId?: string) {
   formData.id = null
   formData.name = ""
   formData.description = ""

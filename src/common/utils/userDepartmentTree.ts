@@ -9,7 +9,7 @@ export interface UserTreeRow {
   nodeType: UserTreeRowType
   children?: UserTreeRow[]
   /** 部门节点 */
-  id?: number
+  id?: string
   name?: string
   level?: number
   /** 含下级部门在内的用户总数 */
@@ -20,18 +20,18 @@ export interface UserTreeRow {
   role?: number
   orgName?: string
   phone?: string
-  departmentId?: number | null
+  departmentId?: string | null
   createTime?: string
 }
 
 export interface UserRecord {
-  id: number
+  id: string
   username: string
   realName?: string
   role: number
   orgName?: string
   phone?: string
-  departmentId?: number | null
+  departmentId?: string | null
   createTime?: string
 }
 
@@ -78,9 +78,9 @@ function filterUsers(users: UserRecord[], options?: BuildUserTreeOptions): UserR
   return result
 }
 
-function enrichDeptNode(dept: DepartmentTree, usersByDept: Map<number, UserRecord[]>): UserTreeRow {
+function enrichDeptNode(dept: DepartmentTree, usersByDept: Map<string, UserRecord[]>): UserTreeRow {
   const subDepts = dept.children?.map(child => enrichDeptNode(child, usersByDept)) ?? []
-  const directUsers = [...(usersByDept.get(dept.id!) ?? [])]
+  const directUsers = [...(usersByDept.get(String(dept.id!)) ?? [])]
   sortUsers(directUsers)
   const userNodes = directUsers.map(userToNode)
 
@@ -129,12 +129,12 @@ export function buildUserDepartmentTree(
 ): UserTreeRow[] {
   const filtered = filterUsers(users, options)
 
-  const usersByDept = new Map<number, UserRecord[]>()
+  const usersByDept = new Map<string, UserRecord[]>()
   const unassigned: UserRecord[] = []
-  const deptIds = new Set(departments.map(d => d.id).filter((id): id is number => id != null))
+  const deptIds = new Set(departments.map(d => d.id).filter((id): id is string => id != null).map(String))
 
   for (const user of filtered) {
-    const deptId = user.departmentId
+    const deptId = user.departmentId != null ? String(user.departmentId) : null
     if (deptId == null || !deptIds.has(deptId)) {
       unassigned.push(user)
     } else {

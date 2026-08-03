@@ -12,7 +12,7 @@ export interface FollowUpCaseClosureStats {
 
 /** 草稿转完成或新建时，当前随访尚未计入已完成列表 */
 export function shouldIncludeCurrentFollowUpInStats(
-  initialData?: { id?: number, status?: number } | null
+  initialData?: { id?: string, status?: number } | null
 ): boolean {
   if (!initialData?.id) return true
   return initialData.status !== 1
@@ -87,7 +87,7 @@ export interface FollowUpHistoryDisplayRow {
   missedDoses: string | number
   doctorSignature: string
   /** 后续随访原始字段（修改/删除/打印用） */
-  id?: number
+  id?: string
   status?: number
   createTime?: string | null
   editable?: boolean | null

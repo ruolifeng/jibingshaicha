@@ -95,7 +95,7 @@ export function saveFirstVisitDraftApi(data: Record<string, any>) {
 }
 
 /** 查询首次随访 */
-export function getFirstVisitApi(patientId: number) {
+export function getFirstVisitApi(patientId: string) {
   return request<ApiResponseData<any>>({
     url: `patient/first-visit/${patientId}`,
     method: "get"
@@ -121,7 +121,7 @@ export function saveFollowUpDraftApi(data: Record<string, any>) {
 }
 
 /** 查询后续随访草稿 */
-export function getFollowUpDraftApi(patientId: number) {
+export function getFollowUpDraftApi(patientId: string) {
   return request<ApiResponseData<any>>({
     url: `patient/follow-up/draft/${patientId}`,
     method: "get"
@@ -129,7 +129,7 @@ export function getFollowUpDraftApi(patientId: number) {
 }
 
 /** 患者结案全程管理统计（实际访视/服药次数） */
-export function getFollowUpCaseClosureStatsApi(patientId: number, includeCurrentFollowUp = true) {
+export function getFollowUpCaseClosureStatsApi(patientId: string, includeCurrentFollowUp = true) {
   return request<ApiResponseData<{ actualVisitCount: number, actualDoseCount: number }>>({
     url: `patient/follow-up/case-closure-stats/${patientId}`,
     method: "get",
@@ -138,7 +138,7 @@ export function getFollowUpCaseClosureStatsApi(patientId: number, includeCurrent
 }
 
 /** 后续随访列表 */
-export function getFollowUpListApi(patientId: number) {
+export function getFollowUpListApi(patientId: string) {
   return request<ApiResponseData<any[]>>({
     url: `patient/follow-up/list/${patientId}`,
     method: "get"
@@ -146,7 +146,7 @@ export function getFollowUpListApi(patientId: number) {
 }
 
 /** 删除单条后续随访记录 */
-export function deleteFollowUpVisitApi(id: number) {
+export function deleteFollowUpVisitApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `patient/follow-up/${id}`,
     method: "delete"
@@ -163,7 +163,7 @@ export function saveMedicationApi(data: Record<string, any>) {
 }
 
 /** 查询服药管理 */
-export function getMedicationApi(patientId: number) {
+export function getMedicationApi(patientId: string) {
   return request<ApiResponseData<any>>({
     url: `patient/medication/${patientId}`,
     method: "get"
@@ -180,7 +180,7 @@ export function completeMedicationApi(data: Record<string, any>) {
 }
 
 /** 归档患者 */
-export function archivePatientApi(id: number) {
+export function archivePatientApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `patient/archive/${id}`,
     method: "post"

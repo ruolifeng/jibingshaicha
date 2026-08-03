@@ -33,7 +33,7 @@ import ImageUploader from "./ImageUploader.vue"
 
 interface Props {
   visible: boolean
-  patientId: number | null
+  patientId: string | null
   patientName?: string
   /** 患者行数据，用于化疗方案回退预填（病案首次治疗方案） */
   patientRow?: Record<string, any> | null
@@ -82,7 +82,7 @@ const dialogTitle = computed(() => {
 
 const submitting = ref(false)
 const draftSaving = ref(false)
-const draftId = ref<number | null>(null)
+const draftId = ref<string | null>(null)
 
 const caseClosureStatsAutoFilled = computed(() => form.stopTreatment === "是")
 

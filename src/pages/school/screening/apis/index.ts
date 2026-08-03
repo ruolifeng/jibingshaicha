@@ -44,7 +44,7 @@ export interface ScreeningSchoolQueryParams {
 }
 
 /** 导出学校人群筛查数据（可按勾选 ID 或当前筛选条件导出） */
-export function exportScreeningSchoolApi(params?: ScreeningSchoolQueryParams & { ids?: number[] }) {
+export function exportScreeningSchoolApi(params?: ScreeningSchoolQueryParams & { ids?: string[] }) {
   const { ids, ...rest } = params ?? {}
   return request<Blob>({
     url: "screening/school/export",
@@ -59,7 +59,7 @@ export function exportScreeningSchoolApi(params?: ScreeningSchoolQueryParams & {
 }
 
 /** 更新学校人群筛查记录 */
-export function updateScreeningSchoolApi(id: number, data: Record<string, any>) {
+export function updateScreeningSchoolApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `screening/school/update/${id}`,
     method: "put",
@@ -77,7 +77,7 @@ export function createScreeningSchoolApi(data: Record<string, any>) {
 }
 
 /** 删除学校人群筛查记录（级联删除后续所有关联数据） */
-export function deleteScreeningSchoolApi(id: number) {
+export function deleteScreeningSchoolApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `screening/school/delete/${id}`,
     method: "delete"
@@ -85,7 +85,7 @@ export function deleteScreeningSchoolApi(id: number) {
 }
 
 /** 批量删除学校人群筛查记录（级联删除） */
-export function batchDeleteScreeningSchoolApi(ids: number[]) {
+export function batchDeleteScreeningSchoolApi(ids: string[]) {
   return request<ApiResponseData<null>>({
     url: "screening/school/batch-delete",
     method: "delete",
@@ -114,7 +114,7 @@ export function deleteAllScreeningSchoolApi() {
 }
 
 /** 按 ID 查询学校人群筛查记录详情 */
-export function getScreeningSchoolDetailApi(id: number) {
+export function getScreeningSchoolDetailApi(id: string) {
   return request<ApiResponseData<any>>({
     url: `screening/school/${id}`,
     method: "get"

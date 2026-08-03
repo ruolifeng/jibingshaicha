@@ -47,10 +47,11 @@ public class PermissionController {
     @OperationLog(type = "update", module = "system", action = "分配角色权限")
     public ResultResponse<Void> assign(@RequestBody Map<String, Object> params) {
         userService.checkPermissionCode("permission:assign");
-        int role = (int) params.get("role");
+        int role = Integer.parseInt(params.get("role").toString());
         @SuppressWarnings("unchecked")
-        List<Number> ids = (List<Number>) params.get("permissionIds");
-        List<Long> permissionIds = ids.stream().map(Number::longValue).toList();
+        List<Object> ids = (List<Object>) params.get("permissionIds");
+        List<Long> permissionIds = ids == null ? List.of()
+                : ids.stream().map(o -> Long.valueOf(o.toString())).toList();
         permissionService.assignRolePermissions(role, permissionIds);
         return ResultRes.success(null);
     }
@@ -68,11 +69,12 @@ public class PermissionController {
     @OperationLog(type = "update", module = "system", action = "分配用户额外权限")
     public ResultResponse<Void> assignUser(@RequestBody Map<String, Object> params) {
         userService.checkAnyPermissionCode("system:permissions", "permission:assign");
-        long userId = ((Number) params.get("userId")).longValue();
+        long userId = Long.parseLong(params.get("userId").toString());
         userService.assertSameDepartmentAccess(userId);
         @SuppressWarnings("unchecked")
-        List<Number> ids = (List<Number>) params.get("permissionIds");
-        List<Long> permissionIds = ids == null ? List.of() : ids.stream().map(Number::longValue).toList();
+        List<Object> ids = (List<Object>) params.get("permissionIds");
+        List<Long> permissionIds = ids == null ? List.of()
+                : ids.stream().map(o -> Long.valueOf(o.toString())).toList();
         permissionService.assignUserPermissions(userId, permissionIds);
         return ResultRes.success(null);
     }

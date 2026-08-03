@@ -11,7 +11,7 @@ USE `disease_monitor`;
 -- ==================== 系统表 ====================
 
 CREATE TABLE IF NOT EXISTS `user` (
-    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `id`          BIGINT       NOT NULL COMMENT '主键',
     `username`    VARCHAR(64)  NOT NULL COMMENT '用户名',
     `password`    VARCHAR(128) NOT NULL COMMENT '密码',
     `real_name`   VARCHAR(64)  DEFAULT NULL COMMENT '真实姓名',
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS `user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
 
 CREATE TABLE IF NOT EXISTS `sys_sms_config` (
-    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`          BIGINT       NOT NULL,
     `enabled`     TINYINT      NOT NULL DEFAULT 0 COMMENT '是否开启短信：0否 1是',
     `secret_id`   VARCHAR(128) DEFAULT NULL COMMENT '腾讯云 SecretId',
     `secret_key`  VARCHAR(256) DEFAULT NULL COMMENT '腾讯云 SecretKey',
@@ -42,19 +42,19 @@ CREATE TABLE IF NOT EXISTS `sys_sms_config` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统短信配置（单行）';
 
-INSERT INTO `sys_sms_config` (`enabled`, `region`, `deleted`)
-SELECT 0, 'ap-guangzhou', 0
+INSERT INTO `sys_sms_config` (`id`, `enabled`, `region`, `deleted`)
+SELECT 1, 0, 'ap-guangzhou', 0
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM `sys_sms_config` WHERE `deleted` = 0 LIMIT 1);
 
 -- 初始密码均为 123456，已使用 BCrypt(strength=10) 加密（可重复执行，已存在则跳过）
-INSERT IGNORE INTO `user` (`username`, `password`, `real_name`, `role`, `org_name`) VALUES
-('admin',     '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '超级管理员', 1, '市疾控中心'),
-('level4user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '四级操作员', 5, '区疾控中心'),
-('level5user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '五级操作员', 6, '社区卫生服务中心');
+INSERT IGNORE INTO `user` (`id`, `username`, `password`, `real_name`, `role`, `org_name`) VALUES
+(1, 'admin',     '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '超级管理员', 1, '市疾控中心'),
+(2, 'level4user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '四级操作员', 5, '区疾控中心'),
+(3, 'level5user','$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', '五级操作员', 6, '社区卫生服务中心');
 
 CREATE TABLE IF NOT EXISTS `sys_message` (
-    `id`           BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`           BIGINT       NOT NULL,
     `sender_id`    BIGINT       DEFAULT NULL COMMENT '发送人ID（系统消息为空）',
     `receiver_id`  BIGINT       NOT NULL COMMENT '接收人ID',
     `title`        VARCHAR(256) NOT NULL COMMENT '消息标题',
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS `sys_message` (
 -- V4 变更：移除胸片/诊断/痰涂片/分子生物字段（移至潜伏感染追踪阶段录入）；新增结构化预防性治疗字段
 
 CREATE TABLE IF NOT EXISTS `screening_school` (
-    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                    BIGINT       NOT NULL,
     `year`                  VARCHAR(10)  DEFAULT NULL COMMENT '年份',
     `city`                  VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
     `district`              VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS `screening_school` (
 -- V4 变更：移除胸片/诊断/结果判定/是否转诊等字段（移至潜伏感染追踪阶段录入）；新增结构化预防性治疗字段
 
 CREATE TABLE IF NOT EXISTS `screening_key_population` (
-    `id`                       BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                       BIGINT       NOT NULL,
     `year`                     VARCHAR(10)  DEFAULT NULL COMMENT '年份',
     `city`                     VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
     `district`                 VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
 -- V4 重大重构：三轮独立筛查（首次/半年后/一年后），每轮含感染筛查+胸片+诊断
 
 CREATE TABLE IF NOT EXISTS `screening_close_contact` (
-    `id`                              BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                              BIGINT       NOT NULL,
     -- ===== 原患者信息 =====
     `city`                            VARCHAR(64)  DEFAULT NULL COMMENT '市/州',
     `district`                        VARCHAR(64)  DEFAULT NULL COMMENT '区/县',
@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS `screening_close_contact` (
 
 -- ==================== 密接个案表（独立电子表格模块） ====================
 CREATE TABLE IF NOT EXISTS `close_contact_case` (
-    `id`                              BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                              BIGINT       NOT NULL,
     `city`                            VARCHAR(64)  DEFAULT NULL COMMENT '市/州',
     `district`                        VARCHAR(64)  DEFAULT NULL COMMENT '区/县',
     `source_patient_name`             VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
@@ -401,7 +401,7 @@ CREATE TABLE IF NOT EXISTS `close_contact_case` (
 -- V4 新增：胸片检查字段（追踪到位后录入）、首次诊断字段、密接阳性轮次
 
 CREATE TABLE IF NOT EXISTS `latent_infection` (
-    `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                  BIGINT       NOT NULL,
     `screening_id`        BIGINT       NOT NULL COMMENT '关联筛查数据ID',
     `population_type`     VARCHAR(32)  NOT NULL COMMENT '人群类型：school/keyPopulation/closeContact',
     `name`                VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
@@ -440,7 +440,7 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
 -- ==================== 通知单表（潜伏者/患者通用） ====================
 
 CREATE TABLE IF NOT EXISTS `notice` (
-    `id`                     BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                     BIGINT       NOT NULL,
     `notice_type`            VARCHAR(16)  NOT NULL COMMENT '通知单类型：latent=潜伏者通知单 patient=患者通知单',
     `population_type`        VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `biz_id`                 BIGINT       NOT NULL COMMENT '关联业务ID（latent_infection.id 或 patient.id）',
@@ -499,7 +499,7 @@ CREATE TABLE IF NOT EXISTS `notice` (
 -- V5 重大改造：按照 Excel 模板《潜伏感染预防性治疗督导表》字段完整重构
 
 CREATE TABLE IF NOT EXISTS `supervision_form` (
-    `id`                     BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                     BIGINT       NOT NULL,
     `latent_infection_id`    BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
     `population_type`        VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `patient_name`           VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
@@ -553,7 +553,7 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
 -- ==================== 潜伏感染者电话随访表 ====================
 
 CREATE TABLE IF NOT EXISTS `latent_follow_up` (
-    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                    BIGINT       NOT NULL,
     `latent_infection_id`   BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
     `follow_up_date`        DATE         NOT NULL COMMENT '随访日期',
     `follow_up_type`        VARCHAR(32)  NOT NULL DEFAULT '电话随访' COMMENT '随访方式',
@@ -570,7 +570,7 @@ CREATE TABLE IF NOT EXISTS `latent_follow_up` (
 -- ==================== 潜伏感染者按期检查表 ====================
 
 CREATE TABLE IF NOT EXISTS `latent_check` (
-    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                    BIGINT       NOT NULL,
     `latent_infection_id`   BIGINT       NOT NULL COMMENT '关联潜伏感染ID',
     `check_date`            DATE         NOT NULL COMMENT '检查日期',
     `check_period`          VARCHAR(32)  NOT NULL COMMENT '检查周期：3个月/6个月/12个月',
@@ -587,7 +587,7 @@ CREATE TABLE IF NOT EXISTS `latent_check` (
 -- ==================== 患者管理表 ====================
 
 CREATE TABLE IF NOT EXISTS `patient` (
-    `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                  BIGINT       NOT NULL,
     `screening_id`        BIGINT       DEFAULT NULL COMMENT '关联筛查数据ID',
     `latent_infection_id` BIGINT       DEFAULT NULL COMMENT '关联潜伏感染ID（确诊来源）',
     `population_type`     VARCHAR(32)  NOT NULL COMMENT '人群类型',
@@ -619,7 +619,7 @@ CREATE TABLE IF NOT EXISTS `patient` (
 
 -- 首次入户随访表字段与线下《肺结核患者第一次入户随访记录表》一致，详细字段存入 visit_content(JSON)
 CREATE TABLE IF NOT EXISTS `first_visit` (
-    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                    BIGINT       NOT NULL,
     `patient_id`            BIGINT       NOT NULL COMMENT '关联患者ID',
     `population_type`       VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `form_no`               VARCHAR(8)   DEFAULT NULL COMMENT '编号（8位数字，手动录入）',
@@ -657,7 +657,7 @@ CREATE TABLE IF NOT EXISTS `first_visit` (
 -- ==================== 后续随访记录表（患者随访汇总表）====================
 
 CREATE TABLE IF NOT EXISTS `follow_up_visit` (
-    `id`                    BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                    BIGINT       NOT NULL,
     `patient_id`            BIGINT       NOT NULL COMMENT '关联患者ID',
     `population_type`       VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `visit_seq`             INT          DEFAULT NULL COMMENT '随访次数（第几次）',
@@ -677,7 +677,7 @@ CREATE TABLE IF NOT EXISTS `follow_up_visit` (
 -- ==================== 服药管理表 ====================
 
 CREATE TABLE IF NOT EXISTS `medication_management` (
-    `id`                      BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                      BIGINT       NOT NULL,
     `patient_id`              BIGINT       NOT NULL COMMENT '关联患者ID',
     `population_type`         VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `management_method`       VARCHAR(32)  DEFAULT NULL COMMENT '管理方式',
@@ -696,7 +696,7 @@ CREATE TABLE IF NOT EXISTS `medication_management` (
 -- ==================== 领药记录表 ====================
 
 CREATE TABLE IF NOT EXISTS `medication_pickup` (
-    `id`                BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                BIGINT       NOT NULL,
     `patient_id`        BIGINT       NOT NULL COMMENT '关联患者ID',
     `population_type`   VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `pickup_seq`        INT          DEFAULT NULL COMMENT '第几次领药',
@@ -717,7 +717,7 @@ CREATE TABLE IF NOT EXISTS `medication_pickup` (
 -- ==================== 大疫情导入表 ====================
 
 CREATE TABLE IF NOT EXISTS `epidemic_report` (
-    `id`                BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                BIGINT       NOT NULL,
     `population_type`   VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `patient_id`        BIGINT       DEFAULT NULL COMMENT '匹配到的患者ID',
     `raw_data`          JSON         NOT NULL COMMENT '原始导入数据（JSON）',
@@ -733,7 +733,7 @@ CREATE TABLE IF NOT EXISTS `epidemic_report` (
 -- ==================== 权限表 ====================
 
 CREATE TABLE IF NOT EXISTS `permission` (
-    `id`        BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`        BIGINT       NOT NULL,
     `code`      VARCHAR(128) NOT NULL COMMENT '权限编码',
     `name`      VARCHAR(128) NOT NULL COMMENT '权限名称',
     `type`      TINYINT      NOT NULL COMMENT '类型：1=菜单 2=按钮/操作',
@@ -746,7 +746,7 @@ CREATE TABLE IF NOT EXISTS `permission` (
 -- ==================== 角色-权限关联表 ====================
 
 CREATE TABLE IF NOT EXISTS `role_permission` (
-    `id`            BIGINT  NOT NULL AUTO_INCREMENT,
+    `id`            BIGINT  NOT NULL,
     `role`          TINYINT NOT NULL COMMENT '角色编号：1-6',
     `permission_id` BIGINT  NOT NULL COMMENT '权限ID',
     PRIMARY KEY (`id`),
@@ -754,6 +754,13 @@ CREATE TABLE IF NOT EXISTS `role_permission` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色权限关联表';
 
 -- ==================== 初始化权限数据 ====================
+
+-- 无 AUTO_INCREMENT 时，关联表/部分权限插入用会话变量生成 id（仅种子数据）
+SET @_seed_rp_id := 800000;
+SET @_seed_up_id := 850000;
+SET @_seed_perm_id := 500000;
+SET @_seed_qc_id := 1;
+
 
 INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
 -- 一级菜单
@@ -824,24 +831,24 @@ INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VAL
 
 -- ==================== 默认角色权限分配 ====================
 -- 超级管理员(1)：全部权限
-INSERT INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission`;
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission`;
 
 -- 一级(2)：除系统管理外所有菜单 + 所有业务操作
-INSERT INTO `role_permission` (`role`, `permission_id`)
-SELECT 2, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign');
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 2, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign');
 
 -- 二级(3)：同一级
-INSERT INTO `role_permission` (`role`, `permission_id`)
-SELECT 3, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign');
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 3, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign');
 
 -- 三级(4)：所有业务菜单 + 大部分操作（不含导出统计）
-INSERT INTO `role_permission` (`role`, `permission_id`)
-SELECT 4, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign', 'statistics:export');
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 4, `id` FROM `permission` WHERE `code` NOT IN ('system', 'system:users', 'system:permissions', 'user:create', 'user:edit', 'user:delete', 'permission:assign', 'statistics:export');
 
 -- 四级(5)：业务菜单 + 发送通知单/追踪/转诊/督导/随访/服药/上传
-INSERT INTO `role_permission` (`role`, `permission_id`)
-SELECT 5, `id` FROM `permission` WHERE `code` IN (
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, `id` FROM `permission` WHERE `code` IN (
   'school','keyPopulation','closeContact','statistics','message',
   'school:screening','school:latent','school:patient','school:history',
   'keyPopulation:screening','keyPopulation:latent','keyPopulation:patient','keyPopulation:history',
@@ -854,8 +861,8 @@ SELECT 5, `id` FROM `permission` WHERE `code` IN (
 );
 
 -- 五级(6)：仅消息页面 + 通知确认/督导/随访/服药操作权限（无业务页面菜单权限）
-INSERT INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, `id` FROM `permission` WHERE `code` IN (
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, `id` FROM `permission` WHERE `code` IN (
   'message',
   'latent:confirmNotice','latent:supervision','patient:confirmNotice','patient:firstVisit','patient:followUp','patient:medication'
 );
@@ -937,25 +944,27 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (118, 'latent:xray',        '录入胸片诊断',   2, 11, 9);
 
 -- 四级(5)和五级(6)获得新权限
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (5, 115), (5, 116), (5, 117), (5, 118), (6, 115), (6, 116), (6, 117);
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 115 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 116 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 117 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 118 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, 115 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, 116 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, 117 FROM DUAL;
 -- 上级角色也获得
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) SELECT r.`role`, p.`id` FROM (SELECT 1 AS `role` UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r CROSS JOIN `permission` p WHERE p.`code` IN ('latent:followUp','latent:check','latent:closeCase','latent:xray');
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`) SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.`role`, p.`id` FROM (SELECT 1 AS `role` UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r CROSS JOIN `permission` p WHERE p.`code` IN ('latent:followUp','latent:check','latent:closeCase','latent:xray');
 
 -- 系统管理：数据备份权限（admin 专属，parent_id=6 对应系统管理节点）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
 (119, 'system:backup', '数据备份', 2, 6, 10);
 
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'system:sms', '短信配置', 1, p.id, 11
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'system:sms', '短信配置', 1, p.id, 11
 FROM `permission` p
 WHERE p.code = 'system'
   AND NOT EXISTS (SELECT 1 FROM `permission` WHERE code = 'system:sms');
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, p.id
 FROM `permission` p
 WHERE p.code = 'system:sms';
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (1, 119);
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, 119 FROM DUAL;
 
 -- V6 新增：筛查模块按钮级权限（用于重点/密接筛查页面操作）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
@@ -963,8 +972,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (102, 'screening:export', '导出筛查数据', 2, 10, 3),
 (103, 'screening:edit',   '编辑筛查数据', 2, 10, 4),
 (104, 'screening:delete', '删除筛查数据', 2, 10, 5);
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES
-(5, 101), (5, 102), (5, 103), (5, 104);
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 101 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 102 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 103 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 104 FROM DUAL;
 
 -- V7 新增：重点/密接筛查独立按钮权限（权限树分别展示到各自主线下）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
@@ -978,11 +987,10 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (312, 'closeContact:screening:export', '导出筛查数据', 2, 30, 3),
 (313, 'closeContact:screening:edit',   '编辑筛查数据', 2, 30, 4),
 (314, 'closeContact:screening:delete', '删除筛查数据', 2, 30, 5);
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES
-(5, 210), (5, 211), (5, 212), (5, 213), (5, 214),
-(5, 310), (5, 311), (5, 312), (5, 313), (5, 314);
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.`role`, p.`id`
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 210 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 211 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 212 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 213 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 214 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 310 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 311 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 312 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 313 FROM DUAL UNION ALL SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, 314 FROM DUAL;
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.`role`, p.`id`
 FROM (SELECT 1 AS `role` UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
 CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -1046,7 +1054,7 @@ DROP PROCEDURE IF EXISTS _v5_migrate_supervision;
 
 -- 新建部门表
 CREATE TABLE IF NOT EXISTS `department` (
-    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `id`          BIGINT       NOT NULL COMMENT '主键',
     `name`        VARCHAR(64)  NOT NULL COMMENT '部门名称',
     `description` VARCHAR(256) DEFAULT NULL COMMENT '描述',
     `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1078,7 +1086,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (62, 'system:department', '部门管理', 1, 6, 3);
 
 -- 超级管理员(1) 绑定部门管理权限
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`) VALUES (1, 62);
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, 62 FROM DUAL;
 
 -- 修复已存在数据库中 role=6 的权限：移除业务菜单，仅保留消息+操作权限
 DELETE FROM `role_permission`
@@ -1102,8 +1111,8 @@ WHERE `role` = 6
   );
 
 -- 确保 role=6 拥有所需的消息页面操作权限（幂等）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, `id` FROM `permission`
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, `id` FROM `permission`
 WHERE `code` IN (
   'message',
   'latent:confirmNotice','latent:supervision','latent:followUp','latent:check',
@@ -1125,7 +1134,7 @@ DROP PROCEDURE IF EXISTS _v5_fix_supervision_content;
 
 -- ==================== 分级诊疗表 ====================
 CREATE TABLE IF NOT EXISTS `referral` (
-    `id`              BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`              BIGINT       NOT NULL,
     `biz_id`          BIGINT       NOT NULL COMMENT '关联业务记录ID',
     `target_biz_id`   BIGINT       DEFAULT NULL COMMENT '接收确认后在接收方生成的业务记录ID',
     `biz_type`        VARCHAR(64)  NOT NULL COMMENT '业务类型：screening_school/screening_key/screening_close/suspected_school/suspected_key/suspected_close/latent_school/latent_key/latent_close/patient_school/patient_key/patient_close',
@@ -1151,12 +1160,12 @@ CREATE TABLE IF NOT EXISTS `referral` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分级诊疗推送记录表';
 
 -- 为分级诊疗操作权限添加预设（各模块均可配置；挂到系统消息下便于权限树展示与分配）
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-VALUES ('referral', '分级诊疗', 2, 5, 50);
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'referral', '分级诊疗', 2, 5, 50;
 
 -- 确保全部角色均拥有分级诊疗权限（幂等）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id FROM
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id FROM
   (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r,
   `permission` p
 WHERE p.code = 'referral';
@@ -1194,8 +1203,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (335, 'closeContact:patient:medication',     '服药管理',             2, 32, 6);
 
 -- 超级管理员及一~三级：获得全部新按钮权限
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
 CROSS JOIN `permission` p
 WHERE p.code IN (
@@ -1210,8 +1219,8 @@ WHERE p.code IN (
 );
 
 -- 四级(5)：操作权限（发送/督导/随访/检查/结案/治疗决策/导入）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 5, p.id FROM `permission` p
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 5, p.id FROM `permission` p
 WHERE p.code IN (
   'keyPopulation:latent:sendNotice','keyPopulation:latent:supervision',
   'keyPopulation:latent:followUp','keyPopulation:latent:check','keyPopulation:latent:closeCase',
@@ -1224,8 +1233,8 @@ WHERE p.code IN (
 );
 
 -- 五级(6)：接收确认 + 督导 + 随访操作权限
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, p.id FROM `permission` p
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, p.id FROM `permission` p
 WHERE p.code IN (
   'keyPopulation:latent:confirmNotice','keyPopulation:latent:supervision',
   'keyPopulation:latent:followUp','keyPopulation:latent:check',
@@ -1239,7 +1248,7 @@ WHERE p.code IN (
 
 -- ==================== 部门表 ====================
 CREATE TABLE IF NOT EXISTS `department` (
-    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`          BIGINT       NOT NULL,
     `name`        VARCHAR(128) NOT NULL COMMENT '部门名称',
     `description` VARCHAR(256) DEFAULT NULL COMMENT '部门描述',
     `parent_id`   BIGINT       DEFAULT NULL COMMENT '上级部门ID，NULL表示市级顶级',
@@ -1264,7 +1273,7 @@ CALL `_v8_add_department_hierarchy`();
 DROP PROCEDURE IF EXISTS `_v8_add_department_hierarchy`;
 
 CREATE TABLE IF NOT EXISTS `user_permission` (
-    `id`             BIGINT   NOT NULL AUTO_INCREMENT,
+    `id`             BIGINT   NOT NULL,
     `user_id`        BIGINT   NOT NULL COMMENT '用户ID',
     `permission_id`  BIGINT   NOT NULL COMMENT '权限ID',
     `create_time`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1276,8 +1285,8 @@ CREATE TABLE IF NOT EXISTS `user_permission` (
 -- ==================== 五级(6)菜单页面权限补全 ====================
 -- 五级管理员需要能进入潜伏感染和患者管理页面，才能执行督导/随访/确认通知单等操作
 -- 赋予三条主线的父菜单 + 潜伏感染 + 患者管理 + 历史患者 菜单权限（仅页面访问，不含写操作按钮）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, p.id FROM `permission` p
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, p.id FROM `permission` p
 WHERE p.code IN (
   'school', 'school:latent', 'school:patient', 'school:history',
   'keyPopulation', 'keyPopulation:latent', 'keyPopulation:patient', 'keyPopulation:history',
@@ -1296,13 +1305,13 @@ UPDATE `permission` SET `sort` = CASE `id`
 -- 2）统一 referral 记录：挂到「系统消息」下、类型为按钮（兼容旧库错误 type / parent）
 UPDATE `permission` SET `parent_id` = 5, `sort` = 50, `type` = 2 WHERE `code` = 'referral';
 -- 首批角色权限写入若早于 referral 权限行，超级管理员 role_permission 可能缺少 referral，此处补全
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` = 'referral';
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` = 'referral';
 -- 3）角色授权（与学校 latent:track / latent:xray / latent:referral 范围一致：一至四级）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'keyPopulation:latent:referral');
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) r
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'keyPopulation:latent:referral');
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) r
 CROSS JOIN `permission` p
 WHERE p.code IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'keyPopulation:latent:referral');
 
@@ -1319,22 +1328,22 @@ UPDATE `permission` SET `sort` = 4 WHERE `code` IN ('school:patient', 'keyPopula
 UPDATE `permission` SET `sort` = 5 WHERE `code` IN ('school:history', 'keyPopulation:history', 'closeContact:history');
 
 -- 超级管理员获得所有新权限（幂等）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` IN ('school:suspected', 'keyPopulation:suspected', 'closeContact:followUp');
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` IN ('school:suspected', 'keyPopulation:suspected', 'closeContact:followUp');
 
 -- 待诊断/监测随访权限默认不分配给其他角色，由超级管理员通过"权限管理"界面手动分配
 
 -- 一级(role=2)、二级(role=3) 获得权限管理页面访问权：system 父菜单 + system:permissions + permission:assign
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3) r
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id FROM (SELECT 2 AS role UNION SELECT 3) r
 CROSS JOIN `permission` p
 WHERE p.code IN ('system', 'system:permissions', 'permission:assign');
 
 -- ==================== V12：新增数据清洗菜单权限 ====================
 -- 菜单权限已在初始化权限数据中声明，此处补充角色授权。
 -- 默认授予 1-4 级（监管与业务执行角色），5级按需在权限管理中分配
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
 CROSS JOIN `permission` p
 WHERE p.code = 'dataCleaning';
@@ -1347,13 +1356,13 @@ SET `code` = 'closeContact:followUp', `name` = '监测随访', `sort` = 6
 WHERE `code` = 'closeContact:suspected';
 
 -- 超级管理员补充获得更新后权限（幂等）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` = 'closeContact:followUp';
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` = 'closeContact:followUp';
 
 -- ==================== V13：操作日志（P1 重构阶段） ====================
 
 CREATE TABLE IF NOT EXISTS `operation_log` (
-    `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `id`             BIGINT       NOT NULL COMMENT '主键',
     `user_id`        BIGINT       DEFAULT NULL COMMENT '操作人ID',
     `user_name`      VARCHAR(64)  DEFAULT NULL COMMENT '操作人用户名',
     `real_name`      VARCHAR(64)  DEFAULT NULL COMMENT '操作人真实姓名',
@@ -1389,12 +1398,12 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (151, 'operationLog:filter',   '筛选操作日志', 2, 63, 2);
 
 -- 超级管理员获得全部操作日志权限（幂等）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` IN ('system:operationLog', 'operationLog:export', 'operationLog:filter');
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` IN ('system:operationLog', 'operationLog:export', 'operationLog:filter');
 
 -- 一级/二级用户默认可查看操作日志（不可导出，导出需权限管理单独分配）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3) r
 CROSS JOIN `permission` p
 WHERE p.code IN ('system:operationLog', 'operationLog:filter');
@@ -1414,32 +1423,32 @@ UPDATE `permission` SET `name` = '录入胸片结果' WHERE `code` = 'latent:xra
 UPDATE `permission` SET `name` = '录入胸片结果' WHERE `code` = 'keyPopulation:latent:xray';
 
 -- 超级管理员获得新权限（幂等）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` IN ('latent:diagnosis', 'keyPopulation:latent:diagnosis');
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` IN ('latent:diagnosis', 'keyPopulation:latent:diagnosis');
 
 -- 权限迁移：现有持有 *:latent:xray 权限的角色，自动获得对应 *:latent:diagnosis 权限
 -- （按方案 v1.2 §10.3 ✅2 决策：旧权限保留，新权限自动赋予）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT rp.role, p_new.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p_new.id
 FROM `role_permission` rp
 JOIN `permission` p_old ON rp.permission_id = p_old.id AND p_old.code = 'latent:xray'
 JOIN `permission` p_new ON p_new.code = 'latent:diagnosis';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT rp.role, p_new.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p_new.id
 FROM `role_permission` rp
 JOIN `permission` p_old ON rp.permission_id = p_old.id AND p_old.code = 'keyPopulation:latent:xray'
 JOIN `permission` p_new ON p_new.code = 'keyPopulation:latent:diagnosis';
 
 -- 同步迁移用户级别权限（user_permission 表）
-INSERT IGNORE INTO `user_permission` (`user_id`, `permission_id`)
-SELECT up.user_id, p_new.id
+INSERT IGNORE INTO `user_permission` (`id`, `user_id`, `permission_id`)
+SELECT (@_seed_up_id := @_seed_up_id + 1), up.user_id, p_new.id
 FROM `user_permission` up
 JOIN `permission` p_old ON up.permission_id = p_old.id AND p_old.code = 'latent:xray'
 JOIN `permission` p_new ON p_new.code = 'latent:diagnosis';
 
-INSERT IGNORE INTO `user_permission` (`user_id`, `permission_id`)
-SELECT up.user_id, p_new.id
+INSERT IGNORE INTO `user_permission` (`id`, `user_id`, `permission_id`)
+SELECT (@_seed_up_id := @_seed_up_id + 1), up.user_id, p_new.id
 FROM `user_permission` up
 JOIN `permission` p_old ON up.permission_id = p_old.id AND p_old.code = 'keyPopulation:latent:xray'
 JOIN `permission` p_new ON p_new.code = 'keyPopulation:latent:diagnosis';
@@ -1567,8 +1576,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (468, 'patientManagement:pickup',       '填写领药',             2, 420, 7);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -1605,7 +1614,7 @@ UPDATE `permission` SET `sort` = 5 WHERE `code` = 'epidemic:screening';
 
 -- ---------- 1. 推介追踪记录表 ----------
 CREATE TABLE IF NOT EXISTS `referral_tracking` (
-    `id`                     BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    `id`                     BIGINT        NOT NULL PRIMARY KEY,
     `biz_mode`               VARCHAR(16)   NOT NULL                  COMMENT 'recommend=推介 / track=追踪',
     -- 基本信息（手动录入）
     `name`                   VARCHAR(64),
@@ -1727,8 +1736,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 -- CROSS JOIN `permission` p WHERE p.`code` IN ('referralManagement:track', 'referralManagement:epidemicImport', 'referralManagement:export', 'referralManagement:edit');
 
 -- ---------- 3. 将 V17 推介追踪权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -1778,7 +1787,7 @@ WHERE `code` IN (
 -- epidemic_report 保留不删（历史数据兼容）；新功能使用 epidemic_import。
 
 CREATE TABLE IF NOT EXISTS `epidemic_import` (
-    `id`                 BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    `id`                 BIGINT       NOT NULL PRIMARY KEY,
     -- 从大疫情表提取的 10 个字段（文档§4.1）
     `name`               VARCHAR(64)  DEFAULT NULL COMMENT '患者姓名',
     `id_number`          VARCHAR(64)  DEFAULT NULL COMMENT '有效证件号',
@@ -1818,28 +1827,28 @@ CREATE TABLE IF NOT EXISTS `epidemic_import` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='大疫情待诊断记录表（V20，文档§4.1）';
 
 -- 大疫情待诊断权限码补充（epidemic:screening 已在 V16 创建，此处补充操作按钮）
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'epidemic:screening:import', '上传大疫情表', 2, p.id, 1
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'epidemic:screening:import', '上传大疫情表', 2, p.id, 1
 FROM `permission` p
 WHERE p.`code` = 'epidemic:screening';
 
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'epidemic:screening:track', '追踪', 2, p.id, 2
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'epidemic:screening:track', '追踪', 2, p.id, 2
 FROM `permission` p
 WHERE p.`code` = 'epidemic:screening';
 
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'epidemic:screening:xray', '录入胸片', 2, p.id, 3
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'epidemic:screening:xray', '录入胸片', 2, p.id, 3
 FROM `permission` p
 WHERE p.`code` = 'epidemic:screening';
 
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'epidemic:screening:diagnosis', '录入诊断', 2, p.id, 4
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'epidemic:screening:diagnosis', '录入诊断', 2, p.id, 4
 FROM `permission` p
 WHERE p.`code` = 'epidemic:screening';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -1875,7 +1884,7 @@ DEALLOCATE PREPARE stmt;
 
 -- ==================== V23：筛查问卷配置 ====================
 CREATE TABLE IF NOT EXISTS `questionnaire_config` (
-    `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `id`              BIGINT       NOT NULL COMMENT '主键',
     `code`            VARCHAR(64)  NOT NULL COMMENT '问卷编码',
     `title`           VARCHAR(256) NOT NULL COMMENT '问卷标题',
     `subtitle`        VARCHAR(512) DEFAULT NULL COMMENT '问卷说明',
@@ -1889,15 +1898,13 @@ CREATE TABLE IF NOT EXISTS `questionnaire_config` (
     UNIQUE KEY `uk_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='筛查问卷配置表';
 
-INSERT IGNORE INTO `questionnaire_config` (`code`, `title`, `subtitle`, `enabled`, `population_type`, `fields_json`)
-VALUES (
-    'school',
+INSERT IGNORE INTO `questionnaire_config` (`id`, `code`, `title`, `subtitle`, `enabled`, `population_type`, `fields_json`)
+SELECT (@_seed_qc_id := @_seed_qc_id + 1), 'school',
     '学校人群结核病筛查调查问卷',
     '请如实填写以下信息，所有数据仅用于结核病防控统计分析，信息将严格保密。',
     1,
     'school',
-    '[]'
-);
+    '[]';
 
 -- ==================== V24：首次/后续随访草稿状态 ====================
 DROP PROCEDURE IF EXISTS _v24_migrate_visit_draft_status;
@@ -2059,8 +2066,8 @@ WHERE `code` IN (
 )
   AND `name` NOT LIKE '[废弃]%';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` IN (
@@ -2087,17 +2094,17 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (353, 'closeContact:case:edit',      '编辑个案',     2, 35, 4),
 (354, 'closeContact:case:delete',    '删除个案',     2, 35, 5);
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 1, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 1, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 2, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 2, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 3, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 3, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 4, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 4, `id` FROM `permission` WHERE `code` LIKE 'closeContact:case%';
 
 -- ==================== V34：常规筛查改名为疫情筛查 ====================
 UPDATE `permission`
@@ -2298,8 +2305,8 @@ SET `parent_id` = 4, `sort` = 2, `name` = '筛查问卷', `type` = 2
 WHERE `code` = 'statistics:questionnaire';
 
 -- 2）默认授予超级管理员、一至三级（与 statistics:export 范围一致）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
          CROSS JOIN `permission` p
 WHERE p.`code` = 'statistics:questionnaire';
@@ -2327,8 +2334,8 @@ SET `parent_id` = 412, `sort` = 3, `name` = '历史患者', `type` = 1
 WHERE `code` = 'latentManagement:history';
 
 -- 与 latentManagement 其它子菜单一致：授予已拥有「潜伏感染者管理」父权限的角色
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'latentManagement'
          CROSS JOIN `permission` p
@@ -2342,7 +2349,7 @@ UPDATE `permission` SET `sort` = 4 WHERE `code` = 'closeContact:followUp';
 
 -- 补偿建表：生产库若未执行过含 close_contact_case 的 init 段，此处确保表存在
 CREATE TABLE IF NOT EXISTS `close_contact_case` (
-    `id`                              BIGINT       NOT NULL AUTO_INCREMENT,
+    `id`                              BIGINT       NOT NULL,
     `city`                            VARCHAR(64)  DEFAULT NULL COMMENT '市/州',
     `district`                        VARCHAR(64)  DEFAULT NULL COMMENT '区/县',
     `source_patient_name`             VARCHAR(64)  DEFAULT NULL COMMENT '原患者姓名',
@@ -2448,8 +2455,8 @@ UPDATE `permission`
 SET `name` = '导出推介/追踪记录', `parent_id` = 430, `sort` = 3
 WHERE `code` = 'referralManagement:export';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -2463,8 +2470,8 @@ WHERE p.`code` IN (
     'referralManagement:trackOperate'
 );
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
          CROSS JOIN `permission` p
@@ -2479,15 +2486,15 @@ WHERE p.`code` IN (
 );
 
 -- ==================== V43：五级用户 — 患者管理服药权限（不含填写领药） ====================
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
-('patientManagement:pickup', '填写领药', 2, 420, 7);
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:pickup', '填写领药', 2, 420, 7;
 
 UPDATE `permission`
 SET `parent_id` = 420, `sort` = 7, `name` = '填写领药', `type` = 2
 WHERE `code` = 'patientManagement:pickup';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT 6, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, p.id
 FROM `permission` p
 WHERE p.`code` IN (
     'patientManagement',
@@ -2497,8 +2504,8 @@ WHERE p.`code` IN (
     'patientManagement:notice'
 );
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:medication'
@@ -2506,8 +2513,8 @@ FROM `role_permission` rp
 WHERE p.`code` IN ('patientManagement', 'patientManagement:medication')
   AND rp.`role` != 6;
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:medication'
@@ -2515,54 +2522,54 @@ FROM `role_permission` rp
 WHERE p.`code` = 'patientManagement:pickup'
   AND rp.`role` != 6;
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:firstVisit'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:firstVisit';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:followUp'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:followUp';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:confirmNotice'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:notice';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:medication';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:pickup'
   AND rp.`role` != 6;
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:pickup';
 
 -- ==================== V44：市/县级用户 — 查看并管理辖区内五级用户工作 ====================
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 3 AS role UNION SELECT 4 UNION SELECT 5) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -2684,14 +2691,14 @@ UPDATE `permission`
 SET `name` = '导出推介/追踪记录', `parent_id` = 430, `sort` = 3
 WHERE `code` = 'referralManagement:export';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN ('referralManagement:epidemicImport', 'referralManagement:export');
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` existing ON existing.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -2699,21 +2706,21 @@ WHERE existing.`code` LIKE 'referralManagement%'
   AND p.`code` IN ('referralManagement:epidemicImport', 'referralManagement:export');
 
 -- ==================== V51：修复 patientManagement:pickup 权限 ID 冲突 ====================
-INSERT IGNORE INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`) VALUES
-('patientManagement:pickup', '填写领药', 2, 420, 7);
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:pickup', '填写领药', 2, 420, 7;
 
 UPDATE `permission`
 SET `parent_id` = 420, `sort` = 7, `name` = '填写领药', `type` = 2
 WHERE `code` = 'patientManagement:pickup';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 1 AS role UNION SELECT 2) r
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:pickup';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` existing ON existing.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -2724,8 +2731,8 @@ WHERE existing.`code` IN (
   AND p.`code` = 'patientManagement:pickup'
   AND rp.`role` != 6;
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
@@ -2746,8 +2753,8 @@ WHERE u.role = 6
   AND p.`code` = 'patientManagement:pickup';
 
 -- ==================== V53：推介追踪 — 一至五级补全操作按钮权限 ====================
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
          CROSS JOIN `permission` p
 WHERE p.`code` IN (
@@ -2758,8 +2765,8 @@ WHERE p.`code` IN (
     'referralManagement:delete'
 );
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
          CROSS JOIN `permission` p
@@ -2865,8 +2872,8 @@ WHERE `archive_remark` = '已转出'
   AND `archived` = 1;
 
 -- ==================== V59–V62：填写完成后「修改」独立按钮权限（按 code 写入，避免 id 冲突） ====================
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'latentManagement:supervision:edit', '修改督导表', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'latentManagement:supervision:edit', '修改督导表', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'latentManagement:supervision'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'latentManagement:supervision:edit');
@@ -2876,8 +2883,8 @@ UPDATE `permission` child
 SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改督导表', child.`type` = 2
 WHERE child.`code` = 'latentManagement:supervision:edit';
 
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'patientManagement:firstVisit:edit', '编辑首次随访', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:firstVisit:edit', '编辑首次随访', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'patientManagement:firstVisit'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:firstVisit:edit');
@@ -2887,8 +2894,8 @@ UPDATE `permission` child
 SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '编辑首次随访', child.`type` = 2
 WHERE child.`code` = 'patientManagement:firstVisit:edit';
 
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'patientManagement:followUp:edit', '修改随访记录', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:followUp:edit', '修改随访记录', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'patientManagement:followUp'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:followUp:edit');
@@ -2898,8 +2905,8 @@ UPDATE `permission` child
 SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改随访记录', child.`type` = 2
 WHERE child.`code` = 'patientManagement:followUp:edit';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -2908,20 +2915,20 @@ WHERE (parent.`code` = 'latentManagement:supervision' AND p.`code` = 'latentMana
    OR (parent.`code` = 'patientManagement:followUp' AND p.`code` = 'patientManagement:followUp:edit');
 
 -- ==================== V63：填写 / 修改 拆分为独立按钮权限（见 migration/V63） ====================
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'latentManagement:supervision:fill', '填写督导表', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'latentManagement:supervision:fill', '填写督导表', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'latentManagement:supervision'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'latentManagement:supervision:fill');
 
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'patientManagement:firstVisit:fill', '填写首次随访', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:firstVisit:fill', '填写首次随访', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'patientManagement:firstVisit'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:firstVisit:fill');
 
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'patientManagement:followUp:fill', '填写后续随访', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:followUp:fill', '填写后续随访', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'patientManagement:followUp'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:followUp:fill');
@@ -2933,8 +2940,8 @@ UPDATE `permission` SET `sort` = 2, `name` = '修改首次随访' WHERE `code` =
 UPDATE `permission` SET `sort` = 1, `name` = '填写后续随访' WHERE `code` = 'patientManagement:followUp:fill';
 UPDATE `permission` SET `sort` = 2, `name` = '修改随访记录' WHERE `code` = 'patientManagement:followUp:edit';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3009,8 +3016,8 @@ WHERE `recommend_sent_time` IS NOT NULL
   AND `deleted` = 0;
 
 -- ==================== V67：通知单填写权限 + 筛查管理权限树归并（见 migration/V67） ====================
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `sort`)
-SELECT 'patientManagement:notice:fill', '填写通知单', 2, parent.id, 1
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT (@_seed_perm_id := @_seed_perm_id + 1), 'patientManagement:notice:fill', '填写通知单', 2, parent.id, 1
 FROM `permission` parent
 WHERE parent.`code` = 'patientManagement:notice'
   AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:notice:fill');
@@ -3031,16 +3038,16 @@ UPDATE `permission` child
 SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 3, child.`name` = '删除患者'
 WHERE child.`code` = 'patientManagement:delete';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
 WHERE parent.`code` = 'patientManagement:overview'
   AND p.`code` = 'patientManagement:delete';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3066,8 +3073,8 @@ UPDATE `permission` SET `sort` = 3 WHERE `code` = 'regular:screening';
 UPDATE `permission` SET `sort` = 4 WHERE `code` = 'regular:suspected';
 UPDATE `permission` SET `sort` = 5 WHERE `code` = 'epidemic:screening';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old ON old.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3107,8 +3114,8 @@ SET `name` = '密接筛查'
 WHERE `code` = 'closeContact:screening';
 
 -- ==================== V73：待诊断操作权限补齐（见 migration/V73_latent_suspected_role_permissions.sql） ====================
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.`role`, p.`id`
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.`role`, p.`id`
 FROM (
     SELECT 2 AS `role`
     UNION SELECT 3
@@ -3142,15 +3149,15 @@ WHERE `diagnosis_result` = '疑似肺结核';
 
 -- ==================== V75：一至四级用户默认可访问部门管理（见 migration/V75_system_department_roles.sql） ====================
 -- 一至四级（role=2~5）获得部门管理菜单权限（父菜单 anyPermission 已含 system:department，无需额外授予 system）
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) r
 CROSS JOIN `permission` p
 WHERE p.code = 'system:department';
 
 -- ==================== V76：一至五级用户部门管理权限补全（见 migration/V76_system_department_all_levels.sql） ====================
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT r.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
 FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
 CROSS JOIN `permission` p
 WHERE p.code = 'system:department';
@@ -3552,8 +3559,8 @@ UPDATE `permission` child
 SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 3, child.`name` = '删除患者'
 WHERE child.`code` = 'patientManagement:delete';
 
-INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
-SELECT DISTINCT rp.role, p.id
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3568,3 +3575,7 @@ SET `name` = '短信配置'
 WHERE `code` = 'system:sms';
 
 -- V94 appended
+
+
+-- ==================== V98：主键改为应用侧雪花 ID（无 AUTO_INCREMENT） ====================
+-- 新库直接按上方建表；已有库请停机执行 Java 迁移（app.migrate-snowflake-ids=true）或 migration/V98_drop_auto_increment.sql

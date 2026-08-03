@@ -7,7 +7,7 @@ import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages
 
 const props = defineProps<{
   visible: boolean
-  patientId: number | null
+  patientId: string | null
 }>()
 
 const emit = defineEmits<{
@@ -19,7 +19,7 @@ const isCreate = computed(() => props.patientId == null)
 
 const formRef = ref()
 const submitting = ref(false)
-const screeningId = ref<number | null>(null)
+const screeningId = ref<string | null>(null)
 
 const form = reactive({
   populationType: "",

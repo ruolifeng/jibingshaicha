@@ -73,7 +73,7 @@ function createEmptyForm() {
     recommendUnitName: "",
     fillUserName: "",
     recommendReason: "",
-    receiverUserId: undefined as number | undefined
+    receiverUserId: undefined as string | undefined
   }
 }
 
@@ -143,7 +143,7 @@ function mapSourceToForm(source: Record<string, any>, defaultCrowdCategory?: str
     recommendUnitName: userStore.orgName || "",
     fillUserName: userStore.realName || userStore.username || "",
     recommendReason: "",
-    receiverUserId: undefined as number | undefined
+    receiverUserId: undefined as string | undefined
   }
 }
 
@@ -152,9 +152,9 @@ function formatLevel34UserLabel(u: any) {
   return `${u.username}（${unit}）`
 }
 
-function resolveReceiverUserName(receiverUserId?: number) {
+function resolveReceiverUserName(receiverUserId?: string) {
   if (!receiverUserId) return ""
-  const receiver = level34Users.value.find(u => Number(u.id) === Number(receiverUserId))
+  const receiver = level34Users.value.find(u => String(u.id) === String(receiverUserId))
   return receiver ? formatLevel34UserLabel(receiver) : ""
 }
 

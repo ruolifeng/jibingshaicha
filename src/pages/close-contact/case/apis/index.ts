@@ -64,7 +64,7 @@ export function getCloseContactCaseListApi(params: {
 
 /** 导出密接个案表 */
 export function exportCloseContactCaseApi(params?: {
-  ids?: number[]
+  ids?: string[]
   name?: string
   idNumber?: string
   district?: string
@@ -115,7 +115,7 @@ export function createCloseContactCaseApi(data: Record<string, any>) {
 }
 
 /** 更新密接个案 */
-export function updateCloseContactCaseApi(id: number, data: Record<string, any>) {
+export function updateCloseContactCaseApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `close-contact/case/update/${id}`,
     method: "put",
@@ -124,7 +124,7 @@ export function updateCloseContactCaseApi(id: number, data: Record<string, any>)
 }
 
 /** 删除密接个案 */
-export function deleteCloseContactCaseApi(id: number) {
+export function deleteCloseContactCaseApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `close-contact/case/delete/${id}`,
     method: "delete"
@@ -132,7 +132,7 @@ export function deleteCloseContactCaseApi(id: number) {
 }
 
 /** 批量删除密接个案 */
-export function batchDeleteCloseContactCaseApi(ids: number[]) {
+export function batchDeleteCloseContactCaseApi(ids: string[]) {
   return request<ApiResponseData<null>>({
     url: "close-contact/case/batch-delete",
     method: "delete",
@@ -174,7 +174,7 @@ export function deleteAllCloseContactCaseApi() {
 }
 
 /** 按 ID 查询密接个案详情 */
-export function getCloseContactCaseDetailApi(id: number) {
+export function getCloseContactCaseDetailApi(id: string) {
   return request<ApiResponseData<any>>({
     url: `close-contact/case/${id}`,
     method: "get"

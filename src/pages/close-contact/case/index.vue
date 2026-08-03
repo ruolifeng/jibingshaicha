@@ -227,7 +227,7 @@ function buildExportParams(exportType?: "latent" | "confirmed") {
   return { ...buildListQueryParams(), exportType }
 }
 
-async function handleExport(ids?: number[], exportType?: "latent" | "confirmed", mode: "all" | "filtered" | "selected" = "filtered") {
+async function handleExport(ids?: string[], exportType?: "latent" | "confirmed", mode: "all" | "filtered" | "selected" = "filtered") {
   const isSelectedExport = !!ids?.length
   const label = exportType === "latent"
     ? "潜伏感染者"

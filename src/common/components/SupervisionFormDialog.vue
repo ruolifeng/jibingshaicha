@@ -44,7 +44,7 @@ const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const draftSaving = ref(false)
 const archiving = ref(false)
-const draftId = ref<number | undefined>(undefined)
+const draftId = ref<string | undefined>(undefined)
 const recordCreateTime = ref<string | null>(null)
 
 const isEditMode = computed(() => !!props.initialData?.id)

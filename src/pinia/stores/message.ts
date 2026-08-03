@@ -28,18 +28,18 @@ const ALERT_TYPE_TITLE: Record<string, string> = {
   review_reminder: "复查提醒"
 }
 
-function loadAlertedIds(): Set<number> {
+function loadAlertedIds(): Set<string> {
   try {
     const raw = sessionStorage.getItem(ALERT_STORAGE_KEY)
     if (!raw) return new Set()
-    const ids = JSON.parse(raw) as number[]
-    return new Set(Array.isArray(ids) ? ids : [])
+    const ids = JSON.parse(raw) as string[]
+    return new Set((Array.isArray(ids) ? ids : []).map(id => String(id)))
   } catch {
     return new Set()
   }
 }
 
-function persistAlertedIds(ids: Set<number>) {
+function persistAlertedIds(ids: Set<string>) {
   sessionStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify([...ids]))
 }
 
@@ -54,12 +54,12 @@ function buildAlertContent(type: string, items: any[]): string {
 
 export const useMessageStore = defineStore("message", () => {
   const unreadCount = ref(0)
-  const alertedIds = ref<Set<number>>(loadAlertedIds())
+  const alertedIds = ref<Set<string>>(loadAlertedIds())
   const alertVisible = ref(false)
 
   let timer: ReturnType<typeof setInterval> | null = null
 
-  function markAlerted(ids: number[]) {
+  function markAlerted(ids: string[]) {
     ids.forEach(id => alertedIds.value.add(id))
     persistAlertedIds(alertedIds.value)
   }
@@ -94,10 +94,10 @@ export const useMessageStore = defineStore("message", () => {
 
       for (const type of ALERT_TYPE_PRIORITY) {
         const items = records.filter(
-          item => item.type === type && !alertedIds.value.has(item.id)
+          item => item.type === type && !alertedIds.value.has(String(item.id))
         )
         if (items.length > 0) {
-          markAlerted(items.map(item => item.id))
+          markAlerted(items.map(item => String(item.id)))
           await showCenterAlert(
             ALERT_TYPE_TITLE[type] || "消息提醒",
             buildAlertContent(type, items)
@@ -106,9 +106,9 @@ export const useMessageStore = defineStore("message", () => {
         }
       }
 
-      const others = records.filter(item => !alertedIds.value.has(item.id))
+      const others = records.filter(item => !alertedIds.value.has(String(item.id)))
       if (others.length > 0) {
-        markAlerted(others.map(item => item.id))
+        markAlerted(others.map(item => String(item.id)))
         const content = others.length === 1
           ? (others[0].content || others[0].title || "您有新的未读消息，请前往消息中心查看。")
           : `您有 <strong>${others.length}</strong> 条未读消息，请前往消息中心查看。`

@@ -1,16 +1,16 @@
 import { request } from "@/http/axios"
 
 export interface OperationLogItem {
-  id: number
-  userId: number | null
+  id: string
+  userId: string | null
   userName: string | null
   realName: string | null
-  departmentId: number | null
+  departmentId: string | null
   role: number | null
   opType: string
   opModule: string | null
   opAction: string | null
-  bizId: number | null
+  bizId: string | null
   bizType: string | null
   requestMethod: string | null
   requestUrl: string | null

@@ -18,14 +18,14 @@ export function getPermissionTreeApi() {
 
 /** 获取角色已分配权限ID */
 export function getRolePermissionIdsApi(role: number) {
-  return request<ApiResponseData<number[]>>({
+  return request<ApiResponseData<string[]>>({
     url: `permission/role/${role}`,
     method: "get"
   })
 }
 
 /** 分配角色权限 */
-export function assignRolePermissionsApi(role: number, permissionIds: number[]) {
+export function assignRolePermissionsApi(role: number, permissionIds: string[]) {
   return request<ApiResponseData<null>>({
     url: "permission/assign",
     method: "post",
@@ -34,15 +34,15 @@ export function assignRolePermissionsApi(role: number, permissionIds: number[]) 
 }
 
 /** 获取用户额外分配的权限 ID（与角色权限合并生效） */
-export function getUserPermissionIdsApi(userId: number) {
-  return request<ApiResponseData<number[]>>({
+export function getUserPermissionIdsApi(userId: string) {
+  return request<ApiResponseData<string[]>>({
     url: `permission/user/${userId}`,
     method: "get"
   })
 }
 
 /** 全量替换某用户的额外权限 */
-export function assignUserPermissionsApi(userId: number, permissionIds: number[]) {
+export function assignUserPermissionsApi(userId: string, permissionIds: string[]) {
   return request<ApiResponseData<null>>({
     url: "permission/assign-user",
     method: "post",

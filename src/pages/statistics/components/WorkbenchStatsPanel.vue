@@ -7,7 +7,7 @@ import PatientHeatmapChart from "./PatientHeatmapChart.vue"
 
 const props = defineProps<{
   showHeatmap?: boolean
-  departmentIds?: number[]
+  departmentIds?: string[]
 }>()
 
 const yearOptions = buildStatYearOptions()

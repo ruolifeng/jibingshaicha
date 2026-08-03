@@ -5,7 +5,7 @@ import { getDepartmentFilterOptionsApi } from "@@/apis/department"
 defineOptions({ name: "ScopedDepartmentMultiSelect" })
 
 withDefaults(defineProps<{
-  modelValue?: number[]
+  modelValue?: string[]
   placeholder?: string
   width?: string
 }>(), {
@@ -15,7 +15,7 @@ withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  "update:modelValue": [value: number[]]
+  "update:modelValue": [value: string[]]
 }>()
 
 const loading = ref(false)
@@ -38,7 +38,7 @@ async function loadOptions() {
   }
 }
 
-function handleChange(value: number[] | number | undefined) {
+function handleChange(value: string[] | string | undefined) {
   if (Array.isArray(value)) {
     emit("update:modelValue", value)
     return

@@ -1,7 +1,7 @@
 import { request } from "@/http/axios"
 
 export interface SmsConfig {
-  id?: number
+  id?: string
   enabled: boolean
   secretId: string
   secretKeyMasked: string

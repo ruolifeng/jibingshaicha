@@ -65,7 +65,7 @@ watch(() => searchForm.populationType, (val) => {
 
 const detailVisible = ref(false)
 const editVisible = ref(false)
-const currentId = ref<number | null>(null)
+const currentId = ref<string | null>(null)
 const exporting = ref(false)
 const importing = ref(false)
 const templateDownloading = ref(false)
