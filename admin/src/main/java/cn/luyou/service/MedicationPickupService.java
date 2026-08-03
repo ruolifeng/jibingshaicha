@@ -9,5 +9,11 @@ public interface MedicationPickupService extends IService<MedicationPickup> {
 
     void savePickup(MedicationPickup pickup);
 
+    /** 潜伏感染者领药保存 */
+    void saveLatentPickup(MedicationPickup pickup);
+
     List<MedicationPickup> listByPatientId(Long patientId);
+
+    /** 按潜伏感染者查询领药记录 */
+    List<MedicationPickup> listByLatentInfectionId(Long latentInfectionId);
 }

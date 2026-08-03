@@ -51,6 +51,13 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
     /** 删除权限范围内全部密接个案，返回删除条数 */
     int deleteAll();
 
+    /**
+     * 将终筛为「潜伏感染者」的个案同步补充到潜伏感染在管（新建或补空白字段）。
+     *
+     * @return 处理条数
+     */
+    int syncLatentFromCases();
+
     List<CloseContactCase> listForExport(String name, String idNumber, String district,
                                          String phone, String creatorUsername, String diagnosisResult,
                                          String sourcePatientBacteriologyResult, String reportQuarter,

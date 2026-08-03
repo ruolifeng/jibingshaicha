@@ -691,7 +691,8 @@ CREATE TABLE IF NOT EXISTS `follow_up_visit` (
 
 CREATE TABLE IF NOT EXISTS `medication_management` (
     `id`                      BIGINT       NOT NULL,
-    `patient_id`              BIGINT       NOT NULL COMMENT '关联患者ID',
+    `patient_id`              BIGINT       DEFAULT NULL COMMENT '关联患者ID（潜伏感染记录为空）',
+    `latent_infection_id`     BIGINT       DEFAULT NULL COMMENT '关联潜伏感染者ID',
     `population_type`         VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `management_method`       VARCHAR(32)  DEFAULT NULL COMMENT '管理方式',
     `supervisor`              VARCHAR(32)  DEFAULT NULL COMMENT '督导人员',
@@ -703,14 +704,16 @@ CREATE TABLE IF NOT EXISTS `medication_management` (
     `update_time`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`                 TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
-    KEY `idx_patient` (`patient_id`)
+    KEY `idx_patient` (`patient_id`),
+    KEY `idx_latent` (`latent_infection_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服药管理表';
 
 -- ==================== 领药记录表 ====================
 
 CREATE TABLE IF NOT EXISTS `medication_pickup` (
     `id`                BIGINT       NOT NULL,
-    `patient_id`        BIGINT       NOT NULL COMMENT '关联患者ID',
+    `patient_id`        BIGINT       DEFAULT NULL COMMENT '关联患者ID（潜伏感染记录为空）',
+    `latent_infection_id` BIGINT     DEFAULT NULL COMMENT '关联潜伏感染者ID',
     `population_type`   VARCHAR(32)  NOT NULL COMMENT '人群类型',
     `pickup_seq`        INT          DEFAULT NULL COMMENT '第几次领药',
     `drugs`             JSON         DEFAULT NULL COMMENT '药品及用量 [{name,dosage,quantity,quantityUnit}]',
@@ -724,7 +727,8 @@ CREATE TABLE IF NOT EXISTS `medication_pickup` (
     `update_time`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`           TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
-    KEY `idx_patient` (`patient_id`)
+    KEY `idx_patient` (`patient_id`),
+    KEY `idx_latent` (`latent_infection_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='领药记录表';
 
 -- ==================== 大疫情导入表 ====================
@@ -1575,7 +1579,9 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (419, 'latentManagement:supervision',   '督导表管理',           1, 412, 2),
 (472, 'latentManagement:supervision:fill','填写督导表',           2, 419, 1),
 (469, 'latentManagement:supervision:edit','修改督导表',           2, 419, 2),
-(464, 'latentManagement:history',     '历史患者',             1, 412, 3),
+(480, 'latentManagement:medication',    '服药管理',             1, 412, 3),
+(481, 'latentManagement:pickup',        '填写领药',             2, 412, 5),
+(464, 'latentManagement:history',     '历史患者',             1, 412, 4),
 -- 聚合患者管理（一级菜单）
 (420, 'patientManagement',              '患者管理',             1, 0,   12),
 (462, 'patientManagement:overview',     '在管总览',             1, 420, 0),
@@ -1609,7 +1615,7 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
-    'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:history',
+    'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:medication', 'latentManagement:pickup', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
     'patientManagement:notice', 'patientManagement:notice:fill', 'patientManagement:firstVisit', 'patientManagement:firstVisit:fill', 'patientManagement:firstVisit:edit',
     'patientManagement:followUp', 'patientManagement:followUp:fill', 'patientManagement:followUp:edit',
@@ -2614,7 +2620,7 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close',
-    'latentManagement:supervision', 'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:history',
+    'latentManagement:supervision', 'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:medication', 'latentManagement:pickup', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
     'patientManagement:notice', 'patientManagement:notice:fill', 'patientManagement:firstVisit', 'patientManagement:firstVisit:fill', 'patientManagement:firstVisit:edit',
     'patientManagement:followUp', 'patientManagement:followUp:fill', 'patientManagement:followUp:edit',
@@ -3617,3 +3623,44 @@ WHERE `code` = 'system:sms';
 
 -- ==================== V98：主键改为应用侧雪花 ID（无 AUTO_INCREMENT） ====================
 -- 新库直接按上方建表；已有库请停机执行 Java 迁移（app.migrate-snowflake-ids=true）或 migration/V98_drop_auto_increment.sql
+
+-- ==================== V100：潜伏感染者服药管理 / 领药权限 ====================
+UPDATE `permission` SET `sort` = 3 WHERE `code` = 'latentManagement:medication';
+UPDATE `permission` SET `sort` = 4 WHERE `code` = 'latentManagement:history';
+UPDATE `permission` SET `sort` = 5, `type` = 2, `parent_id` = 412 WHERE `code` = 'latentManagement:pickup';
+
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.`role`, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` existing ON existing.id = rp.permission_id
+    AND existing.`code` IN ('latentManagement', 'latentManagement:overview')
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'latentManagement:medication';
+
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), 6, p.id
+FROM `permission` p
+WHERE p.`code` IN ('latentManagement', 'latentManagement:medication');
+
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.`role`, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` existing ON existing.id = rp.permission_id
+    AND existing.`code` IN ('latentManagement', 'latentManagement:overview', 'latentManagement:medication')
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'latentManagement:pickup'
+  AND rp.`role` <> 6;
+
+DELETE rp FROM `role_permission` rp
+         INNER JOIN `permission` p ON p.id = rp.permission_id
+WHERE rp.`role` = 6
+  AND p.`code` = 'latentManagement:pickup';
+
+DELETE up FROM `user_permission` up
+         INNER JOIN `permission` p ON p.id = up.permission_id
+         INNER JOIN `user` u ON u.id = up.user_id
+WHERE u.role = 6
+  AND u.deleted = 0
+  AND p.`code` = 'latentManagement:pickup';
+
+-- V100 appended

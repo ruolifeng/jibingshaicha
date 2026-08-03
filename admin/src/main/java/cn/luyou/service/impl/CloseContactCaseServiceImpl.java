@@ -13,6 +13,7 @@ import cn.luyou.service.DepartmentService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
+import cn.luyou.utils.CloseContactCaseLatentSyncSupport;
 import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
@@ -57,6 +58,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private final DepartmentService departmentService;
     private final UserMapper userMapper;
     private final ScreeningScopeHelper screeningScopeHelper;
+    private final CloseContactCaseLatentSyncSupport closeContactCaseLatentSyncSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "year", "city", "district", "gender", "idNumber", "phone",
@@ -191,6 +193,21 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
         if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
 
+        for (CloseContactCase d : toInsert) {
+            try {
+                closeContactCaseLatentSyncSupport.syncFromCase(d);
+            } catch (Exception e) {
+                log.warn("导入后同步潜伏失败 caseId={} idNumber={}: {}", d.getId(), d.getIdNumber(), e.getMessage());
+            }
+        }
+        for (CloseContactCase d : toUpdate) {
+            try {
+                closeContactCaseLatentSyncSupport.syncFromCase(d);
+            } catch (Exception e) {
+                log.warn("导入后同步潜伏失败 caseId={} idNumber={}: {}", d.getId(), d.getIdNumber(), e.getMessage());
+            }
+        }
+
         result.setSuccessCount(dataList.size());
         return result;
     }
@@ -260,6 +277,11 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         data.setCreatorUsername(CreatorUserSupport.resolveCurrentUsername(userMapper));
         save(data);
+        try {
+            closeContactCaseLatentSyncSupport.syncFromCase(data);
+        } catch (Exception e) {
+            log.warn("新增个案后同步潜伏失败 caseId={} idNumber={}: {}", data.getId(), data.getIdNumber(), e.getMessage());
+        }
     }
 
     @Override
@@ -273,6 +295,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         data.setCreatorUsername(existing.getCreatorUsername());
         data.setDepartmentId(existing.getDepartmentId());
         updateById(data);
+        CloseContactCase latest = getById(data.getId());
+        try {
+            closeContactCaseLatentSyncSupport.syncFromCase(latest != null ? latest : data);
+        } catch (Exception e) {
+            log.warn("编辑个案后同步潜伏失败 caseId={} idNumber={}: {}",
+                    data.getId(), data.getIdNumber(), e.getMessage());
+        }
     }
 
     @Override
@@ -318,6 +347,12 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Transactional(rollbackFor = Exception.class)
     public int deleteAll() {
         return deleteByFilter(null, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int syncLatentFromCases() {
+        return closeContactCaseLatentSyncSupport.syncAllLatentCases();
     }
 
     @Override

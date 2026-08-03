@@ -9,10 +9,16 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentCheck;
 import cn.luyou.model.LatentFollowUp;
 import cn.luyou.model.LatentInfection;
+import cn.luyou.model.MedicationManagement;
+import cn.luyou.model.MedicationPickup;
 import cn.luyou.service.LatentCheckService;
 import cn.luyou.service.LatentFollowUpService;
 import cn.luyou.service.LatentInfectionService;
+import cn.luyou.service.MedicationManagementService;
+import cn.luyou.service.MedicationPickupService;
+import cn.luyou.service.UserService;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,9 +37,16 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class LatentInfectionController {
 
+    private static final String[] MEDICATION_PICKUP_PERMISSIONS = {
+            "latentManagement:pickup"
+    };
+
     private final LatentInfectionService latentInfectionService;
     private final LatentFollowUpService latentFollowUpService;
     private final LatentCheckService latentCheckService;
+    private final MedicationManagementService medicationManagementService;
+    private final MedicationPickupService medicationPickupService;
+    private final UserService userService;
 
     @Operation(summary = "历史患者列表（已归档潜伏感染者）")
     @GetMapping("/history")
@@ -278,5 +291,85 @@ public class LatentInfectionController {
     public ResultResponse<Void> saveCheck(@RequestBody LatentCheck check) {
         latentCheckService.save(check);
         return ResultRes.success(null);
+    }
+
+    // ==================== 服药管理 / 领药 ====================
+
+    @Operation(summary = "保存潜伏感染者服药管理")
+    @PostMapping("/medication/save")
+    @OperationLog(type = "update", module = "latent", action = "保存潜伏感染服药管理")
+    public ResultResponse<Void> saveMedication(@RequestBody MedicationManagement medication) {
+        prepareLatentMedication(medication);
+        medicationManagementService.saveOrUpdate(medication);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "查询潜伏感染者服药管理")
+    @GetMapping("/medication/{latentInfectionId}")
+    public ResultResponse<MedicationManagement> getMedication(@PathVariable Long latentInfectionId) {
+        LambdaQueryWrapper<MedicationManagement> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MedicationManagement::getLatentInfectionId, latentInfectionId)
+                .orderByDesc(MedicationManagement::getCreateTime)
+                .last("LIMIT 1");
+        return ResultRes.success(medicationManagementService.getOne(wrapper));
+    }
+
+    @Operation(summary = "完成潜伏感染者服药管理（归档）")
+    @PostMapping("/medication/complete")
+    @OperationLog(type = "update", module = "latent", action = "完成潜伏感染服药管理")
+    public ResultResponse<Void> completeMedication(@RequestBody MedicationManagement medication) {
+        prepareLatentMedication(medication);
+        medicationManagementService.saveOrUpdate(medication);
+        if (medication.getStopDate() != null) {
+            latentInfectionService.closeCase(medication.getLatentInfectionId());
+        }
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "保存潜伏感染者领药记录")
+    @PostMapping("/medication-pickup/save")
+    @OperationLog(type = "update", module = "latent", action = "保存潜伏感染领药记录")
+    public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
+        if (pickup.getLatentInfectionId() != null) {
+            latentInfectionService.assertLatentOperable(pickup.getLatentInfectionId());
+        }
+        medicationPickupService.saveLatentPickup(pickup);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "潜伏感染者领药记录列表")
+    @GetMapping("/medication-pickup/list/{latentInfectionId}")
+    public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long latentInfectionId) {
+        userService.checkAnyPermissionCode("latentManagement:pickup", "latentManagement:medication");
+        return ResultRes.success(medicationPickupService.listByLatentInfectionId(latentInfectionId));
+    }
+
+    /** 校验归属、补齐人群类型，并确保不会误绑患者记录 */
+    private void prepareLatentMedication(MedicationManagement medication) {
+        if (medication.getLatentInfectionId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少潜伏感染者ID");
+        }
+        latentInfectionService.assertLatentOperable(medication.getLatentInfectionId());
+        if (medication.getId() != null) {
+            MedicationManagement existing = medicationManagementService.getById(medication.getId());
+            if (existing == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "服药管理记录不存在");
+            }
+            if (existing.getLatentInfectionId() == null
+                    || !existing.getLatentInfectionId().equals(medication.getLatentInfectionId())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染者与服药管理记录不匹配");
+            }
+        }
+        if (StrUtil.isBlank(medication.getPopulationType())) {
+            LatentInfection latent = latentInfectionService.getById(medication.getLatentInfectionId());
+            if (latent != null) {
+                medication.setPopulationType(latent.getPopulationType());
+            }
+        }
+        if (StrUtil.isBlank(medication.getPopulationType())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少人群类型");
+        }
+        medication.setPatientId(null);
     }
 }

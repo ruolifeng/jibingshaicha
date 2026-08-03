@@ -137,6 +137,20 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: "督导表管理", tagTitle: "潜伏-督导表管理", keepAlive: true, permission: "latentManagement:supervision" }
       },
       {
+        path: "medication",
+        component: () => import("@/pages/latent-management/medication.vue"),
+        name: "LatentManagementMedication",
+        meta: {
+          title: "服药管理",
+          tagTitle: "潜伏-服药管理",
+          keepAlive: true,
+          anyPermission: [
+            "latentManagement:medication",
+            "latentManagement:pickup"
+          ]
+        }
+      },
+      {
         path: "history",
         component: () => import("@/pages/latent-management/history.vue"),
         name: "LatentManagementHistory",

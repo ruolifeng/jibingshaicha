@@ -6,7 +6,9 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.MedicationPickupMapper;
+import cn.luyou.model.LatentInfection;
 import cn.luyou.model.MedicationPickup;
 import cn.luyou.model.Patient;
 import cn.luyou.service.MedicationPickupService;
@@ -29,6 +31,7 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
     private static final int PICKUP_EDIT_DAYS_LEVEL5 = 10;
 
     private final PatientService patientService;
+    private final LatentInfectionMapper latentInfectionMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -51,13 +54,14 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
             if (existing == null) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "领药记录不存在");
             }
-            if (!existing.getPatientId().equals(pickup.getPatientId())) {
+            if (existing.getPatientId() == null || !existing.getPatientId().equals(pickup.getPatientId())) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "患者与领药记录不匹配");
             }
             assertPickupEditable(existing);
             pickup.setPickupSeq(existing.getPickupSeq());
             pickup.setPopulationType(existing.getPopulationType());
             pickup.setPatientId(existing.getPatientId());
+            pickup.setLatentInfectionId(null);
             if (pickup.getFilledBy() == null) {
                 pickup.setFilledBy(existing.getFilledBy());
             }
@@ -65,8 +69,53 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
             return;
         }
 
+        pickup.setLatentInfectionId(null);
         pickup.setPopulationType(patient.getPopulationType());
-        pickup.setPickupSeq(nextPickupSeq(pickup.getPatientId()));
+        pickup.setPickupSeq(nextPatientPickupSeq(pickup.getPatientId()));
+        pickup.setFilledBy(BaseContext.getCurrentId());
+        save(pickup);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveLatentPickup(MedicationPickup pickup) {
+        if (pickup.getLatentInfectionId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少潜伏感染者ID");
+        }
+        validatePickupFields(pickup);
+
+        LatentInfection latent = latentInfectionMapper.selectById(pickup.getLatentInfectionId());
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        if (Integer.valueOf(1).equals(latent.getArchived()) && pickup.getId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该潜伏感染者已归档，无法新增领药记录");
+        }
+
+        if (pickup.getId() != null) {
+            MedicationPickup existing = getById(pickup.getId());
+            if (existing == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "领药记录不存在");
+            }
+            if (existing.getLatentInfectionId() == null
+                    || !existing.getLatentInfectionId().equals(pickup.getLatentInfectionId())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染者与领药记录不匹配");
+            }
+            assertPickupEditable(existing);
+            pickup.setPickupSeq(existing.getPickupSeq());
+            pickup.setPopulationType(existing.getPopulationType());
+            pickup.setLatentInfectionId(existing.getLatentInfectionId());
+            pickup.setPatientId(null);
+            if (pickup.getFilledBy() == null) {
+                pickup.setFilledBy(existing.getFilledBy());
+            }
+            updateById(pickup);
+            return;
+        }
+
+        pickup.setPatientId(null);
+        pickup.setPopulationType(latent.getPopulationType());
+        pickup.setPickupSeq(nextLatentPickupSeq(pickup.getLatentInfectionId()));
         pickup.setFilledBy(BaseContext.getCurrentId());
         save(pickup);
     }
@@ -75,6 +124,17 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
     public List<MedicationPickup> listByPatientId(Long patientId) {
         LambdaQueryWrapper<MedicationPickup> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(MedicationPickup::getPatientId, patientId)
+                .orderByAsc(MedicationPickup::getCreateTime);
+        List<MedicationPickup> list = list(wrapper);
+        Integer role = BaseContext.getCurrentRole();
+        list.forEach(item -> item.setEditable(isPickupEditable(role, item)));
+        return list;
+    }
+
+    @Override
+    public List<MedicationPickup> listByLatentInfectionId(Long latentInfectionId) {
+        LambdaQueryWrapper<MedicationPickup> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MedicationPickup::getLatentInfectionId, latentInfectionId)
                 .orderByAsc(MedicationPickup::getCreateTime);
         List<MedicationPickup> list = list(wrapper);
         Integer role = BaseContext.getCurrentRole();
@@ -102,8 +162,13 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
         }
     }
 
-    private int nextPickupSeq(Long patientId) {
+    private int nextPatientPickupSeq(Long patientId) {
         long count = lambdaQuery().eq(MedicationPickup::getPatientId, patientId).count();
+        return (int) count + 1;
+    }
+
+    private int nextLatentPickupSeq(Long latentInfectionId) {
+        long count = lambdaQuery().eq(MedicationPickup::getLatentInfectionId, latentInfectionId).count();
         return (int) count + 1;
     }
 

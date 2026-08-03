@@ -194,6 +194,9 @@ public class SnowflakeIdMigrationRunner implements ApplicationRunner {
                 "medication_pickup", "epidemic_report")) {
             updateFk(t, "patient_id", "patient", false);
         }
+        updateFk("medication_management", "latent_infection_id", "latent_infection", false);
+        updateFk("medication_pickup", "latent_infection_id", "latent_infection", false);
+        updateFk("medication_pickup", "filled_by", "user", false);
 
         // referral
         updateReferralBizIds();

@@ -1531,8 +1531,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 new LambdaQueryWrapper<MedicationManagement>().eq(MedicationManagement::getPatientId, sourcePatientId));
         for (MedicationManagement source : records) {
             MedicationManagement copy = new MedicationManagement();
-            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "patientId");
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                    "patientId", "latentInfectionId");
             copy.setPatientId(newPatientId);
+            copy.setLatentInfectionId(null);
             medicationManagementMapper.insert(copy);
         }
     }
@@ -1542,8 +1544,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 new LambdaQueryWrapper<MedicationPickup>().eq(MedicationPickup::getPatientId, sourcePatientId));
         for (MedicationPickup source : records) {
             MedicationPickup copy = new MedicationPickup();
-            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime", "patientId", "filledBy");
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                    "patientId", "latentInfectionId", "filledBy");
             copy.setPatientId(newPatientId);
+            copy.setLatentInfectionId(null);
             copy.setFilledBy(receiverUserId);
             medicationPickupMapper.insert(copy);
         }

@@ -9,6 +9,8 @@ import cn.luyou.model.ImportResult;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.LatentFollowUp;
 import cn.luyou.model.LatentCheck;
+import cn.luyou.model.MedicationManagement;
+import cn.luyou.model.MedicationPickup;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.Referral;
@@ -46,6 +48,7 @@ import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
+import cn.luyou.utils.CloseContactCaseLatentSyncSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
@@ -74,9 +77,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -110,6 +115,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final MedicationPickupService medicationPickupService;
     private final EpidemicReportService epidemicReportService;
     private final NoticePartyFillSupport noticePartyFillSupport;
+    private final CloseContactCaseLatentSyncSupport closeContactCaseLatentSyncSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
@@ -119,7 +125,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
             "gender", "populationType", "infectionResult", "diagnosisFirst", "diagnosisResult",
-            "hasChestXray", "chestXrayResult", "crowdCategory"
+            "hasChestXray", "chestXrayResult", "crowdCategory", "creatorUsername"
     );
 
     private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
@@ -252,8 +258,96 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         fillScreeningDiagnosisDraft(records);
         records.forEach(this::fillNoticeAutoFields);
         fillNoticeAndSupervisionStatus(records, populationType);
+        fillMedicationPickupSummary(records);
 
         return result;
+    }
+
+    /** 批量查询领药记录摘要并填充到潜伏感染列表 */
+    private void fillMedicationPickupSummary(List<LatentInfection> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        List<Long> latentIds = records.stream().map(LatentInfection::getId).filter(Objects::nonNull).toList();
+        if (latentIds.isEmpty()) {
+            return;
+        }
+        List<MedicationPickup> pickups = medicationPickupService.lambdaQuery()
+                .in(MedicationPickup::getLatentInfectionId, latentIds)
+                .orderByAsc(MedicationPickup::getCreateTime)
+                .list();
+        Map<Long, List<MedicationPickup>> grouped = pickups.stream()
+                .collect(Collectors.groupingBy(MedicationPickup::getLatentInfectionId));
+        records.forEach(r -> {
+            List<MedicationPickup> list = grouped.get(r.getId());
+            if (list == null || list.isEmpty()) {
+                r.setMedicationPickupCount(0);
+                r.setMedicationPickTime(null);
+                r.setMedicationChemotherapy(null);
+                r.setMedicationDrugForm(null);
+                return;
+            }
+            r.setMedicationPickupCount(list.size());
+            MedicationPickup latest = list.get(list.size() - 1);
+            r.setMedicationPickTime(latest.getPickupTime() != null ? latest.getPickupTime().toString() : null);
+            r.setMedicationChemotherapy(formatLatentDrugNames(latest.getDrugs()));
+            r.setMedicationDrugForm(formatLatentDrugQuantities(
+                    latest.getDrugs(), latest.getQuantity(), latest.getQuantityUnit()));
+        });
+    }
+
+    private String formatLatentDrugNames(String drugsJson) {
+        if (StrUtil.isBlank(drugsJson)) {
+            return null;
+        }
+        try {
+            cn.hutool.json.JSONArray array = JSONUtil.parseArray(drugsJson);
+            return array.stream()
+                    .map(item -> {
+                        if (item instanceof cn.hutool.json.JSONObject obj) {
+                            return obj.getStr("name");
+                        }
+                        return null;
+                    })
+                    .filter(StrUtil::isNotBlank)
+                    .collect(Collectors.joining("、"));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String formatLatentDrugQuantities(String drugsJson, java.math.BigDecimal legacyQuantity, String legacyUnit) {
+        if (StrUtil.isNotBlank(drugsJson)) {
+            try {
+                cn.hutool.json.JSONArray array = JSONUtil.parseArray(drugsJson);
+                String joined = array.stream()
+                        .map(item -> {
+                            if (!(item instanceof cn.hutool.json.JSONObject obj)) {
+                                return null;
+                            }
+                            Object quantity = obj.get("quantity");
+                            if (quantity == null) {
+                                return null;
+                            }
+                            String name = obj.getStr("name");
+                            String unit = obj.getStr("quantityUnit");
+                            return (StrUtil.isNotBlank(name) ? name : "药品")
+                                    + new java.math.BigDecimal(quantity.toString()).stripTrailingZeros().toPlainString()
+                                    + (StrUtil.isNotBlank(unit) ? unit : "");
+                        })
+                        .filter(StrUtil::isNotBlank)
+                        .collect(Collectors.joining("；"));
+                if (StrUtil.isNotBlank(joined)) {
+                    return joined;
+                }
+            } catch (Exception ignored) {
+                // fallback
+            }
+        }
+        if (legacyQuantity != null && StrUtil.isNotBlank(legacyUnit)) {
+            return legacyQuantity.stripTrailingZeros().toPlainString() + legacyUnit;
+        }
+        return null;
     }
 
     private void applyColumnFilters(LambdaQueryWrapper<LatentInfection> wrapper, String columnFilters) {
@@ -275,7 +369,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 case "crowdCategory" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getCrowdCategory, value);
                 case "remark" -> ColumnFilterSupport.like(wrapper, LatentInfection::getRemark, value);
                 case "creatorUsername" -> {
-                    List<Long> ids = CreatorUserSupport.resolveUserIdsByKeyword(userMapper, value);
+                    List<Long> ids = resolveCreatorIdsByFilterValue(value);
                     if (!ids.isEmpty()) {
                         wrapper.in(LatentInfection::getCreatorId, ids);
                     }
@@ -300,7 +394,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         Map<Long, String> nameMap = new HashMap<>();
         for (User u : userMapper.selectBatchIds(ids)) {
             if (u != null) {
-                nameMap.put(u.getId(), StrUtil.blankToDefault(u.getRealName(), u.getUsername()));
+                String display = StrUtil.blankToDefault(u.getRealName(), u.getUsername());
+                if (StrUtil.isNotBlank(display)) {
+                    nameMap.put(u.getId(), display.trim());
+                }
             }
         }
         for (LatentInfection r : records) {
@@ -1296,6 +1393,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (latent.getScreeningId() == null && latent.getInfectionScreenDate() != null) {
             latent.setScreenDate(latent.getInfectionScreenDate());
         }
+        closeContactCaseLatentSyncSupport.fillCaseDetailFields(latent);
         fillNoticeAndSupervisionStatus(List.of(latent), latent.getPopulationType());
         return latent;
     }
@@ -1495,8 +1593,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 String populationTypeRaw = getImportField(row, headerIndex, "数据来源");
                 String crowdCategoryRaw = getImportField(row, headerIndex, "人群分类");
                 String populationType = resolvePopulationType(populationTypeRaw);
-                if (StrUtil.isBlank(crowdCategoryRaw)) {
-                    crowdCategoryRaw = extractCrowdCategoryFromPopulationLabel(populationTypeRaw);
+                // 数据来源已含细分（如「密接-家庭内」「重点人群-老年人」）时直接带出，不必再填人群分类
+                String embeddedCrowd = extractCrowdCategoryFromPopulationLabel(populationTypeRaw);
+                if (StrUtil.isNotBlank(embeddedCrowd)) {
+                    crowdCategoryRaw = embeddedCrowd;
+                } else {
+                    String embeddedFromCrowdCol = extractCrowdCategoryFromPopulationLabel(crowdCategoryRaw);
+                    if (StrUtil.isNotBlank(embeddedFromCrowdCol)) {
+                        crowdCategoryRaw = embeddedFromCrowdCol;
+                    }
                 }
                 String phone = normalizeExcelCellText(getImportField(row, headerIndex, "联系电话"));
 
@@ -1675,6 +1780,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         copyLatentSupervisionForms(sourceLatentId, newLatentId, receiverUserId);
         copyLatentFollowUps(sourceLatentId, newLatentId);
         copyLatentChecks(sourceLatentId, newLatentId);
+        copyLatentMedication(sourceLatentId, newLatentId, receiverUserId);
 
         // 兜底：确保接收方记录为可操作的在管状态
         lambdaUpdate()
@@ -1761,6 +1867,34 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
     }
 
+    /** 转出同步：复制服药管理与领药记录到接收方副本 */
+    private void copyLatentMedication(Long sourceLatentId, Long newLatentId, Long receiverUserId) {
+        List<MedicationManagement> meds = medicationManagementService.lambdaQuery()
+                .eq(MedicationManagement::getLatentInfectionId, sourceLatentId)
+                .list();
+        for (MedicationManagement source : meds) {
+            MedicationManagement copy = new MedicationManagement();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                    "patientId", "latentInfectionId");
+            copy.setPatientId(null);
+            copy.setLatentInfectionId(newLatentId);
+            medicationManagementService.save(copy);
+        }
+        List<MedicationPickup> pickups = medicationPickupService.lambdaQuery()
+                .eq(MedicationPickup::getLatentInfectionId, sourceLatentId)
+                .orderByAsc(MedicationPickup::getPickupSeq)
+                .list();
+        for (MedicationPickup source : pickups) {
+            MedicationPickup copy = new MedicationPickup();
+            BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
+                    "patientId", "latentInfectionId", "filledBy");
+            copy.setPatientId(null);
+            copy.setLatentInfectionId(newLatentId);
+            copy.setFilledBy(receiverUserId);
+            medicationPickupService.save(copy);
+        }
+    }
+
     @Override
     public void assertLatentOperable(Long id) {
         LatentInfection latent = getById(id);
@@ -1820,6 +1954,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         supervisionFormService.lambdaUpdate()
                 .eq(SupervisionForm::getLatentInfectionId, latentId).remove();
+        medicationManagementService.lambdaUpdate()
+                .eq(MedicationManagement::getLatentInfectionId, latentId).remove();
+        medicationPickupService.lambdaUpdate()
+                .eq(MedicationPickup::getLatentInfectionId, latentId).remove();
         latentFollowUpService.lambdaUpdate()
                 .eq(cn.luyou.model.LatentFollowUp::getLatentInfectionId, latentId).remove();
         latentCheckService.lambdaUpdate()
@@ -1896,9 +2034,22 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         return text;
     }
 
+    /** 统一数据来源分隔符（兼容 Excel 中各类横线及两侧空格） */
+    private String normalizePopulationLabel(String raw) {
+        if (StrUtil.isBlank(raw)) return "";
+        String v = raw.trim()
+                .replace('－', '-')
+                .replace('—', '-')
+                .replace('–', '-')
+                .replace('/', '-')
+                .replace('／', '-');
+        // 「密接 - 家庭内」「密接- 家庭外」等 → 「密接-家庭内」
+        return v.replaceAll("\\s*-\\s*", "-");
+    }
+
     private String resolvePopulationType(String raw) {
         if (StrUtil.isBlank(raw)) return "";
-        String v = raw.trim();
+        String v = normalizePopulationLabel(raw);
         if (MANUAL_POPULATION_TYPES.contains(v)) return v;
         if (v.startsWith("重点人群-")) return "keyPopulation";
         if (v.startsWith("密接-")) return "closeContact";
@@ -1916,12 +2067,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     private String extractCrowdCategoryFromPopulationLabel(String raw) {
         if (StrUtil.isBlank(raw)) return "";
-        String v = raw.trim();
+        String v = normalizePopulationLabel(raw);
         if (v.startsWith("重点人群-")) {
-            return v.substring("重点人群-".length());
+            return v.substring("重点人群-".length()).trim();
         }
         if (v.startsWith("密接-")) {
-            return v.substring("密接-".length());
+            return v.substring("密接-".length()).trim();
         }
         return "";
     }
@@ -1933,6 +2084,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     private String resolveManualCrowdCategory(String populationType, Object crowdCategoryInput) {
         String crowdCategory = crowdCategoryInput == null ? "" : crowdCategoryInput.toString().trim();
+        // 兼容人群分类误填「密接-家庭内」「重点人群-老年人」
+        String embedded = extractCrowdCategoryFromPopulationLabel(crowdCategory);
+        if (StrUtil.isNotBlank(embedded)) {
+            crowdCategory = embedded;
+        }
         if ("keyPopulation".equals(populationType)) {
             if (StrUtil.isBlank(crowdCategory)) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择重点人群分类（老年人、糖尿病、双感）");
@@ -1952,7 +2108,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         if ("closeContact".equals(populationType)) {
             if (!CLOSE_CONTACT_TYPES.contains(crowdCategory)) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择密接类型（家庭内/家庭外）");
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择密接类型（家庭内/家庭外）；数据来源也可直接填「密接-家庭内」或「密接-家庭外」");
             }
             return crowdCategory;
         }
@@ -1994,10 +2150,60 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         int resolvedArchived = archived != null ? archived : 0;
         LambdaQueryWrapper<LatentInfection> wrapper = buildDistinctScopeWrapper(populationType, resolvedArchived, referralResult);
+        // 录入用户非表字段：按 creator_id 去重后再解析展示名
+        if ("creatorUsername".equals(field)) {
+            wrapper.select(LatentInfection::getCreatorId)
+                    .isNotNull(LatentInfection::getCreatorId)
+                    .groupBy(LatentInfection::getCreatorId);
+            List<Long> creatorIds = list(wrapper).stream()
+                    .map(LatentInfection::getCreatorId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            if (creatorIds.isEmpty()) {
+                return List.of();
+            }
+            List<String> names = new ArrayList<>();
+            for (User u : userMapper.selectBatchIds(creatorIds)) {
+                if (u == null) {
+                    continue;
+                }
+                String display = StrUtil.blankToDefault(u.getRealName(), u.getUsername());
+                if (StrUtil.isNotBlank(display)) {
+                    names.add(display.trim());
+                }
+            }
+            return ColumnDistinctSupport.normalize(names);
+        }
         applyDistinctSelect(wrapper, field);
         return ColumnDistinctSupport.normalize(list(wrapper).stream()
                 .map(row -> extractDistinctValue(row, field))
                 .toList());
+    }
+
+    /**
+     * 表头录入用户筛选：支持多选逗号分隔。
+     * 每个选项优先按姓名/账号精确匹配（与列表展示名一致），无精确结果时再模糊。
+     */
+    private List<Long> resolveCreatorIdsByFilterValue(String value) {
+        Collection<String> names = ColumnFilterSupport.splitValues(value);
+        if (names.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        for (String name : names) {
+            List<User> exactUsers = userMapper.selectList(new LambdaQueryWrapper<User>()
+                    .and(w -> w.eq(User::getRealName, name).or().eq(User::getUsername, name)));
+            if (exactUsers != null && !exactUsers.isEmpty()) {
+                exactUsers.stream()
+                        .map(User::getId)
+                        .filter(Objects::nonNull)
+                        .forEach(ids::add);
+                continue;
+            }
+            ids.addAll(CreatorUserSupport.resolveUserIdsByKeyword(userMapper, name));
+        }
+        return new ArrayList<>(ids);
     }
 
     /** distinct 查询的基础权限与列表范围（与 queryPage 在管列表一致） */
