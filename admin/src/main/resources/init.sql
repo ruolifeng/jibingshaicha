@@ -117,6 +117,10 @@ CREATE TABLE IF NOT EXISTS `screening_school` (
     `remark`                   TEXT         DEFAULT NULL COMMENT '备注',
     `is_latent`                TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
     `upload_batch`             VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
+    `import_row_no`            INT          DEFAULT NULL COMMENT 'Excel导入行号（与模板行号一致，用于列表排序）',
+    `department_id`            BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_id`               BIGINT       DEFAULT NULL COMMENT '录入人用户ID',
+    `creator_username`         VARCHAR(64)  DEFAULT NULL COMMENT '录入用户名',
     `create_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`                  TINYINT      NOT NULL DEFAULT 0,
@@ -188,6 +192,10 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `is_latent`                   TINYINT      NOT NULL DEFAULT 0 COMMENT '是否潜伏管理者：0否 1是',
     `upload_batch`                VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
     `import_row_no`               INT          DEFAULT NULL COMMENT 'Excel导入行号（与模板行号一致，用于列表排序）',
+    `department_id`               BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_id`                  BIGINT       DEFAULT NULL COMMENT '录入人用户ID',
+    `creator_username`            VARCHAR(64)  DEFAULT NULL COMMENT '录入用户名',
+    `source_type`                 VARCHAR(32)  NOT NULL DEFAULT 'keyPopulation' COMMENT 'V16 数据来源：keyPopulation=重点人群 / regular=疫情筛查',
     `create_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`                  TINYINT      NOT NULL DEFAULT 0,
@@ -428,6 +436,11 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
     `medication_status`   TINYINT      DEFAULT NULL COMMENT '服药状态：1按要求服药 2不服药',
     `archived`            TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已归档：0否 1是',
     `archived_time`       DATETIME     DEFAULT NULL COMMENT '结案归档时间',
+    `archive_remark`      VARCHAR(128) DEFAULT NULL COMMENT '归档备注（如：已转出）',
+    `department_id`       BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_id`          BIGINT       DEFAULT NULL COMMENT '录入人用户ID',
+    `import_row_no`       INT          DEFAULT NULL COMMENT 'Excel导入行号（与模板行号一致，用于列表排序）',
+    `source_latent_id`    BIGINT       DEFAULT NULL COMMENT '转出复制来源潜伏感染ID',
     `create_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`             TINYINT      NOT NULL DEFAULT 0,
@@ -1518,11 +1531,18 @@ DROP PROCEDURE IF EXISTS _v15_migrate_follow_up;
 -- ==================== V16：P4 重构阶段 — 疫情筛查、聚合菜单、患者删除、新权限 ====================
 
 -- ---------- 1. screening_key_population 增加 source_type 列（区分重点人群 vs 疫情筛查） ----------
--- DEFAULT 'keyPopulation' 保证存量数据不受影响。
-ALTER TABLE `screening_key_population`
-    ADD COLUMN `source_type` VARCHAR(32) NOT NULL DEFAULT 'keyPopulation'
-        COMMENT 'V16 数据来源：keyPopulation=重点人群 / regular=疫情筛查'
-        AFTER `upload_batch`;
+-- DEFAULT 'keyPopulation' 保证存量数据不受影响；建表已含该列时跳过。
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'screening_key_population' AND COLUMN_NAME = 'source_type'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `screening_key_population` ADD COLUMN `source_type` VARCHAR(32) NOT NULL DEFAULT ''keyPopulation'' COMMENT ''V16 数据来源：keyPopulation=重点人群 / regular=疫情筛查'' AFTER `upload_batch`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ---------- 2. 新增权限码（V16 新增菜单对应的权限，ID 从 400 起） ----------
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
@@ -1629,6 +1649,8 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `current_address`        VARCHAR(256),
     `crowd_category`         VARCHAR(128)                            COMMENT '人群分类',
     `recommend_reason`       VARCHAR(512)                            COMMENT '推介原因（recommend模式）',
+    `recommend_unit_name`    VARCHAR(200)                            COMMENT '推介单位名称',
+    `fill_user_name`         VARCHAR(100)                            COMMENT '填写用户名称',
     `track_reason`           VARCHAR(512)                            COMMENT '追踪原因（track模式）',
     `source_type`            VARCHAR(16)   NOT NULL DEFAULT 'manual' COMMENT 'manual=手动 epidemic=大疫情导入',
     -- 大疫情导入字段
@@ -1642,6 +1664,7 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `report_card_time`       DATETIME                                COMMENT '报告卡录入时间',
     `epidemic_remark`        TEXT                                    COMMENT '大疫情备注',
     `upload_batch`           VARCHAR(64)                             COMMENT '导入批次号',
+    `import_row_no`          INT                                     COMMENT 'Excel导入行号（与模板行号一致，用于列表排序）',
     -- 推介专用字段（biz_mode=recommend 时使用）
     `receiver_user_id`       BIGINT                                  COMMENT '接收推介的一至五级用户ID',
     `receiver_dept_id`       BIGINT                                  COMMENT '接收推介的用户所在部门ID（自动派生）',
@@ -1656,6 +1679,7 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `not_in_place_count`     INT           NOT NULL DEFAULT 0,
     `tracking_remark`        TEXT,
     `arrival_time`           DATETIME                                COMMENT '到位时间',
+    `actual_arrival_date`    DATE                                    COMMENT '真实到位时间（手动录入）',
     `tracking_history_json`  TEXT                                    COMMENT '追踪过程记录JSON',
     -- 到位后补录
     `has_infection_screen`   VARCHAR(10),
@@ -2067,7 +2091,7 @@ WHERE `code` IN (
   AND `name` NOT LIKE '[废弃]%';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` IN (
@@ -2311,6 +2335,20 @@ FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
          CROSS JOIN `permission` p
 WHERE p.`code` = 'statistics:questionnaire';
 
+-- 2.1）统计分析 — 重点人群结核症状筛查推介报表
+INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
+(132, 'statistics:keyPopulationTbSymptomReferral', '重点人群结核症状筛查推介', 2, 4, 3);
+
+UPDATE `permission`
+SET `parent_id` = 4, `sort` = 3, `name` = '重点人群结核症状筛查推介', `type` = 2
+WHERE `code` = 'statistics:keyPopulationTbSymptomReferral';
+
+INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
+FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
+         CROSS JOIN `permission` p
+WHERE p.`code` = 'statistics:keyPopulationTbSymptomReferral';
+
 -- 3）清理角色权限表中已废弃权限的关联（含其全部子权限）
 DELETE rp FROM `role_permission` rp
     INNER JOIN `permission` p ON p.id = rp.permission_id
@@ -2335,7 +2373,7 @@ WHERE `code` = 'latentManagement:history';
 
 -- 与 latentManagement 其它子菜单一致：授予已拥有「潜伏感染者管理」父权限的角色
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'latentManagement'
          CROSS JOIN `permission` p
@@ -2471,7 +2509,7 @@ WHERE p.`code` IN (
 );
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
          CROSS JOIN `permission` p
@@ -2505,7 +2543,7 @@ WHERE p.`code` IN (
 );
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:medication'
@@ -2514,7 +2552,7 @@ WHERE p.`code` IN ('patientManagement', 'patientManagement:medication')
   AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:medication'
@@ -2523,7 +2561,7 @@ WHERE p.`code` = 'patientManagement:pickup'
   AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:firstVisit'
@@ -2531,7 +2569,7 @@ FROM `role_permission` rp
 WHERE p.`code` = 'patientManagement:firstVisit';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:followUp'
@@ -2539,7 +2577,7 @@ FROM `role_permission` rp
 WHERE p.`code` = 'patientManagement:followUp';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old_p ON old_p.id = rp.permission_id
     AND old_p.`code` = 'patient:confirmNotice'
@@ -2547,14 +2585,14 @@ FROM `role_permission` rp
 WHERE p.`code` = 'patientManagement:notice';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
 WHERE p.`code` = 'patientManagement:medication';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
@@ -2698,7 +2736,7 @@ FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT
 WHERE p.`code` IN ('referralManagement:epidemicImport', 'referralManagement:export');
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` existing ON existing.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -2720,7 +2758,7 @@ FROM (SELECT 1 AS role UNION SELECT 2) r
 WHERE p.`code` = 'patientManagement:pickup';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` existing ON existing.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -2732,7 +2770,7 @@ WHERE existing.`code` IN (
   AND rp.`role` != 6;
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'patientManagement'
          CROSS JOIN `permission` p
@@ -2766,7 +2804,7 @@ WHERE p.`code` IN (
 );
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
          CROSS JOIN `permission` p
@@ -2906,7 +2944,7 @@ SET child.`parent_id` = parent.id, child.`sort` = 1, child.`name` = '修改随�
 WHERE child.`code` = 'patientManagement:followUp:edit';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -2941,7 +2979,7 @@ UPDATE `permission` SET `sort` = 1, `name` = '填写后续随访' WHERE `code` =
 UPDATE `permission` SET `sort` = 2, `name` = '修改随访记录' WHERE `code` = 'patientManagement:followUp:edit';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3039,7 +3077,7 @@ SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 3, child.`na
 WHERE child.`code` = 'patientManagement:delete';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3047,7 +3085,7 @@ WHERE parent.`code` = 'patientManagement:overview'
   AND p.`code` = 'patientManagement:delete';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3074,7 +3112,7 @@ UPDATE `permission` SET `sort` = 4 WHERE `code` = 'regular:suspected';
 UPDATE `permission` SET `sort` = 5 WHERE `code` = 'epidemic:screening';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` old ON old.id = rp.permission_id
          CROSS JOIN `permission` p
@@ -3560,7 +3598,7 @@ SET child.`parent_id` = parent.id, child.`type` = 2, child.`sort` = 3, child.`na
 WHERE child.`code` = 'patientManagement:delete';
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
-SELECT (@_seed_rp_id := @_seed_rp_id + 1), DISTINCT rp.role, p.id
+SELECT DISTINCT (@_seed_rp_id := @_seed_rp_id + 1), rp.role, p.id
 FROM `role_permission` rp
          INNER JOIN `permission` parent ON parent.id = rp.permission_id
          CROSS JOIN `permission` p
