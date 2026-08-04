@@ -274,7 +274,12 @@ function removeDrugRow(index: number) {
         二、领取数量
       </el-divider>
       <div v-for="(row, index) in pickupForm.drugRows" :key="`quantity-${row.id}`">
-        <el-form-item :label="resolveDrugName(row) || `药品 ${index + 1}`" required>
+        <el-form-item
+          class="quantity-form-item"
+          :label="resolveDrugName(row) || `药品 ${index + 1}`"
+          :label-width="180"
+          required
+        >
           <div class="quantity-row">
             <el-input-number
               v-model="row.quantity"
@@ -361,5 +366,9 @@ function removeDrugRow(index: number) {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+:deep(.quantity-form-item .el-form-item__label) {
+  white-space: nowrap;
 }
 </style>
