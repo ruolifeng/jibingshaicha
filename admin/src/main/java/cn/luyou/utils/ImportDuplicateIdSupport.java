@@ -21,10 +21,11 @@ public final class ImportDuplicateIdSupport {
     }
 
     public static String normalizeIdNumber(String idNumber) {
-        if (StrUtil.isBlank(idNumber)) {
+        String normalized = ImportIdentitySupport.normalizeIdNumber(idNumber);
+        if (StrUtil.isBlank(normalized)) {
             return "";
         }
-        return idNumber.trim().toUpperCase();
+        return normalized.toUpperCase();
     }
 
     public static <T> List<IdentityRow> collectRows(List<T> items,

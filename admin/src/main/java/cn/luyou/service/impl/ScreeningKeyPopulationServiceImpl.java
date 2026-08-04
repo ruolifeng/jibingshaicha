@@ -240,6 +240,18 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         result.setSkippedCount(skippedCount);
         result.setDuplicateCount(duplicateCount);
         result.setSuccessCount(toInsert.size() + toUpdate.size());
+        for (ScreeningKeyPopulation d : toInsert) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                ImportIdentitySupport.registerMissingIdWarning(
+                        result, d.getImportRowNo() == null ? 0 : d.getImportRowNo(), d.getName());
+            }
+        }
+        for (ScreeningKeyPopulation d : toUpdate) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                ImportIdentitySupport.registerMissingIdWarning(
+                        result, d.getImportRowNo() == null ? 0 : d.getImportRowNo(), d.getName());
+            }
+        }
 
         // 仅对新插入且感染筛查阳性、或已含胸片+首次诊断的记录自动创建潜伏感染记录。
         // 注意：diagnosisResult 不在此处预填，需操作员在"待诊断"页面点击"诊断"后由
@@ -295,6 +307,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
                         return;
                     }
+                    data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "身份证号格式不正确");
                     }
@@ -671,6 +684,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createScreening(ScreeningKeyPopulation data) {
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
         if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
@@ -744,6 +758,13 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         ScreeningKeyPopulation existing = getById(data.getId());
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
+        }
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
         if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
             data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
@@ -900,7 +921,8 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     }
 
     private boolean isBlankKeyPopulationRow(ScreeningKeyPopulation data) {
-        return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
+        return data == null || (StrUtil.isBlank(data.getName())
+                && ImportIdentitySupport.isBlankOrPlaceholder(data.getIdNumber()));
     }
 
     @Override

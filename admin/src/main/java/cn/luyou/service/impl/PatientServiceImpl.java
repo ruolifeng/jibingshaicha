@@ -44,6 +44,7 @@ import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.ListSortSupport;
@@ -205,12 +206,14 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                      String name, String idNumber, String phone, String currentAddress,
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory,
-                                     String creatorUsername, String columnFilters, String sortField, String sortOrder) {
+                                     String creatorUsername, String columnFilters, String sortField, String sortOrder,
+                                     String formatIssue) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
                 dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory);
         applyCreatorUsernameFilter(wrapper, creatorUsername);
         applyColumnFilters(wrapper, columnFilters);
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         ListSortSupport.apply(wrapper, sortField, sortOrder, SORT_COLUMNS, ImportRowOrderSupport.WITHOUT_BATCH);
         IPage<Patient> result = page(new Page<>(page, size), wrapper);
         fillCreatorUsernames(result.getRecords());
@@ -230,10 +233,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                         Integer archived, String dateFrom, String dateTo,
                                         String startTime, String endTime,
                                         String dateFilterBy, String medicationManagementUnit,
-                                        String crowdCategory) {
+                                        String crowdCategory, String formatIssue) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                 archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit, crowdCategory);
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         if (Integer.valueOf(1).equals(archived)) {
             wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getArchivedTime);
         } else {
@@ -824,7 +828,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         return wrapper;
     }
 
-    /** 统计年度内患者：登记日期在周期内，或无登记日期时按创建时间 */
+    /**
+     * 统计年度内患者：有登记日期则按登记日期落在周期内；
+     * 仅当无 epidemic_data 或登记日期为空/无法解析时，才回退按创建时间。
+     */
     private void applyStatYearPatientFilter(LambdaQueryWrapper<Patient> wrapper, StatYearPeriod period) {
         LocalDateTime from = period.start().atStartOfDay();
         LocalDateTime to = period.end().atTime(23, 59, 59);
@@ -833,7 +840,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .apply(REGISTRATION_DATE_SQL_EXPR + " IS NOT NULL")
                         .apply(REGISTRATION_DATE_SQL_EXPR + " >= {0}", period.start())
                         .apply(REGISTRATION_DATE_SQL_EXPR + " <= {0}", period.end()))
-                .or(w2 -> w2.ge(Patient::getCreateTime, from).le(Patient::getCreateTime, to)));
+                .or(w2 -> w2.and(noReg -> noReg.isNull(Patient::getEpidemicData)
+                                .or()
+                                .apply(REGISTRATION_DATE_SQL_EXPR + " IS NULL"))
+                        .ge(Patient::getCreateTime, from)
+                        .le(Patient::getCreateTime, to)));
     }
 
     /**
@@ -1277,7 +1288,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             Map<Integer, String> row = dataRows.get(ri);
             int importRowNo = ri + 2;
             String nameVal = getFieldByHeader(row, headerIndex, "姓名");
-            String idNumberVal = getFieldByHeader(row, headerIndex, "证件号", "身份证号", "身份证");
+            String idNumberVal = ImportIdentitySupport.normalizeIdNumber(
+                    getFieldByHeader(row, headerIndex, "证件号", "身份证号", "身份证"));
 
             // 跳过姓名和证件号均为空的空行
             if (StrUtil.isBlank(nameVal) && StrUtil.isBlank(idNumberVal)) {
@@ -1292,7 +1304,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 rawJson = namedRow.toString();
             }
 
-            // 优先按证件号精确匹配，再按姓名模糊匹配（仅在当前用户辖区内匹配）
+            // 优先按真实证件号精确匹配，再按姓名模糊匹配（仅在当前用户辖区内匹配）
             Patient matched = null;
             if (StrUtil.isNotBlank(idNumberVal)) {
                 LambdaQueryWrapper<Patient> idWrapper = new LambdaQueryWrapper<>();
@@ -1467,7 +1479,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     }
 
     private void assertNoDuplicateInReceiverDept(Patient source, Long receiverDeptId) {
-        if (StrUtil.isBlank(source.getIdNumber())) {
+        if (ImportIdentitySupport.isBlankOrPlaceholder(source.getIdNumber())) {
             return;
         }
         long count = lambdaQuery()
@@ -2007,7 +2019,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             Map<Integer, String> row = dataRows.get(ri);
             int importRowNo = ri + 2;
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
-            String idNumber = getFieldByHeader(row, headerIndex, "身份证号", "有效证件号", "证件号");
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                    getFieldByHeader(row, headerIndex, "身份证号", "有效证件号", "证件号"));
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) continue;
 
             String gender = getFieldByHeader(row, headerIndex, "性别");
@@ -2118,7 +2131,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
         if (body.get("idType") != null) patient.setIdType(body.get("idType").toString());
         if (body.get("idNumber") != null) {
-            String idNumber = body.get("idNumber").toString().trim();
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(body.get("idNumber").toString().trim());
             if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
             }
@@ -2238,17 +2251,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Transactional(rollbackFor = Exception.class)
     public Long createManual(Map<String, Object> body) {
         String name = body.getOrDefault("name", "").toString().trim();
-        String idNumber = body.getOrDefault("idNumber", "").toString().trim();
+        String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                body.getOrDefault("idNumber", "").toString().trim());
         String populationType = body.getOrDefault("populationType", "").toString().trim();
         String phone = body.getOrDefault("phone", "").toString().trim();
 
         if (StrUtil.isBlank(name)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "姓名不能为空");
         }
-        if (StrUtil.isBlank(idNumber)) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "证件号不能为空");
-        }
-        if (!isValidIdCard(idNumber)) {
+        if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
         if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
@@ -2337,7 +2348,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             int rowNum = i + 2;
             String name = getImportField(row, headerIndex, "姓名");
             String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
-            if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+            if (StrUtil.isBlank(name) && ImportIdentitySupport.isBlankOrPlaceholder(idNumber)) {
                 continue;
             }
             ImportIdentitySupport.registerInvalidIdentity(result, rowNum, name, idNumber, confirmSkipInvalid);
@@ -2351,11 +2362,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             Map<Integer, String> row = dataRows.get(i);
             int rowNum = i + 2;
             String name = getImportField(row, headerIndex, "姓名");
-            String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                    normalizeExcelCellText(getImportField(row, headerIndex, "证件号")));
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
                 continue;
             }
             if (ImportIdentitySupport.isMissingBasicIdentity(name, idNumber)) {
+                continue;
+            }
+            if (StrUtil.isBlank(idNumber)) {
                 continue;
             }
             String populationType = resolvePopulationType(getImportField(row, headerIndex, "数据来源"));
@@ -2381,20 +2396,22 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             int rowNum = i + 2;
             try {
                 String name = getImportField(row, headerIndex, "姓名");
-                String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
-                if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+                String rawIdNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+                if (StrUtil.isBlank(name) && ImportIdentitySupport.isBlankOrPlaceholder(rawIdNumber)) {
                     continue;
                 }
-                if (ImportIdentitySupport.isMissingBasicIdentity(name, idNumber)) {
+                if (ImportIdentitySupport.isMissingBasicIdentity(name, rawIdNumber)) {
                     continue;
                 }
+                String idNumber = ImportIdentitySupport.normalizeIdNumber(rawIdNumber);
+                boolean missingId = ImportIdentitySupport.isBlankOrPlaceholder(rawIdNumber);
 
                 String populationTypeRaw = getImportField(row, headerIndex, "数据来源");
                 String populationType = resolvePopulationType(populationTypeRaw);
                 String phone = normalizeExcelCellText(getImportField(row, headerIndex, "联系电话"));
 
                 boolean hasError = false;
-                if (!isValidIdCard(idNumber)) {
+                if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
                     result.addError(rowNum, name, "身份证号格式不正确");
                     hasError = true;
                 }
@@ -2417,15 +2434,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                     continue;
                 }
 
-                LambdaQueryWrapper<Patient> dupWrapper = new LambdaQueryWrapper<>();
-                dupWrapper.eq(Patient::getIdNumber, idNumber)
-                        .eq(Patient::getPopulationType, populationType)
-                        .eq(Patient::getArchived, 0);
-                dataScopeHelper.applyImportDedupScope(
-                        dupWrapper, Patient::getDepartmentId, Patient::getCreatorId);
-                if (count(dupWrapper) > 0) {
-                    result.addError(rowNum, name, "该证件号在此数据来源下已存在");
-                    continue;
+                if (StrUtil.isNotBlank(idNumber)) {
+                    LambdaQueryWrapper<Patient> dupWrapper = new LambdaQueryWrapper<>();
+                    dupWrapper.eq(Patient::getIdNumber, idNumber)
+                            .eq(Patient::getPopulationType, populationType)
+                            .eq(Patient::getArchived, 0);
+                    dataScopeHelper.applyImportDedupScope(
+                            dupWrapper, Patient::getDepartmentId, Patient::getCreatorId);
+                    if (count(dupWrapper) > 0) {
+                        result.addError(rowNum, name, "该证件号在此数据来源下已存在");
+                        continue;
+                    }
                 }
 
                 Map<String, String> epidemicFields = buildEpidemicFieldsFromImportRow(row, headerIndex);
@@ -2465,16 +2484,20 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
                 save(patient);
                 result.setSuccessCount(result.getSuccessCount() + 1);
+                if (missingId) {
+                    ImportIdentitySupport.registerMissingIdWarning(result, rowNum, name);
+                }
             } catch (Exception e) {
                 result.addError(rowNum, getImportField(row, headerIndex, "姓名"), "数据解析失败：" + e.getMessage());
             }
         }
 
         if (result.getSuccessCount() == 0 && result.getErrors().isEmpty()) {
-            result.addError(0, "", "未找到有效数据行，请确认已填写姓名和证件号");
+            result.addError(0, "", "未找到有效数据行，请确认已填写姓名");
         }
 
-        log.info("在管患者批量导入完成，成功 {} 条，错误 {} 条", result.getSuccessCount(), result.getErrors().size());
+        log.info("在管患者批量导入完成，成功 {} 条，错误 {} 条，缺证件号 {} 条",
+                result.getSuccessCount(), result.getErrors().size(), result.getMissingIdCount());
         return result;
     }
 
@@ -2505,6 +2528,42 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         for (Long id : ids) {
             deletePatient(id);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String populationType, String name, String idNumber, String phone,
+                              String currentAddress, String diagnosisResult, Integer archived,
+                              String dateFrom, String dateTo, String dateFilterBy,
+                              String medicationManagementUnit, String crowdCategory,
+                              String creatorUsername, String columnFilters, String formatIssue) {
+        final int pageSize = 2000;
+        int pageNum = 1;
+        List<Long> allIds = new ArrayList<>();
+        while (true) {
+            IPage<Patient> page = queryPage(
+                    pageNum, pageSize, populationType, name, idNumber, phone, currentAddress,
+                    diagnosisResult, archived, dateFrom, dateTo, dateFilterBy,
+                    medicationManagementUnit, crowdCategory, creatorUsername, columnFilters,
+                    null, null, formatIssue);
+            if (page.getRecords() == null || page.getRecords().isEmpty()) {
+                break;
+            }
+            for (Patient record : page.getRecords()) {
+                if (record.getId() != null) {
+                    allIds.add(record.getId());
+                }
+            }
+            if ((long) pageNum * pageSize >= page.getTotal()) {
+                break;
+            }
+            pageNum++;
+        }
+        if (allIds.isEmpty()) {
+            return 0;
+        }
+        batchDeletePatients(allIds);
+        return allIds.size();
     }
 
     private Integer parseIntegerField(Object val) {

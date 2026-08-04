@@ -119,6 +119,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                     if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
                         return;
                     }
+                    data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "接触者身份证号格式不正确");
                     }
@@ -209,6 +210,12 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
 
         result.setSuccessCount(dataList.size());
+        for (CloseContactCase d : dataList) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                ImportIdentitySupport.registerMissingIdWarning(
+                        result, d.getImportRowNo() == null ? 0 : d.getImportRowNo(), d.getName());
+            }
+        }
         return result;
     }
 
@@ -271,6 +278,10 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createCase(CloseContactCase data) {
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
@@ -288,6 +299,10 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Transactional(rollbackFor = Exception.class)
     public void updateCase(CloseContactCase data) {
         CloseContactCase existing = requireAccessibleCase(data.getId());
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
         }
@@ -469,7 +484,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private boolean isBlankDataRow(CloseContactCase data) {
         return data == null
                 || (StrUtil.isBlank(data.getName())
-                && StrUtil.isBlank(data.getIdNumber())
+                && ImportIdentitySupport.isBlankOrPlaceholder(data.getIdNumber())
                 && StrUtil.isBlank(data.getCity())
                 && StrUtil.isBlank(data.getDistrict()));
     }

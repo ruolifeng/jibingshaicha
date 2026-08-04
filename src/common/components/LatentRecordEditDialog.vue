@@ -6,7 +6,7 @@ import {
 } from "@@/constants/disease"
 import { CONTACT_TYPE_OPTIONS } from "@@/constants/screening-close-contact"
 import { confirmEditChange } from "@@/utils/listToolbar"
-import { idCardRule, phoneRule } from "@@/utils/validate"
+import { idCardRule, normalizeIdNumber, phoneRule } from "@@/utils/validate"
 import { createLatentApi, getLatentDetailApi, updateLatentApi } from "@/pages/latent-management/apis"
 
 const props = defineProps<{
@@ -72,7 +72,7 @@ const rules = computed(() => ({
     ? { closeContactType: [{ required: true, message: "请选择密接类型", trigger: "change" }] }
     : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
-  idNumber: [idCardRule(true)],
+  idNumber: [idCardRule(false)],
   phone: [phoneRule(!isCreate.value)]
 }))
 
@@ -190,13 +190,15 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const crowdCategory = buildCrowdCategory()
+    const idNumber = normalizeIdNumber(form.idNumber)
     if (isCreate.value) {
-      await createLatentApi({ ...form, crowdCategory })
+      await createLatentApi({ ...form, idNumber, crowdCategory })
       ElMessage.success("新增成功")
     } else {
       const { populationType, keyPopulationSubCategories, closeContactType, ...payload } = form
       await updateLatentApi(props.latentId!, {
         ...payload,
+        idNumber,
         ...(showCrowdCategoryFields.value ? { crowdCategory } : {})
       })
       ElMessage.success("保存成功")
@@ -282,7 +284,7 @@ async function handleSubmit() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="证件号" prop="idNumber">
-            <el-input v-model="form.idNumber" />
+            <el-input v-model="form.idNumber" placeholder="可填无" />
           </el-form-item>
         </el-col>
         <el-col :span="12">

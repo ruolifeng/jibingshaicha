@@ -152,7 +152,7 @@ function openTierCare(row: any) {
 /** Excel 上传 */
 const uploadRef = ref()
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 async function handleUpload(uploadFile: any) {
@@ -795,7 +795,7 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="证件号">
-              <el-input v-model="editForm.idNumber" />
+              <el-input v-model="editForm.idNumber" placeholder="可填无" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -1094,7 +1094,9 @@ watch(
       />
       <template v-if="importResult.errors.length > 0">
         <el-alert
-          :title="`发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`"
+          :title="importResult.missingIdCount
+            ? `其中 ${importResult.missingIdCount} 条未填写身份证号已导入，其余问题见下表`
+            : `发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`"
           type="warning"
           :closable="false"
           class="mb-3"

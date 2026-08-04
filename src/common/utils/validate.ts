@@ -14,6 +14,26 @@ export function isExternal(path: string) {
   return reg.test(path)
 }
 
+/** 证件号空值或「无」等占位（与后端 ImportIdentitySupport 一致） */
+export function isMissingIdNumber(id: string | null | undefined): boolean {
+  if (!id || !String(id).trim()) return true
+  const v = String(id).trim()
+  return v === "无"
+    || v === "无证件号"
+    || v === "无身份证"
+    || v === "无身份证号"
+    || v === "-"
+    || v === "/"
+    || v === "——"
+    || v === "—"
+}
+
+/** 规范化证件号：占位符转为空字符串 */
+export function normalizeIdNumber(id: string | null | undefined): string {
+  if (isMissingIdNumber(id)) return ""
+  return String(id).trim()
+}
+
 /** 18位身份证校验（格式 + 校验位） */
 export function validateIdCard(id: string): boolean {
   if (!id || id.length !== 18) return false
@@ -34,11 +54,11 @@ export function validatePhone(phone: string): boolean {
   return /^1[3-9]\d{9}$/.test(phone)
 }
 
-/** Element Plus 表单校验规则 — 身份证（非必填时为空则跳过） */
+/** Element Plus 表单校验规则 — 身份证（非必填时为空/「无」则跳过） */
 export function idCardRule(required = false) {
   return {
     validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
-      if (!value) {
+      if (isMissingIdNumber(value)) {
         if (required) return callback(new Error("请填写身份证号"))
         return callback()
       }

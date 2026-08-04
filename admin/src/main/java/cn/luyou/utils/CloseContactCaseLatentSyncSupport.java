@@ -8,6 +8,7 @@ import cn.luyou.model.CloseContactCase;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.User;
 import cn.luyou.service.LatentInfectionService;
+import cn.luyou.utils.ImportIdentitySupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,10 +49,14 @@ public class CloseContactCaseLatentSyncSupport {
      */
     @Transactional(rollbackFor = Exception.class)
     public LatentInfection syncFromCase(CloseContactCase caze) {
-        if (caze == null || StrUtil.isBlank(caze.getIdNumber()) || !isLatentFinalResult(caze.getFinalScreeningResult())) {
+        if (caze == null
+                || ImportIdentitySupport.isBlankOrPlaceholder(caze.getIdNumber())
+                || !isLatentFinalResult(caze.getFinalScreeningResult())) {
             return null;
         }
-        LatentInfection existing = findManualCloseContactLatent(caze.getIdNumber().trim(), caze.getDepartmentId());
+        String normalizedId = ImportIdentitySupport.normalizeIdNumber(caze.getIdNumber());
+        caze.setIdNumber(normalizedId);
+        LatentInfection existing = findManualCloseContactLatent(normalizedId, caze.getDepartmentId());
         if (existing == null) {
             if (StrUtil.isBlank(caze.getName())) {
                 log.warn("密接个案同步：缺少姓名，跳过新建 caseId={} idNumber={}", caze.getId(), caze.getIdNumber());
@@ -97,7 +102,8 @@ public class CloseContactCaseLatentSyncSupport {
      * 详情展示：按证件号回填个案扩展字段（不落库）。
      */
     public void fillCaseDetailFields(LatentInfection latent) {
-        if (latent == null || !"closeContact".equals(latent.getPopulationType()) || StrUtil.isBlank(latent.getIdNumber())) {
+        if (latent == null || !"closeContact".equals(latent.getPopulationType())
+                || ImportIdentitySupport.isBlankOrPlaceholder(latent.getIdNumber())) {
             return;
         }
         CloseContactCase caze = findBestCase(latent.getIdNumber(), latent.getDepartmentId());
@@ -437,9 +443,6 @@ public class CloseContactCaseLatentSyncSupport {
     }
 
     private static String normalizeIdNumber(String idNumber) {
-        if (idNumber == null) {
-            return null;
-        }
-        return idNumber.replaceAll("\\s+", "").trim();
+        return ImportIdentitySupport.normalizeIdNumber(idNumber);
     }
 }

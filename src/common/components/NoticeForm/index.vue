@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { getLevel5UsersApi } from "@@/apis/users"
 import { CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS } from "@@/constants/disease"
+import { idCardRule } from "@@/utils/validate"
 
 interface Props {
   visible: boolean
@@ -40,7 +41,7 @@ const form = reactive({
 
 const rules = {
   receiverOrgId: [{ required: true, message: "请选择发送对象", trigger: "change" }],
-  idNumber: [{ required: true, message: "请输入身份证号", trigger: "blur" }],
+  idNumber: [idCardRule(false)],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
   treatmentPlan: [{ required: true, message: "请选择治疗方案", trigger: "change" }]
 }
@@ -114,7 +115,7 @@ async function handleSubmit() {
         <el-input v-model="form.householdAddress" placeholder="请输入户籍地址" />
       </el-form-item>
       <el-form-item label="身份证" prop="idNumber">
-        <el-input v-model="form.idNumber" placeholder="请输入身份证号" />
+        <el-input v-model="form.idNumber" placeholder="可填无" />
       </el-form-item>
       <el-form-item label="性别">
         <el-radio-group v-model="form.gender">

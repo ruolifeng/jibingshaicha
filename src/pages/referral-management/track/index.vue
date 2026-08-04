@@ -496,7 +496,7 @@ const createFormRef = ref()
 
 const createFormRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
-  idNumber: [idCardRule(true)],
+  idNumber: [idCardRule(false)],
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],

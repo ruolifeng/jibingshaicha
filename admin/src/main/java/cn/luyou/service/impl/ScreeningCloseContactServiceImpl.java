@@ -164,6 +164,7 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
                         return;
                     }
+                    data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                         result.addError(row, data.getName(), "接触者身份证号格式不正确");
                     }
@@ -253,6 +254,12 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
 
         // 活动性肺结核（确诊）仅标记 ccStatus，不自动创建患者管理记录（患者管理数据仅来自专病信息表导入）
         result.setSuccessCount(dataList.size());
+        for (ScreeningCloseContact d : dataList) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                ImportIdentitySupport.registerMissingIdWarning(
+                        result, d.getImportRowNo() == null ? 0 : d.getImportRowNo(), d.getName());
+            }
+        }
         return result;
     }
 
@@ -769,8 +776,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         if (StrUtil.isBlank(data.getName())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "接触者姓名不能为空");
         }
-        if (StrUtil.isBlank(data.getIdNumber())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号不能为空");
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
         if (StrUtil.isBlank(data.getPhone())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "联系电话不能为空");
@@ -805,7 +813,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
     }
 
     private boolean isBlankCloseContactRow(ScreeningCloseContact data) {
-        return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
+        return data == null || (StrUtil.isBlank(data.getName())
+                && ImportIdentitySupport.isBlankOrPlaceholder(data.getIdNumber()));
     }
 
     @Override

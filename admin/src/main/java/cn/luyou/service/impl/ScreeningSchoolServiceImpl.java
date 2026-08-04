@@ -167,6 +167,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 if (ImportIdentitySupport.isMissingBasicIdentity(data.getName(), data.getIdNumber())) {
                     continue;
                 }
+                data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
                 if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
                     result.addError(rowNum, data.getName(), "身份证号格式不正确");
                 }
@@ -241,6 +242,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
 
         result.setSuccessCount(dataList.size());
+        for (ScreeningSchool d : dataList) {
+            if (StrUtil.isBlank(d.getIdNumber())) {
+                ImportIdentitySupport.registerMissingIdWarning(
+                        result, d.getImportRowNo() == null ? 0 : d.getImportRowNo(), d.getName());
+            }
+        }
 
         // 仅对新插入且感染筛查阳性、或已含胸片+首次诊断的记录自动创建潜伏感染记录。
         // 注意：diagnosisResult 不在此处预填，需操作员在"待诊断"页面点击"诊断"后由
@@ -561,6 +568,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createScreening(ScreeningSchool data) {
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
         if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
@@ -674,7 +682,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         data.setBirthDate(FlexibleDateParseUtil.parse(field(row, headerIndex, "出生日期")));
         data.setAge(parseInteger(field(row, headerIndex, "年龄")));
         data.setIdType(field(row, headerIndex, "证件类型"));
-        data.setIdNumber(normalizeExcelCellText(field(row, headerIndex, "证件号", "身份证号", "身份证号码")));
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(
+                normalizeExcelCellText(field(row, headerIndex, "证件号", "身份证号", "身份证号码"))));
         data.setEthnicity(field(row, headerIndex, "民族"));
         data.setPhone(normalizeExcelCellText(field(row, headerIndex, "联系电话")));
         data.setHouseholdAddress(field(row, headerIndex, "户籍所在地XX市XX县区", "户籍所在地"));
@@ -712,7 +721,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     }
 
     private boolean isBlankSchoolRow(ScreeningSchool data) {
-        return data == null || (StrUtil.isBlank(data.getName()) && StrUtil.isBlank(data.getIdNumber()));
+        return data == null || (StrUtil.isBlank(data.getName())
+                && ImportIdentitySupport.isBlankOrPlaceholder(data.getIdNumber()));
     }
 
     private Integer parseInteger(String value) {
@@ -767,6 +777,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createFromQuestionnaire(ScreeningSchool data) {
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
         if (isIdCardType(data.getIdType()) && StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
@@ -809,6 +820,13 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         ScreeningSchool existing = getById(data.getId());
         if (existing == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "筛查记录不存在");
+        }
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
+        if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+        }
+        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
         // 根据感染筛查结果与诊断结果重新计算潜伏判定
         if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {

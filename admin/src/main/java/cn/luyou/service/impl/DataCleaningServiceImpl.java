@@ -10,6 +10,7 @@ import cn.luyou.model.DataCleaningResult;
 import cn.luyou.service.DataCleaningService;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
+import cn.luyou.utils.ImportIdentitySupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
@@ -310,7 +311,8 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     private boolean shouldSkipValidationRow(String type, List<Object> row, CloseContactColumnLayout closeLayout) {
         int nameIndex = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? closeLayout.nameCol() : 4);
         int idIndex = TYPE_CLOSE.equals(type) ? closeLayout.idCol() : 9;
-        return StrUtil.isBlank(getCellString(row, nameIndex)) && StrUtil.isBlank(getCellString(row, idIndex));
+        return StrUtil.isBlank(getCellString(row, nameIndex))
+                && ImportIdentitySupport.isBlankOrPlaceholder(getCellString(row, idIndex));
     }
 
     private void appendCommonValidation(
@@ -324,8 +326,8 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             String infectionResult,
             int infectionCol
     ) {
-        if (StrUtil.isBlank(idCard)) {
-            result.add(err(excelRowIndex, name, idCardCol, "身份证号不能为空"));
+        if (ImportIdentitySupport.isBlankOrPlaceholder(idCard)) {
+            result.add(err(excelRowIndex, name, idCardCol, "未填写身份证号（可继续，建议后续补全）"));
         } else if (!isValidIdCard(idCard)) {
             result.add(err(excelRowIndex, name, idCardCol, "身份证号格式不正确"));
         }
@@ -590,7 +592,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
 
     private boolean isBlankSourceRow(Row row, Map<String, Integer> headerIndex) {
         return StrUtil.isBlank(matchedValue(row, headerIndex, "name", 0))
-                && StrUtil.isBlank(matchedValue(row, headerIndex, "idNumber", 0));
+                && ImportIdentitySupport.isBlankOrPlaceholder(matchedValue(row, headerIndex, "idNumber", 0));
     }
 
     private String getPoiCellString(Row row, int col) {
