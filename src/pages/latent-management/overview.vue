@@ -15,12 +15,23 @@ import {
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
   TRACKING_STATUS_MAP
 } from "@@/constants/disease"
+import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
 import { downloadBlob } from "@@/utils/download"
 import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
+import { confirmDangerDelete } from "@@/utils/listToolbar"
 import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
-import { batchDeleteLatentApi, closeCaseApi, downloadLatentTemplateApi, exportAllLatentApi, getLatentColumnDistinctApi, importLatentApi, trackLatentApi } from "./apis"
+import {
+  batchDeleteLatentApi,
+  closeCaseApi,
+  deleteLatentByFilterApi,
+  downloadLatentTemplateApi,
+  exportAllLatentApi,
+  getLatentColumnDistinctApi,
+  importLatentApi,
+  trackLatentApi
+} from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const {
@@ -34,6 +45,7 @@ const {
   searchForm,
   columnFilters,
   setFilter,
+  toQueryParam,
   fetchData,
   handleSearch,
   handleReset
@@ -68,15 +80,33 @@ const detailVisible = ref(false)
 const editVisible = ref(false)
 const currentId = ref<string | null>(null)
 const exporting = ref(false)
+const batchDeleting = ref(false)
 const importing = ref(false)
 const templateDownloading = ref(false)
 const importDialogVisible = ref(false)
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
+}
+
+function buildListQueryParams() {
+  const columnFiltersParam = toQueryParam()
+  return {
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    populationType: searchForm.populationType || undefined,
+    creatorName: searchForm.creatorName || undefined,
+    crowdCategory: searchForm.keyPopulationSubCategories.length
+      ? searchForm.keyPopulationSubCategories.join(",")
+      : undefined,
+    formatIssue: searchForm.formatIssue || undefined,
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...extractDateRangeParams(searchForm.dateRange)
+  }
 }
 
 function openDetail(row: any) {
@@ -182,31 +212,41 @@ async function handleArchive(row: any) {
   }
 }
 
-async function handleExport() {
-  exporting.value = true
+/** 导出：filtered=筛选结果 / selected=勾选 */
+async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: string[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected ? `选中的 ${ids!.length} 条` : "当前筛选条件下的"
   try {
-    const blob = await exportAllLatentApi({
-      name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined,
-      phone: searchForm.phone || undefined,
-      populationType: searchForm.populationType || undefined,
-      creatorName: searchForm.creatorName || undefined,
-      crowdCategory: searchForm.keyPopulationSubCategories.length
-        ? searchForm.keyPopulationSubCategories.join(",")
-        : undefined,
-      ...extractDateRangeParams(searchForm.dateRange)
+    await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
     })
+    exporting.value = true
+    const blob = await exportAllLatentApi(isSelected ? { ids } : buildListQueryParams())
     downloadBlob(blob as unknown as Blob, "在管潜伏感染者信息总表.xlsx")
     ElMessage.success("导出成功")
-  } catch {
-    ElMessage.error("导出失败")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
   } finally {
     exporting.value = false
   }
 }
 
+function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport("selected", ids)
+}
+
 async function handleBatchDelete() {
-  if (!selectedRows.value.length) return
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
   if (selectedRows.value.some(r => isLatentTransferLocked(r))) {
     ElMessage.warning("选中记录包含已转出或转出待确认的数据，不可删除")
     return
@@ -215,15 +255,37 @@ async function handleBatchDelete() {
   try {
     await ElMessageBox.confirm(
       `确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、督导表、患者等数据将一并删除，且不可恢复！`,
-      "警告",
-      { type: "warning" }
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
     )
+    batchDeleting.value = true
     await batchDeleteLatentApi(selectedRows.value.map(r => r.id))
-    ElMessage.success("删除成功")
+    ElMessage.success(`成功删除 ${selectedRows.value.length} 条记录`)
     selectedRows.value = []
     fetchData()
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("删除失败")
+    if (err !== "cancel") ElMessage.error("删除勾选失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部在管潜伏感染者吗？关联的通知单、督导表、患者等数据将一并删除，且不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteLatentByFilterApi(buildListQueryParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch {
+    ElMessage.error("删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -332,6 +394,11 @@ async function handleImport(uploadFile: any) {
         <el-form-item label="录入者">
           <el-input v-model="searchForm.creatorName" placeholder="姓名或账号" clearable style="width: 140px" />
         </el-form-item>
+        <el-form-item label="格式问题">
+          <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -344,10 +411,10 @@ async function handleImport(uploadFile: any) {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 10px">
-      <div class="toolbar flex items-center justify-end gap-2" style="margin-bottom: 12px">
+      <div class="toolbar flex items-center justify-end gap-2 flex-wrap" style="margin-bottom: 12px">
         <el-button
           v-permission="'latentManagement:overview'"
-          type="primary"
+          type="success"
           @click="openCreate"
         >
           新增
@@ -356,25 +423,44 @@ async function handleImport(uploadFile: any) {
           v-permission="'latentManagement:overview'"
           type="primary"
           plain
-          @click="openImportDialog"
+          :loading="exporting"
+          @click="handleExport('filtered')"
         >
-          导入
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:overview'"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="handleDeleteFiltered"
+        >
+          删除筛选结果
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:overview'"
+          type="warning"
+          :disabled="selectedRows.length === 0"
+          :loading="exporting"
+          @click="handleExportSelected"
+        >
+          导出勾选
         </el-button>
         <el-button
           v-permission="'latentManagement:overview'"
           type="danger"
           :disabled="selectedRows.length === 0"
+          :loading="batchDeleting"
           @click="handleBatchDelete"
         >
-          删除
+          删除勾选
         </el-button>
         <el-button
           v-permission="'latentManagement:overview'"
-          type="success"
-          :loading="exporting"
-          @click="handleExport"
+          type="primary"
+          @click="openImportDialog"
         >
-          导出
+          导入
         </el-button>
       </div>
 
@@ -685,14 +771,16 @@ async function handleImport(uploadFile: any) {
       />
       <template v-if="(importResult.errors?.length ?? 0) > 0">
         <el-alert
-          :title="`发现 ${importResult.errors?.length ?? 0} 条数据存在问题（已跳过）`"
+          :title="importResult.missingIdCount
+            ? `其中 ${importResult.missingIdCount} 条未填写身份证号已导入，其余问题见下表`
+            : `发现 ${importResult.errors?.length ?? 0} 条数据存在问题`"
           type="warning"
           :closable="false"
           class="mb-3"
         />
         <el-table :data="(importResult.errors ?? []).map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
           <el-table-column prop="index" label="#" width="60" />
-          <el-table-column prop="msg" label="错误信息" />
+          <el-table-column prop="msg" label="说明" />
         </el-table>
       </template>
       <template #footer>

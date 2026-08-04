@@ -23,7 +23,7 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
 
-        // 分母均限定 statYear 管理/发起 cohort；分子可跨年（如治疗成功、推介/追踪到位）
+        // 管理患者=分母；病原学阳性=其子集（分子）。治疗成功/推介到位分子可跨年。
         long managedPatientCount = patientService.countManagedPatientsForDashboard(year, filterDeptIds);
         long pathogenPositiveCount = patientService.countPathogenPositivePatientsForDashboard(year, filterDeptIds);
         long treatmentSuccessCount = patientService.countTreatmentSuccessForDashboard(year, filterDeptIds);
@@ -34,8 +34,10 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
         data.put("managementYear", year);
         data.put("statPeriodFrom", period.start().toString());
         data.put("statPeriodTo", period.end().toString());
+        // pendingVisit 字段名历史沿用，实际展示为「年度管理患者数」
         data.put("pendingVisit", managedPatientCount);
         data.put("pathogenPositiveCount", pathogenPositiveCount);
+        // 阳性率 = 阳性人数 / 年度管理患者数（二者可不相等）
         data.put("pathogenPositiveRate", managedPatientCount > 0
                 ? Math.round(pathogenPositiveCount * 1000.0 / managedPatientCount) / 10.0
                 : 0.0);

@@ -51,6 +51,7 @@ import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.CloseContactCaseLatentSyncSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.LatentScreeningLinkSupport;
@@ -160,7 +161,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                              String referralResult, String diagnosisFirst,
                                              String phone, String dateFrom, String dateTo,
                                              String dateFilterBy, String creatorName, String crowdCategory,
-                                             List<Long> filterDepartmentIds, String columnFilters) {
+                                             List<Long> filterDepartmentIds, String columnFilters, String formatIssue) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         boolean noticeFillFilter = "noticeFill".equals(dateFilterBy);
@@ -244,6 +245,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     .le(createTo != null, LatentInfection::getCreateTime, createTo);
         }
         applyColumnFilters(wrapper, columnFilters);
+        IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         ImportRowOrderSupport.applyWithoutBatch(wrapper);
         departmentFilterSupport.applyDepartmentIdFilter(
                 wrapper, LatentInfection::getDepartmentId, filterDepartmentIds);
@@ -1046,7 +1048,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             // 密接人群证件号在列 11（71 列官方模板），其余人群在列 9
             int idNumberIdx = "closeContact".equals(populationType) ? 11 : 9;
             String idNumber = getStrCell(row, idNumberIdx);
-            if (StrUtil.isBlank(idNumber)) continue;
+            if (ImportIdentitySupport.isBlankOrPlaceholder(idNumber)) continue;
+            idNumber = ImportIdentitySupport.normalizeIdNumber(idNumber);
 
             LambdaQueryWrapper<LatentInfection> dupWrapper = new LambdaQueryWrapper<>();
             dupWrapper.eq(LatentInfection::getIdNumber, idNumber)
@@ -1413,7 +1416,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             Object ageVal = body.get("age");
             latent.setAge(ageVal == null || "".equals(ageVal.toString()) ? null : Integer.valueOf(ageVal.toString()));
         }
-        if (body.get("idNumber") != null) latent.setIdNumber(body.get("idNumber").toString());
+        if (body.get("idNumber") != null) {
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(body.get("idNumber").toString());
+            if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+            }
+            latent.setIdNumber(idNumber);
+        }
         if (body.get("phone") != null) latent.setPhone(body.get("phone").toString());
         if (body.get("phoneContactRelation") != null) {
             latent.setPhoneContactRelation(body.get("phoneContactRelation").toString());
@@ -1442,17 +1451,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     @Transactional(rollbackFor = Exception.class)
     public Long createManual(Map<String, Object> body) {
         String name = body.getOrDefault("name", "").toString().trim();
-        String idNumber = body.getOrDefault("idNumber", "").toString().trim();
+        String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                body.getOrDefault("idNumber", "").toString().trim());
         String populationType = body.getOrDefault("populationType", "").toString().trim();
         String phone = body.getOrDefault("phone", "").toString().trim();
 
         if (StrUtil.isBlank(name)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "姓名不能为空");
         }
-        if (StrUtil.isBlank(idNumber)) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "证件号不能为空");
-        }
-        if (!isValidIdCard(idNumber)) {
+        if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
         if (StrUtil.isNotBlank(phone) && !isValidPhone(phone)) {
@@ -1538,7 +1545,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             int rowNum = i + 2;
             String name = getImportField(row, headerIndex, "姓名");
             String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
-            if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+            if (StrUtil.isBlank(name) && ImportIdentitySupport.isBlankOrPlaceholder(idNumber)) {
                 continue;
             }
             ImportIdentitySupport.registerInvalidIdentity(result, rowNum, name, idNumber, confirmSkipInvalid);
@@ -1552,11 +1559,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             Map<Integer, String> row = dataRows.get(i);
             int rowNum = i + 2;
             String name = getImportField(row, headerIndex, "姓名");
-            String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                    normalizeExcelCellText(getImportField(row, headerIndex, "证件号")));
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
                 continue;
             }
             if (ImportIdentitySupport.isMissingBasicIdentity(name, idNumber)) {
+                continue;
+            }
+            if (StrUtil.isBlank(idNumber)) {
                 continue;
             }
             String populationType = resolvePopulationType(getImportField(row, headerIndex, "数据来源"));
@@ -1582,13 +1593,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             int rowNum = i + 2;
             try {
                 String name = getImportField(row, headerIndex, "姓名");
-                String idNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
-                if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
+                String rawIdNumber = normalizeExcelCellText(getImportField(row, headerIndex, "证件号"));
+                if (StrUtil.isBlank(name) && ImportIdentitySupport.isBlankOrPlaceholder(rawIdNumber)) {
                     continue;
                 }
-                if (ImportIdentitySupport.isMissingBasicIdentity(name, idNumber)) {
+                if (ImportIdentitySupport.isMissingBasicIdentity(name, rawIdNumber)) {
                     continue;
                 }
+                String idNumber = ImportIdentitySupport.normalizeIdNumber(rawIdNumber);
+                boolean missingId = ImportIdentitySupport.isBlankOrPlaceholder(rawIdNumber);
 
                 String populationTypeRaw = getImportField(row, headerIndex, "数据来源");
                 String crowdCategoryRaw = getImportField(row, headerIndex, "人群分类");
@@ -1606,7 +1619,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 String phone = normalizeExcelCellText(getImportField(row, headerIndex, "联系电话"));
 
                 boolean hasError = false;
-                if (!isValidIdCard(idNumber)) {
+                if (StrUtil.isNotBlank(idNumber) && !isValidIdCard(idNumber)) {
                     result.addError(rowNum, name, "身份证号格式不正确");
                     hasError = true;
                 }
@@ -1638,15 +1651,17 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     continue;
                 }
 
-                LambdaQueryWrapper<LatentInfection> dupWrapper = new LambdaQueryWrapper<>();
-                dupWrapper.eq(LatentInfection::getIdNumber, idNumber)
-                        .eq(LatentInfection::getPopulationType, populationType)
-                        .eq(LatentInfection::getArchived, 0);
-                dataScopeHelper.applyImportDedupScope(
-                        dupWrapper, LatentInfection::getDepartmentId, LatentInfection::getCreatorId);
-                if (count(dupWrapper) > 0) {
-                    result.addError(rowNum, name, "该证件号在此数据来源下已存在");
-                    continue;
+                if (StrUtil.isNotBlank(idNumber)) {
+                    LambdaQueryWrapper<LatentInfection> dupWrapper = new LambdaQueryWrapper<>();
+                    dupWrapper.eq(LatentInfection::getIdNumber, idNumber)
+                            .eq(LatentInfection::getPopulationType, populationType)
+                            .eq(LatentInfection::getArchived, 0);
+                    dataScopeHelper.applyImportDedupScope(
+                            dupWrapper, LatentInfection::getDepartmentId, LatentInfection::getCreatorId);
+                    if (count(dupWrapper) > 0) {
+                        result.addError(rowNum, name, "该证件号在此数据来源下已存在");
+                        continue;
+                    }
                 }
 
                 LatentInfection latent = LatentInfection.builder()
@@ -1679,16 +1694,20 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .build();
                 save(latent);
                 result.setSuccessCount(result.getSuccessCount() + 1);
+                if (missingId) {
+                    ImportIdentitySupport.registerMissingIdWarning(result, rowNum, name);
+                }
             } catch (Exception e) {
                 result.addError(rowNum, getImportField(row, headerIndex, "姓名"), "数据解析失败：" + e.getMessage());
             }
         }
 
         if (result.getSuccessCount() == 0 && result.getErrors().isEmpty()) {
-            result.addError(0, "", "未找到有效数据行，请确认已填写姓名和证件号");
+            result.addError(0, "", "未找到有效数据行，请确认已填写姓名");
         }
 
-        log.info("潜伏感染者批量导入完成，成功 {} 条，错误 {} 条", result.getSuccessCount(), result.getErrors().size());
+        log.info("潜伏感染者批量导入完成，成功 {} 条，错误 {} 条，缺证件号 {} 条",
+                result.getSuccessCount(), result.getErrors().size(), result.getMissingIdCount());
         return result;
     }
 
@@ -1796,7 +1815,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     private void assertNoDuplicateLatentInReceiverDept(LatentInfection source, Long receiverDeptId) {
-        if (StrUtil.isBlank(source.getIdNumber())) {
+        if (ImportIdentitySupport.isBlankOrPlaceholder(source.getIdNumber())) {
             return;
         }
         long count = lambdaQuery()
@@ -1935,6 +1954,40 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         for (Long id : ids) {
             deleteCascade(id);
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteByFilter(String populationType, String name, String idNumber, Integer trackingStatus,
+                              Integer archived, String referralResult, String diagnosisFirst,
+                              String phone, String dateFrom, String dateTo, String dateFilterBy,
+                              String creatorName, String crowdCategory, String columnFilters, String formatIssue) {
+        final int pageSize = 2000;
+        int pageNum = 1;
+        List<Long> allIds = new ArrayList<>();
+        while (true) {
+            IPage<LatentInfection> page = queryPage(
+                    pageNum, pageSize, populationType, name, idNumber, trackingStatus, archived,
+                    referralResult, diagnosisFirst, phone, dateFrom, dateTo, dateFilterBy,
+                    creatorName, crowdCategory, null, columnFilters, formatIssue);
+            if (page.getRecords() == null || page.getRecords().isEmpty()) {
+                break;
+            }
+            for (LatentInfection record : page.getRecords()) {
+                if (record.getId() != null) {
+                    allIds.add(record.getId());
+                }
+            }
+            if ((long) pageNum * pageSize >= page.getTotal()) {
+                break;
+            }
+            pageNum++;
+        }
+        if (allIds.isEmpty()) {
+            return 0;
+        }
+        batchDeleteCascade(allIds);
+        return allIds.size();
     }
 
     private void doDeleteCascade(Long latentId) {

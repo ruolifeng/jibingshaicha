@@ -13,6 +13,7 @@ import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
@@ -83,7 +84,8 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
         List<Map<Integer, String>> dataRows = allRows.subList(1, allRows.size());
         for (Map<Integer, String> row : dataRows) {
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
-            String idNumber = getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证");
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                    getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证"));
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber)) {
                 continue;
             }
@@ -99,7 +101,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
             String reportUnit = getFieldByHeader(row, headerIndex, "报告单位");
             LocalDate birthDate = parseDate(birthDateText);
 
-            // 去重策略：证件号优先；证件号为空时按 姓名+出生日期+联系电话 兜底（仅在当前用户辖区内去重）
+            // 去重策略：真实证件号优先；证件号为空/「无」时按 姓名+出生日期+联系电话 兜底（仅在当前用户辖区内去重）
             LambdaQueryWrapper<EpidemicImport> dupWrapper = new LambdaQueryWrapper<>();
             dupWrapper.and(w -> {
                 if (StrUtil.isNotBlank(idNumber)) {
@@ -269,12 +271,29 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
     }
 
     private Long createPatientFromEpidemic(EpidemicImport entity) {
-        Patient existed = patientService.lambdaQuery()
-                .eq(StrUtil.isNotBlank(entity.getIdNumber()), Patient::getIdNumber, entity.getIdNumber())
-                .eq(Patient::getPopulationType, "epidemic")
-                .eq(Patient::getName, entity.getName())
-                .last("LIMIT 1")
-                .one();
+        String idNumber = ImportIdentitySupport.normalizeIdNumber(entity.getIdNumber());
+        entity.setIdNumber(idNumber);
+
+        Patient existed = null;
+        if (StrUtil.isNotBlank(idNumber)) {
+            existed = patientService.lambdaQuery()
+                    .eq(Patient::getIdNumber, idNumber)
+                    .eq(Patient::getPopulationType, "epidemic")
+                    .eq(entity.getDepartmentId() != null, Patient::getDepartmentId, entity.getDepartmentId())
+                    .last("LIMIT 1")
+                    .one();
+        } else if (StrUtil.isNotBlank(entity.getName())
+                && (entity.getBirthDate() != null || StrUtil.isNotBlank(entity.getPhone()))) {
+            // 无真实证件号：勿仅按姓名匹配，避免同名误复用
+            existed = patientService.lambdaQuery()
+                    .eq(Patient::getPopulationType, "epidemic")
+                    .eq(Patient::getName, entity.getName())
+                    .eq(entity.getBirthDate() != null, Patient::getBirthDate, entity.getBirthDate())
+                    .eq(StrUtil.isNotBlank(entity.getPhone()), Patient::getPhone, entity.getPhone())
+                    .eq(entity.getDepartmentId() != null, Patient::getDepartmentId, entity.getDepartmentId())
+                    .last("LIMIT 1")
+                    .one();
+        }
         if (existed != null) {
             return existed.getId();
         }
@@ -286,7 +305,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
                 .gender(entity.getGender())
                 .birthDate(entity.getBirthDate())
                 .age(entity.getAge())
-                .idNumber(entity.getIdNumber())
+                .idNumber(idNumber)
                 .phone(entity.getPhone())
                 .currentAddress(entity.getCurrentAddress())
                 .diagnosisResult("确诊患者")
@@ -298,13 +317,29 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
     }
 
     private Long createLatentFromEpidemic(EpidemicImport entity) {
-        LatentInfection existed = latentInfectionService.lambdaQuery()
-                .eq(StrUtil.isNotBlank(entity.getIdNumber()), LatentInfection::getIdNumber, entity.getIdNumber())
-                .eq(LatentInfection::getPopulationType, "epidemic")
-                .eq(LatentInfection::getName, entity.getName())
-                .eq(LatentInfection::getArchived, 0)
-                .last("LIMIT 1")
-                .one();
+        String idNumber = ImportIdentitySupport.normalizeIdNumber(entity.getIdNumber());
+        entity.setIdNumber(idNumber);
+
+        LatentInfection existed = null;
+        if (StrUtil.isNotBlank(idNumber)) {
+            existed = latentInfectionService.lambdaQuery()
+                    .eq(LatentInfection::getIdNumber, idNumber)
+                    .eq(LatentInfection::getPopulationType, "epidemic")
+                    .eq(LatentInfection::getArchived, 0)
+                    .eq(entity.getDepartmentId() != null, LatentInfection::getDepartmentId, entity.getDepartmentId())
+                    .last("LIMIT 1")
+                    .one();
+        } else if (StrUtil.isNotBlank(entity.getName()) && StrUtil.isNotBlank(entity.getPhone())) {
+            // 无真实证件号：姓名+电话+部门匹配，禁止仅按姓名命中同名记录
+            existed = latentInfectionService.lambdaQuery()
+                    .eq(LatentInfection::getPopulationType, "epidemic")
+                    .eq(LatentInfection::getName, entity.getName())
+                    .eq(LatentInfection::getPhone, entity.getPhone())
+                    .eq(LatentInfection::getArchived, 0)
+                    .eq(entity.getDepartmentId() != null, LatentInfection::getDepartmentId, entity.getDepartmentId())
+                    .last("LIMIT 1")
+                    .one();
+        }
         if (existed != null) {
             return existed.getId();
         }
@@ -312,7 +347,7 @@ public class EpidemicImportServiceImpl extends ServiceImpl<EpidemicImportMapper,
         LatentInfection latent = LatentInfection.builder()
                 .populationType("epidemic")
                 .name(entity.getName())
-                .idNumber(entity.getIdNumber())
+                .idNumber(idNumber)
                 .gender(entity.getGender())
                 .age(entity.getAge())
                 .phone(entity.getPhone())

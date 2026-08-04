@@ -27,7 +27,9 @@ import cn.luyou.service.ScreeningSchoolService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
+import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
 import com.alibaba.excel.EasyExcel;
@@ -613,6 +615,7 @@ public class ExportController {
     @GetMapping("/all-patients")
     @OperationLog(type = "export", module = "statistics", action = "导出患者信息总表")
     public void exportAllPatients(
+            @RequestParam(required = false) String ids,
             @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
@@ -629,12 +632,24 @@ public class ExportController {
             @RequestParam(required = false) String stopTreatmentReason,
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String departmentIds,
+            @RequestParam(required = false) String formatIssue,
             HttpServletResponse response) throws IOException {
 
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
-        List<Patient> patientList = patientService.listForExport(
-                populationType, name, idNumber, phone, currentAddress, diagnosisResult,
-                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit, crowdCategory);
+        List<Long> idList = parseIdList(ids);
+        List<Patient> patientList;
+        if (!idList.isEmpty()) {
+            LambdaQueryWrapper<Patient> idWrapper = new LambdaQueryWrapper<Patient>()
+                    .in(Patient::getId, idList)
+                    .eq(archived != null, Patient::getArchived, archived);
+            dataScopeHelper.applyPatientScope(idWrapper);
+            patientList = patientService.list(idWrapper);
+        } else {
+            patientList = patientService.listForExport(
+                    populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                    archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit,
+                    crowdCategory, formatIssue);
+        }
         if (departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
             Set<Long> allowed = new HashSet<>(filterDeptIds);
             patientList = patientList.stream()
@@ -1104,11 +1119,13 @@ public class ExportController {
 
     /**
      * 潜伏感染者信息总表（全部来源，含来源标签）。
-     * populationType 不传时默认排除密接（密接潜伏不纳入聚合统计）；若明确传 closeContact 则包含。
+     * 与在管列表一致：仅 referralResult=latent；排除确诊患者、已转出（在管）、筛查已删孤儿。
+     * populationType 不传时默认排除密接筛查同步数据；若明确传 closeContact 则包含。
      */
     @Operation(summary = "潜伏感染者信息总表导出（全部来源，含来源标签）")
     @GetMapping("/all-latent")
     public void exportAllLatent(
+            @RequestParam(required = false) String ids,
             @RequestParam(required = false) String populationType,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String idNumber,
@@ -1120,13 +1137,15 @@ public class ExportController {
             @RequestParam(required = false) String treatmentCompletionStatus,
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String departmentIds,
+            @RequestParam(required = false) String formatIssue,
             HttpServletResponse response) throws IOException {
 
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<Long> idList = parseIdList(ids);
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         List<Long> creatorUserIds = null;
-        if (StrUtil.isNotBlank(creatorName)) {
+        if (idList.isEmpty() && StrUtil.isNotBlank(creatorName)) {
             creatorUserIds = userMapper.selectList(new LambdaQueryWrapper<User>()
                             .and(w -> w.like(User::getRealName, creatorName)
                                     .or()
@@ -1141,27 +1160,46 @@ public class ExportController {
             }
         }
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<LatentInfection>()
-                .like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
-                .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
-                .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
                 .eq(archived != null, LatentInfection::getArchived, archived)
-                .in(creatorUserIds != null, LatentInfection::getCreatorId, creatorUserIds);
-        if (StrUtil.isNotBlank(populationType)) {
-            wrapper.eq(LatentInfection::getPopulationType, populationType);
+                // 仅导出已确认为潜伏感染者的记录（筛查「疑似结核」等待诊断不纳入）
+                .eq(LatentInfection::getReferralResult, "latent")
+                // 与在管列表一致：排除确诊患者；NULL 诊断结果需显式放行
+                .and(w -> w.isNull(LatentInfection::getDiagnosisResult)
+                        .or()
+                        .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
+        if (!idList.isEmpty()) {
+            wrapper.in(LatentInfection::getId, idList);
         } else {
-            wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
-                    .or()
-                    .isNull(LatentInfection::getScreeningId));
+            wrapper.like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
+                    .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
+                    .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
+                    .in(creatorUserIds != null, LatentInfection::getCreatorId, creatorUserIds);
+            if (StrUtil.isNotBlank(populationType)) {
+                wrapper.eq(LatentInfection::getPopulationType, populationType);
+            } else {
+                wrapper.and(w -> w.ne(LatentInfection::getPopulationType, "closeContact")
+                        .or()
+                        .isNull(LatentInfection::getScreeningId));
+            }
+            // 在管导出排除「已转出」（兼容历史误留在 archived=0 的数据）
+            if (archived == null || Integer.valueOf(0).equals(archived)) {
+                wrapper.and(w -> w.isNull(LatentInfection::getArchiveRemark)
+                        .or()
+                        .ne(LatentInfection::getArchiveRemark, LatentInfectionService.ARCHIVE_REMARK_TRANSFERRED_OUT));
+            }
+            if (Integer.valueOf(1).equals(archived) && (StrUtil.isNotBlank(dateFrom) || StrUtil.isNotBlank(dateTo))) {
+                wrapper.ge(StrUtil.isNotBlank(dateFrom), LatentInfection::getArchivedTime, dateFrom)
+                        .le(StrUtil.isNotBlank(dateTo), LatentInfection::getArchivedTime, dateTo + " 23:59:59");
+            } else {
+                wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
+                        .le(createTo != null, LatentInfection::getCreateTime, createTo);
+            }
+            KeyPopulationCrowdCategoryQuerySupport.applyLatentFilter(
+                    wrapper, populationType, crowdCategory, screeningKeyPopulationMapper);
+            IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         }
-        if (Integer.valueOf(1).equals(archived) && (StrUtil.isNotBlank(dateFrom) || StrUtil.isNotBlank(dateTo))) {
-            wrapper.ge(StrUtil.isNotBlank(dateFrom), LatentInfection::getArchivedTime, dateFrom)
-                    .le(StrUtil.isNotBlank(dateTo), LatentInfection::getArchivedTime, dateTo + " 23:59:59");
-        } else {
-            wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
-                    .le(createTo != null, LatentInfection::getCreateTime, createTo);
-        }
-        KeyPopulationCrowdCategoryQuerySupport.applyLatentFilter(
-                wrapper, populationType, crowdCategory, screeningKeyPopulationMapper);
+        // 排除筛查已删除但 latent 未清理的孤儿记录
+        LatentScreeningLinkSupport.applyLinkedScreeningExistsFilter(wrapper);
         wrapper.orderByAsc(LatentInfection::getPopulationType);
         if (Integer.valueOf(1).equals(archived)) {
             wrapper.orderByDesc(LatentInfection::getArchivedTime);
@@ -1171,7 +1209,7 @@ public class ExportController {
         departmentFilterSupport.applyDepartmentIdFilter(wrapper, LatentInfection::getDepartmentId, filterDeptIds);
         dataScopeHelper.applyLatentScope(wrapper);
 
-        if (StrUtil.isNotBlank(treatmentCompletionStatus)) {
+        if (idList.isEmpty() && StrUtil.isNotBlank(treatmentCompletionStatus)) {
             List<Long> matchedLatentIds = latentInfectionService.findLatentIdsByPreferredTreatmentCompletionStatus(treatmentCompletionStatus);
             if (matchedLatentIds.isEmpty()) {
                 writeExcel(response, "潜伏感染者信息总表", List.of(), ALL_LATENT_EXPORT_HEADERS);

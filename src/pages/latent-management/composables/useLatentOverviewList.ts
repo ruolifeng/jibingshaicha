@@ -20,13 +20,14 @@ export function useLatentOverviewList() {
     populationType: "",
     keyPopulationSubCategories: [] as string[],
     creatorName: "",
-    dateRange: [] as string[]
+    dateRange: [] as string[],
+    formatIssue: ""
   })
 
   async function fetchData() {
     loading.value = true
     try {
-      const { dateRange, keyPopulationSubCategories, ...rest } = searchForm
+      const { dateRange, keyPopulationSubCategories, formatIssue, ...rest } = searchForm
       const columnFiltersParam = toQueryParam()
       const params: Record<string, any> = {
         page: 1,
@@ -38,6 +39,7 @@ export function useLatentOverviewList() {
         ...(keyPopulationSubCategories.length > 0
           ? { crowdCategory: keyPopulationSubCategories.join(",") }
           : {}),
+        ...(formatIssue ? { formatIssue } : {}),
         ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
       }
       if (!params.populationType) delete params.populationType
@@ -67,6 +69,7 @@ export function useLatentOverviewList() {
     searchForm.keyPopulationSubCategories = []
     searchForm.creatorName = ""
     searchForm.dateRange = []
+    searchForm.formatIssue = ""
     clearFilters()
     handleSearch()
   }

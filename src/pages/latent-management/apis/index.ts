@@ -52,12 +52,28 @@ export function batchDeleteLatentApi(ids: string[]) {
   return request<ApiResponseData<null>>({ url: "latent/batch-delete", method: "delete", data: { ids } })
 }
 
-/** 导出在管潜伏感染者总表 */
+/** 按当前筛选条件删除在管潜伏感染者 */
+export function deleteLatentByFilterApi(params: Record<string, any>) {
+  return request<ApiResponseData<number>>({
+    url: "latent/delete-by-filter",
+    method: "delete",
+    params: { archived: 0, referralResult: "latent", ...params },
+    timeout: 300000
+  })
+}
+
+/** 导出在管潜伏感染者总表（与列表一致：仅 referralResult=latent；支持 ids 勾选导出） */
 export function exportAllLatentApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
   return request<Blob>({
     url: "export/all-latent",
     method: "get",
-    params: { archived: 0, ...params },
+    params: {
+      archived: 0,
+      referralResult: "latent",
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob"
   })
 }
@@ -177,12 +193,12 @@ export function getLatentHistoryListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "latent/history", method: "get", params })
 }
 
-/** 导出历史潜伏感染者总表 */
+/** 导出历史潜伏感染者总表（仅已确认为潜伏感染者的归档数据） */
 export function exportLatentHistoryApi(params: Record<string, any>) {
   return request<Blob>({
     url: "export/all-latent",
     method: "get",
-    params: { archived: 1, ...params },
+    params: { archived: 1, referralResult: "latent", ...params },
     responseType: "blob"
   })
 }

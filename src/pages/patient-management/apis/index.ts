@@ -39,12 +39,27 @@ export function batchDeletePatientsApi(ids: string[]) {
   return request<ApiResponseData<null>>({ url: "patient/batch-delete", method: "delete", data: { ids } })
 }
 
-/** 导出在管患者总表 */
+/** 按当前筛选条件删除在管患者 */
+export function deletePatientsByFilterApi(params: Record<string, any>) {
+  return request<ApiResponseData<number>>({
+    url: "patient/delete-by-filter",
+    method: "delete",
+    params: { archived: 0, ...params },
+    timeout: 300000
+  })
+}
+
+/** 导出在管患者总表（支持 ids 勾选导出） */
 export function exportAllPatientsApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
   return request<Blob>({
     url: "export/all-patients",
     method: "get",
-    params: { archived: 0, ...params },
+    params: {
+      archived: 0,
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob"
   })
 }

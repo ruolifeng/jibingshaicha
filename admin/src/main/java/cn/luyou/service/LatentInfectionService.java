@@ -21,7 +21,18 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                       String referralResult, String diagnosisFirst,
                                       String phone, String dateFrom, String dateTo,
                                       String dateFilterBy, String creatorName, String crowdCategory,
-                                      List<Long> filterDepartmentIds, String columnFilters);
+                                      List<Long> filterDepartmentIds, String columnFilters, String formatIssue);
+
+    default IPage<LatentInfection> queryPage(int page, int size, String populationType,
+                                             String name, String idNumber, Integer trackingStatus, Integer archived,
+                                             String referralResult, String diagnosisFirst,
+                                             String phone, String dateFrom, String dateTo,
+                                             String dateFilterBy, String creatorName, String crowdCategory,
+                                             List<Long> filterDepartmentIds, String columnFilters) {
+        return queryPage(page, size, populationType, name, idNumber, trackingStatus, archived,
+                referralResult, diagnosisFirst, phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory,
+                filterDepartmentIds, columnFilters, null);
+    }
 
     default IPage<LatentInfection> queryPage(int page, int size, String populationType,
                                              String name, String idNumber, Integer trackingStatus, Integer archived,
@@ -31,7 +42,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                              List<Long> filterDepartmentIds) {
         return queryPage(page, size, populationType, name, idNumber, trackingStatus, archived,
                 referralResult, diagnosisFirst, phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory,
-                filterDepartmentIds, null);
+                filterDepartmentIds, null, null);
     }
 
     default IPage<LatentInfection> queryPage(int page, int size, String populationType,
@@ -41,7 +52,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
                                              String dateFilterBy, String creatorName, String crowdCategory) {
         return queryPage(page, size, populationType, name, idNumber, trackingStatus, archived,
                 referralResult, diagnosisFirst, phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory,
-                null, null);
+                null, null, null);
     }
 
     /** 追踪操作 */
@@ -124,6 +135,12 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     /** 批量级联删除潜伏感染记录 */
     void batchDeleteCascade(List<Long> ids);
+
+    /** 按当前筛选条件级联删除（与列表 queryPage 条件一致） */
+    int deleteByFilter(String populationType, String name, String idNumber, Integer trackingStatus,
+                       Integer archived, String referralResult, String diagnosisFirst,
+                       String phone, String dateFrom, String dateTo, String dateFilterBy,
+                       String creatorName, String crowdCategory, String columnFilters, String formatIssue);
 
     /** 表头 Excel 式筛选：某列实际去重值（叠加潜伏权限与 populationType 范围） */
     List<String> listDistinctColumnValues(String field, String populationType, Integer archived, String referralResult);

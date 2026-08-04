@@ -104,11 +104,12 @@ public class PatientController {
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String sortField,
-            @RequestParam(required = false) String sortOrder) {
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(patientService.queryPage(
                 page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
                 dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters, sortField, sortOrder));
+                creatorUsername, columnFilters, sortField, sortOrder, formatIssue));
     }
 
     @Operation(summary = "历史患者列表")
@@ -199,6 +200,32 @@ public class PatientController {
         List<Long> ids = rawIds.stream().map(o -> Long.valueOf(o.toString())).toList();
         patientService.batchDeletePatients(ids);
         return ResultRes.success(null);
+    }
+
+    @Operation(summary = "按筛选条件删除患者（级联删除）")
+    @DeleteMapping("/delete-by-filter")
+    @OperationLog(type = "delete", module = "patient", action = "按筛选条件删除患者")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
+        userService.checkPermissionCode("patientManagement:delete");
+        return ResultRes.success(patientService.deleteByFilter(
+                populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
+                dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                creatorUsername, columnFilters, formatIssue));
     }
 
     @Operation(summary = "删除患者（级联删除首次随访/后续随访/服药/通知单）")

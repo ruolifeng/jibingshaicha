@@ -128,6 +128,30 @@ public class LatentInfectionController {
         return ResultRes.success(null);
     }
 
+    @Operation(summary = "按筛选条件删除潜伏感染记录（级联删除）")
+    @DeleteMapping("/delete-by-filter")
+    @OperationLog(type = "delete", module = "latent", action = "按筛选条件删除潜伏感染记录")
+    public ResultResponse<Integer> deleteByFilter(
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String referralResult,
+            @RequestParam(required = false) String diagnosisFirst,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
+        return ResultRes.success(latentInfectionService.deleteByFilter(
+                populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst,
+                phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory, columnFilters, formatIssue));
+    }
+
     @Operation(summary = "分页查询潜伏感染数据")
     @GetMapping("/list")
     public ResultResponse<IPage<LatentInfection>> list(
@@ -146,10 +170,11 @@ public class LatentInfectionController {
             @RequestParam(required = false) String dateFilterBy,
             @RequestParam(required = false) String creatorName,
             @RequestParam(required = false) String crowdCategory,
-            @RequestParam(required = false) String columnFilters) {
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(latentInfectionService.queryPage(
                 page, size, populationType, name, idNumber, trackingStatus, archived, referralResult, diagnosisFirst,
-                phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory, null, columnFilters));
+                phone, dateFrom, dateTo, dateFilterBy, creatorName, crowdCategory, null, columnFilters, formatIssue));
     }
 
     @Operation(summary = "追踪操作")

@@ -11,6 +11,7 @@ import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.StatYearPeriod;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
@@ -72,6 +73,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         Long currentUserId = BaseContext.getCurrentId();
         User currentUser = userService.getById(currentUserId);
+        params.put("idNumber", ImportIdentitySupport.normalizeIdNumber(getStr(params, "idNumber")));
 
         ReferralTracking record = ReferralTracking.builder()
                 .bizMode(bizMode)
@@ -204,12 +206,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     public boolean existsByIdNumberAndName(String bizMode, String idNumber, String name) {
-        if (StrUtil.isBlank(bizMode) || StrUtil.isBlank(idNumber) || StrUtil.isBlank(name)) {
+        String normalizedId = ImportIdentitySupport.normalizeIdNumber(idNumber);
+        if (StrUtil.isBlank(bizMode) || StrUtil.isBlank(normalizedId) || StrUtil.isBlank(name)) {
             return false;
         }
         return lambdaQuery()
                 .eq(ReferralTracking::getBizMode, bizMode)
-                .eq(ReferralTracking::getIdNumber, idNumber.trim())
+                .eq(ReferralTracking::getIdNumber, normalizedId)
                 .eq(ReferralTracking::getName, name.trim())
                 .exists();
     }
@@ -335,7 +338,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             int importRowNo = headerRowIndex + 2 + ri;
             String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
-            String idNumber = getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证");
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(
+                    getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证"));
             if (StrUtil.isBlank(name) && StrUtil.isBlank(idNumber) && StrUtil.isBlank(cardId)) {
                 continue;
             }
@@ -735,7 +739,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         if (getInt(params, "age") != null) record.setAge(getInt(params, "age"));
         if (getStr(params, "idType") != null) record.setIdType(getStr(params, "idType"));
-        if (getStr(params, "idNumber") != null) record.setIdNumber(getStr(params, "idNumber"));
+        if (getStr(params, "idNumber") != null) {
+            String idNumber = ImportIdentitySupport.normalizeIdNumber(getStr(params, "idNumber"));
+            if (StrUtil.isNotBlank(idNumber) && !idNumber.matches("\\d{17}[\\dXx]")) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
+            }
+            record.setIdNumber(idNumber);
+        }
         if (getStr(params, "ethnicity") != null) record.setEthnicity(getStr(params, "ethnicity"));
         if (getStr(params, "phone") != null) record.setPhone(getStr(params, "phone"));
         if (getStr(params, "householdAddress") != null) record.setHouseholdAddress(getStr(params, "householdAddress"));
@@ -1572,8 +1582,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 追踪模式必填项校验 */
     private void validateTrackRequired(Map<String, Object> params) {
-        if (StrUtil.isBlank(getStr(params, "idNumber"))) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写证件号");
+        String idNumber = ImportIdentitySupport.normalizeIdNumber(getStr(params, "idNumber"));
+        params.put("idNumber", idNumber);
+        if (StrUtil.isNotBlank(idNumber) && !idNumber.matches("\\d{17}[\\dXx]")) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
         if (StrUtil.isBlank(getStr(params, "phone"))) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写联系电话");
@@ -1674,8 +1686,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 推介模式必填项校验 */
     private void validateRecommendRequired(Map<String, Object> params) {
-        if (StrUtil.isBlank(getStr(params, "idNumber"))) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写证件号");
+        String idNumber = ImportIdentitySupport.normalizeIdNumber(getStr(params, "idNumber"));
+        params.put("idNumber", idNumber);
+        if (StrUtil.isNotBlank(idNumber) && !idNumber.matches("\\d{17}[\\dXx]")) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
         }
         if (StrUtil.isBlank(getStr(params, "phone"))) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写联系电话");
@@ -1965,12 +1979,13 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     .one();
         }
         LocalDate birthDate = parseDate(birthDateText);
+        String normalizedId = ImportIdentitySupport.normalizeIdNumber(idNumber);
         return lambdaQuery()
                 .eq(ReferralTracking::getBizMode, "track")
                 .eq(ReferralTracking::getSourceType, "epidemic")
                 .and(w -> {
-                    if (StrUtil.isNotBlank(idNumber)) {
-                        w.eq(ReferralTracking::getIdNumber, idNumber);
+                    if (StrUtil.isNotBlank(normalizedId)) {
+                        w.eq(ReferralTracking::getIdNumber, normalizedId);
                     } else {
                         w.eq(ReferralTracking::getName, name)
                                 .eq(birthDate != null, ReferralTracking::getBirthDate, birthDate)

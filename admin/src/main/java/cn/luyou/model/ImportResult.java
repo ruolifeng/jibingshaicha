@@ -27,8 +27,11 @@ public class ImportResult {
     /** 与系统已有记录重复的条数（预览或导入前检测） */
     private int duplicateCount;
 
-    /** 缺少姓名或证件号的行数 */
+    /** 缺少姓名的行数（无法作为有效人员记录） */
     private int invalidIdentityCount;
+
+    /** 有姓名但未填写证件号（或填「无」）的行数；这类行仍会导入 */
+    private int missingIdCount;
 
     /** 是否需要用户确认后跳过无效行再继续导入 */
     private boolean requireIdentityConfirm;
@@ -58,7 +61,13 @@ public class ImportResult {
     public void addInvalidIdentityError(int rowNum, String name, String idNumber) {
         invalidIdentityCount++;
         String label = StrUtil.isNotBlank(name) ? name : (StrUtil.isNotBlank(idNumber) ? idNumber : "未知");
-        errors.add(String.format("第%d行：无人员基本信息（缺少姓名或身份证） - %s", rowNum, label));
+        errors.add(String.format("第%d行：无人员基本信息（缺少姓名） - %s", rowNum, label));
+    }
+
+    public void addMissingIdWarning(int rowNum, String name) {
+        missingIdCount++;
+        errors.add(String.format("第%d行：未填写身份证号（已导入） - %s",
+                rowNum, StrUtil.isNotBlank(name) ? name : "未知"));
     }
 
     public void addDuplicateInFileWarning(int rowNum, String name, String idNumber, String reason) {

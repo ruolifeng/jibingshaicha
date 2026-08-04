@@ -49,13 +49,14 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     creatorUsername: "",
     dateRange: [] as string[],
     archived: defaultArchived,
+    formatIssue: "",
     ...(hasMedicationUnitSearch(options) ? { medicationManagementUnit: "" } : {})
   })
 
   async function fetchData() {
     loading.value = true
     try {
-      const { dateRange, keyPopulationSubCategories, ...rest } = searchForm
+      const { dateRange, keyPopulationSubCategories, formatIssue, ...rest } = searchForm
       const columnFiltersParam = toQueryParam()
       const params: Record<string, any> = {
         page: paginationData.currentPage,
@@ -65,6 +66,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
         ...(keyPopulationSubCategories.length > 0
           ? { crowdCategory: keyPopulationSubCategories.join(",") }
           : {}),
+        ...(formatIssue ? { formatIssue } : {}),
         ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
         ...toSortQueryParam()
       }
@@ -105,6 +107,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     searchForm.keyPopulationSubCategories = []
     searchForm.creatorUsername = ""
     searchForm.dateRange = []
+    searchForm.formatIssue = ""
     if (hasMedicationUnitSearch(options) && "medicationManagementUnit" in searchForm) {
       searchForm.medicationManagementUnit = ""
     }

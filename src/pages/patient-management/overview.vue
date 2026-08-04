@@ -7,12 +7,22 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
+import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
+import { confirmDangerDelete } from "@@/utils/listToolbar"
 import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
-import { archivePatientApi, batchDeletePatientsApi, downloadPatientTemplateApi, exportAllPatientsApi, getPatientColumnDistinctApi, importPatientApi } from "./apis"
+import {
+  archivePatientApi,
+  batchDeletePatientsApi,
+  deletePatientsByFilterApi,
+  downloadPatientTemplateApi,
+  exportAllPatientsApi,
+  getPatientColumnDistinctApi,
+  importPatientApi
+} from "./apis"
 import { usePatientList } from "./composables/usePatientList"
 
 const userStore = useUserStore()
@@ -29,6 +39,7 @@ const {
   searchForm,
   columnFilters,
   setFilter,
+  toQueryParam,
   defaultSort,
   handleSortChange,
   fetchData,
@@ -79,15 +90,37 @@ const detailVisible = ref(false)
 const editVisible = ref(false)
 const currentId = ref<string | null>(null)
 const exporting = ref(false)
+const batchDeleting = ref(false)
 const importing = ref(false)
 const templateDownloading = ref(false)
 const importDialogVisible = ref(false)
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
+}
+
+function buildListQueryParams() {
+  const columnFiltersParam = toQueryParam()
+  return {
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    currentAddress: searchForm.currentAddress || undefined,
+    diagnosisResult: searchForm.diagnosisResult || undefined,
+    populationType: searchForm.populationType || undefined,
+    medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
+    creatorUsername: searchForm.creatorUsername || undefined,
+    crowdCategory: searchForm.keyPopulationSubCategories.length
+      ? searchForm.keyPopulationSubCategories.join(",")
+      : undefined,
+    formatIssue: searchForm.formatIssue || undefined,
+    dateFilterBy: "registrationDate",
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...extractDateRangeParams(searchForm.dateRange)
+  }
 }
 
 function openDetail(row: any) {
@@ -134,38 +167,44 @@ async function handleArchive(row: any) {
   }
 }
 
-async function handleExport() {
-  if (total.value === 0) {
+/** 导出：filtered=筛选结果 / selected=勾选 */
+async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: string[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected ? `选中的 ${ids!.length} 条` : "当前筛选条件下的"
+  if (!isSelected && total.value === 0) {
     ElMessage.warning("当前没有在管患者数据，将导出仅含表头的空表")
   }
-  exporting.value = true
   try {
-    const blob = await exportAllPatientsApi({
-      name: searchForm.name || undefined,
-      idNumber: searchForm.idNumber || undefined,
-      phone: searchForm.phone || undefined,
-      currentAddress: searchForm.currentAddress || undefined,
-      diagnosisResult: searchForm.diagnosisResult || undefined,
-      populationType: searchForm.populationType || undefined,
-      medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
-      creatorUsername: searchForm.creatorUsername || undefined,
-      crowdCategory: searchForm.keyPopulationSubCategories.length
-        ? searchForm.keyPopulationSubCategories.join(",")
-        : undefined,
-      dateFilterBy: "registrationDate",
-      ...extractDateRangeParams(searchForm.dateRange)
+    await ElMessageBox.confirm(`确认导出${label}数据吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
     })
+    exporting.value = true
+    const blob = await exportAllPatientsApi(isSelected ? { ids } : buildListQueryParams())
     downloadBlob(blob as unknown as Blob, "在管患者信息总表.xlsx")
     ElMessage.success("导出成功")
-  } catch {
-    ElMessage.error("导出失败")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
   } finally {
     exporting.value = false
   }
 }
 
+function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport("selected", ids)
+}
+
 async function handleBatchDelete() {
-  if (!selectedRows.value.length) return
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
   const hasLocked = selectedRows.value.some(r => isPatientTransferLocked(r))
   if (hasLocked && !isSuperAdmin.value) {
     ElMessage.warning("选中记录包含已转出或转出待确认的患者，不可删除")
@@ -178,15 +217,37 @@ async function handleBatchDelete() {
   try {
     await ElMessageBox.confirm(
       `${forceTip}确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、随访、服药等数据将一并删除，且不可恢复！`,
-      hasLocked ? "超级管理员强制删除" : "警告",
-      { type: "warning" }
+      hasLocked ? "超级管理员强制删除" : "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
     )
+    batchDeleting.value = true
     await batchDeletePatientsApi(selectedRows.value.map(r => r.id))
-    ElMessage.success("删除成功")
+    ElMessage.success(`成功删除 ${selectedRows.value.length} 条记录`)
     selectedRows.value = []
     fetchData()
   } catch (err: any) {
-    if (err !== "cancel") ElMessage.error("删除失败")
+    if (err !== "cancel") ElMessage.error("删除勾选失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部在管患者吗？关联的通知单、随访、服药等数据将一并删除，且不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deletePatientsByFilterApi(buildListQueryParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch {
+    ElMessage.error("删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -320,6 +381,11 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
         <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 140px" />
         </el-form-item>
+        <el-form-item label="格式问题">
+          <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="住址">
           <el-input v-model="searchForm.currentAddress" placeholder="请输入现住址" clearable style="width: 160px" />
         </el-form-item>
@@ -364,10 +430,10 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
     </el-card>
 
     <el-card shadow="never" style="margin-top: 10px">
-      <div class="toolbar flex items-center justify-end gap-2" style="margin-bottom: 12px">
+      <div class="toolbar flex items-center justify-end gap-2 flex-wrap" style="margin-bottom: 12px">
         <el-button
           v-permission="'patientManagement:overview'"
-          type="primary"
+          type="success"
           @click="openCreate"
         >
           新增
@@ -376,25 +442,44 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
           v-permission="'patientManagement:overview'"
           type="primary"
           plain
-          @click="openImportDialog"
+          :loading="exporting"
+          @click="handleExport('filtered')"
         >
-          导入
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'patientManagement:delete'"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="handleDeleteFiltered"
+        >
+          删除筛选结果
+        </el-button>
+        <el-button
+          v-permission="'patientManagement:overview'"
+          type="warning"
+          :disabled="selectedRows.length === 0"
+          :loading="exporting"
+          @click="handleExportSelected"
+        >
+          导出勾选
         </el-button>
         <el-button
           v-permission="'patientManagement:delete'"
           type="danger"
           :disabled="selectedRows.length === 0"
+          :loading="batchDeleting"
           @click="handleBatchDelete"
         >
-          删除
+          删除勾选
         </el-button>
         <el-button
           v-permission="'patientManagement:overview'"
-          type="success"
-          :loading="exporting"
-          @click="handleExport"
+          type="primary"
+          @click="openImportDialog"
         >
-          导出
+          导入
         </el-button>
       </div>
 
@@ -711,14 +796,16 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
       />
       <template v-if="(importResult.errors?.length ?? 0) > 0">
         <el-alert
-          :title="`发现 ${importResult.errors?.length ?? 0} 条数据存在问题（已跳过）`"
+          :title="importResult.missingIdCount
+            ? `其中 ${importResult.missingIdCount} 条未填写身份证号已导入，其余问题见下表`
+            : `发现 ${importResult.errors?.length ?? 0} 条数据存在问题`"
           type="warning"
           :closable="false"
           class="mb-3"
         />
         <el-table :data="(importResult.errors ?? []).map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
           <el-table-column prop="index" label="#" width="60" />
-          <el-table-column prop="msg" label="错误信息" />
+          <el-table-column prop="msg" label="说明" />
         </el-table>
       </template>
       <template #footer>

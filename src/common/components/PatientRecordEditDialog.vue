@@ -2,7 +2,7 @@
 import { CROWD_CATEGORY_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { resolveManualEpidemicFormFields } from "@@/utils/patient"
-import { idCardRule, phoneRule } from "@@/utils/validate"
+import { idCardRule, normalizeIdNumber, phoneRule } from "@@/utils/validate"
 import { createPatientApi, getPatientDetailApi, updatePatientApi } from "@/pages/patient-management/apis"
 
 const props = defineProps<{
@@ -70,7 +70,7 @@ const rules = computed(() => ({
     ? { populationType: [{ required: true, message: "请选择数据来源", trigger: "change" }] }
     : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
-  idNumber: [idCardRule(true)],
+  idNumber: [idCardRule(false)],
   phone: [phoneRule(!isCreate.value)]
 }))
 
@@ -158,7 +158,7 @@ function close() {
 }
 
 function buildPayload() {
-  const payload: Record<string, unknown> = { ...form }
+  const payload: Record<string, unknown> = { ...form, idNumber: normalizeIdNumber(form.idNumber) }
   if (!showScreeningFields.value) {
     delete payload.screenDate
     delete payload.screenMethod
@@ -268,7 +268,7 @@ async function handleSubmit() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="证件号" prop="idNumber">
-            <el-input v-model="form.idNumber" />
+            <el-input v-model="form.idNumber" placeholder="可填无" />
           </el-form-item>
         </el-col>
         <el-col :span="12">

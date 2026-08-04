@@ -166,7 +166,7 @@ function handleReset() {
 }
 
 const importResultVisible = ref(false)
-const importResult = ref<{ successCount: number, errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{ successCount: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const templateDownloading = ref(false)
 const selectedRows = ref<any[]>([])
 
@@ -744,7 +744,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
               </el-col>
               <el-col :span="8">
                 <el-form-item label="身份证号">
-                  <el-input v-model="editForm.idNumber" />
+                  <el-input v-model="editForm.idNumber" placeholder="可填无" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -917,7 +917,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
     <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
       <el-alert :title="`成功导入 ${importResult.successCount} 条数据`" type="success" :closable="false" class="mb-3" />
       <template v-if="importResult.errors.length > 0">
-        <el-alert :title="`发现 ${importResult.errors.length} 条数据格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
+        <el-alert :title="importResult.missingIdCount ? `其中 ${importResult.missingIdCount} 条未填写身份证号已导入，其余问题见下表` : `发现 ${importResult.errors.length} 条数据格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
           <el-table-column prop="index" label="#" />
           <el-table-column prop="msg" label="错误信息" />

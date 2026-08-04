@@ -10,6 +10,7 @@ export interface ImportResultData {
   skippedCount?: number
   duplicateCount?: number
   invalidIdentityCount?: number
+  missingIdCount?: number
   duplicateInFileCount?: number
   duplicateInFileSummaries?: string[]
   requireIdentityConfirm?: boolean
@@ -25,7 +26,8 @@ function buildDuplicateConfirmMessage(result: ImportResultData): string {
 }
 
 /**
- * 导入 Excel：依次处理「缺少姓名/身份证」与「文件内重复身份证」两类确认。
+ * 导入 Excel：依次处理「缺少姓名」与「文件内重复身份证」两类确认。
+ * 有姓名但未填证件号的行会照常导入，并在结果中提醒。
  */
 export async function runImportWithIdentityConfirm<T extends ImportResultData>(
   uploadFn: (file: File, options?: ImportConfirmOptions) => Promise<{ data: T }>,
@@ -39,7 +41,7 @@ export async function runImportWithIdentityConfirm<T extends ImportResultData>(
     if (data.requireIdentityConfirm && !options.confirmSkipInvalid && (data.invalidIdentityCount ?? 0) > 0) {
       try {
         await ElMessageBox.confirm(
-          `发现 ${data.invalidIdentityCount} 条数据缺少姓名或身份证，无法作为有效人员记录。\n是否继续导入其余有效数据？`,
+          `发现 ${data.invalidIdentityCount} 条数据缺少姓名，无法作为有效人员记录。\n是否继续导入其余有效数据？`,
           "无效导入确认",
           {
             confirmButtonText: "继续导入有效数据",

@@ -1,7 +1,8 @@
 <script lang="ts" setup>
-import dayjs from "dayjs"
 import type { FormInstance, FormItemRule, FormRules } from "element-plus"
 import type { QuestionnaireConfig, QuestionnaireField, QuestionnaireFieldGroup } from "@/common/constants/questionnaire"
+import { isMissingIdNumber, normalizeIdNumber, validateIdCard } from "@@/utils/validate"
+import dayjs from "dayjs"
 import { QUESTIONNAIRE_CODE } from "@/common/constants/questionnaire"
 import { getPublicQuestionnaireConfigApi, submitPublicQuestionnaireApi } from "@/pages/statistics/apis/questionnaire"
 
@@ -22,17 +23,23 @@ const rules = computed<FormRules>(() => {
   const result: FormRules = {}
   config.value?.groups.forEach((group) => {
     group.fields.filter(isFieldVisible).forEach((field) => {
-      if (!field.required) return
-      const fieldRules: FormItemRule[] = [{
-        required: true,
-        message: `请填写${field.label}`,
-        trigger: field.type === "select" ? "change" : "blur"
-      }]
+      const fieldRules: FormItemRule[] = []
+      if (field.required) {
+        fieldRules.push({
+          required: true,
+          message: `请填写${field.label}`,
+          trigger: field.type === "select" ? "change" : "blur"
+        })
+      }
       if (field.key === "idNumber") {
         fieldRules.push({
           validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-            if (form.idType === "居民身份证" && value && value.length !== 18) {
-              callback(new Error("身份证号应为18位"))
+            if (isMissingIdNumber(value)) {
+              callback()
+              return
+            }
+            if (form.idType === "居民身份证" && !validateIdCard(String(value))) {
+              callback(new Error("身份证号格式不正确（需18位）"))
             } else {
               callback()
             }
@@ -40,7 +47,7 @@ const rules = computed<FormRules>(() => {
           trigger: "blur"
         })
       }
-      if (field.key === "phone") {
+      if (field.key === "phone" && field.required) {
         fieldRules.push({
           pattern: /^1[3-9]\d{9}$/,
           message: "请输入正确的手机号码",
@@ -59,7 +66,9 @@ const rules = computed<FormRules>(() => {
           trigger: "blur"
         })
       }
-      result[field.key] = fieldRules
+      if (fieldRules.length > 0) {
+        result[field.key] = fieldRules
+      }
     })
   })
   return result
@@ -127,7 +136,8 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await submitPublicQuestionnaireApi(questionnaireCode.value, { ...form })
+    const payload = { ...form, idNumber: normalizeIdNumber(String(form.idNumber ?? "")) }
+    await submitPublicQuestionnaireApi(questionnaireCode.value, payload)
     submitted.value = true
     ElMessage.success("问卷提交成功！")
   } catch {
@@ -323,8 +333,12 @@ onMounted(loadConfig)
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .status-title {

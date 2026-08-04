@@ -49,7 +49,18 @@ public interface PatientService extends IService<Patient> {
                               String name, String idNumber, String phone, String currentAddress,
                               String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                               String dateFilterBy, String medicationManagementUnit, String crowdCategory,
-                              String creatorUsername, String columnFilters, String sortField, String sortOrder);
+                              String creatorUsername, String columnFilters, String sortField, String sortOrder,
+                              String formatIssue);
+
+    default IPage<Patient> queryPage(int page, int size, String populationType,
+                                     String name, String idNumber, String phone, String currentAddress,
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory,
+                                     String creatorUsername, String columnFilters, String sortField, String sortOrder) {
+        return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
+                diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                creatorUsername, columnFilters, sortField, sortOrder, null);
+    }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
@@ -58,7 +69,7 @@ public interface PatientService extends IService<Patient> {
                                      String creatorUsername, String columnFilters) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters, null, null);
+                creatorUsername, columnFilters, null, null, null);
     }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
@@ -67,7 +78,7 @@ public interface PatientService extends IService<Patient> {
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     /** 手动新增在管患者（在管总览） */
@@ -83,13 +94,31 @@ public interface PatientService extends IService<Patient> {
     /** 批量删除患者（级联删除） */
     void batchDeletePatients(List<Long> ids);
 
+    /** 按当前筛选条件级联删除（与列表 queryPage 条件一致） */
+    int deleteByFilter(String populationType, String name, String idNumber, String phone,
+                       String currentAddress, String diagnosisResult, Integer archived,
+                       String dateFrom, String dateTo, String dateFilterBy,
+                       String medicationManagementUnit, String crowdCategory,
+                       String creatorUsername, String columnFilters, String formatIssue);
+
     /** 导出用患者列表（与列表查询使用相同的数据范围过滤） */
     List<Patient> listForExport(String populationType, String name, String idNumber,
                                  String phone, String currentAddress, String diagnosisResult,
                                  Integer archived, String dateFrom, String dateTo,
                                  String startTime, String endTime,
                                  String dateFilterBy, String medicationManagementUnit,
-                                 String crowdCategory);
+                                 String crowdCategory, String formatIssue);
+
+    default List<Patient> listForExport(String populationType, String name, String idNumber,
+                                        String phone, String currentAddress, String diagnosisResult,
+                                        Integer archived, String dateFrom, String dateTo,
+                                        String startTime, String endTime,
+                                        String dateFilterBy, String medicationManagementUnit,
+                                        String crowdCategory) {
+        return listForExport(populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit,
+                crowdCategory, null);
+    }
 
     /** 导入大疫情表并模糊匹配合并 */
     int importEpidemic(MultipartFile file, String populationType);
@@ -147,14 +176,16 @@ public interface PatientService extends IService<Patient> {
     void assertPatientOperable(Long id);
 
     /**
-     * 首页统计：在管总览 + 历史患者总数（与列表查询一致的数据权限）。
+     * 首页统计：年度管理患者数（阳性率分母）。
+     * 在管+历史、排除已转出；有登记日期按登记日期落在统计年度，无登记日期才按创建时间。
      *
      * @param statYear 统计年度（自然年 1/1—12/31）；为 null 时不限年度
      */
     long countManagedPatientsForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
-     * 首页统计：在管总览 + 历史患者中「病原学结果阳性」人数（与列表筛选项「病原学结果阳性」口径一致）。
+     * 首页统计：病原学阳性人数（阳性率分子）。
+     * 在年度管理患者子集上，匹配列表筛选项「病原学结果阳性」（阳性/病原学阳性/病原学结果阳性）。
      */
     long countPathogenPositivePatientsForDashboard(Integer statYear, List<Long> filterDeptIds);
 

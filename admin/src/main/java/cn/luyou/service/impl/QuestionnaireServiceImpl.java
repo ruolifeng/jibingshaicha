@@ -14,6 +14,7 @@ import cn.luyou.model.dto.ShowWhenDTO;
 import cn.luyou.model.vo.QuestionnaireConfigVO;
 import cn.luyou.service.QuestionnaireService;
 import cn.luyou.service.ScreeningSchoolService;
+import cn.luyou.utils.ImportIdentitySupport;
 import com.alibaba.excel.EasyExcel;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -288,6 +289,10 @@ public class QuestionnaireServiceImpl extends ServiceImpl<QuestionnaireConfigMap
                     continue;
                 }
                 Object value = formData.get(field.getKey());
+                // 证件号允许空或「无」等占位，与全系统录入策略一致
+                if ("idNumber".equals(field.getKey())) {
+                    continue;
+                }
                 if (value == null || (value instanceof String s && StrUtil.isBlank(s))) {
                     throw new ServiceException(StatusEnum.PARAM_INVALID, field.getLabel() + "不能为空");
                 }
@@ -314,7 +319,7 @@ public class QuestionnaireServiceImpl extends ServiceImpl<QuestionnaireConfigMap
         data.setBirthDate(asDate(formData.get("birthDate")));
         data.setAge(asInteger(formData.get("age")));
         data.setIdType(asString(formData.get("idType")));
-        data.setIdNumber(asString(formData.get("idNumber")));
+        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(asString(formData.get("idNumber"))));
         data.setEthnicity(asString(formData.get("ethnicity")));
         data.setPhone(asString(formData.get("phone")));
         data.setHouseholdAddress(asString(formData.get("householdAddress")));
@@ -382,7 +387,7 @@ public class QuestionnaireServiceImpl extends ServiceImpl<QuestionnaireConfigMap
                 field("birthDate", "出生日期", "date", true, null, null),
                 field("age", "年龄", "number", true, null, null),
                 field("idType", "证件类型", "select", true, List.of("居民身份证", "护照", "其他"), null),
-                field("idNumber", "证件号", "input", true, null, null),
+                field("idNumber", "证件号", "input", false, null, null),
                 field("ethnicity", "民族", "input", false, null, null),
                 field("phone", "联系电话", "input", true, null, null)
         )));
