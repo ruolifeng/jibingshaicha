@@ -96,11 +96,21 @@ const supervisionForm = reactive({
 })
 
 const rules: FormRules = {
-  treatmentStartDate: [{ required: true, message: "请选择开始治疗时间", trigger: "change" }],
+  treatmentStartDate: [{
+    validator: (_rule, value, callback) => {
+      if (supervisionForm.treatmentPlan !== "不服药" && !value) {
+        callback(new Error("请选择开始治疗时间"))
+        return
+      }
+      callback()
+    },
+    trigger: "change"
+  }],
   treatmentPlan: [{ required: true, message: "请选择治疗方案", trigger: "change" }]
 }
 
 const formDisabled = computed(() => props.readonly || formLocked.value)
+const isTreatmentStartDateRequired = computed(() => supervisionForm.treatmentPlan !== "不服药")
 
 function formatDateValue(value: unknown): string {
   if (!value) return ""
@@ -249,6 +259,13 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => supervisionForm.treatmentPlan,
+  () => {
+    formRef.value?.clearValidate("treatmentStartDate")
+  }
 )
 
 function resolveMedicationRate() {
@@ -483,7 +500,7 @@ async function handleArchive() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="治疗开始时间" prop="treatmentStartDate">
+          <el-form-item label="治疗开始时间" prop="treatmentStartDate" :required="isTreatmentStartDateRequired">
             <el-date-picker
               v-model="supervisionForm.treatmentStartDate"
               type="date"
