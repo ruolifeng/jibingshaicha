@@ -83,3 +83,49 @@ export function phoneRule(required = false) {
     trigger: "blur"
   }
 }
+
+/** 内容限制：获取 el-input-number 的小数位数（未配置时默认 6，兼容旧数据） */
+export function getContentLimitPrecision(contentLimit: string, decimalPlaces?: number): number {
+  if (contentLimit === "integer") return 0
+  if (contentLimit === "number" || contentLimit === "decimal") {
+    if (typeof decimalPlaces === "number" && decimalPlaces >= 0) {
+      return Math.min(6, Math.floor(decimalPlaces))
+    }
+    return 6
+  }
+  return 0
+}
+
+/** 校验内容限制数值格式（整数/小数位数/范围） */
+export function validateContentLimitNumber(
+  contentLimit: string,
+  val: string,
+  opts?: { decimalPlaces?: number, rangeMin?: number, rangeMax?: number },
+  labelPrefix = ""
+): string | null {
+  if (!val || !["number", "integer", "decimal"].includes(contentLimit)) return null
+
+  const n = Number(val)
+  if (Number.isNaN(n)) return `${labelPrefix}请输入数字`
+
+  if (contentLimit === "integer") {
+    if (!/^-?\d+$/.test(val.trim())) return `${labelPrefix}请输入整数`
+  }
+
+  if (contentLimit !== "integer" && typeof opts?.decimalPlaces === "number") {
+    const precision = getContentLimitPrecision(contentLimit, opts.decimalPlaces)
+    const dotIdx = val.indexOf(".")
+    if (dotIdx !== -1 && val.length - dotIdx - 1 > precision) {
+      return `${labelPrefix}最多保留 ${precision} 位小数`
+    }
+  }
+
+  if (opts?.rangeMin !== undefined && n < opts.rangeMin) {
+    return `${labelPrefix}最小值为 ${opts.rangeMin}`
+  }
+  if (opts?.rangeMax !== undefined && n > opts.rangeMax) {
+    return `${labelPrefix}最大值为 ${opts.rangeMax}`
+  }
+
+  return null
+}

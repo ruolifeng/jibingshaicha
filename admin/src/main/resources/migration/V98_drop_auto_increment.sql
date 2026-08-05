@@ -27,4 +27,16 @@ ALTER TABLE `user_permission` MODIFY COLUMN `id` BIGINT NOT NULL;
 ALTER TABLE `operation_log` MODIFY COLUMN `id` BIGINT NOT NULL;
 ALTER TABLE `referral_tracking` MODIFY COLUMN `id` BIGINT NOT NULL;
 ALTER TABLE `epidemic_import` MODIFY COLUMN `id` BIGINT NOT NULL;
-ALTER TABLE `questionnaire_config` MODIFY COLUMN `id` BIGINT NOT NULL;
+-- questionnaire_config 可能已被后续迁移删除，仅在表存在时修改
+SET @__v98_qc_exists := (
+    SELECT COUNT(*) FROM information_schema.tables
+    WHERE table_schema = DATABASE() AND table_name = 'questionnaire_config'
+);
+SET @__v98_qc_sql := IF(
+    @__v98_qc_exists > 0,
+    'ALTER TABLE `questionnaire_config` MODIFY COLUMN `id` BIGINT NOT NULL',
+    'SELECT 1'
+);
+PREPARE __v98_qc_stmt FROM @__v98_qc_sql;
+EXECUTE __v98_qc_stmt;
+DEALLOCATE PREPARE __v98_qc_stmt;
