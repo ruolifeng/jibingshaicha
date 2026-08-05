@@ -83,9 +83,6 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
      */
     void updateScreening(ScreeningSchool data);
 
-    /** 问卷公开提交：无需登录，departmentId 为空 */
-    void createFromQuestionnaire(ScreeningSchool data);
-
     /** 表头 Excel 式筛选：某列实际去重值（叠加部门权限） */
     List<String> listDistinctColumnValues(String field);
 }

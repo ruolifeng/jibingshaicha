@@ -776,46 +776,6 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createFromQuestionnaire(ScreeningSchool data) {
-        data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
-        if (isIdCardType(data.getIdType()) && StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "身份证号格式不正确");
-        }
-        if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
-        }
-
-        data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
-        data.setDepartmentId(null);
-        save(data);
-
-        if (data.getIsLatent() == 1) {
-            LatentInfection latent = LatentInfection.builder()
-                    .screeningId(data.getId())
-                    .populationType("school")
-                    .name(data.getName())
-                    .idNumber(data.getIdNumber())
-                    .gender(data.getGender())
-                    .age(data.getAge())
-                    .phone(data.getPhone())
-                    .infectionResult(data.getInfectionResult())
-                    .trackingStatus(0)
-                    .notInPlaceCount(0)
-                    .archived(0)
-                    .hasChestXray(data.getHasChestXray())
-                    .chestXrayDate(data.getChestXrayDate())
-                    .chestXrayResult(data.getChestXrayResult())
-                    .diagnosisFirst(latentDiagnosisFirst(data))
-                    .departmentId(null)
-                    .creatorId(BaseContext.getCurrentId())
-                    .build();
-            latentInfectionService.save(latent);
-            latentInfectionService.autoReferralForDirectDiagnosis(List.of(latent));
-        }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
     public void updateScreening(ScreeningSchool data) {
         ScreeningSchool existing = getById(data.getId());
         if (existing == null) {

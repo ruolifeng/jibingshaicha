@@ -15,13 +15,11 @@ import {
   getDistrictStatisticsApi,
   getSchoolStatisticsApi
 } from "./apis"
-import QuestionnairePanel from "./components/QuestionnairePanel.vue"
 import WorkbenchStatsPanel from "./components/WorkbenchStatsPanel.vue"
 
 defineOptions({ name: "StatisticsOverview" })
 
 const userStore = useUserStore()
-const canQuestionnaire = computed(() => userStore.hasPermission("statistics:questionnaire"))
 /** 超级管理员及一级、二级、三级用户（role ≤ 4）可查看患者分布热力图 */
 const canViewPatientHeatmap = computed(() => userStore.userRole > 0 && userStore.userRole <= 4)
 
@@ -312,7 +310,7 @@ onMounted(() => {
 <template>
   <div class="app-container">
     <!-- 筛选条件（问卷 Tab 不需要年份/区县筛选） -->
-    <el-card v-if="activeTab !== 'questionnaire'" shadow="never" class="mb-4">
+    <el-card shadow="never" class="mb-4">
       <el-form :model="filterForm" inline>
         <el-form-item v-show="showDepartmentFilter" label="部门">
           <ScopedDepartmentMultiSelect
@@ -507,11 +505,6 @@ onMounted(() => {
               导出潜伏感染者信息总表
             </el-button>
           </el-card>
-        </el-tab-pane>
-
-        <!-- 筛查问卷 -->
-        <el-tab-pane v-if="canQuestionnaire" label="筛查问卷" name="questionnaire">
-          <QuestionnairePanel />
         </el-tab-pane>
       </el-tabs>
     </el-card>

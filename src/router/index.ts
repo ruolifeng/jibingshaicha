@@ -35,10 +35,10 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { hidden: true }
   },
   {
-    path: "/questionnaire/:code?",
-    component: () => import("@/pages/questionnaire/index.vue"),
-    name: "QuestionnaireFill",
-    meta: { hidden: true, title: "筛查问卷" }
+    path: "/fill/:id",
+    component: () => import("@/pages/fill/index.vue"),
+    name: "QuestionnairePublicFill",
+    meta: { hidden: true, title: "问卷填写" }
   },
   {
     path: "/",
@@ -321,7 +321,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       title: "统计分析",
       elIcon: "DataAnalysis",
       alwaysShow: true,
-      anyPermission: ["statistics", "statistics:keyPopulationTbSymptomReferral", "statistics:questionnaire"]
+      anyPermission: ["statistics", "statistics:keyPopulationTbSymptomReferral"]
     },
     children: [
       {
@@ -427,6 +427,56 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/pages/system/operation-log.vue"),
         name: "SystemOperationLog",
         meta: { title: "操作日志", permission: "system:operationLog" }
+      }
+    ]
+  },
+
+  // ==================== 问卷管理 ====================
+  {
+    path: "/questionnaire",
+    component: Layouts,
+    redirect: "/questionnaire/list",
+    name: "Questionnaire",
+    meta: {
+      title: "问卷管理",
+      elIcon: "Notebook",
+      alwaysShow: true,
+      permission: "questionnaire"
+    },
+    children: [
+      {
+        path: "list",
+        component: () => import("@/pages/questionnaire/list/index.vue"),
+        name: "QuestionnaireList",
+        meta: { title: "问卷列表", keepAlive: true, permission: "questionnaire:list" }
+      },
+      {
+        path: "template",
+        component: () => import("@/pages/questionnaire/template/index.vue"),
+        name: "QuestionnaireTemplate",
+        meta: { title: "问卷模板", keepAlive: true, permission: "questionnaire:template:view" }
+      },
+      {
+        path: "category",
+        component: () => import("@/pages/questionnaire/category/index.vue"),
+        name: "QuestionnaireCategory",
+        meta: { title: "问卷分类", keepAlive: true, permission: "questionnaire:category" }
+      },
+      {
+        path: "design/:id",
+        component: () => import("@/pages/questionnaire/design/index.vue"),
+        name: "QuestionnaireDesign",
+        meta: {
+          hidden: true,
+          title: "问卷设计",
+          anyPermission: ["questionnaire:create", "questionnaire:update"]
+        }
+      },
+      {
+        path: "data/:id",
+        component: () => import("@/pages/questionnaire/data/index.vue"),
+        name: "QuestionnaireData",
+        meta: { hidden: true, title: "问卷数据", permission: "questionnaire:data" }
       }
     ]
   }

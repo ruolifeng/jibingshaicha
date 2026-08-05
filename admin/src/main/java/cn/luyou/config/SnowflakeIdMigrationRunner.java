@@ -39,7 +39,7 @@ public class SnowflakeIdMigrationRunner implements ApplicationRunner {
             "latent_infection", "notice", "supervision_form", "latent_follow_up", "latent_check",
             "patient", "first_visit", "follow_up_visit", "medication_management", "medication_pickup",
             "epidemic_report", "permission", "role_permission", "department", "referral",
-            "user_permission", "operation_log", "referral_tracking", "epidemic_import", "questionnaire_config"
+            "user_permission", "operation_log", "referral_tracking", "epidemic_import"
     };
 
     private final JdbcTemplate jdbc;
