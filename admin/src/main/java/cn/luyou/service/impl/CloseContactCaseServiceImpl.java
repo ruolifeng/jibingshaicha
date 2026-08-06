@@ -405,35 +405,64 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         LambdaQueryWrapper<CloseContactCase> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StrUtil.isNotBlank(name), CloseContactCase::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), CloseContactCase::getIdNumber, idNumber)
-                .eq(StrUtil.isNotBlank(district), CloseContactCase::getDistrict, district)
                 .like(StrUtil.isNotBlank(phone), CloseContactCase::getPhone, phone)
                 .like(StrUtil.isNotBlank(creatorUsername), CloseContactCase::getCreatorUsername, creatorUsername)
-                .eq(StrUtil.isNotBlank(diagnosisResult), CloseContactCase::getFinalScreeningResult, diagnosisResult)
-                .eq(StrUtil.isNotBlank(sourcePatientBacteriologyResult),
-                        CloseContactCase::getSourcePatientBacteriologyResult, sourcePatientBacteriologyResult)
                 .ge(createFrom != null, CloseContactCase::getCreateTime, createFrom)
                 .le(createTo != null, CloseContactCase::getCreateTime, createTo);
+        ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getDistrict, district);
+        ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getFinalScreeningResult, diagnosisResult);
+        ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSourcePatientBacteriologyResult,
+                sourcePatientBacteriologyResult);
         applyReportQuarterFilter(wrapper, reportQuarter);
         IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         return wrapper;
     }
 
-    /** 报表填报季度按密切接触者登记日期所在季度筛选（衍生列不落库）。 */
+    /** 报表填报季度按密切接触者登记日期所在季度筛选（衍生列不落库；支持多季度逗号分隔）。 */
     private void applyReportQuarterFilter(LambdaQueryWrapper<CloseContactCase> wrapper, String reportQuarter) {
         if (StrUtil.isBlank(reportQuarter)) {
             return;
         }
-        if (CloseContactCaseExcelDerivedSupport.isEmptyRegistrationQuarter(reportQuarter)) {
-            wrapper.isNull(CloseContactCase::getRegistrationDate);
+        java.util.Collection<String> quarters = ColumnFilterSupport.splitValues(reportQuarter);
+        if (quarters.isEmpty()) {
             return;
         }
-        java.time.LocalDate[] range = CloseContactCaseExcelDerivedSupport.resolveReportQuarterDateRange(reportQuarter);
-        if (range == null) {
+        boolean hasEmpty = quarters.stream().anyMatch(CloseContactCaseExcelDerivedSupport::isEmptyRegistrationQuarter);
+        java.util.List<java.time.LocalDate[]> ranges = quarters.stream()
+                .filter(q -> !CloseContactCaseExcelDerivedSupport.isEmptyRegistrationQuarter(q))
+                .map(CloseContactCaseExcelDerivedSupport::resolveReportQuarterDateRange)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (!hasEmpty && ranges.isEmpty()) {
             wrapper.eq(CloseContactCase::getId, -1L);
             return;
         }
-        wrapper.ge(CloseContactCase::getRegistrationDate, range[0])
-                .le(CloseContactCase::getRegistrationDate, range[1]);
+        if (quarters.size() == 1 && !hasEmpty) {
+            java.time.LocalDate[] range = ranges.get(0);
+            wrapper.ge(CloseContactCase::getRegistrationDate, range[0])
+                    .le(CloseContactCase::getRegistrationDate, range[1]);
+            return;
+        }
+        if (quarters.size() == 1 && hasEmpty) {
+            wrapper.isNull(CloseContactCase::getRegistrationDate);
+            return;
+        }
+        wrapper.and(w -> {
+            boolean first = true;
+            if (hasEmpty) {
+                w.isNull(CloseContactCase::getRegistrationDate);
+                first = false;
+            }
+            for (java.time.LocalDate[] range : ranges) {
+                if (!first) {
+                    w.or();
+                }
+                // 每个季度用嵌套 and，避免 ge/le 与 or 优先级错乱
+                w.and(inner -> inner.ge(CloseContactCase::getRegistrationDate, range[0])
+                        .le(CloseContactCase::getRegistrationDate, range[1]));
+                first = false;
+            }
+        });
     }
 
     private void applyDepartmentFilter(LambdaQueryWrapper<CloseContactCase> wrapper) {

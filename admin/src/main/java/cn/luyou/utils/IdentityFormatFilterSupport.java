@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
  *   <li>未填写证件号：空值或「无」等占位</li>
  *   <li>空值不算证件号/手机号「格式」异常</li>
  * </ul>
- * 查询参数：{@code formatIssue=idNumber|phone|any|missingId}
+ * 查询参数：{@code formatIssue=idNumber|phone|any|missingId}，多选时逗号分隔（OR）。
  */
 public final class IdentityFormatFilterSupport {
 
@@ -32,6 +32,13 @@ public final class IdentityFormatFilterSupport {
         if (StrUtil.isBlank(formatIssue)) {
             return false;
         }
+        return ColumnFilterSupport.splitValues(formatIssue).stream().anyMatch(IdentityFormatFilterSupport::isSupportedSingle);
+    }
+
+    private static boolean isSupportedSingle(String formatIssue) {
+        if (StrUtil.isBlank(formatIssue)) {
+            return false;
+        }
         String v = formatIssue.trim();
         return ISSUE_ID_NUMBER.equals(v)
                 || ISSUE_PHONE.equals(v)
@@ -40,7 +47,7 @@ public final class IdentityFormatFilterSupport {
     }
 
     /**
-     * 按 formatIssue 追加 SQL 条件。
+     * 按 formatIssue 追加 SQL 条件；多选逗号分隔时各条件 OR。
      *
      * @param idNumberColumn 证件号列名，如 id_number
      * @param phoneColumn    手机号列名，如 phone
@@ -49,10 +56,16 @@ public final class IdentityFormatFilterSupport {
                                  String formatIssue,
                                  String idNumberColumn,
                                  String phoneColumn) {
-        if (wrapper == null || !isSupported(formatIssue)) {
+        if (wrapper == null || StrUtil.isBlank(formatIssue)) {
             return;
         }
-        String issue = formatIssue.trim();
+        java.util.List<String> issues = ColumnFilterSupport.splitValues(formatIssue).stream()
+                .filter(IdentityFormatFilterSupport::isSupportedSingle)
+                .distinct()
+                .toList();
+        if (issues.isEmpty()) {
+            return;
+        }
         String idSql = "(" + idNumberColumn + " IS NOT NULL AND TRIM(" + idNumberColumn + ") <> ''"
                 + " AND " + idNumberColumn + " NOT IN ('无','无证件号','无身份证','无身份证号','-','/','——','—')"
                 + " AND " + idNumberColumn + " NOT REGEXP {0})";
@@ -60,6 +73,27 @@ public final class IdentityFormatFilterSupport {
                 + " AND " + phoneColumn + " NOT REGEXP {0})";
         String missingIdSql = "(" + idNumberColumn + " IS NULL OR TRIM(" + idNumberColumn + ") = ''"
                 + " OR " + idNumberColumn + " IN ('无','无证件号','无身份证','无身份证号','-','/','——','—'))";
+        if (issues.size() == 1) {
+            applySingle(wrapper, issues.get(0), idSql, phoneSql, missingIdSql);
+            return;
+        }
+        wrapper.and(w -> {
+            boolean first = true;
+            for (String issue : issues) {
+                if (!first) {
+                    w.or();
+                }
+                applySingle(w, issue, idSql, phoneSql, missingIdSql);
+                first = false;
+            }
+        });
+    }
+
+    private static <T> void applySingle(LambdaQueryWrapper<T> wrapper,
+                                        String issue,
+                                        String idSql,
+                                        String phoneSql,
+                                        String missingIdSql) {
         switch (issue) {
             case ISSUE_ID_NUMBER -> wrapper.apply(idSql, ID_NUMBER_VALID_REGEXP);
             case ISSUE_PHONE -> wrapper.apply(phoneSql, PHONE_VALID_REGEXP);

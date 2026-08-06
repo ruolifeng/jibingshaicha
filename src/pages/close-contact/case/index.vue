@@ -86,21 +86,21 @@ const tableRef = ref<any>()
 const searchForm = reactive({
   name: "",
   idNumber: "",
-  district: "",
+  district: [] as string[],
   phone: "",
   creatorUsername: "",
-  diagnosisResult: "",
-  sourcePatientBacteriologyResult: "",
+  diagnosisResult: [] as string[],
+  sourcePatientBacteriologyResult: [] as string[],
   reportYear: "" as string,
-  reportQuarterNo: "" as string,
+  reportQuarterNo: [] as string[],
   entryTimeRange: [] as string[],
-  formatIssue: "" as string
+  formatIssue: [] as string[]
 })
 
-/** 组合为后端可识别的「2026年Q2」 */
+/** 组合为后端可识别的「2026年Q1,2026年Q2」（支持多季度） */
 const reportQuarterParam = computed(() => {
-  if (!searchForm.reportYear || !searchForm.reportQuarterNo) return undefined
-  return `${searchForm.reportYear}年Q${searchForm.reportQuarterNo}`
+  if (!searchForm.reportYear || !searchForm.reportQuarterNo.length) return undefined
+  return searchForm.reportQuarterNo.map(q => `${searchForm.reportYear}年Q${q}`).join(",")
 })
 
 const previewColumns = CLOSE_CONTACT_CASE_COLUMNS
@@ -117,23 +117,10 @@ function onHeaderFilterChange(field: string, value: string) {
 async function fetchData() {
   loading.value = true
   try {
-    const { entryTimeRange, reportYear: _y, reportQuarterNo: _q, formatIssue, ...rest } = searchForm
-    const columnFiltersParam = toQueryParam()
     const res = await getCloseContactCaseListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      ...rest,
-      name: rest.name || undefined,
-      idNumber: rest.idNumber || undefined,
-      district: rest.district || undefined,
-      phone: rest.phone || undefined,
-      creatorUsername: rest.creatorUsername || undefined,
-      diagnosisResult: rest.diagnosisResult || undefined,
-      sourcePatientBacteriologyResult: rest.sourcePatientBacteriologyResult || undefined,
-      reportQuarter: reportQuarterParam.value,
-      ...(formatIssue ? { formatIssue } : {}),
-      ...extractCreateTimeRangeParams(entryTimeRange),
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+      ...buildListQueryParams()
     })
     tableData.value = res.data.records
     total.value = res.data.total
@@ -152,15 +139,15 @@ function handleSearch() {
 function handleReset() {
   searchForm.name = ""
   searchForm.idNumber = ""
-  searchForm.district = ""
+  searchForm.district = []
   searchForm.phone = ""
   searchForm.creatorUsername = ""
-  searchForm.diagnosisResult = ""
-  searchForm.sourcePatientBacteriologyResult = ""
+  searchForm.diagnosisResult = []
+  searchForm.sourcePatientBacteriologyResult = []
   searchForm.reportYear = ""
-  searchForm.reportQuarterNo = ""
+  searchForm.reportQuarterNo = []
   searchForm.entryTimeRange = []
-  searchForm.formatIssue = ""
+  searchForm.formatIssue = []
   clearFilters()
   handleSearch()
 }
@@ -234,13 +221,15 @@ function buildListQueryParams() {
   return {
     name: rest.name || undefined,
     idNumber: rest.idNumber || undefined,
-    district: rest.district || undefined,
+    district: rest.district.length ? rest.district.join(",") : undefined,
     phone: rest.phone || undefined,
     creatorUsername: rest.creatorUsername || undefined,
-    diagnosisResult: rest.diagnosisResult || undefined,
-    sourcePatientBacteriologyResult: rest.sourcePatientBacteriologyResult || undefined,
+    diagnosisResult: rest.diagnosisResult.length ? rest.diagnosisResult.join(",") : undefined,
+    sourcePatientBacteriologyResult: rest.sourcePatientBacteriologyResult.length
+      ? rest.sourcePatientBacteriologyResult.join(",")
+      : undefined,
     reportQuarter: reportQuarterParam.value,
-    ...(formatIssue ? { formatIssue } : {}),
+    ...(formatIssue.length ? { formatIssue: formatIssue.join(",") } : {}),
     ...extractCreateTimeRangeParams(entryTimeRange),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
   }
@@ -492,10 +481,13 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
         <el-form-item label="区县">
           <el-select
             v-model="searchForm.district"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
             filterable
             clearable
             placeholder="请选择区/县"
-            style="width: 160px"
+            style="width: 200px"
             @visible-change="(v: boolean) => v && loadDistrictSearchOptions()"
           >
             <el-option v-for="item in distinctValues('district').value" :key="item" :label="item" :value="item" />
@@ -505,23 +497,42 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <el-input v-model="searchForm.creatorUsername" placeholder="录入账号" clearable />
         </el-form-item>
         <el-form-item label="格式问题">
-          <el-select v-model="searchForm.formatIssue" placeholder="全部" clearable style="width: 180px">
+          <el-select
+            v-model="searchForm.formatIssue"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="全部"
+            clearable
+            style="width: 220px"
+          >
             <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="病原学结果">
           <el-select
             v-model="searchForm.sourcePatientBacteriologyResult"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
             placeholder="全部"
             clearable
             filterable
-            style="width: 160px"
+            style="width: 200px"
           >
             <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="最终筛查结果">
-          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable style="width: 150px">
+          <el-select
+            v-model="searchForm.diagnosisResult"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="全部"
+            clearable
+            style="width: 200px"
+          >
             <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </el-form-item>
@@ -536,9 +547,12 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           />
           <el-select
             v-model="searchForm.reportQuarterNo"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
             placeholder="季度"
             clearable
-            style="width: 90px; margin-left: 8px"
+            style="width: 140px; margin-left: 8px"
           >
             <el-option v-for="opt in REPORT_QUARTER_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
