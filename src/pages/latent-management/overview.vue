@@ -11,6 +11,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import {
   getLatentPopulationDisplayLabel,
   getPopulationTypeTagType,
+  INFECTION_METHOD_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
   TRACKING_STATUS_MAP
@@ -68,6 +69,17 @@ const loadGenderOptions = () => loadDistinct("gender")
 const loadPopulationTypeOptions = () => loadDistinct("populationType")
 const loadInfectionResultOptions = () => loadDistinct("infectionResult")
 const loadCreatorOptions = () => loadDistinct("creatorUsername")
+const screenMethodFilterOptions = INFECTION_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+
+/** 无筛查方法时，从感染筛查结果推断（如 EC阳性 → EC） */
+function displayScreenMethod(row: { screenMethod?: string, infectionResult?: string }) {
+  if (row.screenMethod) return row.screenMethod
+  const result = row.infectionResult || ""
+  if (result.startsWith("PPD")) return "PPD"
+  if (result.startsWith("EC")) return "EC"
+  if (result.startsWith("IGRA")) return "IGRA"
+  return "-"
+}
 
 watch(() => searchForm.populationType, (val) => {
   clearCache()
@@ -515,7 +527,20 @@ async function handleImport(uploadFile: any) {
             />
           </template>
         </el-table-column>
-        <el-table-column prop="screenMethod" label="感染筛查方法" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="screenMethod" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查方法"
+              type="select"
+              :options="screenMethodFilterOptions"
+              :model-value="columnFilters.screenMethod"
+              @change="(v) => { setFilter('screenMethod', v); handleSearch() }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ displayScreenMethod(row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
