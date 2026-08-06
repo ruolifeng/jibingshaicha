@@ -515,6 +515,7 @@ async function handleImport(uploadFile: any) {
             />
           </template>
         </el-table-column>
+        <el-table-column prop="screenMethod" label="感染筛查方法" min-width="120" show-overflow-tooltip />
         <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter

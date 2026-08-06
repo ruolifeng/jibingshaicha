@@ -131,7 +131,7 @@ public class ExportController {
     /** 潜伏感染者信息总表导出列（无数据时也输出表头） */
     private static final List<String> ALL_LATENT_EXPORT_HEADERS = List.of(
             "序号", "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "联系电话与联系人关系",
-            "户籍地址", "现住地址", "感染筛查日期", "感染筛查结果", "追踪状态", "未到位次数",
+            "户籍地址", "现住地址", "感染筛查日期", "感染筛查方法", "感染筛查结果", "追踪状态", "未到位次数",
             "首次诊断结果", "最终诊断结果", "是否胸片检查", "胸片检查日期", "胸片检查结果",
             "追踪情况", "备注", "通知单状态", "督导表状态", "预防性治疗方案",
             "预防性治疗开始时间", "预防性治疗完成时间", "预防性治疗结果", "治疗完成情况", "治疗阶段",
@@ -1241,6 +1241,9 @@ public class ExportController {
                     .forEach(sv -> supervisionMap.putIfAbsent(sv.getLatentInfectionId(), sv));
         }
 
+        // 批量查询筛查原表，回填感染筛查方法（latent.screenMethod 为非持久化字段）
+        Map<Long, String> screenMethodByLatentId = resolveLatentScreenMethodMap(latentList);
+
         int seq = 1;
         List<Map<String, Object>> rows = new ArrayList<>();
         for (LatentInfection r : latentList) {
@@ -1281,6 +1284,7 @@ public class ExportController {
             row.put("户籍地址", r.getHouseholdAddress());
             row.put("现住地址", r.getCurrentAddress());
             row.put("感染筛查日期", formatDate(r.getInfectionScreenDate()));
+            row.put("感染筛查方法", resolveLatentScreenMethod(r, screenMethodByLatentId));
             row.put("感染筛查结果", r.getInfectionResult());
             row.put("追踪状态", trackingLabel);
             row.put("未到位次数", r.getNotInPlaceCount() != null ? r.getNotInPlaceCount() : 0);
@@ -1310,6 +1314,111 @@ public class ExportController {
 
     private String formatDate(LocalDate date) {
         return date != null ? date.format(DATE_FMT) : "";
+    }
+
+    /**
+     * 批量解析潜伏感染者感染筛查方法（key = latentId）。
+     * 学校/重点人群/疫情筛查从筛查表取；密接按 activeRound 取对应轮次方法。
+     */
+    private Map<Long, String> resolveLatentScreenMethodMap(List<LatentInfection> latentList) {
+        Map<Long, String> result = new HashMap<>();
+        if (latentList == null || latentList.isEmpty()) {
+            return result;
+        }
+
+        List<Long> schoolIds = latentList.stream()
+                .filter(r -> "school".equals(r.getPopulationType()) && r.getScreeningId() != null)
+                .map(LatentInfection::getScreeningId).distinct().toList();
+        Map<Long, String> schoolMethodMap = new HashMap<>();
+        if (!schoolIds.isEmpty()) {
+            screeningSchoolService.listByIds(schoolIds).forEach(s -> {
+                if (StrUtil.isNotBlank(s.getScreenMethod())) {
+                    schoolMethodMap.put(s.getId(), s.getScreenMethod());
+                }
+            });
+        }
+
+        List<Long> keyIds = latentList.stream()
+                .filter(r -> ("keyPopulation".equals(r.getPopulationType()) || "regular".equals(r.getPopulationType()))
+                        && r.getScreeningId() != null)
+                .map(LatentInfection::getScreeningId).distinct().toList();
+        Map<Long, String> keyMethodMap = new HashMap<>();
+        if (!keyIds.isEmpty()) {
+            keyPopulationService.listByIds(keyIds).forEach(k -> {
+                if (StrUtil.isNotBlank(k.getScreenMethod())) {
+                    keyMethodMap.put(k.getId(), k.getScreenMethod());
+                }
+            });
+        }
+
+        List<Long> closeIds = latentList.stream()
+                .filter(r -> "closeContact".equals(r.getPopulationType()) && r.getScreeningId() != null)
+                .map(LatentInfection::getScreeningId).distinct().toList();
+        Map<Long, ScreeningCloseContact> closeMap = closeIds.isEmpty() ? Map.of()
+                : closeContactService.listByIds(closeIds).stream()
+                .collect(Collectors.toMap(ScreeningCloseContact::getId, c -> c, (a, b) -> a));
+
+        for (LatentInfection r : latentList) {
+            if (r.getId() == null) {
+                continue;
+            }
+            String method = null;
+            if (r.getScreeningId() != null && StrUtil.isNotBlank(r.getPopulationType())) {
+                method = switch (r.getPopulationType()) {
+                    case "school" -> schoolMethodMap.get(r.getScreeningId());
+                    case "keyPopulation", "regular" -> keyMethodMap.get(r.getScreeningId());
+                    case "closeContact" -> {
+                        ScreeningCloseContact c = closeMap.get(r.getScreeningId());
+                        if (c == null) {
+                            yield null;
+                        }
+                        yield switch (r.getActiveRound() == null ? 1 : r.getActiveRound()) {
+                            case 2 -> c.getFollowup6ImagingMethod();
+                            case 3 -> c.getFollowup12ImagingMethod();
+                            default -> c.getInfectionCheckMethod();
+                        };
+                    }
+                    default -> null;
+                };
+            }
+            if (StrUtil.isNotBlank(method)) {
+                result.put(r.getId(), method);
+            }
+        }
+        return result;
+    }
+
+    /** 解析潜伏感染者感染筛查方法：优先筛查表，否则从感染筛查结果推断（如 EC阳性 → EC） */
+    private String resolveLatentScreenMethod(LatentInfection r, Map<Long, String> screenMethodByLatentId) {
+        if (r == null) {
+            return "";
+        }
+        if (StrUtil.isNotBlank(r.getScreenMethod())) {
+            return r.getScreenMethod();
+        }
+        if (r.getId() != null && screenMethodByLatentId != null) {
+            String method = screenMethodByLatentId.get(r.getId());
+            if (StrUtil.isNotBlank(method)) {
+                return method;
+            }
+        }
+        return inferScreenMethodFromInfectionResult(r.getInfectionResult());
+    }
+
+    private static String inferScreenMethodFromInfectionResult(String infectionResult) {
+        if (StrUtil.isBlank(infectionResult)) {
+            return "";
+        }
+        if (infectionResult.startsWith("PPD")) {
+            return "PPD";
+        }
+        if (infectionResult.startsWith("EC")) {
+            return "EC";
+        }
+        if (infectionResult.startsWith("IGRA")) {
+            return "IGRA";
+        }
+        return "";
     }
 
     /** 潜伏感染者是否已归档：结案归档、督导表归档均视为已归档 */
