@@ -120,14 +120,16 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
-            "infectionResult", "diagnosisFirst", "diagnosisResult", "populationType",
+            "infectionResult", "screenMethod", "diagnosisFirst", "diagnosisResult", "populationType",
             "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark"
     );
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
-            "gender", "populationType", "infectionResult", "diagnosisFirst", "diagnosisResult",
+            "gender", "populationType", "infectionResult", "screenMethod", "diagnosisFirst", "diagnosisResult",
             "hasChestXray", "chestXrayResult", "crowdCategory", "creatorUsername"
     );
+    /** 感染筛查方法筛选白名单（与筛查表/前端选项一致） */
+    private static final Set<String> SCREEN_METHOD_FILTER_VALUES = Set.of("PPD", "EC", "IGRA", "未查");
 
     private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
             "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact", "other"
@@ -363,6 +365,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 case "currentAddress" -> ColumnFilterSupport.like(wrapper, LatentInfection::getCurrentAddress, value);
                 case "householdAddress" -> ColumnFilterSupport.like(wrapper, LatentInfection::getHouseholdAddress, value);
                 case "infectionResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getInfectionResult, value);
+                case "screenMethod" -> applyScreenMethodFilter(wrapper, value);
                 case "diagnosisFirst" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getDiagnosisFirst, value);
                 case "diagnosisResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getDiagnosisResult, value);
                 case "populationType" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getPopulationType, value);
@@ -378,6 +381,88 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 }
                 default -> { }
             }
+        });
+    }
+
+    /**
+     * 感染筛查方法筛选：screenMethod 非 latent 表字段，按关联筛查表方法匹配，
+     * 并兼容手动录入（感染筛查结果前缀如 EC阳性 → EC）。
+     */
+    private void applyScreenMethodFilter(LambdaQueryWrapper<LatentInfection> wrapper, String value) {
+        List<String> methods = ColumnFilterSupport.splitValues(value).stream()
+                .filter(SCREEN_METHOD_FILTER_VALUES::contains)
+                .distinct()
+                .toList();
+        if (methods.isEmpty()) {
+            return;
+        }
+
+        List<Long> schoolIds = screeningSchoolMapper.selectList(new LambdaQueryWrapper<ScreeningSchool>()
+                        .select(ScreeningSchool::getId)
+                        .in(ScreeningSchool::getScreenMethod, methods))
+                .stream().map(ScreeningSchool::getId).filter(Objects::nonNull).toList();
+        List<Long> keyIds = screeningKeyPopulationMapper.selectList(new LambdaQueryWrapper<ScreeningKeyPopulation>()
+                        .select(ScreeningKeyPopulation::getId)
+                        .in(ScreeningKeyPopulation::getScreenMethod, methods))
+                .stream().map(ScreeningKeyPopulation::getId).filter(Objects::nonNull).toList();
+
+        LambdaQueryWrapper<ScreeningCloseContact> closeWrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
+                .select(ScreeningCloseContact::getId);
+        closeWrapper.and(q -> {
+            boolean first = true;
+            for (String method : methods) {
+                if (!first) {
+                    q.or();
+                }
+                q.and(inner -> inner.like(ScreeningCloseContact::getInfectionCheckMethod, method)
+                        .or().like(ScreeningCloseContact::getFollowup6ImagingMethod, method)
+                        .or().like(ScreeningCloseContact::getFollowup12ImagingMethod, method));
+                first = false;
+            }
+        });
+        List<Long> closeIds = screeningCloseContactMapper.selectList(closeWrapper).stream()
+                .map(ScreeningCloseContact::getId).filter(Objects::nonNull).toList();
+
+        wrapper.and(w -> {
+            boolean first = true;
+            if (!schoolIds.isEmpty()) {
+                w.and(s -> s.eq(LatentInfection::getPopulationType, "school")
+                        .in(LatentInfection::getScreeningId, schoolIds));
+                first = false;
+            }
+            if (!keyIds.isEmpty()) {
+                if (!first) {
+                    w.or();
+                }
+                w.and(k -> k.in(LatentInfection::getPopulationType, "keyPopulation", "regular")
+                        .in(LatentInfection::getScreeningId, keyIds));
+                first = false;
+            }
+            if (!closeIds.isEmpty()) {
+                if (!first) {
+                    w.or();
+                }
+                w.and(c -> c.eq(LatentInfection::getPopulationType, "closeContact")
+                        .in(LatentInfection::getScreeningId, closeIds));
+                first = false;
+            }
+            if (!first) {
+                w.or();
+            }
+            // 仅手动新增/导入（无筛查关联）按感染筛查结果前缀推断，避免与筛查表方法口径冲突
+            w.and(ir -> {
+                ir.isNull(LatentInfection::getScreeningId);
+                ir.and(prefix -> {
+                    boolean irFirst = true;
+                    for (String method : methods) {
+                        if (!irFirst) {
+                            prefix.or();
+                        }
+                        prefix.likeRight(LatentInfection::getInfectionResult, method);
+                        irFirst = false;
+                    }
+                });
+            });
         });
     }
 
@@ -1402,6 +1487,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     @Override
+    public void applyOverviewColumnFilters(LambdaQueryWrapper<LatentInfection> wrapper, String columnFilters) {
+        applyColumnFilters(wrapper, columnFilters);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateBasicInfo(Long id, Map<String, Object> body) {
         dataScopeHelper.assertLatentAccessible(id);
@@ -2200,6 +2290,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     public List<String> listDistinctColumnValues(String field, String populationType, Integer archived, String referralResult) {
         if (StrUtil.isBlank(field) || !COLUMN_DISTINCT_FIELDS.contains(field)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
+        }
+        // 感染筛查方法为固定枚举（非 latent 表字段）
+        if ("screenMethod".equals(field)) {
+            return List.of("PPD", "EC", "IGRA");
         }
         int resolvedArchived = archived != null ? archived : 0;
         LambdaQueryWrapper<LatentInfection> wrapper = buildDistinctScopeWrapper(populationType, resolvedArchived, referralResult);

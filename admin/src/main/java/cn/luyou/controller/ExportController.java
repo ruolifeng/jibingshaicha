@@ -1138,6 +1138,7 @@ public class ExportController {
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String departmentIds,
             @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String columnFilters,
             HttpServletResponse response) throws IOException {
 
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
@@ -1197,6 +1198,7 @@ public class ExportController {
             KeyPopulationCrowdCategoryQuerySupport.applyLatentFilter(
                     wrapper, populationType, crowdCategory, screeningKeyPopulationMapper);
             IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
+            latentInfectionService.applyOverviewColumnFilters(wrapper, columnFilters);
         }
         // 排除筛查已删除但 latent 未清理的孤儿记录
         LatentScreeningLinkSupport.applyLinkedScreeningExistsFilter(wrapper);

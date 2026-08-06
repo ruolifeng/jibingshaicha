@@ -117,6 +117,13 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /** 查询潜伏感染详情（含筛查回填字段） */
     LatentInfection getDetail(Long id);
 
+    /**
+     * 应用与在管列表一致的表头 columnFilters（导出等复用）。
+     */
+    void applyOverviewColumnFilters(
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<LatentInfection> wrapper,
+            String columnFilters);
+
     /** 更新潜伏感染基本信息 */
     void updateBasicInfo(Long id, Map<String, Object> body);
 
