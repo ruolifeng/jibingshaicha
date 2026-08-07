@@ -40,6 +40,8 @@ public class LatentInfection extends BaseEntity {
     private String phoneContactRelation;
     /** 感染筛查日期（手动新增/导入） */
     private LocalDate infectionScreenDate;
+    /** 感染筛查方法（PPD/EC/IGRA 等；筛查关联记录也可由筛查表回填展示） */
+    private String screenMethod;
     private String infectionResult;
     /** 追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束 */
     private Integer trackingStatus;
@@ -133,10 +135,7 @@ public class LatentInfection extends BaseEntity {
     /** 感染检测时间（通知单展示，优先筛查表，否则取 infectionScreenDate） */
     @TableField(exist = false)
     private LocalDate screenDate;
-    /** 感染检查方法 */
-    @TableField(exist = false)
-    private String screenMethod;
-    /** 感染检查结果 */
+    /** 感染检查结果（通知单展示，来自筛查表） */
     @TableField(exist = false)
     private String screenResult;
     /** 预防性治疗方案（通知单展示，来自筛查表） */

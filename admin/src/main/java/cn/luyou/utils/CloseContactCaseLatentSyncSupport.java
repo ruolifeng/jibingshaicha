@@ -126,7 +126,7 @@ public class CloseContactCaseLatentSyncSupport {
             }
         }
         if (StrUtil.isBlank(latent.getScreenMethod()) && StrUtil.isNotBlank(caze.getInfectionCheckMethod())) {
-            latent.setScreenMethod(caze.getInfectionCheckMethod());
+            latent.setScreenMethod(ScreeningMethodSupport.normalize(caze.getInfectionCheckMethod()));
         }
         if (StrUtil.isBlank(latent.getScreenResult()) && StrUtil.isNotBlank(caze.getInfectionCheckResult())) {
             latent.setScreenResult(caze.getInfectionCheckResult());
@@ -238,6 +238,7 @@ public class CloseContactCaseLatentSyncSupport {
                 .currentAddress(caze.getCurrentAddress())
                 .infectionScreenDate(infectionDate)
                 .infectionResult(caze.getInfectionCheckResult())
+                .screenMethod(ScreeningMethodSupport.normalize(caze.getInfectionCheckMethod()))
                 .hasChestXray(StrUtil.isNotBlank(caze.getImagingResult()) ? "是" : null)
                 .chestXrayDate(caze.getImagingDate())
                 .chestXrayResult(caze.getImagingResult())
@@ -323,6 +324,10 @@ public class CloseContactCaseLatentSyncSupport {
         }
         if (StrUtil.isBlank(latent.getInfectionResult()) && StrUtil.isNotBlank(caze.getInfectionCheckResult())) {
             latent.setInfectionResult(caze.getInfectionCheckResult());
+            changed = true;
+        }
+        if (StrUtil.isBlank(latent.getScreenMethod()) && StrUtil.isNotBlank(caze.getInfectionCheckMethod())) {
+            latent.setScreenMethod(ScreeningMethodSupport.normalize(caze.getInfectionCheckMethod()));
             changed = true;
         }
         if (StrUtil.isBlank(latent.getHasChestXray()) && StrUtil.isNotBlank(caze.getImagingResult())) {
