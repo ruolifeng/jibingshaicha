@@ -17,6 +17,24 @@ const detail = ref<Record<string, any> | null>(null)
 
 const hasCloseContactCase = computed(() => !!detail.value?.closeContactCaseId || !!detail.value?.finalScreeningResult)
 
+/** 展示感染筛查方法：优先真实字段，兼容密接完整选项名 */
+function displayScreenMethod(row: { screenMethod?: string, infectionResult?: string } | null) {
+  if (!row) return "-"
+  const method = (row.screenMethod || "").trim()
+  if (method) {
+    const upper = method.toUpperCase()
+    if (upper.includes("IGRA") || method.includes("干扰素")) return "IGRA"
+    if (upper.includes("EC") || method.includes("结核抗原")) return "EC"
+    if (upper.includes("PPD") || method.includes("结核菌素")) return "PPD"
+    return method
+  }
+  const result = row.infectionResult || ""
+  if (/IGRA/i.test(result)) return "IGRA"
+  if (/^EC/i.test(result) || /EC阳|EC阴/.test(result)) return "EC"
+  if (/^PPD/i.test(result) || /PPD/.test(result)) return "PPD"
+  return "-"
+}
+
 async function loadDetail() {
   if (!props.latentId) return
   loading.value = true
@@ -87,7 +105,7 @@ watch(() => props.visible, (val) => {
             {{ detail.infectionScreenDate || detail.screenDate || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查方法">
-            {{ detail.screenMethod || "-" }}
+            {{ displayScreenMethod(detail) }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">
             {{ detail.infectionResult || detail.screenResult || "-" }}

@@ -71,13 +71,20 @@ const loadInfectionResultOptions = () => loadDistinct("infectionResult")
 const loadCreatorOptions = () => loadDistinct("creatorUsername")
 const screenMethodFilterOptions = INFECTION_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
 
-/** 无筛查方法时，从感染筛查结果推断（如 EC阳性 → EC） */
+/** 展示感染筛查方法：优先真实字段，兼容密接完整选项名；无方法时才从结果推断 */
 function displayScreenMethod(row: { screenMethod?: string, infectionResult?: string }) {
-  if (row.screenMethod) return row.screenMethod
+  const method = (row.screenMethod || "").trim()
+  if (method) {
+    const upper = method.toUpperCase()
+    if (upper.includes("IGRA") || method.includes("干扰素")) return "IGRA"
+    if (upper.includes("EC") || method.includes("结核抗原")) return "EC"
+    if (upper.includes("PPD") || method.includes("结核菌素")) return "PPD"
+    return method
+  }
   const result = row.infectionResult || ""
-  if (result.startsWith("PPD")) return "PPD"
-  if (result.startsWith("EC")) return "EC"
-  if (result.startsWith("IGRA")) return "IGRA"
+  if (/IGRA/i.test(result)) return "IGRA"
+  if (/^EC/i.test(result) || /EC阳|EC阴/.test(result)) return "EC"
+  if (/^PPD/i.test(result) || /PPD/.test(result)) return "PPD"
   return "-"
 }
 

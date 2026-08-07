@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import {
+  INFECTION_METHOD_OPTIONS,
   LATENT_CLOSE_CONTACT_TYPE_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS
@@ -44,6 +45,7 @@ const form = reactive({
   householdAddress: "",
   currentAddress: "",
   infectionScreenDate: "",
+  screenMethod: "",
   infectionResult: "",
   diagnosisFirst: "",
   hasChestXray: "",
@@ -91,6 +93,7 @@ function resetForm() {
     householdAddress: "",
     currentAddress: "",
     infectionScreenDate: "",
+    screenMethod: "",
     infectionResult: "",
     diagnosisFirst: "",
     hasChestXray: "",
@@ -145,6 +148,7 @@ async function loadDetail() {
     householdAddress: data.householdAddress || "",
     currentAddress: data.currentAddress || "",
     infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
+    screenMethod: data.screenMethod || "",
     infectionResult: data.infectionResult || "",
     diagnosisFirst: data.diagnosisFirst || "",
     hasChestXray: data.hasChestXray || "",
@@ -316,6 +320,21 @@ async function handleSubmit() {
               placeholder="选择日期"
               style="width: 100%"
             />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="感染筛查方法">
+            <el-select
+              v-model="form.screenMethod"
+              placeholder="请选择或输入"
+              clearable
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+            >
+              <el-option v-for="item in INFECTION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="12">

@@ -58,6 +58,7 @@ import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.NoticePartyFillSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
+import cn.luyou.utils.ScreeningMethodSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
@@ -385,11 +386,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     /**
-     * 感染筛查方法筛选：screenMethod 非 latent 表字段，按关联筛查表方法匹配，
-     * 并兼容手动录入（感染筛查结果前缀如 EC阳性 → EC）。
+     * 感染筛查方法筛选：优先匹配 latent.screen_method，再按关联筛查表方法，
+     * 手动录入且方法为空时才用感染筛查结果前缀兜底。
      */
     private void applyScreenMethodFilter(LambdaQueryWrapper<LatentInfection> wrapper, String value) {
         List<String> methods = ColumnFilterSupport.splitValues(value).stream()
+                .map(ScreeningMethodSupport::normalize)
+                .filter(StrUtil::isNotBlank)
                 .filter(SCREEN_METHOD_FILTER_VALUES::contains)
                 .distinct()
                 .toList();
@@ -425,7 +428,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         wrapper.and(w -> {
             boolean first = true;
+            // 持久化字段直接匹配（含密接个案同步/手动新增）
+            w.in(LatentInfection::getScreenMethod, methods);
+            first = false;
             if (!schoolIds.isEmpty()) {
+                if (!first) {
+                    w.or();
+                }
                 w.and(s -> s.eq(LatentInfection::getPopulationType, "school")
                         .in(LatentInfection::getScreeningId, schoolIds));
                 first = false;
@@ -449,8 +458,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             if (!first) {
                 w.or();
             }
-            // 仅手动新增/导入（无筛查关联）按感染筛查结果前缀推断，避免与筛查表方法口径冲突
+            // 仅方法为空的手动记录按感染筛查结果前缀推断
             w.and(ir -> {
+                ir.and(blank -> blank.isNull(LatentInfection::getScreenMethod)
+                        .or().eq(LatentInfection::getScreenMethod, ""));
                 ir.isNull(LatentInfection::getScreeningId);
                 ir.and(prefix -> {
                     boolean irFirst = true;
@@ -776,6 +787,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private void fillNoticeAutoFields(LatentInfection latent) {
         if (latent == null || StrUtil.isBlank(latent.getPopulationType())) return;
         if (latent.getScreeningId() == null) {
+            if (StrUtil.isNotBlank(latent.getScreenMethod())) {
+                latent.setScreenMethod(ScreeningMethodSupport.normalize(latent.getScreenMethod()));
+            } else if (StrUtil.isNotBlank(latent.getInfectionResult())) {
+                // 无方法时不在列表强制推断写入，展示层可兜底；此处保持为空避免误标 PPD
+            }
             if ("closeContact".equals(latent.getPopulationType()) && StrUtil.isBlank(latent.getCrowdCategory())) {
                 latent.setCrowdCategory("密接");
             }
@@ -795,7 +811,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 }
                 latent.setHouseholdAddress(s.getHouseholdAddress());
                 latent.setScreenDate(s.getScreenDate());
-                latent.setScreenMethod(s.getScreenMethod());
+                latent.setScreenMethod(ScreeningMethodSupport.normalize(s.getScreenMethod()));
                 latent.setScreenResult(s.getScreenResult());
                 if (StrUtil.isNotBlank(s.getPreventivePlan())) {
                     latent.setPreventivePlan(s.getPreventivePlan());
@@ -817,7 +833,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 }
                 latent.setHouseholdAddress(k.getHouseholdAddress());
                 latent.setScreenDate(k.getScreenDate());
-                latent.setScreenMethod(k.getScreenMethod());
+                latent.setScreenMethod(ScreeningMethodSupport.normalize(k.getScreenMethod()));
                 latent.setScreenResult(k.getScreenResult());
                 if (StrUtil.isNotBlank(k.getPreventivePlan())) {
                     latent.setPreventivePlan(k.getPreventivePlan());
@@ -845,19 +861,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     case 1 -> {
                         // 首次筛查：index 18=firstScreenDate, 22=infectionCheckMethod, 23=infectionCheckResult
                         latent.setScreenDate(c.getFirstScreenDate());
-                        latent.setScreenMethod(c.getInfectionCheckMethod());
+                        latent.setScreenMethod(ScreeningMethodSupport.normalize(c.getInfectionCheckMethod()));
                         latent.setScreenResult(c.getInfectionCheckResult());
                     }
                     case 2 -> {
                         // 6月随访：index 40=followup6ScreenDate, 44=followup6ImagingMethod, 49=followup6Result
                         latent.setScreenDate(c.getFollowup6ScreenDate());
-                        latent.setScreenMethod(c.getFollowup6ImagingMethod());
+                        latent.setScreenMethod(ScreeningMethodSupport.normalize(c.getFollowup6ImagingMethod()));
                         latent.setScreenResult(c.getFollowup6Result());
                     }
                     case 3 -> {
                         // 12月随访：index 51=followup12ScreenDate, 55=followup12ImagingMethod, 60=followup12Result
                         latent.setScreenDate(c.getFollowup12ScreenDate());
-                        latent.setScreenMethod(c.getFollowup12ImagingMethod());
+                        latent.setScreenMethod(ScreeningMethodSupport.normalize(c.getFollowup12ImagingMethod()));
                         latent.setScreenResult(c.getFollowup12Result());
                     }
                     default -> {
@@ -1522,6 +1538,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (body.get("infectionScreenDate") != null) {
             latent.setInfectionScreenDate(parseDateCell(body.get("infectionScreenDate")));
         }
+        if (body.get("screenMethod") != null) {
+            latent.setScreenMethod(ScreeningMethodSupport.normalize(body.get("screenMethod").toString()));
+        }
         if (body.get("infectionResult") != null) latent.setInfectionResult(body.get("infectionResult").toString());
         if (body.get("diagnosisFirst") != null) latent.setDiagnosisFirst(body.get("diagnosisFirst").toString());
         if (body.get("hasChestXray") != null) latent.setHasChestXray(body.get("hasChestXray").toString());
@@ -1573,6 +1592,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .infectionScreenDate(parseDateCell(body.get("infectionScreenDate")))
                 .gender(body.getOrDefault("gender", "").toString())
                 .age(parseIntegerField(body.get("age")))
+                .screenMethod(ScreeningMethodSupport.normalize(body.getOrDefault("screenMethod", "").toString()))
                 .infectionResult(body.getOrDefault("infectionResult", "").toString())
                 .diagnosisFirst(body.getOrDefault("diagnosisFirst", "").toString())
                 .hasChestXray(body.getOrDefault("hasChestXray", "").toString())
@@ -1766,6 +1786,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .infectionScreenDate(parseDateCell(getImportField(row, headerIndex, "感染筛查日期")))
                         .gender(getImportField(row, headerIndex, "性别"))
                         .age(parseIntegerField(getImportField(row, headerIndex, "年龄")))
+                        .screenMethod(ScreeningMethodSupport.normalize(getImportField(row, headerIndex, "感染筛查方法")))
                         .infectionResult(getImportField(row, headerIndex, "感染筛查结果"))
                         .diagnosisFirst(getImportField(row, headerIndex, "首次诊断"))
                         .hasChestXray(getImportField(row, headerIndex, "是否胸片检查"))
@@ -2291,7 +2312,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (StrUtil.isBlank(field) || !COLUMN_DISTINCT_FIELDS.contains(field)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
         }
-        // 感染筛查方法为固定枚举（非 latent 表字段）
+        // 感染筛查方法为固定枚举（也可存自定义值，筛选项仍给标准三项）
         if ("screenMethod".equals(field)) {
             return List.of("PPD", "EC", "IGRA");
         }

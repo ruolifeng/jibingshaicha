@@ -32,6 +32,7 @@ import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
+import cn.luyou.utils.ScreeningMethodSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -1384,43 +1385,28 @@ public class ExportController {
                 };
             }
             if (StrUtil.isNotBlank(method)) {
-                result.put(r.getId(), method);
+                result.put(r.getId(), ScreeningMethodSupport.normalize(method));
             }
         }
         return result;
     }
 
-    /** 解析潜伏感染者感染筛查方法：优先筛查表，否则从感染筛查结果推断（如 EC阳性 → EC） */
+    /** 解析潜伏感染者感染筛查方法：优先本表/筛查表，否则从感染筛查结果推断 */
     private String resolveLatentScreenMethod(LatentInfection r, Map<Long, String> screenMethodByLatentId) {
         if (r == null) {
             return "";
         }
-        if (StrUtil.isNotBlank(r.getScreenMethod())) {
-            return r.getScreenMethod();
+        String fromEntity = ScreeningMethodSupport.normalize(r.getScreenMethod());
+        if (StrUtil.isNotBlank(fromEntity)) {
+            return fromEntity;
         }
         if (r.getId() != null && screenMethodByLatentId != null) {
-            String method = screenMethodByLatentId.get(r.getId());
+            String method = ScreeningMethodSupport.normalize(screenMethodByLatentId.get(r.getId()));
             if (StrUtil.isNotBlank(method)) {
                 return method;
             }
         }
-        return inferScreenMethodFromInfectionResult(r.getInfectionResult());
-    }
-
-    private static String inferScreenMethodFromInfectionResult(String infectionResult) {
-        if (StrUtil.isBlank(infectionResult)) {
-            return "";
-        }
-        if (infectionResult.startsWith("PPD")) {
-            return "PPD";
-        }
-        if (infectionResult.startsWith("EC")) {
-            return "EC";
-        }
-        if (infectionResult.startsWith("IGRA")) {
-            return "IGRA";
-        }
-        return "";
+        return StrUtil.blankToDefault(ScreeningMethodSupport.inferFromInfectionResult(r.getInfectionResult()), "");
     }
 
     /** 潜伏感染者是否已归档：结案归档、督导表归档均视为已归档 */
