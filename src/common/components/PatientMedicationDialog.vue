@@ -97,7 +97,11 @@ async function loadMedication() {
     firstVisit = data
   } catch { /* 无首次随访 */ }
 
-  applyMedicationFormDefaults(medicationForm, { saved, firstVisit })
+  applyMedicationFormDefaults(medicationForm, {
+    saved,
+    firstVisit,
+    patientRow: props.patientRow
+  })
 }
 
 watch(
@@ -234,7 +238,7 @@ function handleStartTreatmentDateChange() {
       <el-form-item label="治疗前痰菌检查">
         <el-select
           v-model="medicationForm.sputumResult"
-          placeholder="来自首次随访痰菌情况，可修改"
+          placeholder="来自病原学结果，可修改"
           style="width: 100%"
           :disabled="readOnly"
         >

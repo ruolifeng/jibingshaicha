@@ -124,8 +124,8 @@ public class ExportController {
 
     /** 在管患者总表导出列（无数据时也输出表头） */
     private static final List<String> ALL_PATIENT_EXPORT_HEADERS = List.of(
-            "序号", "数据来源", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
-            "民族", "联系电话", "户籍地址", "现住址", "最终诊断结果", "通知单状态",
+            "序号", "数据来源", "登记号", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
+            "民族", "联系电话", "户籍地址", "现住址", "服药管理单位", "最终诊断结果", "通知单状态",
             "首次随访", "后续随访次数", "服药管理", "停止治疗原因", "是否归档", "归档备注", "归档时间", "创建时间"
     );
 
@@ -640,11 +640,7 @@ public class ExportController {
         List<Long> idList = parseIdList(ids);
         List<Patient> patientList;
         if (!idList.isEmpty()) {
-            LambdaQueryWrapper<Patient> idWrapper = new LambdaQueryWrapper<Patient>()
-                    .in(Patient::getId, idList)
-                    .eq(archived != null, Patient::getArchived, archived);
-            dataScopeHelper.applyPatientScope(idWrapper);
-            patientList = patientService.list(idWrapper);
+            patientList = patientService.listByIdsForExport(idList, archived);
         } else {
             patientList = patientService.listForExport(
                     populationType, name, idNumber, phone, currentAddress, diagnosisResult,
@@ -729,6 +725,7 @@ public class ExportController {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("序号", seq++);
             row.put("数据来源", POP_TYPE_LABEL.getOrDefault(p.getPopulationType(), p.getPopulationType()));
+            row.put("登记号", resolvePatientRegistrationNo(p));
             row.put("姓名", p.getName());
             row.put("性别", p.getGender());
             row.put("出生日期", formatDate(p.getBirthDate()));
@@ -739,6 +736,7 @@ public class ExportController {
             row.put("联系电话", p.getPhone());
             row.put("户籍地址", p.getHouseholdAddress());
             row.put("现住址", p.getCurrentAddress());
+            row.put("服药管理单位", resolvePatientMedicationUnit(p, notice));
             row.put("最终诊断结果", p.getDiagnosisResult());
             row.put("通知单状态", noticeStatusLabel);
             row.put("首次随访", firstVisitSet.contains(p.getId()) ? "已完成" : "未完成");
@@ -1476,6 +1474,33 @@ public class ExportController {
             } catch (IllegalAccessException ignored) {}
         }
         return map;
+    }
+
+    /** 登记号：主表解析字段或 epidemicData / 导入字段 */
+    private static String resolvePatientRegistrationNo(Patient p) {
+        if (p == null) {
+            return "";
+        }
+        if (StrUtil.isNotBlank(p.getRegistrationNo())) {
+            return p.getRegistrationNo().trim();
+        }
+        return firstImportField(p, "登记号");
+    }
+
+    /** 服药管理单位：通知单优先，其次病案/导入字段 */
+    private static String resolvePatientMedicationUnit(Patient p, Notice notice) {
+        if (notice != null && StrUtil.isNotBlank(notice.getMedicationManagementUnit())) {
+            return notice.getMedicationManagementUnit().trim();
+        }
+        return firstImportField(p, "服药管理单位");
+    }
+
+    private static String firstImportField(Patient p, String key) {
+        if (p == null || p.getImportFields() == null) {
+            return "";
+        }
+        String value = p.getImportFields().get(key);
+        return StrUtil.isNotBlank(value) ? value.trim() : "";
     }
 
     private void writeExcel(HttpServletResponse response, String fileName, List<Map<String, Object>> rows) throws IOException {

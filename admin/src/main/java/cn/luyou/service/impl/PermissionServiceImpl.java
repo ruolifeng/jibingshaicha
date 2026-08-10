@@ -32,7 +32,16 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
     private final UserPermissionMapper userPermissionMapper;
     private final UserMapper userMapper;
 
-    private static final String PICKUP_PERMISSION_CODE = "patientManagement:pickup";
+    /** 填写领药 → 对应服药管理菜单（领药入口在服药管理页上） */
+    private static final Map<String, String> PICKUP_IMPLIES_MEDICATION = Map.of(
+            "patientManagement:pickup", "patientManagement:medication",
+            "latentManagement:pickup", "latentManagement:medication"
+    );
+
+    private static final Set<String> LEVEL5_DENIED_PICKUP_CODES = Set.of(
+            "patientManagement:pickup",
+            "latentManagement:pickup"
+    );
 
     @Override
     public List<Permission> getPermissionTree() {
@@ -95,8 +104,9 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         rolePermissionMapper.delete(
                 new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRole, role)
         );
-        List<Long> sanitizedIds = sanitizeLevel5Pickup(role, permissionIds);
-        List<Long> expandedIds = expandAncestorPermissionIds(sanitizedIds);
+        // 先按「领药 → 服药管理」补全，再剥掉五级不可用的领药，避免只勾领药时菜单也被清空
+        List<Long> expandedIds = expandAncestorPermissionIds(
+                sanitizeLevel5Pickup(role, expandPickupImpliesMedicationIds(permissionIds)));
         if (expandedIds != null && !expandedIds.isEmpty()) {
             List<RolePermission> records = expandedIds.stream()
                     .map(pid -> RolePermission.builder().role(role).permissionId(pid).build())
@@ -127,8 +137,8 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         );
         User user = userId == null ? null : userMapper.selectById(userId);
         int role = user != null && user.getRole() != null ? user.getRole() : 0;
-        List<Long> sanitizedIds = sanitizeLevel5Pickup(role, permissionIds);
-        List<Long> expandedIds = expandAncestorPermissionIds(sanitizedIds);
+        List<Long> expandedIds = expandAncestorPermissionIds(
+                sanitizeLevel5Pickup(role, expandPickupImpliesMedicationIds(permissionIds)));
         if (expandedIds != null && !expandedIds.isEmpty()) {
             for (Long pid : expandedIds) {
                 userPermissionMapper.insert(UserPermission.builder()
@@ -160,6 +170,7 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
             }
         }
         expandAncestorPermissionCodes(codes);
+        normalizePickupImpliesMedicationCodes(codes);
         normalizeLegacyPermissionCodes(codes);
         return new ArrayList<>(codes);
     }
@@ -189,25 +200,54 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         return children;
     }
 
-    /** 五级用户不允许拥有「填写领药」权限，防止权限树误勾选后写入 */
+    /** 五级不允许填写领药（患者 / 潜伏），防止权限树误勾选后写入 */
     private List<Long> sanitizeLevel5Pickup(int role, List<Long> permissionIds) {
         if (permissionIds == null || permissionIds.isEmpty() || role != 6) {
             return permissionIds;
         }
-        Long pickupId = getPickupPermissionId();
-        if (pickupId == null) {
+        Set<Long> deniedIds = list(new LambdaQueryWrapper<Permission>()
+                .in(Permission::getCode, LEVEL5_DENIED_PICKUP_CODES))
+                .stream()
+                .map(Permission::getId)
+                .collect(Collectors.toSet());
+        if (deniedIds.isEmpty()) {
             return permissionIds;
         }
         return permissionIds.stream()
-                .filter(id -> !pickupId.equals(id))
+                .filter(id -> !deniedIds.contains(id))
                 .toList();
     }
 
-    private Long getPickupPermissionId() {
-        Permission pickup = getOne(new LambdaQueryWrapper<Permission>()
-                .eq(Permission::getCode, PICKUP_PERMISSION_CODE)
-                .last("LIMIT 1"));
-        return pickup == null ? null : pickup.getId();
+    /** 勾选填写领药时自动带上服药管理菜单 */
+    private List<Long> expandPickupImpliesMedicationIds(List<Long> permissionIds) {
+        if (permissionIds == null || permissionIds.isEmpty()) {
+            return permissionIds;
+        }
+        List<Permission> all = list();
+        Map<Long, String> codeById = all.stream()
+                .collect(Collectors.toMap(Permission::getId, Permission::getCode, (a, b) -> a));
+        Map<String, Long> idByCode = all.stream()
+                .collect(Collectors.toMap(Permission::getCode, Permission::getId, (a, b) -> a));
+        LinkedHashSet<Long> expanded = new LinkedHashSet<>(permissionIds);
+        for (Long id : permissionIds) {
+            String implied = PICKUP_IMPLIES_MEDICATION.get(codeById.get(id));
+            if (implied == null) {
+                continue;
+            }
+            Long medicationId = idByCode.get(implied);
+            if (medicationId != null) {
+                expanded.add(medicationId);
+            }
+        }
+        return new ArrayList<>(expanded);
+    }
+
+    private void normalizePickupImpliesMedicationCodes(LinkedHashSet<String> codes) {
+        PICKUP_IMPLIES_MEDICATION.forEach((pickup, medication) -> {
+            if (codes.contains(pickup)) {
+                codes.add(medication);
+            }
+        });
     }
 
     /** 保存权限时自动补全祖先节点，避免仅勾选子菜单时父级权限码缺失 */

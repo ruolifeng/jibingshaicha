@@ -101,6 +101,9 @@ export const useUserStore = defineStore("user", () => {
     if (userRole.value === 1) return true
     if (permissions.value.includes(code)) return true
     if (code === "dataCleaning" && permissions.value.includes("dataClean")) return true
+    // 填写领药入口在服药管理页：有领药权限即可进入服药管理
+    if (code === "patientManagement:medication" && permissions.value.includes("patientManagement:pickup")) return true
+    if (code === "latentManagement:medication" && permissions.value.includes("latentManagement:pickup")) return true
     return false
   }
 

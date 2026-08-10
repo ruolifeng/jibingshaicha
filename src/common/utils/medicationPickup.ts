@@ -6,9 +6,10 @@ export const PATIENT_MEDICATION_PICKUP_PERMISSIONS = [
   "patientManagement:pickup"
 ] as const
 
-/** 进入服药管理页 / 服药日历（聚合模块） */
+/** 进入服药管理页 / 服药日历（有服药管理或填写领药任一即可） */
 export const PATIENT_MEDICATION_PAGE_PERMISSIONS = [
   "patientManagement:medication",
+  "patientManagement:pickup",
   "patient:medication",
   "keyPopulation:patient:medication",
   "closeContact:patient:medication"
@@ -16,7 +17,8 @@ export const PATIENT_MEDICATION_PAGE_PERMISSIONS = [
 
 /** 潜伏感染者 — 服药管理页 */
 export const LATENT_MEDICATION_PAGE_PERMISSIONS = [
-  "latentManagement:medication"
+  "latentManagement:medication",
+  "latentManagement:pickup"
 ] as const
 
 /** 潜伏感染者 — 填写领药 */
