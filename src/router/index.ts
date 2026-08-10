@@ -201,6 +201,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           keepAlive: true,
           anyPermission: [
             "patientManagement:medication",
+            "patientManagement:pickup",
             "patient:medication",
             "keyPopulation:patient:medication",
             "closeContact:patient:medication"

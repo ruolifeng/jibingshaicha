@@ -101,6 +101,9 @@ public interface PatientService extends IService<Patient> {
                        String medicationManagementUnit, String crowdCategory,
                        String creatorUsername, String columnFilters, String formatIssue);
 
+    /** 按 ID 导出（填充 epidemicData 扩展字段，含登记号等） */
+    List<Patient> listByIdsForExport(List<Long> ids, Integer archived);
+
     /** 导出用患者列表（与列表查询使用相同的数据范围过滤） */
     List<Patient> listForExport(String populationType, String name, String idNumber,
                                  String phone, String currentAddress, String diagnosisResult,

@@ -11,7 +11,7 @@ import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveMedicationManagementUnit, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -66,6 +66,7 @@ const populationTypeFilterOptions = [
 const pathogenSourceValues = ref<string[]>([])
 const genderSourceValues = ref<string[]>([])
 const populationTypeSourceValues = ref<string[]>([])
+const medicationUnitSourceValues = ref<string[]>([])
 
 async function loadColumnDistinct(field: string, target: Ref<string[]>) {
   try {
@@ -79,6 +80,7 @@ async function loadColumnDistinct(field: string, target: Ref<string[]>) {
 const loadGenderOptions = () => loadColumnDistinct("gender", genderSourceValues)
 const loadPathogenOptions = () => loadColumnDistinct("diagnosisResult", pathogenSourceValues)
 const loadPopulationTypeOptions = () => loadColumnDistinct("populationType", populationTypeSourceValues)
+const loadMedicationUnitOptions = () => loadColumnDistinct("medicationManagementUnit", medicationUnitSourceValues)
 
 watch(() => searchForm.populationType, (val) => {
   if (val !== "keyPopulation") {
@@ -371,12 +373,23 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
           />
         </el-form-item>
         <el-form-item label="服药管理单位">
-          <el-input
+          <el-select
             v-model="searchForm.medicationManagementUnit"
-            placeholder="请输入"
+            placeholder="全部"
             clearable
-            style="width: 160px"
-          />
+            filterable
+            allow-create
+            default-first-option
+            style="width: 200px"
+            @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+          >
+            <el-option
+              v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="录入用户">
           <el-input v-model="searchForm.creatorUsername" placeholder="请输入" clearable style="width: 140px" />
@@ -583,6 +596,11 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             <span :class="{ 'text-red-600 font-semibold': isRetreatmentPatient(row) }">
               {{ resolveTreatmentClass(row) || "-" }}
             </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="通知单">

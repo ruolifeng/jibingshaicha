@@ -96,7 +96,7 @@ function handlePrint() {
       </el-radio-group>
     </div>
 
-    <div id="print-medication-content" class="print-area">
+    <div id="print-medication-content" class="print-area print-area--landscape">
       <h2 class="print-title">
         肺结核患者治疗记录卡
       </h2>
@@ -135,13 +135,17 @@ function handlePrint() {
             <th>管理方式</th>
             <td>{{ medicationData.managementMethod }}</td>
             <th>督导人员</th>
-            <td>{{ medicationData.supervisor }}</td>
-            <th>治疗前痰菌检查</th>
-            <td>{{ medicationData.sputumResult }}</td>
+            <td colspan="3">
+              {{ medicationData.supervisor || "——" }}
+            </td>
           </tr>
           <tr>
+            <th>治疗前痰菌检查</th>
+            <td colspan="3">
+              {{ medicationData.sputumResult || "——" }}
+            </td>
             <th>停止完成时间</th>
-            <td colspan="7">
+            <td colspan="3">
               {{ medicationData.stopDate || "——" }}
             </td>
           </tr>
@@ -215,94 +219,8 @@ function handlePrint() {
   margin-bottom: 16px;
   font-size: 14px;
 }
+</style>
 
-.print-area {
-  padding: 8px 4px;
-}
-
-.print-title {
-  text-align: center;
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 14px;
-}
-
-.info-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 14px;
-  font-size: 13px;
-
-  th,
-  td {
-    border: 1px solid #333;
-    padding: 5px 8px;
-    text-align: left;
-  }
-
-  th {
-    background: #f0f0f0;
-    white-space: nowrap;
-    font-weight: 600;
-  }
-}
-
-.med-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  table-layout: fixed;
-
-  th,
-  td {
-    border: 1px solid #333;
-    text-align: center;
-    padding: 0;
-    height: 24px;
-    line-height: 24px;
-  }
-
-  .th-month {
-    width: 52px;
-    background: #f0f0f0;
-    font-weight: 600;
-    font-size: 11px;
-    line-height: 1.3;
-    padding: 3px 2px;
-  }
-
-  .th-day {
-    background: #f0f0f0;
-    font-weight: 600;
-    font-size: 11px;
-  }
-
-  .td-month {
-    background: #f0f0f0;
-    font-weight: 600;
-  }
-
-  .td-invalid {
-    background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 2px, #f5f5f5 2px, #f5f5f5 8px);
-  }
-
-  .td-mark-x,
-  .td-mark-circled {
-    color: #000;
-    font-weight: bold;
-    font-size: 14px;
-  }
-
-  .td-mark-circled {
-    font-size: 15px;
-  }
-}
-
-.print-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-  font-size: 13px;
-  color: #303133;
-}
+<style lang="scss">
+@import "@@/assets/styles/print-forms.css";
 </style>

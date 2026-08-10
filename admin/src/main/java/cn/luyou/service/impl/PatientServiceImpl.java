@@ -83,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -225,6 +226,20 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         fillScreeningXrayData(result.getRecords(), populationType);
         fillEpidemicExtraFields(result.getRecords());
         return result;
+    }
+
+    @Override
+    public List<Patient> listByIdsForExport(List<Long> ids, Integer archived) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
+                .in(Patient::getId, ids)
+                .eq(archived != null, Patient::getArchived, archived);
+        applyPatientScopeFilter(wrapper);
+        List<Patient> patients = list(wrapper);
+        fillEpidemicExtraFields(patients);
+        return patients;
     }
 
     @Override
@@ -895,6 +910,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public List<String> listDistinctColumnValues(String field, Integer archived) {
+        if ("medicationManagementUnit".equals(field)) {
+            return listDistinctMedicationManagementUnits(archived);
+        }
         if (StrUtil.isBlank(field) || !COLUMN_FILTER_WHITELIST.contains(field)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
         }
@@ -942,6 +960,46 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .distinct()
                 .sorted()
                 .collect(Collectors.toList());
+    }
+
+    /** 服药管理单位去重：病案 JSON + 患者通知单 */
+    private List<String> listDistinctMedicationManagementUnits(Integer archived) {
+        Set<String> units = new TreeSet<>();
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(archived != null, Patient::getArchived, archived);
+        if (archived == null || Integer.valueOf(0).equals(archived)) {
+            wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
+                    .or()
+                    .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        }
+        applyPatientScopeFilter(wrapper);
+        wrapper.select(Patient::getId, Patient::getEpidemicData, Patient::getPopulationType);
+
+        List<Patient> patients = list(wrapper);
+        Set<Long> patientIds = new HashSet<>();
+        for (Patient p : patients) {
+            if (p.getId() != null) {
+                patientIds.add(p.getId());
+            }
+            String unit = parseImportFields(p).get("服药管理单位");
+            if (StrUtil.isNotBlank(unit)) {
+                units.add(unit.trim());
+            }
+        }
+        if (!patientIds.isEmpty()) {
+            noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                            .eq(Notice::getNoticeType, "patient")
+                            .in(Notice::getBizId, patientIds)
+                            .isNotNull(Notice::getMedicationManagementUnit)
+                            .ne(Notice::getMedicationManagementUnit, "")
+                            .select(Notice::getMedicationManagementUnit))
+                    .forEach(n -> {
+                        if (StrUtil.isNotBlank(n.getMedicationManagementUnit())) {
+                            units.add(n.getMedicationManagementUnit().trim());
+                        }
+                    });
+        }
+        return new ArrayList<>(units);
     }
 
     /** 病原学阳性（列表筛选项「阳性」）：兼容主表与 epidemic_data 中「病原学结果」「诊断结果」 */
