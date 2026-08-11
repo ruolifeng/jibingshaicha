@@ -13,7 +13,8 @@ import {
   formatMedicationPickupDrugs,
   formatMedicationPickupQuantities,
   LATENT_MEDICATION_PAGE_PERMISSIONS,
-  LATENT_MEDICATION_PICKUP_PERMISSIONS
+  LATENT_MEDICATION_PICKUP_PERMISSIONS,
+  LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS
 } from "@@/utils/medicationPickup"
 import { useUserStore } from "@/pinia/stores/user"
 import { getLatentMedicationPickupListApi } from "./apis"
@@ -21,8 +22,14 @@ import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 
 const userStore = useUserStore()
 
+/** 填写/修改领药 */
 const canManagePickup = computed(() =>
   LATENT_MEDICATION_PICKUP_PERMISSIONS.some(code => userStore.hasPermission(code))
+)
+
+/** 查看领药摘要与记录（服药管理或填写领药） */
+const canViewPickup = computed(() =>
+  LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS.some(code => userStore.hasPermission(code))
 )
 
 const {
@@ -164,7 +171,7 @@ function viewDetail(record: Record<string, any>) {
         <el-table-column prop="idNumber" label="证件号" min-width="160" show-overflow-tooltip />
         <el-table-column prop="phone" label="联系电话" min-width="120" />
         <el-table-column prop="infectionResult" label="感染筛查结果" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" fixed="right" :width="canManagePickup ? 100 : 120">
+        <el-table-column label="操作" fixed="right" :width="canViewPickup ? 100 : 120">
           <template #default="{ row }">
             <template v-if="!isLatentTransferLocked(row)">
               <el-button
@@ -187,7 +194,7 @@ function viewDetail(record: Record<string, any>) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="canManagePickup" label="领药情况" min-width="260" fixed="right">
+        <el-table-column v-if="canViewPickup" label="领药情况" min-width="260" fixed="right">
           <template #default="{ row }">
             <div v-if="hasPickupData(row)" class="medication-pickup-cell">
               <div>共 {{ row.medicationPickupCount }} 次</div>
@@ -204,7 +211,7 @@ function viewDetail(record: Record<string, any>) {
             <span v-else class="text-gray-400">未录入</span>
             <div class="pickup-actions">
               <el-button
-                v-if="canAddPickup(row)"
+                v-if="canManagePickup && canAddPickup(row)"
                 v-permission="[...LATENT_MEDICATION_PICKUP_PERMISSIONS]"
                 type="primary"
                 link
