@@ -30,12 +30,15 @@ export function mapPathogenResultToMedicationSputum(pathogenResult?: string | nu
   return ""
 }
 
-/** 从患者行解析治疗前痰菌检查默认值（与服药管理列表「病原学结果」口径一致） */
+/** 从患者行解析治疗前痰菌检查默认值（与服药管理列表「病原学结果」列口径一致） */
 export function resolveMedicationSputumFromPatient(
   patientRow?: Record<string, any> | null
 ): string {
   if (!patientRow) return ""
-  const pathogen = resolvePatientPathogenResult(patientRow)
+  // 列表列直接展示 diagnosisResult；抓取时优先用它，避免 importFields 中的旧值覆盖
+  const listPathogen = String(patientRow.diagnosisResult || "").trim()
+  const pathogen = listPathogen || resolvePatientPathogenResult(patientRow)
+  if (!pathogen) return ""
   if (pathogen.includes("结核性胸膜炎")) {
     const fields = resolveImportFields(patientRow)
     const molecular = fields["0月序分子生物学结果"] || fields["0月单分子生物学结果"] || ""
@@ -89,7 +92,7 @@ export function resolveStartTreatmentDate(
 
 /**
  * 打开服药管理时填充默认值：管理方式锁定全程管理；
- * 督导人员来自已完成首次随访；治疗前痰菌检查优先取病原学结果；
+ * 督导人员来自已完成首次随访；治疗前痰菌检查优先取列表病原学结果；
  * 开始治疗日期来自已保存或日历。
  */
 export function applyMedicationFormDefaults(
@@ -105,13 +108,16 @@ export function applyMedicationFormDefaults(
   const saved = options.saved
   if (saved) {
     form.supervisor = saved.supervisor || form.supervisor
-    form.sputumResult = saved.sputumResult || form.sputumResult
     form.stopDate = saved.stopDate || ""
     form.startTreatmentDate = resolveStartTreatmentDate(saved.startTreatmentDate, form.dayMarks)
   }
 
-  if (!form.sputumResult) {
-    form.sputumResult = resolveMedicationSputumFromPatient(options.patientRow)
+  // 治疗前痰菌检查：优先抓取服药管理列表「病原学结果」，再回退已保存值 / 首次随访
+  const fromPathogen = resolveMedicationSputumFromPatient(options.patientRow)
+  if (fromPathogen) {
+    form.sputumResult = fromPathogen
+  } else if (saved?.sputumResult) {
+    form.sputumResult = saved.sputumResult
   }
 
   const firstVisit = options.firstVisit

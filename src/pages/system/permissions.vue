@@ -46,6 +46,8 @@ async function handleSaveRole() {
   try {
     await assignRolePermissionsApi(selectedRole.value, allIds)
     ElMessage.success("角色权限已保存")
+    // 回读服务端实际落库结果（含领药隐含服药管理等自动补全）
+    await loadRolePermissions()
   } catch { /* handled */ }
 }
 
@@ -91,6 +93,7 @@ async function handleSaveUserPerms() {
   try {
     await assignUserPermissionsApi(selectedUserId.value, allIds)
     ElMessage.success("用户额外权限已保存（登录后生效）")
+    await loadUserExtraPermissions()
   } catch { /* handled */ }
 }
 

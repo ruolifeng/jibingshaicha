@@ -41,9 +41,13 @@ public class PatientController {
     private final UserService userService;
     private final FirstVisitSputumCultureSupport firstVisitSputumCultureSupport;
 
-    /** 填写领药与服药管理分离：仅 pickup 权限可保存领药记录 */
-    private static final String[] MEDICATION_PICKUP_PERMISSIONS = {
+    /** 填写领药：仅 pickup 可保存；查看领药记录允许服药管理或填写领药 */
+    private static final String[] MEDICATION_PICKUP_WRITE_PERMISSIONS = {
             "patientManagement:pickup"
+    };
+    private static final String[] MEDICATION_PICKUP_READ_PERMISSIONS = {
+            "patientManagement:pickup",
+            "patientManagement:medication"
     };
 
     @Operation(summary = "手动新增在管患者")
@@ -433,7 +437,7 @@ public class PatientController {
     @PostMapping("/medication-pickup/save")
     @OperationLog(type = "update", module = "patient", action = "保存领药记录")
     public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
-        userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_WRITE_PERMISSIONS);
         if (pickup.getPatientId() != null) {
             patientService.assertPatientOperable(pickup.getPatientId());
         }
@@ -444,7 +448,7 @@ public class PatientController {
     @Operation(summary = "领药记录列表")
     @GetMapping("/medication-pickup/list/{patientId}")
     public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long patientId) {
-        userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_READ_PERMISSIONS);
         return ResultRes.success(medicationPickupService.listByPatientId(patientId));
     }
 

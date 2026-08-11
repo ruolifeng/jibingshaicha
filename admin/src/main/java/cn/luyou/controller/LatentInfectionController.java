@@ -37,8 +37,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class LatentInfectionController {
 
-    private static final String[] MEDICATION_PICKUP_PERMISSIONS = {
+    private static final String[] MEDICATION_PICKUP_WRITE_PERMISSIONS = {
             "latentManagement:pickup"
+    };
+    private static final String[] MEDICATION_PICKUP_READ_PERMISSIONS = {
+            "latentManagement:pickup",
+            "latentManagement:medication"
     };
 
     private final LatentInfectionService latentInfectionService;
@@ -355,7 +359,7 @@ public class LatentInfectionController {
     @PostMapping("/medication-pickup/save")
     @OperationLog(type = "update", module = "latent", action = "保存潜伏感染领药记录")
     public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
-        userService.checkAnyPermissionCode(MEDICATION_PICKUP_PERMISSIONS);
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_WRITE_PERMISSIONS);
         if (pickup.getLatentInfectionId() != null) {
             latentInfectionService.assertLatentOperable(pickup.getLatentInfectionId());
         }
@@ -366,7 +370,7 @@ public class LatentInfectionController {
     @Operation(summary = "潜伏感染者领药记录列表")
     @GetMapping("/medication-pickup/list/{latentInfectionId}")
     public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long latentInfectionId) {
-        userService.checkAnyPermissionCode("latentManagement:pickup", "latentManagement:medication");
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_READ_PERMISSIONS);
         return ResultRes.success(medicationPickupService.listByLatentInfectionId(latentInfectionId));
     }
 

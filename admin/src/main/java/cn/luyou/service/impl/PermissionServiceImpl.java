@@ -2,11 +2,9 @@ package cn.luyou.service.impl;
 
 import cn.luyou.mapper.PermissionMapper;
 import cn.luyou.mapper.RolePermissionMapper;
-import cn.luyou.mapper.UserMapper;
 import cn.luyou.mapper.UserPermissionMapper;
 import cn.luyou.model.Permission;
 import cn.luyou.model.RolePermission;
-import cn.luyou.model.User;
 import cn.luyou.model.UserPermission;
 import cn.luyou.service.PermissionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -30,17 +28,11 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
 
     private final RolePermissionMapper rolePermissionMapper;
     private final UserPermissionMapper userPermissionMapper;
-    private final UserMapper userMapper;
 
     /** 填写领药 → 对应服药管理菜单（领药入口在服药管理页上） */
     private static final Map<String, String> PICKUP_IMPLIES_MEDICATION = Map.of(
             "patientManagement:pickup", "patientManagement:medication",
             "latentManagement:pickup", "latentManagement:medication"
-    );
-
-    private static final Set<String> LEVEL5_DENIED_PICKUP_CODES = Set.of(
-            "patientManagement:pickup",
-            "latentManagement:pickup"
     );
 
     @Override
@@ -104,9 +96,9 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         rolePermissionMapper.delete(
                 new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRole, role)
         );
-        // 先按「领药 → 服药管理」补全，再剥掉五级不可用的领药，避免只勾领药时菜单也被清空
+        // 勾选填写领药时自动补上服药管理菜单，再补全祖先节点
         List<Long> expandedIds = expandAncestorPermissionIds(
-                sanitizeLevel5Pickup(role, expandPickupImpliesMedicationIds(permissionIds)));
+                expandPickupImpliesMedicationIds(permissionIds));
         if (expandedIds != null && !expandedIds.isEmpty()) {
             List<RolePermission> records = expandedIds.stream()
                     .map(pid -> RolePermission.builder().role(role).permissionId(pid).build())
@@ -135,10 +127,8 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         userPermissionMapper.delete(
                 new LambdaQueryWrapper<UserPermission>().eq(UserPermission::getUserId, userId)
         );
-        User user = userId == null ? null : userMapper.selectById(userId);
-        int role = user != null && user.getRole() != null ? user.getRole() : 0;
         List<Long> expandedIds = expandAncestorPermissionIds(
-                sanitizeLevel5Pickup(role, expandPickupImpliesMedicationIds(permissionIds)));
+                expandPickupImpliesMedicationIds(permissionIds));
         if (expandedIds != null && !expandedIds.isEmpty()) {
             for (Long pid : expandedIds) {
                 userPermissionMapper.insert(UserPermission.builder()
@@ -198,24 +188,6 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
             child.setChildren(buildChildren(grouped, child.getId()));
         }
         return children;
-    }
-
-    /** 五级不允许填写领药（患者 / 潜伏），防止权限树误勾选后写入 */
-    private List<Long> sanitizeLevel5Pickup(int role, List<Long> permissionIds) {
-        if (permissionIds == null || permissionIds.isEmpty() || role != 6) {
-            return permissionIds;
-        }
-        Set<Long> deniedIds = list(new LambdaQueryWrapper<Permission>()
-                .in(Permission::getCode, LEVEL5_DENIED_PICKUP_CODES))
-                .stream()
-                .map(Permission::getId)
-                .collect(Collectors.toSet());
-        if (deniedIds.isEmpty()) {
-            return permissionIds;
-        }
-        return permissionIds.stream()
-                .filter(id -> !deniedIds.contains(id))
-                .toList();
     }
 
     /** 勾选填写领药时自动带上服药管理菜单 */
