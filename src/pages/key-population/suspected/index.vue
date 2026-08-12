@@ -2,21 +2,25 @@
 import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
 import RecommendCreateDialog from "@@/components/RecommendCreateDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
   getSuspectedConfirmDiagnosisLabel,
   isConfirmedPatientDiagnosis,
+  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
+  KEY_SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS,
   SCREENING_DIAGNOSIS_SEARCH_OPTIONS,
-  SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS,
   TRACKING_STATUS_MAP
 } from "@@/constants/disease"
 import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import {
+  exportSuspectedListApi,
   getSuspectedListApi,
   importXrayApi,
   submitDiagnosisApi,
@@ -27,6 +31,21 @@ import {
 const POPULATION_TYPE = "keyPopulation"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const infectionResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({
+  text: item,
+  value: item
+}))
+const chestXrayFilterOptions = CHEST_XRAY_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const diagnosisFilterOptions = [
+  ...SCREENING_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value })),
+  ...KEY_SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+]
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -46,6 +65,7 @@ async function fetchData() {
   loading.value = true
   try {
     const { dateRange, ...rest } = searchForm
+    const columnFiltersParam = toQueryParam()
     const params: Parameters<typeof getSuspectedListApi>[0] = {
       page: paginationData.currentPage ?? 1,
       size: paginationData.pageSize ?? 10,
@@ -56,9 +76,11 @@ async function fetchData() {
       trackingStatus: rest.trackingStatus,
       archived: rest.archived,
       diagnosisFirst: rest.diagnosisFirst || undefined,
-      ...extractDateRangeParams(dateRange)
+      ...extractDateRangeParams(dateRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     }
-    if (!searchForm.diagnosisFirst && searchForm.archived === undefined) {
+    if (searchForm.archived === undefined || searchForm.archived === 0) {
+      // 待诊断页默认只看尚未分流记录；筛选「疑似结核」时仍保持 pending，便于与筛查页对账
       params.referralResult = "pending"
     }
     const { data } = await getSuspectedListApi(params)
@@ -82,7 +104,48 @@ function handleReset() {
   searchForm.trackingStatus = undefined
   searchForm.archived = undefined
   searchForm.diagnosisFirst = ""
+  clearFilters()
   handleSearch()
+}
+
+const exporting = ref(false)
+
+function buildListQueryParams() {
+  const columnFiltersParam = toQueryParam()
+  const params: Parameters<typeof exportSuspectedListApi>[0] = {
+    populationType: POPULATION_TYPE,
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    trackingStatus: searchForm.trackingStatus,
+    archived: searchForm.archived,
+    diagnosisFirst: searchForm.diagnosisFirst || undefined,
+    ...extractDateRangeParams(searchForm.dateRange),
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+  }
+  if (searchForm.archived === undefined || searchForm.archived === 0) {
+    params.referralResult = "pending"
+  }
+  return params
+}
+
+async function handleExport() {
+  try {
+    exporting.value = true
+    const res = await exportSuspectedListApi(buildListQueryParams())
+    const blob = new Blob([res as any], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "重点人群_待诊断.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    ElMessage.error(err?.message || "导出失败")
+  } finally {
+    exporting.value = false
+  }
 }
 
 const submitting = ref(false)
@@ -314,26 +377,85 @@ watch(
       <template #header>
         <div class="flex items-center justify-between">
           <span class="text-lg font-bold">重点人群 — 待诊断管理</span>
-          <el-upload
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".xlsx,.xls"
-            :on-change="handleImportXray"
-          >
-            <el-button v-permission="'latent:xray'" :loading="xrayImportLoading" size="small">
-              批量导入胸片结果
+          <div class="flex items-center gap-2">
+            <el-button type="success" :loading="exporting" size="small" @click="handleExport">
+              导出筛选结果
             </el-button>
-          </el-upload>
+            <el-upload
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".xlsx,.xls"
+              :on-change="handleImportXray"
+            >
+              <el-button v-permission="'latent:xray'" :loading="xrayImportLoading" size="small">
+                批量导入胸片结果
+              </el-button>
+            </el-upload>
+          </div>
         </div>
       </template>
 
+      <el-alert
+        class="mb-3"
+        type="info"
+        :closable="false"
+        show-icon
+        title="待诊断 ≠ 筛查「诊断结果=疑似结核」"
+        description="待诊断包含：①诊断为疑似结核；②感染筛查阳性（如 EC阳性/PPD+/IGRA阳性）尚未确认诊断；③其他需跟进记录。上报「疑似结核」请以筛查页诊断结果筛选为准，或在本页诊断结果选「疑似结核」后导出对账。多出的记录可看「纳入原因」列。"
+      />
+
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600" :row-class-name="getRowClass">
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查结果"
+              type="select"
+              :options="infectionResultFilterOptions"
+              :model-value="columnFilters.infectionResult"
+              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="pendingEntryReason" label="纳入原因" min-width="160" show-overflow-tooltip />
         <el-table-column label="追踪状态">
           <template #default="{ row }">
             <el-tag :type="getTrackingStatusType(row.trackingStatus)" size="small">
@@ -343,8 +465,27 @@ watch(
         </el-table-column>
         <el-table-column prop="notInPlaceCount" label="未到位次数" />
         <el-table-column prop="trackingRemark" label="追踪备注" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
+        <el-table-column prop="chestXrayResult" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="胸片结果"
+              type="select"
+              :options="chestXrayFilterOptions"
+              :model-value="columnFilters.chestXrayResult"
+              @change="(v) => { setFilter('chestXrayResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisFirst" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="确认诊断"
+              type="select"
+              :options="diagnosisFilterOptions"
+              :model-value="columnFilters.diagnosisFirst"
+              @change="(v) => { setFilter('diagnosisFirst', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
           </template>
@@ -490,7 +631,7 @@ watch(
       <el-form :model="diagnosisForm" label-width="0">
         <el-form-item required>
           <el-select v-model="diagnosisForm.diagnosisFirst" placeholder="请选择诊断结果" style="width: 100%">
-            <el-option v-for="item in SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option v-for="item in KEY_SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
       </el-form>

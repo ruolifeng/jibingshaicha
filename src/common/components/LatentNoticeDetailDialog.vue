@@ -94,10 +94,13 @@ async function handleConfirmNotice(noticeId: string) {
       <el-descriptions-item label="户籍地址" :span="2">
         {{ noticeDetailData.householdAddress || "-" }}
       </el-descriptions-item>
+      <el-descriptions-item label="登记号">
+        {{ noticeDetailData.registrationNo || "-" }}
+      </el-descriptions-item>
       <el-descriptions-item label="感染检测时间">
         {{ noticeDetailData.infectionDate || "-" }}
       </el-descriptions-item>
-      <el-descriptions-item label="检查方法">
+      <el-descriptions-item label="感染检查方法">
         {{ noticeDetailData.infectionMethod || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="感染检查结果" :span="2">

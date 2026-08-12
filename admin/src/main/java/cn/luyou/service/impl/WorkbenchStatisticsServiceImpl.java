@@ -23,9 +23,10 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
         int year = statYear != null ? statYear : StatYearPeriod.current().statYear();
         StatYearPeriod period = StatYearPeriod.of(year);
 
-        // 管理患者=分母；病原学阳性=其子集（分子）。治疗成功/推介到位分子可跨年。
+        // 管理患者=分母；发病率分子含经典病原学阳性 + 结核性胸膜炎且0月序影像/分子阳
         long managedPatientCount = patientService.countManagedPatientsForDashboard(year, filterDeptIds);
         long pathogenPositiveCount = patientService.countPathogenPositivePatientsForDashboard(year, filterDeptIds);
+        long drugResistanceScreenedCount = patientService.countDrugResistanceScreenedForDashboard(year, filterDeptIds);
         long treatmentSuccessCount = patientService.countTreatmentSuccessForDashboard(year, filterDeptIds);
         long recommendCount = referralTrackingService.countRecommendSentForDashboard(year, filterDeptIds);
         long recommendArrivedCount = referralTrackingService.countRecommendArrivedForDashboard(year, filterDeptIds);
@@ -37,9 +38,13 @@ public class WorkbenchStatisticsServiceImpl implements WorkbenchStatisticsServic
         // pendingVisit 字段名历史沿用，实际展示为「年度管理患者数」
         data.put("pendingVisit", managedPatientCount);
         data.put("pathogenPositiveCount", pathogenPositiveCount);
-        // 阳性率 = 阳性人数 / 年度管理患者数（二者可不相等）
+        // 发病率 = 分子 / 年度管理患者数（在管+历史）
         data.put("pathogenPositiveRate", managedPatientCount > 0
                 ? Math.round(pathogenPositiveCount * 1000.0 / managedPatientCount) / 10.0
+                : 0.0);
+        data.put("drugResistanceScreenedCount", drugResistanceScreenedCount);
+        data.put("drugResistanceScreeningRate", managedPatientCount > 0
+                ? Math.round(drugResistanceScreenedCount * 1000.0 / managedPatientCount) / 10.0
                 : 0.0);
         data.put("treatmentSuccessCount", treatmentSuccessCount);
         data.put("treatmentSuccessRate", managedPatientCount > 0

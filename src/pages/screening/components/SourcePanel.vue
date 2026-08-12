@@ -21,6 +21,10 @@ const PERM_MAP: Record<SourceTab, { screening: string, suspected: string }> = {
 
 const viewTab = ref<ViewTab>("screening")
 
+const suspectedTabLabel = computed(() =>
+  props.source === "school" ? "学生报表统计" : "待诊断"
+)
+
 function canAccessView(view: ViewTab) {
   const perms = PERM_MAP[props.source]
   return userStore.hasPermission(view === "screening" ? perms.screening : perms.suspected)
@@ -76,7 +80,7 @@ watch(() => route.query.view, syncFromQuery)
   <div class="screening-source">
     <el-tabs v-model="viewTab" type="border-card" class="view-tabs">
       <el-tab-pane v-if="canAccessView('screening')" label="筛查数据" name="screening" />
-      <el-tab-pane v-if="canAccessView('suspected')" label="待诊断" name="suspected" />
+      <el-tab-pane v-if="canAccessView('suspected')" :label="suspectedTabLabel" name="suspected" />
     </el-tabs>
 
     <el-empty v-if="!visibleViews.length" description="暂无可用权限" />

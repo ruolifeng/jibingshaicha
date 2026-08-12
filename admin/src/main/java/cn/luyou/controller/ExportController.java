@@ -125,13 +125,14 @@ public class ExportController {
     /** 在管患者总表导出列（无数据时也输出表头） */
     private static final List<String> ALL_PATIENT_EXPORT_HEADERS = List.of(
             "序号", "数据来源", "登记号", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
-            "民族", "联系电话", "户籍地址", "现住址", "服药管理单位", "最终诊断结果", "通知单状态",
+            "民族", "联系电话", "户籍地址", "现住址", "服药管理单位", "病原学结果", "诊断结果",
+            "通知单状态",
             "首次随访", "后续随访次数", "服药管理", "停止治疗原因", "是否归档", "归档备注", "归档时间", "创建时间"
     );
 
     /** 潜伏感染者信息总表导出列（无数据时也输出表头） */
     private static final List<String> ALL_LATENT_EXPORT_HEADERS = List.of(
-            "序号", "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "联系电话与联系人关系",
+            "序号", "数据来源", "登记号", "姓名", "性别", "年龄", "证件号", "联系电话", "联系电话与联系人关系",
             "户籍地址", "现住地址", "感染筛查日期", "感染筛查方法", "感染筛查结果", "追踪状态", "未到位次数",
             "首次诊断结果", "最终诊断结果", "是否胸片检查", "胸片检查日期", "胸片检查结果",
             "追踪情况", "备注", "通知单状态", "督导表状态", "预防性治疗方案",
@@ -469,6 +470,80 @@ public class ExportController {
         }
     }
 
+    /**
+     * 待诊断列表导出（与待诊断页 latent/list + referralResult=pending 口径一致）。
+     * 含「纳入待诊断原因」，便于与筛查页「诊断结果=疑似结核」对账。
+     */
+    @Operation(summary = "待诊断列表导出")
+    @GetMapping("/suspected-list")
+    @OperationLog(type = "export", module = "statistics", action = "导出待诊断列表")
+    public void exportSuspectedList(
+            @RequestParam String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String diagnosisFirst,
+            @RequestParam(required = false) String referralResult,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String departmentIds,
+            HttpServletResponse response) throws IOException {
+
+        String resolvedReferral = referralResult;
+        if (StrUtil.isBlank(resolvedReferral) && (archived == null || Integer.valueOf(0).equals(archived))) {
+            resolvedReferral = "pending";
+        }
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<LatentInfection> records = new ArrayList<>();
+        int pageNum = 1;
+        final int pageSize = 2000;
+        while (true) {
+            var page = latentInfectionService.queryPage(
+                    pageNum, pageSize, populationType, name, idNumber, trackingStatus, archived,
+                    resolvedReferral, diagnosisFirst, phone, dateFrom, dateTo, null,
+                    null, null, filterDeptIds, columnFilters, null);
+            if (page.getRecords() == null || page.getRecords().isEmpty()) {
+                break;
+            }
+            records.addAll(page.getRecords());
+            if ((long) pageNum * pageSize >= page.getTotal()) {
+                break;
+            }
+            pageNum++;
+        }
+
+        String popLabel = switch (populationType) {
+            case "school" -> "学校人群";
+            case "regular" -> "疫情筛查";
+            default -> "重点人群";
+        };
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int seq = 1;
+        for (LatentInfection r : records) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("序号", seq++);
+            row.put("姓名", r.getName());
+            row.put("性别", r.getGender());
+            row.put("年龄", r.getAge());
+            row.put("证件号", r.getIdNumber());
+            row.put("联系电话", r.getPhone());
+            row.put("感染筛查结果", r.getInfectionResult());
+            row.put("胸片结果", r.getChestXrayResult());
+            row.put("确认诊断", StrUtil.blankToDefault(r.getDiagnosisFirst(), r.getScreeningDiagnosisFirst()));
+            row.put("纳入待诊断原因", r.getPendingEntryReason());
+            row.put("追踪状态", r.getTrackingStatus());
+            row.put("未到位次数", r.getNotInPlaceCount());
+            row.put("追踪备注", r.getTrackingRemark());
+            row.put("归档", Integer.valueOf(1).equals(r.getArchived()) ? "已归档" : "进行中");
+            rows.add(row);
+        }
+        log.info("[导出] 待诊断列表 populationType={} referral={} count={}", populationType, resolvedReferral, rows.size());
+        writeExcel(response, popLabel + "_待诊断", rows);
+    }
+
     /** 患者管理列表导出（学校/重点人群），字段与模板表头保持一致 */
     @Operation(summary = "患者管理列表导出")
     @GetMapping("/patient-list")
@@ -737,7 +812,8 @@ public class ExportController {
             row.put("户籍地址", p.getHouseholdAddress());
             row.put("现住址", p.getCurrentAddress());
             row.put("服药管理单位", resolvePatientMedicationUnit(p, notice));
-            row.put("最终诊断结果", p.getDiagnosisResult());
+            row.put("病原学结果", resolvePatientPathogenResultForExport(p));
+            row.put("诊断结果", resolvePatientDiagnosisResultForExport(p));
             row.put("通知单状态", noticeStatusLabel);
             row.put("首次随访", firstVisitSet.contains(p.getId()) ? "已完成" : "未完成");
             row.put("后续随访次数", followUpCountMap.getOrDefault(p.getId(), 0L));
@@ -955,7 +1031,7 @@ public class ExportController {
         row.put("性别", nullToEmpty(p.getGender()));
         row.put("证件号", nullToEmpty(p.getIdNumber()));
         row.put("联系电话", nullToEmpty(p.getPhone()));
-        row.put("病原学结果", nullToEmpty(p.getDiagnosisResult()));
+        row.put("病原学结果", resolvePatientPathogenResultForExport(p));
     }
 
     private Map<String, Object> buildFollowUpExportRow(Patient p, FollowUpVisit v) {
@@ -1003,7 +1079,7 @@ public class ExportController {
         return row;
     }
 
-    private String nullToEmpty(String value) {
+    private static String nullToEmpty(String value) {
         return value != null ? value : "";
     }
 
@@ -1166,7 +1242,7 @@ public class ExportController {
                 // 与在管列表一致：排除确诊患者；NULL 诊断结果需显式放行
                 .and(w -> w.isNull(LatentInfection::getDiagnosisResult)
                         .or()
-                        .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
+                        .notIn(LatentInfection::getDiagnosisResult, "确诊患者", "确诊结核", "在治患者"));
         if (!idList.isEmpty()) {
             wrapper.in(LatentInfection::getId, idList);
         } else {
@@ -1276,6 +1352,11 @@ public class ExportController {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("序号", seq++);
             row.put("数据来源", formatLatentPopulationLabel(r.getPopulationType(), r.getCrowdCategory()));
+            row.put("登记号", StrUtil.blankToDefault(
+                    notice != null && StrUtil.isNotBlank(notice.getRegistrationNo())
+                            ? notice.getRegistrationNo().trim()
+                            : r.getRegistrationNo(),
+                    ""));
             row.put("姓名", r.getName());
             row.put("性别", r.getGender());
             row.put("年龄", r.getAge());
@@ -1493,6 +1574,40 @@ public class ExportController {
             return notice.getMedicationManagementUnit().trim();
         }
         return firstImportField(p, "服药管理单位");
+    }
+
+    /** 与前端 resolvePatientPathogenResult 口径一致 */
+    private static String resolvePatientPathogenResultForExport(Patient p) {
+        if (p == null) {
+            return "";
+        }
+        String fromImport = firstImportField(p, "病原学结果");
+        if (StrUtil.isNotBlank(fromImport)) {
+            return fromImport;
+        }
+        if (StrUtil.isNotBlank(firstImportField(p, "诊断结果")) || isSpecialDiseasePatient(p)) {
+            return "";
+        }
+        return nullToEmpty(p.getDiagnosisResult());
+    }
+
+    /** 与前端 resolvePatientDiagnosisResult 口径一致 */
+    private static String resolvePatientDiagnosisResultForExport(Patient p) {
+        if (p == null) {
+            return "";
+        }
+        String fromImport = firstImportField(p, "诊断结果");
+        if (StrUtil.isNotBlank(fromImport)) {
+            return fromImport;
+        }
+        if (isSpecialDiseasePatient(p)) {
+            return nullToEmpty(p.getDiagnosisResult());
+        }
+        return "";
+    }
+
+    private static boolean isSpecialDiseasePatient(Patient p) {
+        return "specialDisease".equals(p.getPopulationType()) || "specialDisease".equals(p.getSource());
     }
 
     private static String firstImportField(Patient p, String key) {

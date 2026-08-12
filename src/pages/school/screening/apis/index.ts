@@ -34,6 +34,7 @@ export interface ScreeningSchoolQueryParams {
   chestXrayResult?: string
   sputumSmearResult?: string
   molecularBiologyResult?: string
+  sputumCultureResult?: string
   columnFilters?: string
   year?: string
   createTimeFrom?: string

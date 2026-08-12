@@ -2,6 +2,7 @@
 import LatentMedicationDialog from "@@/components/LatentMedicationDialog.vue"
 import LatentMedicationPickupDialog from "@@/components/LatentMedicationPickupDialog.vue"
 import PatientMedicationPickupDetailDialog from "@@/components/PatientMedicationPickupDetailDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import {
   getLatentPopulationDisplayLabel,
   getPopulationTypeTagType,
@@ -13,12 +14,14 @@ import {
   formatMedicationPickupDrugs,
   formatMedicationPickupQuantities,
   LATENT_MEDICATION_PAGE_PERMISSIONS,
+  LATENT_MEDICATION_PICKUP_COLUMN_PERMISSIONS,
   LATENT_MEDICATION_PICKUP_PERMISSIONS,
   LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS
 } from "@@/utils/medicationPickup"
 import { useUserStore } from "@/pinia/stores/user"
 import { getLatentMedicationPickupListApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
+import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
 const userStore = useUserStore()
 
@@ -27,9 +30,14 @@ const canManagePickup = computed(() =>
   LATENT_MEDICATION_PICKUP_PERMISSIONS.some(code => userStore.hasPermission(code))
 )
 
-/** 查看领药摘要与记录（服药管理或填写领药） */
-const canViewPickup = computed(() =>
+/** 查看领药记录按钮 */
+const canViewPickupRecords = computed(() =>
   LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS.some(code => userStore.hasPermission(code))
+)
+
+/** 展示领药情况列 */
+const canViewPickup = computed(() =>
+  LATENT_MEDICATION_PICKUP_COLUMN_PERMISSIONS.some(code => userStore.hasPermission(code))
 )
 
 const {
@@ -41,10 +49,24 @@ const {
   tableData,
   total,
   searchForm,
+  columnFilters,
+  setFilter,
   fetchData,
   handleSearch,
   handleReset
-} = useLatentOverviewList()
+} = useLatentOverviewList({ trackingStatus: 1 })
+
+const {
+  genderFilterOptions,
+  populationTypeFilterOptions,
+  infectionResultFilterOptions,
+  loadGenderOptions,
+  loadPopulationTypeOptions,
+  loadInfectionResultOptions,
+  genderSourceValues,
+  populationTypeSourceValues,
+  infectionResultSourceValues
+} = useLatentTableHeaderFilters(() => searchForm.populationType)
 
 const medicationDialogVisible = ref(false)
 const medicationRow = ref<any>(null)
@@ -159,18 +181,77 @@ function viewDetail(record: Record<string, any>) {
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="数据来源" min-width="110">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getLatentPopulationDisplayLabel(row.populationType, row.crowdCategory) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" min-width="90" />
-        <el-table-column prop="gender" label="性别" width="70" />
-        <el-table-column prop="idNumber" label="证件号" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="phone" label="联系电话" min-width="120" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查结果"
+              type="select"
+              :options="infectionResultFilterOptions"
+              :source-values="infectionResultSourceValues"
+              :load-options="loadInfectionResultOptions"
+              :model-value="columnFilters.infectionResult"
+              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right" :width="canViewPickup ? 100 : 120">
           <template #default="{ row }">
             <template v-if="!isLatentTransferLocked(row)">
@@ -221,7 +302,8 @@ function viewDetail(record: Record<string, any>) {
                 填写领药
               </el-button>
               <el-button
-                v-if="hasPickupData(row)"
+                v-if="canViewPickupRecords && hasPickupData(row)"
+                v-permission="[...LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS]"
                 type="info"
                 link
                 size="small"

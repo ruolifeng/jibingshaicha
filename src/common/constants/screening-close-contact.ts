@@ -31,13 +31,11 @@ export const CC_SYMPTOM1_OPTIONS = [
   "盗汗"
 ] as const
 
-/** 感染检测方法 */
-export const CC_INFECTION_CHECK_METHOD_OPTIONS = [
-  "结核菌素皮肤试验_PPD",
-  "结核抗原皮肤试验_EC",
-  "γ干扰素释放试验_IGRA",
-  "未做"
-] as const
+/** 感染筛查方法（与重点人群/疫情筛查官方下拉一致） */
+export { KEY_INFECTION_SCREEN_METHOD_OPTIONS as CC_INFECTION_CHECK_METHOD_OPTIONS } from "./disease"
+
+/** 结果判定 / 感染检测结果 */
+export { KEY_INFECTION_JUDGE_RESULT_OPTIONS as CC_INFECTION_CHECK_RESULT_OPTIONS } from "./disease"
 
 /** 影像方法 */
 export const CC_IMAGING_METHOD_OPTIONS = [

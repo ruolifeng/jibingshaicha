@@ -32,6 +32,8 @@ public class LatentInfection extends BaseEntity {
     private String gender;
     private Integer age;
     private String phone;
+    /** 登记号（来自通知单同步） */
+    private String registrationNo;
     /** 户籍地址（手动新增/导入持久化；有筛查关联时由筛查表回填展示） */
     private String householdAddress;
     /** 现住地址 */
@@ -66,6 +68,10 @@ public class LatentInfection extends BaseEntity {
     /** 筛查表中的待确认诊断（非持久化，仅待诊断列表展示/预填） */
     @TableField(exist = false)
     private String screeningDiagnosisFirst;
+
+    /** 纳入待诊断原因（非持久化，列表/导出对账用） */
+    @TableField(exist = false)
+    private String pendingEntryReason;
     /** 密接阳性轮次：1首次 2半年后 3一年后（仅密接人群使用） */
     private Integer activeRound;
 

@@ -75,8 +75,10 @@ CREATE TABLE IF NOT EXISTS `sys_message` (
 CREATE TABLE IF NOT EXISTS `screening_school` (
     `id`                    BIGINT       NOT NULL,
     `year`                  VARCHAR(10)  DEFAULT NULL COMMENT '年份',
+    `reporting_org`         VARCHAR(128) DEFAULT NULL COMMENT '填报机构',
     `city`                  VARCHAR(64)  DEFAULT NULL COMMENT '市（州）',
     `district`              VARCHAR(64)  DEFAULT NULL COMMENT '县（市、区）',
+    `township`              VARCHAR(128) DEFAULT NULL COMMENT '乡镇/街道',
     `name`                  VARCHAR(64)  DEFAULT NULL COMMENT '姓名',
     `gender`                VARCHAR(10)  DEFAULT NULL COMMENT '性别',
     `birth_date`            DATE         DEFAULT NULL COMMENT '出生日期',
@@ -84,15 +86,21 @@ CREATE TABLE IF NOT EXISTS `screening_school` (
     `id_type`               VARCHAR(32)  DEFAULT NULL COMMENT '证件类型',
     `id_number`             VARCHAR(64)  DEFAULT NULL COMMENT '证件号',
     `ethnicity`             VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `participated_screening` VARCHAR(10) DEFAULT NULL COMMENT '是否参加筛查',
     `phone`                 VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
     `household_address`     VARCHAR(256) DEFAULT NULL COMMENT '户籍所在地',
     `current_address`       VARCHAR(256) DEFAULT NULL COMMENT '现地址',
     `school_type`           VARCHAR(64)  DEFAULT NULL COMMENT '学校类型',
+    `boarding_type`         VARCHAR(32)  DEFAULT NULL COMMENT '是否寄宿制',
     `school_name`           VARCHAR(128) DEFAULT NULL COMMENT '学校名称',
+    `grade_name`            VARCHAR(64)  DEFAULT NULL COMMENT '年级',
     `class_name`            VARCHAR(128) DEFAULT NULL COMMENT '班级（院系）',
     `tb_history`            VARCHAR(64)  DEFAULT NULL COMMENT '既往结核病史',
     `close_contact_history` VARCHAR(64)  DEFAULT NULL COMMENT '密切接触史',
     `suspicious_symptoms`   VARCHAR(128) DEFAULT NULL COMMENT '结核病可疑症状',
+    `symptom_cough`         VARCHAR(16)  DEFAULT NULL COMMENT '咳嗽咳痰≥两周',
+    `symptom_hemoptysis`    VARCHAR(16)  DEFAULT NULL COMMENT '咯血或血痰',
+    `symptom_other`         VARCHAR(16)  DEFAULT NULL COMMENT '可疑症状-其他',
     `has_infection_screen`  VARCHAR(10)  DEFAULT NULL COMMENT '是否进行感染筛',
     `screen_date`           DATE         DEFAULT NULL COMMENT '感染筛查日期',
     `screen_method`         VARCHAR(64)  DEFAULT NULL COMMENT '方法（PPD/EC/IGRA）',
@@ -100,14 +108,16 @@ CREATE TABLE IF NOT EXISTS `screening_school` (
     `infection_result`      VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果（V4：PPD阴性/PPD+/PPD++/PPD+++/EC阴性/EC阳性/IGRA阴性/IGRA阳性）',
     -- 胸片与诊断（追踪到位后系统回写）
     `has_chest_xray`        VARCHAR(10)  DEFAULT NULL COMMENT '是否进行胸片检查',
+    `chest_xray_method`     VARCHAR(64)  DEFAULT NULL COMMENT '胸部影像学方法',
     `chest_xray_date`       DATE         DEFAULT NULL COMMENT '胸片检查日期',
     `chest_xray_result`     VARCHAR(128) DEFAULT NULL COMMENT '胸片结果',
     `sputum_smear_result`   VARCHAR(64)  DEFAULT NULL COMMENT '痰涂片结果',
     `molecular_biology_result` VARCHAR(64) DEFAULT NULL COMMENT '分子生物学结果',
+    `sputum_culture_result` VARCHAR(64)  DEFAULT NULL COMMENT '痰培养结果',
     `diagnosis_first`       VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
     `diagnosis_half_year`   VARCHAR(128) DEFAULT NULL COMMENT '诊断结果（半年后）',
     `diagnosis_one_year`        VARCHAR(128) DEFAULT NULL COMMENT '诊断结果（一年后）',
-    -- 预防性治疗情况（督导表归档后同步，V4新增结构化字段）
+    -- 预防性治疗情况（潜伏感染者结案进入历史患者后同步，V4新增结构化字段）
     `has_preventive_treatment` VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
     `preventive_plan`          VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
     `preventive_start_date`    DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
@@ -181,7 +191,7 @@ CREATE TABLE IF NOT EXISTS `screening_key_population` (
     `diagnosis_first`          VARCHAR(128) DEFAULT NULL COMMENT '诊断结果',
     `diagnosis_half_year`      VARCHAR(128) DEFAULT NULL COMMENT '诊断结果（半年后）',
     `diagnosis_one_year`           VARCHAR(128) DEFAULT NULL COMMENT '诊断结果（一年后）',
-    -- 预防性治疗情况（督导表归档后同步，V4新增结构化字段）
+    -- 预防性治疗情况（潜伏感染者结案进入历史患者后同步，V4新增结构化字段）
     `has_preventive_treatment`    VARCHAR(10)  DEFAULT NULL COMMENT '是否进行预防性治疗',
     `preventive_plan`             VARCHAR(128) DEFAULT NULL COMMENT '预防性治疗方案',
     `preventive_start_date`       DATE         DEFAULT NULL COMMENT '预防性治疗开始时间',
@@ -417,6 +427,7 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
     `gender`              VARCHAR(10)  DEFAULT NULL COMMENT '性别',
     `age`                 INT          DEFAULT NULL COMMENT '年龄',
     `phone`               VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
+    `registration_no`     VARCHAR(64)  DEFAULT NULL COMMENT '登记号（来自通知单同步）',
     `infection_result`    VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
     `tracking_status`     TINYINT      NOT NULL DEFAULT 0 COMMENT '追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`  INT          NOT NULL DEFAULT 0 COMMENT '未到位次数',
@@ -468,6 +479,7 @@ CREATE TABLE IF NOT EXISTS `notice` (
     `ethnicity`              VARCHAR(32)  DEFAULT NULL COMMENT '民族',
     `current_address`        VARCHAR(256) DEFAULT NULL COMMENT '现居住地址',
     `household_address`      VARCHAR(256) DEFAULT NULL COMMENT '户籍地址',
+    `registration_no`        VARCHAR(64)  DEFAULT NULL COMMENT '登记号（潜伏感染者通知单填写）',
     -- 检查信息（两类共用）
     `chest_xray_date`        DATE         DEFAULT NULL COMMENT '胸片检查时间',
     `chest_xray_result`      VARCHAR(32)  DEFAULT NULL COMMENT '胸片检查结果：正常/异常/未查',
@@ -1335,7 +1347,7 @@ WHERE p.code IN ('keyPopulation:latent:track', 'keyPopulation:latent:xray', 'key
 -- ==================== V10：待诊断菜单权限 + 一二级用户权限管理访问 ====================
 -- 新增三条主线"待诊断"菜单权限（挂在各自主线父节点下，sort=2，位于筛查管理之后）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(14, 'school:suspected',        '待诊断',   1, 1, 2),
+(14, 'school:suspected',        '学生报表统计',   1, 1, 2),
 (24, 'keyPopulation:suspected', '待诊断',   1, 2, 2),
 (34, 'closeContact:followUp',   '监测随访', 1, 3, 6);
 
@@ -1568,7 +1580,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (411, 'epidemic:screening',             '大疫情导入筛查',       1, 400, 5),
 -- 聚合潜伏感染者管理（一级菜单）
 (412, 'latentManagement',               '潜伏感染者管理',       1, 0,   11),
-(460, 'latentManagement:overview',      '在管总览',             1, 412, 0),
+(460, 'latentManagement:overview',      '潜伏感染者在管总览',   1, 412, 0),
 (461, 'latentManagement:edit',          '修改信息',             2, 460, 1),
 (413, 'latentManagement:notice',        '通知单管理',           1, 412, 1),
 (414, 'latentManagement:track',         '追踪',                 2, 460, 3),
@@ -1581,6 +1593,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (469, 'latentManagement:supervision:edit','修改督导表',           2, 419, 2),
 (480, 'latentManagement:medication',    '服药管理',             1, 412, 3),
 (481, 'latentManagement:pickup',        '填写领药',             2, 412, 5),
+(483, 'latentManagement:pickupView',    '查看记录',             2, 412, 6),
 (464, 'latentManagement:history',     '历史患者',             1, 412, 4),
 -- 聚合患者管理（一级菜单）
 (420, 'patientManagement',              '患者管理',             1, 0,   12),
@@ -1599,7 +1612,8 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (427, 'patientManagement:referral',     '转出',                 2, 462, 2),
 (475, 'patientManagement:notice:fill',  '填写通知单',           2, 421, 1),
 (428, 'patientManagement:delete',       '删除患者',             2, 462, 3),
-(468, 'patientManagement:pickup',       '填写领药',             2, 420, 7);
+(468, 'patientManagement:pickup',       '填写领药',             2, 420, 7),
+(482, 'patientManagement:pickupView',   '查看记录',             2, 420, 8);
 
 -- ---------- 3. 将 V16 新权限赋给角色 1（超级管理员）和 2（一级管理员） ----------
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
@@ -1615,11 +1629,11 @@ WHERE p.`code` IN (
     'latentManagement', 'latentManagement:overview', 'latentManagement:edit',
     'latentManagement:notice', 'latentManagement:track', 'latentManagement:xray',
     'latentManagement:diagnosis', 'latentManagement:referral', 'latentManagement:close', 'latentManagement:supervision',
-    'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:medication', 'latentManagement:pickup', 'latentManagement:history',
+    'latentManagement:supervision:fill', 'latentManagement:supervision:edit', 'latentManagement:medication', 'latentManagement:pickup', 'latentManagement:pickupView', 'latentManagement:history',
     'patientManagement', 'patientManagement:overview', 'patientManagement:edit',
     'patientManagement:notice', 'patientManagement:notice:fill', 'patientManagement:firstVisit', 'patientManagement:firstVisit:fill', 'patientManagement:firstVisit:edit',
     'patientManagement:followUp', 'patientManagement:followUp:fill', 'patientManagement:followUp:edit',
-    'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:specialDisease', 'patientManagement:history',
+    'patientManagement:medication', 'patientManagement:pickup', 'patientManagement:pickupView', 'patientManagement:specialDisease', 'patientManagement:history',
     'patientManagement:referral', 'patientManagement:delete'
 );
 
@@ -1715,7 +1729,7 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
 
 -- 兼容已部署环境：在管总览菜单权限（可重复执行）
 -- INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
--- (460, 'latentManagement:overview', '在管总览', 1, 412, 0),
+-- (460, 'latentManagement:overview', '潜伏感染者在管总览', 1, 412, 0),
 -- (461, 'latentManagement:edit', '修改信息', 2, 460, 1),
 -- (462, 'patientManagement:overview', '在管总览', 1, 420, 0),
 -- (463, 'patientManagement:edit', '修改信息', 2, 462, 1);
@@ -1750,14 +1764,14 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (432, 'referralManagement:create',       '新增推介/追踪记录',    2, 431, 1),
 (433, 'referralManagement:send',         '发送推介通知',         2, 431, 2),
 (434, 'referralManagement:confirm',      '确认/拒绝推介',        2, 431, 3),
-(435, 'referralManagement:trackOperate', '操作追踪状态',         2, 431, 4),
-(436, 'referralManagement:xray',         '录入胸片',             2, 431, 5),
-(437, 'referralManagement:diagnosis',    '录入诊断',             2, 431, 6),
-(438, 'referralManagement:delete',       '删除推介/追踪记录',    2, 431, 7),
+(438, 'referralManagement:delete',       '删除推介/追踪记录',    2, 431, 4),
 (439, 'referralManagement:track',        '追踪',                 1, 430, 2),
 (440, 'referralManagement:epidemicImport','大疫情导入',          2, 439, 1),
-(441, 'referralManagement:export',       '导出推介/追踪记录',    2, 430, 3),
-(442, 'referralManagement:edit',           '编辑追踪记录',         2, 439, 3);
+(435, 'referralManagement:trackOperate', '操作追踪状态',         2, 439, 2),
+(442, 'referralManagement:edit',           '编辑追踪记录',         2, 439, 3),
+(436, 'referralManagement:xray',         '录入胸片',             2, 439, 4),
+(437, 'referralManagement:diagnosis',    '录入诊断',             2, 439, 5),
+(441, 'referralManagement:export',       '导出推介/追踪记录',    2, 430, 3);
 
 -- 兼容：原拥有 epidemic:screening 权限的角色同步获得追踪模块大疫情导入权限
 -- INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
@@ -3947,3 +3961,192 @@ WHERE u.role = 6
   AND p.`code` IN ('patientManagement:pickup', 'latentManagement:pickup');
 
 -- V105 appended
+
+-- ==================== V106：学生筛查 2026 秋季新生入学表字段 ====================
+SET @db = DATABASE();
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'reporting_org') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `reporting_org` VARCHAR(128) DEFAULT NULL COMMENT ''填报机构'' AFTER `year`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'township') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `township` VARCHAR(128) DEFAULT NULL COMMENT ''乡镇/街道'' AFTER `district`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'participated_screening') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `participated_screening` VARCHAR(10) DEFAULT NULL COMMENT ''是否参加筛查'' AFTER `ethnicity`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'symptom_cough') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `symptom_cough` VARCHAR(16) DEFAULT NULL COMMENT ''咳嗽咳痰≥两周'' AFTER `suspicious_symptoms`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'symptom_hemoptysis') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `symptom_hemoptysis` VARCHAR(16) DEFAULT NULL COMMENT ''咯血或血痰'' AFTER `symptom_cough`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'symptom_other') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `symptom_other` VARCHAR(16) DEFAULT NULL COMMENT ''可疑症状-其他'' AFTER `symptom_hemoptysis`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'chest_xray_method') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `chest_xray_method` VARCHAR(64) DEFAULT NULL COMMENT ''胸部影像学方法'' AFTER `has_chest_xray`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'sputum_culture_result') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `sputum_culture_result` VARCHAR(64) DEFAULT NULL COMMENT ''痰培养结果'' AFTER `molecular_biology_result`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- V106 appended
+
+-- ==================== V107：学生筛查 是否寄宿制 / 年级 ====================
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'boarding_type') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `boarding_type` VARCHAR(32) DEFAULT NULL COMMENT ''是否寄宿制'' AFTER `school_type`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'screening_school' AND COLUMN_NAME = 'grade_name') = 0,
+    'ALTER TABLE `screening_school` ADD COLUMN `grade_name` VARCHAR(64) DEFAULT NULL COMMENT ''年级'' AFTER `school_name`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- V107 appended
+
+-- ==================== V108：学生人群「待诊断」菜单名改为「学生报表统计」 ====================
+UPDATE `permission`
+SET `name` = '学生报表统计'
+WHERE `code` = 'school:suspected';
+
+-- ==================== V109：推介追踪 — 操作追踪/胸片/诊断挂到「追踪」下 ====================
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'referralManagement:track'
+SET child.`parent_id` = parent.id,
+    child.`sort` = 2,
+    child.`name` = '操作追踪状态'
+WHERE child.`code` = 'referralManagement:trackOperate';
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'referralManagement:track'
+SET child.`parent_id` = parent.id,
+    child.`sort` = 4,
+    child.`name` = '录入胸片'
+WHERE child.`code` = 'referralManagement:xray';
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'referralManagement:track'
+SET child.`parent_id` = parent.id,
+    child.`sort` = 5,
+    child.`name` = '录入诊断'
+WHERE child.`code` = 'referralManagement:diagnosis';
+
+UPDATE `permission` child
+         INNER JOIN `permission` parent ON parent.`code` = 'referralManagement:track'
+SET child.`parent_id` = parent.id,
+    child.`sort` = 3,
+    child.`name` = '编辑追踪记录'
+WHERE child.`code` = 'referralManagement:edit';
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT r.role, p.id
+FROM (SELECT 2 AS role UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement:trackOperate',
+    'referralManagement:xray',
+    'referralManagement:diagnosis',
+    'referralManagement:edit'
+);
+
+INSERT IGNORE INTO `role_permission` (`role`, `permission_id`)
+SELECT DISTINCT rp.role, p.id
+FROM `role_permission` rp
+         INNER JOIN `permission` parent ON parent.id = rp.permission_id AND parent.`code` = 'referralManagement'
+         CROSS JOIN `permission` p
+WHERE p.`code` IN (
+    'referralManagement:trackOperate',
+    'referralManagement:xray',
+    'referralManagement:diagnosis',
+    'referralManagement:edit'
+);
+
+-- ==================== V112：患者/潜伏「查看记录」独立按钮权限 ====================
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 482, 'patientManagement:pickupView', '查看记录', 2, parent.id, 8
+FROM `permission` parent
+WHERE parent.`code` = 'patientManagement'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'patientManagement:pickupView');
+
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 483, 'latentManagement:pickupView', '查看记录', 2, parent.id, 6
+FROM `permission` parent
+WHERE parent.`code` = 'latentManagement'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'latentManagement:pickupView');
+
+SET @v112_rp_id := 112000000;
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@v112_rp_id := @v112_rp_id + 1), src.`role`, view_p.id
+FROM (
+    SELECT DISTINCT rp.`role`,
+           CASE p.`code`
+               WHEN 'patientManagement:medication' THEN 'patientManagement:pickupView'
+               WHEN 'patientManagement:pickup' THEN 'patientManagement:pickupView'
+               WHEN 'latentManagement:medication' THEN 'latentManagement:pickupView'
+               WHEN 'latentManagement:pickup' THEN 'latentManagement:pickupView'
+           END AS view_code
+    FROM `role_permission` rp
+             INNER JOIN `permission` p ON p.id = rp.permission_id
+    WHERE p.`code` IN (
+        'patientManagement:medication', 'patientManagement:pickup',
+        'latentManagement:medication', 'latentManagement:pickup'
+    )
+) src
+         INNER JOIN `permission` view_p ON view_p.`code` = src.view_code
+WHERE src.view_code IS NOT NULL
+  AND NOT EXISTS (
+        SELECT 1 FROM `role_permission` x
+        WHERE x.`role` = src.`role` AND x.`permission_id` = view_p.id
+    );
+
+SET @v112_up_id := 112100000;
+INSERT INTO `user_permission` (`id`, `user_id`, `permission_id`)
+SELECT (@v112_up_id := @v112_up_id + 1), src.user_id, view_p.id
+FROM (
+    SELECT DISTINCT up.user_id,
+           CASE p.`code`
+               WHEN 'patientManagement:medication' THEN 'patientManagement:pickupView'
+               WHEN 'patientManagement:pickup' THEN 'patientManagement:pickupView'
+               WHEN 'latentManagement:medication' THEN 'latentManagement:pickupView'
+               WHEN 'latentManagement:pickup' THEN 'latentManagement:pickupView'
+           END AS view_code
+    FROM `user_permission` up
+             INNER JOIN `permission` p ON p.id = up.permission_id
+    WHERE p.`code` IN (
+        'patientManagement:medication', 'patientManagement:pickup',
+        'latentManagement:medication', 'latentManagement:pickup'
+    )
+) src
+         INNER JOIN `permission` view_p ON view_p.`code` = src.view_code
+WHERE src.view_code IS NOT NULL
+  AND NOT EXISTS (
+        SELECT 1 FROM `user_permission` x
+        WHERE x.user_id = src.user_id AND x.permission_id = view_p.id
+    );

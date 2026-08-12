@@ -33,7 +33,7 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
                                      String phone, String year, String entryUnit,
                                      String createTimeFrom, String createTimeTo,
                                      String creatorUsername, String hasChestXray, String chestXrayResult,
-                                     String sputumSmearResult, String molecularBiologyResult,
+                                     String sputumSmearResult, String molecularBiologyResult, String sputumCultureResult,
                                      String columnFilters, String formatIssue, String sortField, String sortOrder);
 
     /** 导出：ids 非空时仅导出勾选行，否则按当前筛选条件导出全部匹配数据 */
@@ -41,7 +41,7 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
                                         Integer isLatent, String diagnosisFirst, String phone, String year,
                                         String entryUnit, String createTimeFrom, String createTimeTo,
                                         String creatorUsername, String hasChestXray, String chestXrayResult,
-                                        String sputumSmearResult, String molecularBiologyResult,
+                                        String sputumSmearResult, String molecularBiologyResult, String sputumCultureResult,
                                         String columnFilters, String formatIssue, String sortField, String sortOrder,
                                         List<Long> ids);
 
@@ -51,7 +51,7 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
                                              String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, schoolName, district, isLatent, diagnosisFirst,
                 phone, year, entryUnit, createTimeFrom, createTimeTo, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     /** 新增单条筛查记录（同步判定潜伏并自动创建潜伏感染记录） */
@@ -72,8 +72,8 @@ public interface ScreeningSchoolService extends IService<ScreeningSchool> {
                        Integer isLatent, String diagnosisFirst, String phone, String year,
                        String entryUnit, String createTimeFrom, String createTimeTo,
                        String creatorUsername, String hasChestXray, String chestXrayResult,
-                       String sputumSmearResult, String molecularBiologyResult, String columnFilters,
-                       String formatIssue);
+                       String sputumSmearResult, String molecularBiologyResult, String sputumCultureResult,
+                       String columnFilters, String formatIssue);
 
     /** 删除当前用户数据权限范围内全部记录，返回删除条数 */
     int deleteAll();

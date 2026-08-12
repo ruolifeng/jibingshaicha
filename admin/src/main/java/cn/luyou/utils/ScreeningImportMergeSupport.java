@@ -62,10 +62,10 @@ public final class ScreeningImportMergeSupport {
         overwriteString(incoming.getHasChestXray(), existing::setHasChestXray);
         overwriteDate(incoming.getChestXrayDate(), existing::setChestXrayDate);
         overwriteString(incoming.getChestXrayResult(), existing::setChestXrayResult);
-        overwriteDiagnosis(incoming.getDiagnosisFirst(), existing::setDiagnosisFirst);
+        overwriteKeyPopulationDiagnosis(incoming.getDiagnosisFirst(), existing::setDiagnosisFirst);
         // 半年/一年诊断、预防治疗均在官方模板列内，覆盖导入按 Excel 全量写入（含空单元格清空）
-        overwriteString(incoming.getDiagnosisHalfYear(), existing::setDiagnosisHalfYear);
-        overwriteString(incoming.getDiagnosisOneYear(), existing::setDiagnosisOneYear);
+        overwriteKeyPopulationDiagnosis(incoming.getDiagnosisHalfYear(), existing::setDiagnosisHalfYear);
+        overwriteKeyPopulationDiagnosis(incoming.getDiagnosisOneYear(), existing::setDiagnosisOneYear);
         overwriteString(incoming.getHasPreventiveTreatment(), existing::setHasPreventiveTreatment);
         overwriteString(incoming.getPreventivePlan(), existing::setPreventivePlan);
         overwriteDate(incoming.getPreventiveStartDate(), existing::setPreventiveStartDate);
@@ -84,23 +84,31 @@ public final class ScreeningImportMergeSupport {
 
     public static void mergeSchool(ScreeningSchool existing, ScreeningSchool incoming) {
         overwriteString(incoming.getYear(), existing::setYear);
+        overwriteString(incoming.getReportingOrg(), existing::setReportingOrg);
         overwriteString(incoming.getCity(), existing::setCity);
         overwriteString(incoming.getDistrict(), existing::setDistrict);
+        overwriteString(incoming.getTownship(), existing::setTownship);
         overwriteString(incoming.getName(), existing::setName);
         overwriteString(incoming.getGender(), existing::setGender);
         overwriteDate(incoming.getBirthDate(), existing::setBirthDate);
         overwriteInteger(incoming.getAge(), existing::setAge);
         overwriteString(incoming.getIdType(), existing::setIdType);
         overwriteString(incoming.getEthnicity(), existing::setEthnicity);
+        overwriteString(incoming.getParticipatedScreening(), existing::setParticipatedScreening);
         overwriteString(incoming.getPhone(), existing::setPhone);
         overwriteString(incoming.getHouseholdAddress(), existing::setHouseholdAddress);
         overwriteString(incoming.getCurrentAddress(), existing::setCurrentAddress);
         overwriteString(incoming.getSchoolType(), existing::setSchoolType);
+        overwriteString(incoming.getBoardingType(), existing::setBoardingType);
         overwriteString(incoming.getSchoolName(), existing::setSchoolName);
+        overwriteString(incoming.getGradeName(), existing::setGradeName);
         overwriteString(incoming.getClassName(), existing::setClassName);
         overwriteString(incoming.getTbHistory(), existing::setTbHistory);
         overwriteString(incoming.getCloseContactHistory(), existing::setCloseContactHistory);
         overwriteString(incoming.getSuspiciousSymptoms(), existing::setSuspiciousSymptoms);
+        overwriteString(incoming.getSymptomCough(), existing::setSymptomCough);
+        overwriteString(incoming.getSymptomHemoptysis(), existing::setSymptomHemoptysis);
+        overwriteString(incoming.getSymptomOther(), existing::setSymptomOther);
 
         overwriteString(incoming.getHasInfectionScreen(), existing::setHasInfectionScreen);
         overwriteDate(incoming.getScreenDate(), existing::setScreenDate);
@@ -109,13 +117,16 @@ public final class ScreeningImportMergeSupport {
         overwriteString(incoming.getInfectionResult(), existing::setInfectionResult);
 
         overwriteString(incoming.getHasChestXray(), existing::setHasChestXray);
+        overwriteString(incoming.getChestXrayMethod(), existing::setChestXrayMethod);
         overwriteDate(incoming.getChestXrayDate(), existing::setChestXrayDate);
         overwriteString(incoming.getChestXrayResult(), existing::setChestXrayResult);
         overwriteString(incoming.getSputumSmearResult(), existing::setSputumSmearResult);
         overwriteString(incoming.getMolecularBiologyResult(), existing::setMolecularBiologyResult);
+        overwriteString(incoming.getSputumCultureResult(), existing::setSputumCultureResult);
         overwriteDiagnosis(incoming.getDiagnosisFirst(), existing::setDiagnosisFirst);
+        overwriteString(incoming.getRemark(), existing::setRemark);
 
-        // remark 为 ExcelIgnore，模板不读该列，覆盖导入时保留原备注
+        // 覆盖导入时保留原备注已改为可读备注列
         overwriteString(incoming.getUploadBatch(), existing::setUploadBatch);
         overwriteInteger(incoming.getImportRowNo(), existing::setImportRowNo);
         // 部门仅缺失时补齐，覆盖导入不抢归属；录入人由 fillMissingCreator 保留
@@ -158,7 +169,7 @@ public final class ScreeningImportMergeSupport {
         overwriteDate(incoming.getSputumCheckDate(), existing::setSputumCheckDate);
         overwriteString(incoming.getSputumCheckMethod(), existing::setSputumCheckMethod);
         overwriteString(incoming.getSputumCheckResult(), existing::setSputumCheckResult);
-        overwriteDiagnosis(incoming.getFinalScreeningResult(), existing::setFinalScreeningResult);
+        overwriteString(incoming.getFinalScreeningResult(), existing::setFinalScreeningResult);
 
         overwriteString(incoming.getHasContraindication(), existing::setHasContraindication);
         overwriteString(incoming.getNoTreatmentReason(), existing::setNoTreatmentReason);
@@ -213,7 +224,7 @@ public final class ScreeningImportMergeSupport {
         }
     }
 
-    /** 密接个案：与筛查模板列一致，空单元格直接清空 */
+    /** 密接个案：与筛查模板列一致，空单元格直接清空；ExcelIgnore 手动字段（性别/民族/地址等）保留 */
     public static void mergeCloseContactCase(CloseContactCase existing, CloseContactCase incoming) {
         overwriteString(incoming.getCity(), existing::setCity);
         overwriteString(incoming.getDistrict(), existing::setDistrict);
@@ -247,7 +258,7 @@ public final class ScreeningImportMergeSupport {
         overwriteDate(incoming.getSputumCheckDate(), existing::setSputumCheckDate);
         overwriteString(incoming.getSputumCheckMethod(), existing::setSputumCheckMethod);
         overwriteString(incoming.getSputumCheckResult(), existing::setSputumCheckResult);
-        overwriteDiagnosis(incoming.getFinalScreeningResult(), existing::setFinalScreeningResult);
+        overwriteString(incoming.getFinalScreeningResult(), existing::setFinalScreeningResult);
 
         overwriteString(incoming.getHasContraindication(), existing::setHasContraindication);
         overwriteString(incoming.getNoTreatmentReason(), existing::setNoTreatmentReason);
@@ -321,5 +332,15 @@ public final class ScreeningImportMergeSupport {
             return;
         }
         setter.accept(ScreeningDiagnosisSupport.normalizeDiagnosis(value));
+    }
+
+    /** 重点人群/疫情筛查诊断覆盖（统一六种口径） */
+    public static void overwriteKeyPopulationDiagnosis(String value, Consumer<String> setter) {
+        if (StrUtil.isBlank(value)) {
+            setter.accept(null);
+            return;
+        }
+        String normalized = ScreeningDiagnosisSupport.normalizeKeyPopulationDiagnosis(value);
+        setter.accept(normalized != null ? normalized : value.trim());
     }
 }

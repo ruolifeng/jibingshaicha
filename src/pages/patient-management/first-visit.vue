@@ -2,12 +2,15 @@
 import FirstVisitDetailDialog from "@@/components/FirstVisitDetailDialog.vue"
 import PatientFirstVisitFormDialog from "@@/components/PatientFirstVisitFormDialog.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import { DRUG_RESISTANCE_OPTIONS, getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
+import { WarningFilled } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
 import { exportPatientFirstVisitsApi, getFirstVisitDetailApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
+import { usePatientTableHeaderFilters } from "./composables/usePatientTableHeaderFilters"
 
 const userStore = useUserStore()
 const canEditFirstVisitPerm = computed(() => userStore.hasPermission("patientManagement:firstVisit:edit"))
@@ -21,12 +24,26 @@ const {
   tableData,
   total,
   searchForm,
+  columnFilters,
+  setFilter,
   defaultSort,
   handleSortChange,
   fetchData,
   handleSearch,
   handleReset
 } = usePatientList(0, { firstVisitSearch: true })
+
+const {
+  genderFilterOptions,
+  pathogenFilterOptions,
+  populationTypeFilterOptions,
+  loadGenderOptions,
+  loadPathogenOptions,
+  loadPopulationTypeOptions,
+  genderSourceValues,
+  pathogenSourceValues,
+  populationTypeSourceValues
+} = usePatientTableHeaderFilters(0)
 
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
@@ -115,6 +132,16 @@ async function openPrintFirstVisit(row: any) {
             <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
+        <el-form-item label="痰培养">
+          <el-select v-model="searchForm.sputumCulture" placeholder="全部" clearable filterable style="width:140px">
+            <el-option v-for="item in SPUTUM_CULTURE_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="耐药情况">
+          <el-select v-model="searchForm.drugResistance" placeholder="全部" clearable style="width:120px">
+            <el-option v-for="item in DRUG_RESISTANCE_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="填写时间">
           <el-date-picker
             v-model="searchForm.dateRange"
@@ -177,23 +204,89 @@ async function openPrintFirstVisit(row: any) {
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column prop="registrationNo" label="登记号" min-width="120" show-overflow-tooltip sortable="custom">
+        <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip sortable="custom">
+          <template #header>
+            <TableHeaderFilter
+              label="登记号"
+              :model-value="columnFilters.registrationNo"
+              @change="(v) => { setFilter('registrationNo', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             {{ resolveRegistrationNo(row) || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="病原学结果" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="病原学结果"
+              type="select"
+              :options="pathogenFilterOptions"
+              :source-values="pathogenSourceValues"
+              :load-options="loadPathogenOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="首次随访">
           <template #default="{ row }">
             <el-tag v-if="row.firstVisitStatus === 1" type="success" size="small">
@@ -212,9 +305,20 @@ async function openPrintFirstVisit(row: any) {
             {{ row.firstVisitSputumCulture || "—" }}
           </template>
         </el-table-column>
-        <el-table-column label="耐药情况">
+        <el-table-column label="耐药情况" min-width="110">
           <template #default="{ row }">
-            {{ row.firstVisitDrugResistance || "—" }}
+            <span
+              v-if="row.firstVisitDrugResistance === '耐药'"
+              class="drug-resistance-warn"
+            >
+              <span>耐药</span>
+              <el-icon class="drug-resistance-warn__icon" :size="14">
+                <WarningFilled />
+              </el-icon>
+            </span>
+            <template v-else>
+              {{ row.firstVisitDrugResistance || "—" }}
+            </template>
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">
@@ -304,3 +408,18 @@ async function openPrintFirstVisit(row: any) {
     />
   </div>
 </template>
+
+<style scoped lang="scss">
+.drug-resistance-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #f56c6c;
+  font-weight: 600;
+}
+
+.drug-resistance-warn__icon {
+  color: #f56c6c;
+  flex-shrink: 0;
+}
+</style>

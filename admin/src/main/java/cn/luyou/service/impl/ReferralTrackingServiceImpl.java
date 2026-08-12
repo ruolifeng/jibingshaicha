@@ -249,11 +249,17 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 updateCount++;
                 continue;
             }
-            if (existsByIdNumberAndName("track", row.idNumber(), row.name())) {
-                duplicates.add(Map.of(
-                        "name", row.name(),
-                        "idNumber", row.idNumber()
-                ));
+            ReferralTracking existingByPerson = findLatestTrackByIdNumberAndName(
+                    row.idNumber(), row.name(), targetDeptId);
+            if (existingByPerson != null) {
+                // 本单位已有同人：默认将更新已有记录（非跳过）；预览标为待确认重复
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("name", StrUtil.blankToDefault(row.name(), ""));
+                item.put("idNumber", StrUtil.blankToDefault(row.idNumber(), ""));
+                item.put("cardId", StrUtil.blankToDefault(existingByPerson.getCardId(), ""));
+                item.put("township", StrUtil.blankToDefault(existingByPerson.getTownship(), ""));
+                item.put("existingId", existingByPerson.getId() == null ? "" : String.valueOf(existingByPerson.getId()));
+                duplicates.add(item);
             } else {
                 newCount++;
             }
@@ -296,21 +302,33 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
             ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId(), targetDeptId);
             if (existingByCard != null) {
-                if (mergeEpidemicImportFields(existingByCard, row.reportCardTime(), row.currentAddress(),
-                        row.township(), currentUserId, targetDeptId, row.importRowNo())) {
+                if (mergeEpidemicImportFields(existingByCard, row, currentUserId, targetDeptId)) {
                     updateById(existingByCard);
+                }
+                // 无字段变化也计为已处理（与同人更新路径一致）
+                updated++;
+                continue;
+            }
+
+            // 本单位同身份证+姓名：默认更新已有追踪（48 小时上报时效），仅在明确要求时另建一条
+            ReferralTracking existingByPerson = findLatestTrackByIdNumberAndName(
+                    row.idNumber(), row.name(), targetDeptId);
+            if (existingByPerson != null) {
+                if (addDuplicateRecords) {
+                    ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, targetDeptId);
+                    save(entity);
+                    count++;
+                } else if (mergeEpidemicImportFields(existingByPerson, row, currentUserId, targetDeptId)) {
+                    updateById(existingByPerson);
+                    updated++;
+                } else {
+                    // 无字段可更新也计为已处理，避免误报「跳过重复」
                     updated++;
                 }
                 continue;
             }
 
-            if (existsByIdNumberAndName("track", row.idNumber(), row.name())) {
-                if (!addDuplicateRecords) {
-                    skipped++;
-                    continue;
-                }
-            }
-
+            // 其他单位已有同人：不拦截，为本单位新建（列表权限不同会导致「系统里看不到却提示重复」）
             ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, targetDeptId);
             save(entity);
             count++;
@@ -336,7 +354,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         for (int ri = 0; ri < dataRows.size(); ri++) {
             Map<Integer, Object> row = dataRows.get(ri);
             int importRowNo = headerRowIndex + 2 + ri;
-            String cardId = getFieldByHeader(row, headerIndex, "卡片ID");
+            String cardId = ImportIdentitySupport.stripExcelTextMarker(
+                    StrUtil.blankToDefault(getFieldByHeader(row, headerIndex, "卡片ID"), ""));
             String name = getFieldByHeader(row, headerIndex, "患者姓名", "姓名");
             String idNumber = ImportIdentitySupport.normalizeIdNumber(
                     getFieldByHeader(row, headerIndex, "有效证件号", "证件号", "身份证号", "身份证"));
@@ -477,19 +496,40 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /**
-     * 按卡片ID查找大疫情追踪记录。
-     * 必须限定部门，避免跨镇命中后在合并时改写 department_id。
+     * 按卡片ID查找大疫情追踪记录（限定目标单位）。
+     * 不跨单位全局匹配：其他镇已有同卡片时仍允许本单位新建，避免「更新了别人看不到的记录」。
+     * 兼容历史带 Excel 文本前缀的脏数据。
      */
     private ReferralTracking findEpidemicRecordByCardId(String cardId, Long departmentId) {
-        if (StrUtil.isBlank(cardId)) {
+        String normalized = ImportIdentitySupport.stripExcelTextMarker(cardId);
+        if (StrUtil.isBlank(normalized)) {
+            return null;
+        }
+        List<String> cardIdVariants = List.of(normalized, "'" + normalized, "\"" + normalized + "\"");
+        return lambdaQuery()
+                .eq(ReferralTracking::getBizMode, "track")
+                .eq(ReferralTracking::getSourceType, "epidemic")
+                .in(ReferralTracking::getCardId, cardIdVariants)
+                .eq(departmentId != null, ReferralTracking::getDepartmentId, departmentId)
+                .isNull(departmentId == null, ReferralTracking::getDepartmentId)
+                .orderByDesc(ReferralTracking::getCreateTime)
+                .last("LIMIT 1")
+                .one();
+    }
+
+    /** 本单位最近一条同身份证+姓名的追踪记录（用于大疫情重复导入更新） */
+    private ReferralTracking findLatestTrackByIdNumberAndName(String idNumber, String name, Long departmentId) {
+        String normalizedId = ImportIdentitySupport.normalizeIdNumber(idNumber);
+        if (StrUtil.isBlank(normalizedId) || StrUtil.isBlank(name)) {
             return null;
         }
         return lambdaQuery()
                 .eq(ReferralTracking::getBizMode, "track")
-                .eq(ReferralTracking::getSourceType, "epidemic")
-                .eq(ReferralTracking::getCardId, cardId)
+                .eq(ReferralTracking::getIdNumber, normalizedId)
+                .eq(ReferralTracking::getName, name.trim())
                 .eq(departmentId != null, ReferralTracking::getDepartmentId, departmentId)
                 .isNull(departmentId == null, ReferralTracking::getDepartmentId)
+                .orderByDesc(ReferralTracking::getCreateTime)
                 .last("LIMIT 1")
                 .one();
     }
@@ -791,17 +831,29 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             }
         }
 
-        // 追踪过程备注修正：按 attempt 回写 reason，并同步最新 trackingRemark
-        if (params.containsKey("trackingHistory")) {
+        // 追踪过程修正：按 attempt 回写 status/reason，并同步主表追踪状态
+        boolean hasTrackingHistoryUpdate = params.containsKey("trackingHistory");
+        if (hasTrackingHistoryUpdate) {
             applyTrackingHistoryRemarkUpdates(record, params.get("trackingHistory"));
         }
 
         if ("recommend".equals(record.getBizMode())) {
-            if (Integer.valueOf(1).equals(record.getArchived())) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可编辑");
-            }
-            if (record.getRecommendStatus() != null && record.getRecommendStatus() >= 2) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "推介已接受或已拒绝，不可编辑");
+            boolean acceptedOrRejected = record.getRecommendStatus() != null && record.getRecommendStatus() >= 2;
+            boolean archived = Integer.valueOf(1).equals(record.getArchived());
+            // 已接受/已归档后仅允许修正追踪过程（同步操作列展示）
+            if (acceptedOrRejected || archived) {
+                if (!hasTrackingHistoryUpdate) {
+                    throw new ServiceException(StatusEnum.PARAM_INVALID,
+                            archived ? "已归档记录不可编辑" : "推介已接受或已拒绝，不可编辑");
+                }
+                updateById(record);
+                if (clearDiagnosisRemark) {
+                    lambdaUpdate()
+                            .eq(ReferralTracking::getId, id)
+                            .set(ReferralTracking::getDiagnosisRemark, null)
+                            .update();
+                }
+                return;
             }
             if (getStr(params, "recommendReason") != null) {
                 record.setRecommendReason(getStr(params, "recommendReason"));
@@ -845,7 +897,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /**
-     * 按 attempt 合并前端提交的追踪备注，保留原有状态/时间等字段。
+     * 按 attempt 合并前端提交的追踪状态/备注，并同步主表追踪状态、未到位次数、追踪备注。
      */
     @SuppressWarnings("unchecked")
     private void applyTrackingHistoryRemarkUpdates(ReferralTracking record, Object trackingHistoryParam) {
@@ -864,7 +916,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         } else {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "追踪过程格式无效");
         }
-        Map<Integer, String> reasonByAttempt = new HashMap<>();
+        Map<Integer, Map<String, Object>> updateByAttempt = new HashMap<>();
         for (Map<String, Object> item : updates) {
             if (item == null) continue;
             Integer attempt = toInteger(item.get("attempt"));
@@ -874,21 +926,51 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             if (StrUtil.isBlank(reason)) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "第" + attempt + "次追踪备注不能为空");
             }
-            reasonByAttempt.put(attempt, reason);
+            Integer status = toInteger(item.get("status"));
+            if (status != null && (status < 1 || status > 3)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "第" + attempt + "次追踪状态无效");
+            }
+            Map<String, Object> patch = new HashMap<>();
+            patch.put("reason", reason);
+            if (status != null) {
+                patch.put("status", status);
+            }
+            updateByAttempt.put(attempt, patch);
         }
-        if (reasonByAttempt.isEmpty()) {
+        if (updateByAttempt.isEmpty()) {
             return;
         }
         for (Map<String, Object> entry : existing) {
             Integer attempt = toInteger(entry.get("attempt"));
-            if (attempt != null && reasonByAttempt.containsKey(attempt)) {
-                entry.put("reason", reasonByAttempt.get(attempt));
+            if (attempt == null || !updateByAttempt.containsKey(attempt)) {
+                continue;
+            }
+            Map<String, Object> patch = updateByAttempt.get(attempt);
+            entry.put("reason", patch.get("reason"));
+            if (patch.get("status") != null) {
+                entry.put("status", patch.get("status"));
             }
         }
         record.setTrackingHistoryJson(JSONUtil.toJsonStr(existing));
-        Object lastReason = existing.get(existing.size() - 1).get("reason");
+
+        int notInPlaceCount = 0;
+        for (Map<String, Object> entry : existing) {
+            if (Integer.valueOf(2).equals(toInteger(entry.get("status")))) {
+                notInPlaceCount++;
+            }
+        }
+        record.setNotInPlaceCount(notInPlaceCount);
+
+        Map<String, Object> last = existing.get(existing.size() - 1);
+        Object lastReason = last.get("reason");
         if (lastReason != null) {
             record.setTrackingRemark(lastReason.toString());
+        }
+        Integer lastStatus = toInteger(last.get("status"));
+        // 强制结束(4)不因编辑回溯；其余与末次追踪状态对齐，同步列表「追踪状态」
+        if (lastStatus != null && lastStatus >= 1 && lastStatus <= 3
+                && (record.getTrackingStatus() == null || record.getTrackingStatus() != 4)) {
+            record.setTrackingStatus(lastStatus);
         }
     }
 
@@ -1822,7 +1904,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (StrUtil.isBlank(val)) {
             return "";
         }
-        String text = val.trim();
+        String text = ImportIdentitySupport.stripExcelTextMarker(val.trim());
         if (text.matches(".*[eE].*") || text.matches("\\d+\\.0+")) {
             try {
                 return new java.math.BigDecimal(text).toPlainString();
@@ -1996,12 +2078,28 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .one();
     }
 
-    /** 重复导入时补全报告卡录入时间、录入人等信息（不得跨镇改写 department_id） */
-    private boolean mergeEpidemicImportFields(ReferralTracking existing, LocalDateTime reportCardTime,
-                                              String currentAddress, String township,
+    /** 重复导入时补全/覆盖报告卡关键字段（不得跨镇改写已有 department_id） */
+    private boolean mergeEpidemicImportFields(ReferralTracking existing, EpidemicImportRow row,
+                                              Long currentUserId, Long targetDeptId) {
+        return mergeEpidemicImportFields(existing, row.cardId(), row.reportCardTime(), row.currentAddress(),
+                row.township(), row.phone(), row.diseaseName(), row.caseCategory(), row.crowdCategory(),
+                row.reportUnit(), row.epidemicRemark(), currentUserId, targetDeptId, row.importRowNo());
+    }
+
+    private boolean mergeEpidemicImportFields(ReferralTracking existing, String cardId, LocalDateTime reportCardTime,
+                                              String currentAddress, String township, String phone,
+                                              String diseaseName, String caseCategory, String crowdCategory,
+                                              String reportUnit, String epidemicRemark,
                                               Long currentUserId, Long targetDeptId, Integer importRowNo) {
         boolean changed = false;
-        if (reportCardTime != null && existing.getReportCardTime() == null) {
+        String normalizedCardId = ImportIdentitySupport.stripExcelTextMarker(cardId);
+        if (StrUtil.isNotBlank(normalizedCardId)
+                && !normalizedCardId.equals(ImportIdentitySupport.stripExcelTextMarker(existing.getCardId()))) {
+            existing.setCardId(normalizedCardId);
+            changed = true;
+        }
+        if (reportCardTime != null
+                && (existing.getReportCardTime() == null || !reportCardTime.equals(existing.getReportCardTime()))) {
             existing.setReportCardTime(reportCardTime);
             changed = true;
         }
@@ -2011,6 +2109,30 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         if (StrUtil.isNotBlank(township) && !township.equals(existing.getTownship())) {
             existing.setTownship(township);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(phone) && !phone.equals(existing.getPhone())) {
+            existing.setPhone(phone);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(diseaseName) && !diseaseName.equals(existing.getDiseaseName())) {
+            existing.setDiseaseName(diseaseName);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(caseCategory) && !caseCategory.equals(existing.getCaseCategory())) {
+            existing.setCaseCategory(caseCategory);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(crowdCategory) && !crowdCategory.equals(existing.getCrowdCategory())) {
+            existing.setCrowdCategory(crowdCategory);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(reportUnit) && !reportUnit.equals(existing.getReportUnit())) {
+            existing.setReportUnit(reportUnit);
+            changed = true;
+        }
+        if (StrUtil.isNotBlank(epidemicRemark) && !epidemicRemark.equals(existing.getEpidemicRemark())) {
+            existing.setEpidemicRemark(epidemicRemark);
             changed = true;
         }
         if (existing.getCreatorId() == null && currentUserId != null) {
@@ -2026,7 +2148,19 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             existing.setDepartmentId(targetDeptId);
             changed = true;
         }
+        if (StrUtil.isBlank(existing.getSourceType())) {
+            existing.setSourceType("epidemic");
+            changed = true;
+        }
         return changed;
+    }
+
+    /** @deprecated 保留旧签名调用处兼容，请改用带 EpidemicImportRow 的重载 */
+    private boolean mergeEpidemicImportFields(ReferralTracking existing, LocalDateTime reportCardTime,
+                                              String currentAddress, String township,
+                                              Long currentUserId, Long targetDeptId, Integer importRowNo) {
+        return mergeEpidemicImportFields(existing, null, reportCardTime, currentAddress, township,
+                null, null, null, null, null, null, currentUserId, targetDeptId, importRowNo);
     }
 
     /** 定位表头行（兼容大疫情表标题行） */

@@ -53,6 +53,7 @@ import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.InfectionScreenFieldSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.NoticePartyFillSupport;
@@ -130,7 +131,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             "hasChestXray", "chestXrayResult", "crowdCategory", "creatorUsername"
     );
     /** 感染筛查方法筛选白名单（与筛查表/前端选项一致） */
-    private static final Set<String> SCREEN_METHOD_FILTER_VALUES = Set.of("PPD", "EC", "IGRA", "未查");
+    private static final Set<String> SCREEN_METHOD_FILTER_VALUES = Set.copyOf(InfectionScreenFieldSupport.METHODS);
 
     private static final Set<String> MANUAL_POPULATION_TYPES = Set.of(
             "school", "keyPopulation", "regular", "epidemic", "referral", "closeContact", "other"
@@ -152,6 +153,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         m.put("其它", "other");
         m.put("正常", "excluded");
         m.put("确诊患者", "confirmed");
+        m.put("确诊结核", "confirmed");
+        m.put("在治患者", "confirmed");
         m.put(ScreeningDiagnosisSupport.SUSPECTED_TB_DIAGNOSIS, "suspected");
         m.put("疑似肺结核", "suspected");
         m.put("潜伏感染者", "latent");
@@ -227,7 +230,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 // 必须显式放行 diagnosisResult 为 NULL 的记录（导入后未录入诊断的待诊断数据）。
                 .and(w -> w.isNull(LatentInfection::getDiagnosisResult)
                         .or()
-                        .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
+                        .notIn(LatentInfection::getDiagnosisResult, "确诊患者", "确诊结核", "在治患者"));
 
         // referralResult 过滤：pending = 查尚未转诊的记录；具体值 = 精确匹配
         if ("pending".equals(referralResult)) {
@@ -261,11 +264,27 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         fillCreatorUsernames(records);
         fillScreeningDiagnosisDraft(records);
+        fillPendingEntryReason(records);
         records.forEach(this::fillNoticeAutoFields);
         fillNoticeAndSupervisionStatus(records, populationType);
         fillMedicationPickupSummary(records);
 
         return result;
+    }
+
+    /** 待诊断对账：标注每条记录因何进入待诊断（感染阳性 / 疑似结核等） */
+    private void fillPendingEntryReason(List<LatentInfection> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        for (LatentInfection record : records) {
+            String diagnosis = StrUtil.blankToDefault(record.getDiagnosisFirst(), record.getScreeningDiagnosisFirst());
+            record.setPendingEntryReason(ScreeningDiagnosisSupport.resolvePendingEntryReason(
+                    record.getInfectionResult(),
+                    record.getChestXrayResult(),
+                    record.getHasChestXray(),
+                    diagnosis));
+        }
     }
 
     /** 批量查询领药记录摘要并填充到潜伏感染列表 */
@@ -400,20 +419,24 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             return;
         }
 
+        Set<String> methodVariants = methods.stream()
+                .flatMap(m -> ScreeningMethodSupport.expandFilterVariants(m).stream())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
         List<Long> schoolIds = screeningSchoolMapper.selectList(new LambdaQueryWrapper<ScreeningSchool>()
                         .select(ScreeningSchool::getId)
-                        .in(ScreeningSchool::getScreenMethod, methods))
+                        .in(ScreeningSchool::getScreenMethod, methodVariants))
                 .stream().map(ScreeningSchool::getId).filter(Objects::nonNull).toList();
         List<Long> keyIds = screeningKeyPopulationMapper.selectList(new LambdaQueryWrapper<ScreeningKeyPopulation>()
                         .select(ScreeningKeyPopulation::getId)
-                        .in(ScreeningKeyPopulation::getScreenMethod, methods))
+                        .in(ScreeningKeyPopulation::getScreenMethod, methodVariants))
                 .stream().map(ScreeningKeyPopulation::getId).filter(Objects::nonNull).toList();
 
         LambdaQueryWrapper<ScreeningCloseContact> closeWrapper = new LambdaQueryWrapper<ScreeningCloseContact>()
                 .select(ScreeningCloseContact::getId);
         closeWrapper.and(q -> {
             boolean first = true;
-            for (String method : methods) {
+            for (String method : methodVariants) {
                 if (!first) {
                     q.or();
                 }
@@ -428,8 +451,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         wrapper.and(w -> {
             boolean first = true;
-            // 持久化字段直接匹配（含密接个案同步/手动新增）
-            w.in(LatentInfection::getScreenMethod, methods);
+            // 持久化字段直接匹配（含密接个案同步/手动新增；兼容短码与官方文案）
+            w.in(LatentInfection::getScreenMethod, methodVariants);
             first = false;
             if (!schoolIds.isEmpty()) {
                 if (!first) {
@@ -458,14 +481,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             if (!first) {
                 w.or();
             }
-            // 仅方法为空的手动记录按感染筛查结果前缀推断
+            // 仅方法为空的手动记录按感染筛查结果前缀推断（兼容短码）
             w.and(ir -> {
                 ir.and(blank -> blank.isNull(LatentInfection::getScreenMethod)
                         .or().eq(LatentInfection::getScreenMethod, ""));
                 ir.isNull(LatentInfection::getScreeningId);
                 ir.and(prefix -> {
                     boolean irFirst = true;
-                    for (String method : methods) {
+                    for (String method : methodVariants) {
                         if (!irFirst) {
                             prefix.or();
                         }
@@ -698,6 +721,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setNoticeSent(notice.getStatus() != null && notice.getStatus() >= 1);
                 r.setNoticeSenderName(notice.getSenderName());
                 r.setNoticeReceiverName(notice.getReceiverName());
+                // 列表登记号以通知单为准（数据来源：通知单）
+                if (StrUtil.isNotBlank(notice.getRegistrationNo())) {
+                    r.setRegistrationNo(notice.getRegistrationNo().trim());
+                }
             } else {
                 r.setNoticeStatus(null);
                 r.setNoticeId(null);
@@ -1064,7 +1091,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     /** 内部：写诊断字段 + 回写筛查表 + 触发转诊映射 */
     private void doSaveDiagnosis(LatentInfection entity, Map<String, Object> data) {
-        String diagnosisFirst = ScreeningDiagnosisSupport.normalizeDiagnosis(
+        String diagnosisFirst = normalizeLatentDiagnosis(entity.getPopulationType(),
                 data.getOrDefault("diagnosisFirst", "").toString());
         if (StrUtil.isBlank(diagnosisFirst)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
@@ -1082,6 +1109,127 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             LatentInfection refreshed = getById(entity.getId());
             applyReferralOutcome(refreshed, referralCode, null);
         }
+    }
+
+    /** 重点/疫情保留「正常」「确诊结核」等口径；学生仍走学校归一 */
+    private String normalizeLatentDiagnosis(String populationType, String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return raw;
+        }
+        if ("keyPopulation".equals(populationType) || "regular".equals(populationType)) {
+            String key = ScreeningDiagnosisSupport.normalizeKeyPopulationDiagnosis(raw);
+            if (key != null) {
+                return key;
+            }
+        }
+        return ScreeningDiagnosisSupport.normalizeDiagnosis(raw);
+    }
+
+    private static final Set<String> SCHOOL_SCREEN_METHODS = Set.of("PPD", "EC", "IGRA", "未查");
+    private static final Set<String> SCHOOL_INFECTION_RESULTS = Set.of("未感染", "感染", "无法判读", "未查");
+
+    private void applyInfectionMethodUpdate(LatentInfection latent, String method) {
+        if (StrUtil.isBlank(method)) {
+            latent.setScreenMethod(null);
+            return;
+        }
+        validateInfectionFieldsForPopulation(latent.getPopulationType(), method, null);
+        latent.setScreenMethod(normalizeInfectionMethodForPopulation(latent.getPopulationType(), method));
+    }
+
+    private void applyInfectionResultUpdate(LatentInfection latent, String result) {
+        if (StrUtil.isBlank(result)) {
+            latent.setInfectionResult(null);
+            return;
+        }
+        validateInfectionFieldsForPopulation(latent.getPopulationType(), null, result);
+        latent.setInfectionResult(normalizeInfectionResultForPopulation(latent.getPopulationType(), result));
+    }
+
+    private void validateInfectionFieldsForPopulation(String populationType, String method, String result) {
+        if (StrUtil.isNotBlank(method) && !isValidInfectionMethodForPopulation(populationType, method)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "school".equals(populationType)
+                            ? "感染筛查方法仅支持：PPD/EC/IGRA/未查"
+                            : "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做");
+        }
+        if (StrUtil.isNotBlank(result) && !isValidInfectionResultForPopulation(populationType, result)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "school".equals(populationType)
+                            ? "结果判定仅支持：未感染/感染/无法判读/未查"
+                            : "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+        }
+    }
+
+    private boolean isValidInfectionMethodForPopulation(String populationType, String method) {
+        if (StrUtil.isBlank(method)) {
+            return true;
+        }
+        String trimmed = method.trim();
+        if ("school".equals(populationType)) {
+            return SCHOOL_SCREEN_METHODS.contains(trimmed) || InfectionScreenFieldSupport.isValidMethod(trimmed);
+        }
+        return InfectionScreenFieldSupport.isValidMethod(trimmed);
+    }
+
+    private boolean isValidInfectionResultForPopulation(String populationType, String result) {
+        if (StrUtil.isBlank(result)) {
+            return true;
+        }
+        String trimmed = result.trim();
+        if ("school".equals(populationType)) {
+            return SCHOOL_INFECTION_RESULTS.contains(trimmed) || InfectionScreenFieldSupport.isValidResult(trimmed);
+        }
+        return InfectionScreenFieldSupport.isValidResult(trimmed);
+    }
+
+    private String normalizeInfectionMethodForPopulation(String populationType, String method) {
+        if (StrUtil.isBlank(method)) {
+            return null;
+        }
+        String trimmed = method.trim();
+        if ("school".equals(populationType)) {
+            if (SCHOOL_SCREEN_METHODS.contains(trimmed)) {
+                return trimmed;
+            }
+            // 兼容官方全称回写到学校短码
+            String official = InfectionScreenFieldSupport.normalizeMethod(trimmed);
+            if (official == null) {
+                return trimmed;
+            }
+            return switch (official) {
+                case "结核菌素皮肤试验_PPD" -> "PPD";
+                case "结核抗原皮肤试验_EC" -> "EC";
+                case "γ干扰素释放试验_IGRA" -> "IGRA";
+                case "未做" -> "未查";
+                default -> trimmed;
+            };
+        }
+        return ScreeningMethodSupport.normalize(trimmed);
+    }
+
+    private String normalizeInfectionResultForPopulation(String populationType, String result) {
+        if (StrUtil.isBlank(result)) {
+            return null;
+        }
+        String trimmed = result.trim();
+        if ("school".equals(populationType)) {
+            if (SCHOOL_INFECTION_RESULTS.contains(trimmed)) {
+                return trimmed;
+            }
+            String official = InfectionScreenFieldSupport.normalizeResult(trimmed);
+            if (official == null) {
+                return trimmed;
+            }
+            return switch (official) {
+                case "阴性" -> "未感染";
+                case "一般阳性", "中度阳性", "强阳性", "阳性" -> "感染";
+                case "未判读" -> "无法判读";
+                default -> trimmed;
+            };
+        }
+        String normalized = InfectionScreenFieldSupport.normalizeResult(trimmed);
+        return normalized != null ? normalized : trimmed;
     }
 
     /**
@@ -1238,7 +1386,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         // 胸片诊断为确诊患者/疑似肺结核时，不允许转诊为潜伏感染者
         if ("latent".equals(result) &&
-                ("确诊患者".equals(entity.getDiagnosisFirst())
+                (ScreeningDiagnosisSupport.isConfirmedPatientDiagnosis(entity.getDiagnosisFirst())
                         || ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(entity.getDiagnosisFirst()))) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "胸片诊断结果为「" + entity.getDiagnosisFirst() + "」，不可转诊为潜伏感染者，请选择正确的转诊结果");
         }
@@ -1266,8 +1414,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 entity.setArchivedTime(LocalDateTime.now());
             }
             case "confirmed" -> {
-                // 筛查确诊患者仅结案归档，不进入患者管理（患者管理数据仅来自专病信息表导入）
-                entity.setDiagnosisResult("确诊患者");
+                // 筛查确诊仅结案归档，不进入患者管理（患者管理数据仅来自专病信息表导入）
+                String confirmedLabel = StrUtil.blankToDefault(entity.getDiagnosisFirst(), "确诊患者");
+                entity.setDiagnosisResult(confirmedLabel);
                 entity.setArchived(1);
                 entity.setArchivedTime(LocalDateTime.now());
             }
@@ -1366,13 +1515,122 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         entity.setArchived(1);
         entity.setArchivedTime(LocalDateTime.now());
         updateById(entity);
+        // 进入历史患者后，再将督导表预防性治疗数据回写到筛查管理
+        syncPreventiveTreatmentToScreening(entity);
+    }
+
+    /**
+     * 结案进入历史患者后：将优先督导表中的预防性治疗字段回写到对应筛查管理表。
+     * 学校 → screening_school；重点/疫情 → screening_key_population；密接 → screening_close_contact
+     */
+    private void syncPreventiveTreatmentToScreening(LatentInfection latent) {
+        if (latent == null || latent.getId() == null || latent.getScreeningId() == null) {
+            return;
+        }
+        String type = latent.getPopulationType();
+        if (StrUtil.isBlank(type)) {
+            return;
+        }
+        List<SupervisionForm> forms = supervisionFormMapper.selectList(
+                new LambdaQueryWrapper<SupervisionForm>()
+                        .eq(SupervisionForm::getLatentInfectionId, latent.getId())
+                        .orderByDesc(SupervisionForm::getCreateTime));
+        SupervisionForm form = selectPreferredSupervisionForm(forms);
+        if (form == null) {
+            return;
+        }
+        // 与督导表归档时一致：补齐供筛查回写的兼容字段
+        if (StrUtil.isBlank(form.getHasPreventiveTreatment()) && StrUtil.isNotBlank(form.getTreatmentPlan())) {
+            form.setHasPreventiveTreatment("不服药".equals(form.getTreatmentPlan()) ? "否" : "是");
+        }
+        if (StrUtil.isBlank(form.getPreventiveManager()) && StrUtil.isNotBlank(form.getManagingUnit())) {
+            form.setPreventiveManager(form.getManagingUnit());
+        }
+        if (StrUtil.isBlank(form.getPreventiveManager())
+                && (StrUtil.isNotBlank(form.getManagerType()) || StrUtil.isNotBlank(form.getManagerName()))) {
+            StringBuilder manager = new StringBuilder();
+            if (StrUtil.isNotBlank(form.getManagerType())) {
+                manager.append(form.getManagerType());
+            }
+            if (StrUtil.isNotBlank(form.getManagerName())) {
+                if (manager.length() > 0) {
+                    manager.append(" - ");
+                }
+                manager.append(form.getManagerName());
+            }
+            form.setPreventiveManager(manager.toString());
+        }
+        if (StrUtil.isBlank(form.getPreventiveResult())
+                && "无".equals(form.getInterruptMedication())
+                && form.getTreatmentEndDate() != null) {
+            form.setPreventiveResult("规范完成");
+        }
+
+        Long screeningId = latent.getScreeningId();
+        switch (type) {
+            case "school" -> {
+                ScreeningSchool s = screeningSchoolMapper.selectById(screeningId);
+                if (s != null) {
+                    s.setHasPreventiveTreatment(form.getHasPreventiveTreatment());
+                    s.setPreventivePlan(form.getTreatmentPlan());
+                    s.setPreventiveStartDate(form.getTreatmentStartDate());
+                    s.setPreventiveEndDate(form.getTreatmentEndDate());
+                    s.setPreventiveResult(form.getPreventiveResult());
+                    s.setPreventiveManager(form.getPreventiveManager());
+                    screeningSchoolMapper.updateById(s);
+                }
+            }
+            case "keyPopulation", "regular" -> {
+                ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(screeningId);
+                if (k != null) {
+                    k.setHasPreventiveTreatment(form.getHasPreventiveTreatment());
+                    k.setPreventivePlan(form.getTreatmentPlan());
+                    k.setPreventiveStartDate(form.getTreatmentStartDate());
+                    k.setPreventiveEndDate(form.getTreatmentEndDate());
+                    k.setPreventiveResult(form.getPreventiveResult());
+                    k.setPreventiveManager(form.getPreventiveManager());
+                    screeningKeyPopulationMapper.updateById(k);
+                }
+            }
+            case "closeContact" -> {
+                ScreeningCloseContact c = screeningCloseContactMapper.selectById(screeningId);
+                if (c != null) {
+                    c.setHasPreventiveTreatment(StrUtil.blankToDefault(form.getHasPreventiveTreatment(), "是"));
+                    c.setPreventivePlan(form.getTreatmentPlan());
+                    screeningCloseContactMapper.updateById(c);
+                }
+            }
+            default -> { /* 未知类型不处理 */ }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void unarchiveFromCloseCase(Long id) {
+        LatentInfection entity = getById(id);
+        if (entity == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "数据不存在");
+        }
+        if (!Integer.valueOf(1).equals(entity.getArchived())) {
+            return;
+        }
+        if (LatentInfectionService.isTransferLocked(entity)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "转出相关档案不可解锁");
+        }
+        entity.setArchived(0);
+        entity.setArchivedTime(null);
+        // 结案归档会将治疗阶段置为已结案；解锁后恢复为预防治疗中，便于继续督导/服药
+        if (Integer.valueOf(2).equals(entity.getTreatmentPhase())) {
+            entity.setTreatmentPhase(1);
+        }
+        updateById(entity);
     }
 
     @Override
     public IPage<LatentInfection> queryHistoryPage(int page, int size, String populationType,
                                                     String name, String idNumber, String phone,
                                                     String startTime, String endTime,
-                                                    String treatmentCompletionStatus) {
+                                                    String treatmentCompletionStatus, String columnFilters) {
         LambdaQueryWrapper<LatentInfection> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(LatentInfection::getArchived, 1)
                 // 已转出记录不进入历史患者（仅保留最新在管链路）
@@ -1388,6 +1646,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
                 .ge(StrUtil.isNotBlank(startTime), LatentInfection::getArchivedTime, startTime)
                 .le(StrUtil.isNotBlank(endTime), LatentInfection::getArchivedTime, endTime + " 23:59:59");
+        applyColumnFilters(wrapper, columnFilters);
         if (StrUtil.isNotBlank(treatmentCompletionStatus)) {
             List<Long> matchedLatentIds = findLatentIdsByPreferredTreatmentCompletionStatus(treatmentCompletionStatus);
             if (matchedLatentIds.isEmpty()) {
@@ -1412,7 +1671,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     public void autoReferralForDirectDiagnosis(List<LatentInfection> latents) {
         for (LatentInfection entity : latents) {
             if (entity == null || entity.getId() == null) continue;
-            String diagnosisFirst = ScreeningDiagnosisSupport.normalizeDiagnosis(entity.getDiagnosisFirst());
+            String diagnosisFirst = normalizeLatentDiagnosis(entity.getPopulationType(), entity.getDiagnosisFirst());
             String referralResult = DIAGNOSIS_TO_REFERRAL.get(diagnosisFirst);
             if (StrUtil.isBlank(referralResult)) continue;
 
@@ -1450,7 +1709,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (latent == null) {
             return;
         }
-        String normalizedDiagnosis = ScreeningDiagnosisSupport.normalizeDiagnosis(
+        String normalizedDiagnosis = normalizeLatentDiagnosis(populationType,
                 StrUtil.isNotBlank(diagnosisFirst) ? diagnosisFirst : latent.getDiagnosisFirst());
         if (StrUtil.isBlank(normalizedDiagnosis)) {
             normalizedDiagnosis = "正常";
@@ -1539,21 +1798,118 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             latent.setInfectionScreenDate(parseDateCell(body.get("infectionScreenDate")));
         }
         if (body.get("screenMethod") != null) {
-            latent.setScreenMethod(ScreeningMethodSupport.normalize(body.get("screenMethod").toString()));
+            String method = body.get("screenMethod").toString();
+            applyInfectionMethodUpdate(latent, method);
         }
-        if (body.get("infectionResult") != null) latent.setInfectionResult(body.get("infectionResult").toString());
-        if (body.get("diagnosisFirst") != null) latent.setDiagnosisFirst(body.get("diagnosisFirst").toString());
+        if (body.get("infectionResult") != null) {
+            String result = body.get("infectionResult").toString();
+            applyInfectionResultUpdate(latent, result);
+        }
+        if (body.get("diagnosisFirst") != null) {
+            String diagnosisFirst = normalizeLatentDiagnosis(
+                    latent.getPopulationType(), body.get("diagnosisFirst").toString());
+            latent.setDiagnosisFirst(StrUtil.isBlank(diagnosisFirst)
+                    ? null
+                    : diagnosisFirst);
+        }
         if (body.get("hasChestXray") != null) latent.setHasChestXray(body.get("hasChestXray").toString());
         if (body.get("chestXrayDate") != null) {
             latent.setChestXrayDate(parseDateCell(body.get("chestXrayDate")));
         }
         if (body.get("chestXrayResult") != null) latent.setChestXrayResult(body.get("chestXrayResult").toString());
-        if (body.get("trackingRemark") != null) latent.setTrackingRemark(body.get("trackingRemark").toString());
+        if (body.containsKey("trackingHistory")) {
+            applyTrackingHistoryRemarkUpdates(latent, body.get("trackingHistory"));
+        } else if (body.get("trackingRemark") != null) {
+            latent.setTrackingRemark(body.get("trackingRemark").toString());
+        }
         if (body.get("remark") != null) latent.setRemark(body.get("remark").toString());
         if (latent.getScreeningId() == null && body.get("crowdCategory") != null) {
             applyManualCrowdCategory(latent, body.get("crowdCategory").toString());
         }
         updateById(latent);
+    }
+
+    /**
+     * 按 attempt 合并前端提交的追踪备注（可改状态），保留原有时间等字段，并回写 trackingRemark / trackingStatus。
+     */
+    @SuppressWarnings("unchecked")
+    private void applyTrackingHistoryRemarkUpdates(LatentInfection latent, Object trackingHistoryParam) {
+        if (trackingHistoryParam == null) {
+            return;
+        }
+        List<Map<String, Object>> existing = parseTrackingHistory(latent.getTrackingHistoryJson());
+        if (existing.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "暂无追踪过程可编辑");
+        }
+        List<Map<String, Object>> updates;
+        if (trackingHistoryParam instanceof List<?> list) {
+            updates = (List<Map<String, Object>>) (List<?>) list;
+        } else if (trackingHistoryParam instanceof String json && StrUtil.isNotBlank(json)) {
+            updates = parseTrackingHistory(json);
+        } else {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "追踪过程格式无效");
+        }
+        Map<Integer, Map<String, Object>> updateByAttempt = new HashMap<>();
+        for (Map<String, Object> item : updates) {
+            if (item == null) continue;
+            Integer attempt = toInteger(item.get("attempt"));
+            if (attempt == null) continue;
+            Object reasonObj = item.get("reason");
+            String reason = reasonObj == null ? "" : reasonObj.toString().trim();
+            if (StrUtil.isBlank(reason)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "第" + attempt + "次追踪备注不能为空");
+            }
+            Integer status = toInteger(item.get("status"));
+            if (status != null && (status < 1 || status > 3)) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "第" + attempt + "次追踪状态无效");
+            }
+            Map<String, Object> patch = new HashMap<>();
+            patch.put("reason", reason);
+            if (status != null) {
+                patch.put("status", status);
+            }
+            updateByAttempt.put(attempt, patch);
+        }
+        if (updateByAttempt.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> entry : existing) {
+            Integer attempt = toInteger(entry.get("attempt"));
+            if (attempt == null || !updateByAttempt.containsKey(attempt)) {
+                continue;
+            }
+            Map<String, Object> patch = updateByAttempt.get(attempt);
+            entry.put("reason", patch.get("reason"));
+            if (patch.get("status") != null) {
+                entry.put("status", patch.get("status"));
+            }
+        }
+        latent.setTrackingHistoryJson(JSONUtil.toJsonStr(existing));
+        Map<String, Object> last = existing.get(existing.size() - 1);
+        Object lastReason = last.get("reason");
+        if (lastReason != null) {
+            latent.setTrackingRemark(lastReason.toString());
+        }
+        Integer lastStatus = toInteger(last.get("status"));
+        if (lastStatus != null && lastStatus >= 1 && lastStatus <= 3
+                && (latent.getTrackingStatus() == null || latent.getTrackingStatus() != 4)) {
+            // 强制结束(4)不因编辑回溯；其余与末次追踪状态对齐，同步列表「追踪状态」
+            latent.setTrackingStatus(lastStatus);
+        }
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override
@@ -1580,6 +1936,21 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
         String crowdCategory = resolveManualCrowdCategory(populationType, body.get("crowdCategory"));
 
+        String screenMethodRaw = body.getOrDefault("screenMethod", "").toString();
+        String infectionResultRaw = body.getOrDefault("infectionResult", "").toString();
+        validateInfectionFieldsForPopulation(populationType, screenMethodRaw, infectionResultRaw);
+        String screenMethodNormalized = normalizeInfectionMethodForPopulation(populationType, screenMethodRaw);
+        String infectionResultNormalized = normalizeInfectionResultForPopulation(populationType, infectionResultRaw);
+
+        String diagnosisRaw = body.getOrDefault("diagnosisFirst", "").toString();
+        String diagnosisFirst = normalizeLatentDiagnosis(populationType, diagnosisRaw);
+        if (StrUtil.isBlank(diagnosisFirst)) {
+            diagnosisFirst = "潜伏感染者";
+        }
+        String referralCode = DIAGNOSIS_TO_REFERRAL.getOrDefault(diagnosisFirst, "latent");
+        boolean keepPendingDiagnosis = "suspected".equals(referralCode);
+        boolean archived = !"latent".equals(referralCode) && !keepPendingDiagnosis;
+
         LatentInfection latent = LatentInfection.builder()
                 .populationType(populationType)
                 .crowdCategory(crowdCategory)
@@ -1592,9 +1963,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .infectionScreenDate(parseDateCell(body.get("infectionScreenDate")))
                 .gender(body.getOrDefault("gender", "").toString())
                 .age(parseIntegerField(body.get("age")))
-                .screenMethod(ScreeningMethodSupport.normalize(body.getOrDefault("screenMethod", "").toString()))
-                .infectionResult(body.getOrDefault("infectionResult", "").toString())
-                .diagnosisFirst(body.getOrDefault("diagnosisFirst", "").toString())
+                .screenMethod(screenMethodNormalized)
+                .infectionResult(infectionResultNormalized)
+                .diagnosisFirst(diagnosisFirst)
                 .hasChestXray(body.getOrDefault("hasChestXray", "").toString())
                 .chestXrayDate(parseDateCell(body.get("chestXrayDate")))
                 .chestXrayResult(body.getOrDefault("chestXrayResult", "").toString())
@@ -1602,9 +1973,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .remark(body.getOrDefault("remark", "").toString())
                 .trackingStatus(0)
                 .notInPlaceCount(0)
-                .archived(0)
-                .referralResult("latent")
-                .diagnosisResult("潜伏感染者")
+                .archived(archived ? 1 : 0)
+                .archivedTime(archived ? LocalDateTime.now() : null)
+                .referralResult(keepPendingDiagnosis ? null : referralCode)
+                .diagnosisResult(keepPendingDiagnosis ? null : diagnosisFirst)
                 .departmentId(BaseContext.getCurrentDepartmentId())
                 .creatorId(BaseContext.getCurrentId())
                 .build();
@@ -1774,6 +2146,23 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     }
                 }
 
+                String importScreenMethod = getImportField(row, headerIndex, "感染筛查方法");
+                String importInfectionResult = getImportField(row, headerIndex, "结果判定");
+                if (StrUtil.isBlank(importInfectionResult)) {
+                    importInfectionResult = getImportField(row, headerIndex, "感染筛查结果");
+                }
+                if (StrUtil.isNotBlank(importScreenMethod) && !InfectionScreenFieldSupport.isValidMethod(importScreenMethod)) {
+                    result.addError(rowNum, name,
+                            "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做");
+                    continue;
+                }
+                if (StrUtil.isNotBlank(importInfectionResult) && !InfectionScreenFieldSupport.isValidResult(importInfectionResult)) {
+                    result.addError(rowNum, name,
+                            "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                    continue;
+                }
+                String importInfectionNormalized = InfectionScreenFieldSupport.normalizeResult(importInfectionResult);
+
                 LatentInfection latent = LatentInfection.builder()
                         .populationType(populationType)
                         .crowdCategory(crowdCategory)
@@ -1786,8 +2175,10 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         .infectionScreenDate(parseDateCell(getImportField(row, headerIndex, "感染筛查日期")))
                         .gender(getImportField(row, headerIndex, "性别"))
                         .age(parseIntegerField(getImportField(row, headerIndex, "年龄")))
-                        .screenMethod(ScreeningMethodSupport.normalize(getImportField(row, headerIndex, "感染筛查方法")))
-                        .infectionResult(getImportField(row, headerIndex, "感染筛查结果"))
+                        .screenMethod(ScreeningMethodSupport.normalize(importScreenMethod))
+                        .infectionResult(importInfectionNormalized != null
+                                ? importInfectionNormalized
+                                : (StrUtil.isBlank(importInfectionResult) ? null : importInfectionResult))
                         .diagnosisFirst(getImportField(row, headerIndex, "首次诊断"))
                         .hasChestXray(getImportField(row, headerIndex, "是否胸片检查"))
                         .chestXrayDate(parseDateCell(getImportField(row, headerIndex, "胸片检查日期")))
@@ -2032,6 +2423,20 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
         assertLatentNotTransferLocked(latent);
+    }
+
+    @Override
+    public void syncRegistrationNoFromNotice(Long latentId, String registrationNo) {
+        if (latentId == null) {
+            return;
+        }
+        LatentInfection entity = getById(latentId);
+        if (entity == null) {
+            return;
+        }
+        String value = StrUtil.trim(registrationNo);
+        entity.setRegistrationNo(StrUtil.isBlank(value) ? null : value);
+        updateById(entity);
     }
 
     private void assertLatentNotTransferLocked(LatentInfection latent) {
@@ -2392,7 +2797,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         wrapper.and(w -> w.isNull(LatentInfection::getDiagnosisResult)
                 .or()
-                .ne(LatentInfection::getDiagnosisResult, "确诊患者"));
+                .notIn(LatentInfection::getDiagnosisResult, "确诊患者", "确诊结核", "在治患者"));
         if ("pending".equals(referralResult)) {
             wrapper.isNull(LatentInfection::getReferralResult);
         } else if (StrUtil.isNotBlank(referralResult)) {

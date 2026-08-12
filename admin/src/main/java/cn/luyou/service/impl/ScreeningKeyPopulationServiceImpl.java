@@ -35,6 +35,7 @@ import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.InfectionScreenFieldSupport;
 import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.UploadBatchSupport;
@@ -211,9 +212,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         int duplicateCount = 0;
 
         for (ScreeningKeyPopulation d : dataList) {
-            if (StrUtil.isNotBlank(d.getDiagnosisFirst())) {
-                d.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(d.getDiagnosisFirst()));
-            }
+            ScreeningDiagnosisSupport.applyNormalizedKeyPopulationDiagnosis(
+                    d::setDiagnosisFirst, d.getDiagnosisFirst(),
+                    d::setDiagnosisHalfYear, d.getDiagnosisHalfYear(),
+                    d::setDiagnosisOneYear, d.getDiagnosisOneYear());
             if (StrUtil.isBlank(d.getIdNumber())) {
                 toInsert.add(d);
                 continue;
@@ -259,16 +261,19 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         // 导致导入的确诊/疑似记录在"待诊断"中不可见。
         List<LatentInfection> latentList = toInsert.stream()
                 .filter(d -> d.getIsLatent() == 1)
+                .filter(this::shouldCreateLatentRecord)
                 .map(d -> buildLatentInfection(d))
                 .toList();
         // 更新的记录中，若 isLatent 变为1且尚无潜伏感染记录，则补创建（批量查已有 latent，避免逐条 exists）
         Set<Long> existingLatentScreeningIds = findExistingLatentScreeningIds(
                 toUpdate.stream()
                         .filter(d -> d.getIsLatent() == 1 && d.getId() != null)
+                        .filter(this::shouldCreateLatentRecord)
                         .map(ScreeningKeyPopulation::getId)
                         .toList());
         List<LatentInfection> latentFromUpdated = toUpdate.stream()
                 .filter(d -> d.getIsLatent() == 1 && d.getId() != null)
+                .filter(this::shouldCreateLatentRecord)
                 .filter(d -> !existingLatentScreeningIds.contains(d.getId()))
                 .map(this::buildLatentInfection)
                 .toList();
@@ -314,6 +319,30 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
                         result.addError(row, data.getName(), "手机号格式不正确");
                     }
+                    if (!InfectionScreenFieldSupport.isValidMethod(data.getScreenMethod())) {
+                        result.addError(row, data.getName(),
+                                "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做（兼容PPD/EC/IGRA/未查）");
+                        return;
+                    }
+                    if (!InfectionScreenFieldSupport.isValidResult(data.getInfectionResult())) {
+                        result.addError(row, data.getName(),
+                                "感染筛查结果仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                        return;
+                    }
+                    if (!ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisFirst())
+                            || !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisHalfYear())
+                            || !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisOneYear())) {
+                        result.addError(row, data.getName(),
+                                "诊断结果仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
+                        return;
+                    }
+                    InfectionScreenFieldSupport.applyNormalized(
+                            data::setScreenMethod, data.getScreenMethod(),
+                            data::setInfectionResult, data.getInfectionResult());
+                    ScreeningDiagnosisSupport.applyNormalizedKeyPopulationDiagnosis(
+                            data::setDiagnosisFirst, data.getDiagnosisFirst(),
+                            data::setDiagnosisHalfYear, data.getDiagnosisHalfYear(),
+                            data::setDiagnosisOneYear, data.getDiagnosisOneYear());
                     if (StrUtil.isNotBlank(batchId)) {
                         data.setUploadBatch(batchId);
                     }
@@ -450,7 +479,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         for (ScreeningKeyPopulation d : records) {
             if (d.getId() == null) continue;
             String popType = StrUtil.isBlank(d.getSourceType()) ? "keyPopulation" : d.getSourceType();
-            if (d.getIsLatent() != 1) {
+            if (d.getIsLatent() != 1 || !shouldCreateLatentRecord(d)) {
                 latentInfectionService.archivePendingLatentFromScreening(
                         d.getId(), popType, d.getDiagnosisFirst());
                 continue;
@@ -462,6 +491,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     .last("LIMIT 1")
                     .one();
             if (latent == null) {
+                if (!shouldCreateLatentRecord(d)) {
+                    continue;
+                }
                 latent = LatentInfection.builder()
                         .screeningId(d.getId())
                         .populationType(popType)
@@ -692,15 +724,22 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
 
-        if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
-            data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+        if (!ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisFirst())
+                || !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisHalfYear())
+                || !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisOneYear())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "诊断结果仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
         }
+        ScreeningDiagnosisSupport.applyNormalizedKeyPopulationDiagnosis(
+                data::setDiagnosisFirst, data.getDiagnosisFirst(),
+                data::setDiagnosisHalfYear, data.getDiagnosisHalfYear(),
+                data::setDiagnosisOneYear, data.getDiagnosisOneYear());
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
         save(data);
 
-        if (data.getIsLatent() == 1) {
+        if (data.getIsLatent() == 1 && shouldCreateLatentRecord(data)) {
             // diagnosisResult 不在此预填，由"待诊断"页面诊断后由 referral 流程写入
             String popType = StrUtil.isBlank(data.getSourceType()) ? "keyPopulation" : data.getSourceType();
             LatentInfection latent = LatentInfection.builder()
@@ -731,12 +770,26 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         if (data == null) {
             return null;
         }
-        return ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst());
+        if (StrUtil.isBlank(data.getDiagnosisFirst())) {
+            return null;
+        }
+        String normalized = ScreeningDiagnosisSupport.normalizeKeyPopulationDiagnosis(data.getDiagnosisFirst());
+        return normalized != null ? normalized : data.getDiagnosisFirst();
     }
 
     private boolean shouldMarkLatent(ScreeningKeyPopulation data) {
         if (data == null) return false;
         return ScreeningDiagnosisSupport.shouldMarkLatent(
+                data.getInfectionResult(),
+                data.getChestXrayResult(),
+                data.getHasChestXray(),
+                data.getDiagnosisFirst());
+    }
+
+    /** 确诊结核/在治患者仅筛查列表标红，不建潜伏记录 */
+    private boolean shouldCreateLatentRecord(ScreeningKeyPopulation data) {
+        if (data == null) return false;
+        return ScreeningDiagnosisSupport.shouldCreateLatentRecord(
                 data.getInfectionResult(),
                 data.getChestXrayResult(),
                 data.getHasChestXray(),
@@ -767,10 +820,31 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
         }
         if (StrUtil.isNotBlank(data.getDiagnosisFirst())) {
-            data.setDiagnosisFirst(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getDiagnosisFirst()));
+            String normalized = ScreeningDiagnosisSupport.normalizeKeyPopulationDiagnosis(data.getDiagnosisFirst());
+            if (normalized == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID,
+                        "诊断结果仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
+            }
+            data.setDiagnosisFirst(normalized);
         } else {
             // 显式清空：与前端 clearable 提交的 null/"" 对齐，避免保留旧诊断
             data.setDiagnosisFirst(null);
+        }
+        if (StrUtil.isNotBlank(data.getDiagnosisHalfYear())) {
+            String normalized = ScreeningDiagnosisSupport.normalizeKeyPopulationDiagnosis(data.getDiagnosisHalfYear());
+            if (normalized == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID,
+                        "半年诊断结果仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
+            }
+            data.setDiagnosisHalfYear(normalized);
+        }
+        if (StrUtil.isNotBlank(data.getDiagnosisOneYear())) {
+            String normalized = ScreeningDiagnosisSupport.normalizeKeyPopulationDiagnosis(data.getDiagnosisOneYear());
+            if (normalized == null) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID,
+                        "一年诊断结果仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
+            }
+            data.setDiagnosisOneYear(normalized);
         }
         if (StrUtil.isBlank(data.getChestXrayResult())) {
             data.setChestXrayResult(null);

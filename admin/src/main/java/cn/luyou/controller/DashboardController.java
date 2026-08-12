@@ -340,7 +340,7 @@ public class DashboardController {
             }
             case "keyPopulation" -> {
                 LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<ScreeningKeyPopulation>()
-                        .eq(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者");
+                        .in(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者", "确诊结核", "在治患者");
                 if (hasYear) {
                     wrapper.eq(ScreeningKeyPopulation::getYear, year);
                 }

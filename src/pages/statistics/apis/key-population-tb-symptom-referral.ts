@@ -4,7 +4,8 @@ import { request } from "@/http/axios"
 /** 重点人群肺结核可疑症状筛查和推介情况报表行 */
 export interface KeyPopulationTbSymptomReferralStatisticsVO {
   district?: string
-  elderCount?: number
+  /** 老年人数：模板无系统口径，页面手工填写，可为空 */
+  elderCount?: number | null
   elderAnnualExamCount?: number
   elderSymptomScreenCount?: number
   elderChestXrayCount?: number
@@ -34,6 +35,15 @@ interface StatParams {
   departmentIds?: string[]
 }
 
+/** 地区选项（区县 + 乡镇/社区） */
+export function getKeyPopulationTbSymptomReferralRegionOptionsApi(departmentIds?: string[]) {
+  return request<ApiResponseData<string[]>>({
+    url: "statistics/key-population-tb-symptom-referral/region-options",
+    method: "get",
+    params: withDepartmentIds({}, departmentIds)
+  })
+}
+
 /** 重点人群肺结核可疑症状筛查和推介情况报表 */
 export function getKeyPopulationTbSymptomReferralStatisticsApi(params: StatParams) {
   return request<ApiResponseData<KeyPopulationTbSymptomReferralStatisticsVO[]>>({
@@ -43,12 +53,16 @@ export function getKeyPopulationTbSymptomReferralStatisticsApi(params: StatParam
   })
 }
 
-/** 导出重点人群肺结核可疑症状筛查和推介情况报表 */
-export function exportKeyPopulationTbSymptomReferralStatisticsApi(params: StatParams) {
+/** 导出（提交当前表格数据，保留手工填写的老年人数） */
+export function exportKeyPopulationTbSymptomReferralStatisticsApi(
+  year: string | undefined,
+  rows: KeyPopulationTbSymptomReferralStatisticsVO[]
+) {
   return request<Blob>({
     url: "statistics/key-population-tb-symptom-referral/export",
-    method: "get",
-    params: withDepartmentIds(params, params.departmentIds),
+    method: "post",
+    params: { year },
+    data: rows,
     responseType: "blob"
   })
 }

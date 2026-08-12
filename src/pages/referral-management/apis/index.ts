@@ -150,7 +150,13 @@ export function previewEpidemicTrackImportApi(file: File) {
     duplicateCount: number
     newCount: number
     updateCount: number
-    duplicates: { name: string, idNumber: string }[]
+    duplicates: {
+      name: string
+      idNumber: string
+      cardId?: string
+      township?: string
+      existingId?: string
+    }[]
   }>>({
     url: "referral-tracking/import-epidemic/preview",
     method: "post",

@@ -20,7 +20,7 @@ public class KeyPopulationTbSymptomReferralStatisticsVO {
 
     // ========== 老年人 ==========
 
-    /** 老年人数（老年人及老年人+糖尿病） */
+    /** 老年人数（季度报表模板无系统统计口径，留空由页面手工填写） */
     private Long elderCount;
 
     /** 参加年度体检人数 */

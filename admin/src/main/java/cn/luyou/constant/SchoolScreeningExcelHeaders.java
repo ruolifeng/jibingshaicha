@@ -5,8 +5,9 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 学生/学校人群筛查 Excel 表头（与系统列表、导入模板一致：2 行表头）。
- * <p>导出在末尾追加「录入用户」「录入时间」；导入模板不含该系统字段。
+ * 学生筛查 Excel 表头（对齐《2026年秋季新生入学结核病筛查记录表新》）。
+ * <p>无最左「年份」列；姓名后的「年份」为业务 year。
+ * 含「是否寄宿制」「年级」；导出在末尾追加「录入用户」「录入时间」。
  */
 public final class SchoolScreeningExcelHeaders {
 
@@ -15,9 +16,9 @@ public final class SchoolScreeningExcelHeaders {
 
     public static final String SHEET_NAME = "筛查数据";
 
-    private static final String G_INFECTION = "学校人群感染筛查情况";
-    private static final String G_XRAY = "学校人群胸片检查";
-    private static final String G_PREVENT = "潜伏感染者管理情况";
+    private static final String G_SYMPTOM = "结核病可疑症状";
+    private static final String G_INFECTION = "感染筛查";
+    private static final String G_CHEST = "胸部影像学";
 
     private static List<String> head(String... parts) {
         return new ArrayList<>(Arrays.asList(parts));
@@ -25,16 +26,14 @@ public final class SchoolScreeningExcelHeaders {
 
     /** 导入模板表头（不含录入用户） */
     public static List<List<String>> asTemplateHead() {
-        List<List<String>> heads = new ArrayList<>(37);
-        heads.add(head("序号"));
+        List<List<String>> heads = new ArrayList<>(33);
         appendBizHeads(heads);
         return heads;
     }
 
-    /** 导出表头：序号 + 业务列 + 录入用户 + 录入时间（末尾追加，避免导出文件再导入时列错位） */
+    /** 导出表头：业务列 + 录入用户 + 录入时间 */
     public static List<List<String>> asExportHead() {
-        List<List<String>> heads = new ArrayList<>(39);
-        heads.add(head("序号"));
+        List<List<String>> heads = new ArrayList<>(35);
         appendBizHeads(heads);
         heads.add(head("录入用户"));
         heads.add(head("录入时间"));
@@ -42,41 +41,38 @@ public final class SchoolScreeningExcelHeaders {
     }
 
     private static void appendBizHeads(List<List<String>> heads) {
-        heads.add(head("年份"));
-        heads.add(head("市（州）"));
-        heads.add(head("县（市、区）"));
+        heads.add(head("填报机构"));
+        heads.add(head("市州"));
+        heads.add(head("县区"));
+        heads.add(head("乡镇/街道"));
+        heads.add(head("类型"));
+        heads.add(head("是否寄宿制"));
+        heads.add(head("学校名称（全称）"));
         heads.add(head("姓名"));
+        heads.add(head("年份"));
         heads.add(head("性别"));
-        heads.add(head("出生日期"));
+        heads.add(head("身份证号"));
         heads.add(head("年龄"));
-        heads.add(head("证件类型"));
-        heads.add(head("证件号"));
+        heads.add(head("户籍所在地"));
+        heads.add(head("年级"));
+        heads.add(head("班级"));
         heads.add(head("民族"));
-        heads.add(head("联系电话"));
-        heads.add(head("户籍所在地（XX市XX县、区）"));
-        heads.add(head("现地址"));
-        heads.add(head("学校类型"));
-        heads.add(head("学校名称"));
-        heads.add(head("班级（院系）"));
-        heads.add(head("既往结核病史"));
-        heads.add(head("密切接触史"));
-        heads.add(head("结核病可疑症状"));
-        heads.add(head(G_INFECTION, "是否进行感染筛"));
-        heads.add(head(G_INFECTION, "感染筛查日期"));
+        heads.add(head("是否参加筛查"));
+        heads.add(head("有无既往结核病史"));
+        heads.add(head("有无肺结核接触史"));
+        heads.add(head(G_SYMPTOM, "咳嗽，咳痰≥两周"));
+        heads.add(head(G_SYMPTOM, "咯血或血痰"));
+        heads.add(head(G_SYMPTOM, "其他"));
+        heads.add(head(G_INFECTION, "感染筛查时间"));
         heads.add(head(G_INFECTION, "方法"));
-        heads.add(head(G_INFECTION, "结果（PPD：mmXmm；EC及IGRA：阳性/阴性）"));
-        heads.add(head(G_INFECTION, "感染筛查结果"));
-        heads.add(head(G_XRAY, "是否进行胸片检查"));
-        heads.add(head(G_XRAY, "胸片检查日期"));
-        heads.add(head(G_XRAY, "胸片结果"));
-        heads.add(head("痰涂片结果"));
+        heads.add(head(G_INFECTION, "结果"));
+        heads.add(head(G_INFECTION, "判定结果"));
+        heads.add(head(G_CHEST, "胸片检查时间"));
+        heads.add(head(G_CHEST, "方法"));
+        heads.add(head(G_CHEST, "结果"));
         heads.add(head("分子生物学结果"));
-        heads.add(head("诊断结果"));
-        heads.add(head(G_PREVENT, "是否进行预防者治疗"));
-        heads.add(head(G_PREVENT, "预防性治疗方案"));
-        heads.add(head(G_PREVENT, "预防性治疗开始时间（年月日）"));
-        heads.add(head(G_PREVENT, "预防性治疗完成时间（年月日）"));
-        heads.add(head(G_PREVENT, "预防性治疗结果"));
-        heads.add(head(G_PREVENT, "预防性治疗期间随访管理人员"));
+        heads.add(head("痰培养结果"));
+        heads.add(head("筛查结果"));
+        heads.add(head("备注"));
     }
 }

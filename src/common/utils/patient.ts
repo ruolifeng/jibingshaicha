@@ -155,7 +155,10 @@ function resolvePriorityFieldValue(
   label: string
 ): string {
   if (label === "病原学结果") {
-    return fields["病原学结果"] || fields["诊断结果"] || row?.diagnosisResult || ""
+    return resolvePatientPathogenResult(row)
+  }
+  if (label === "诊断结果") {
+    return resolvePatientDiagnosisResult(row)
   }
   return fields[label] || resolveFieldFromPatient(row, label) || ""
 }
@@ -220,18 +223,47 @@ export function resolveNoticeConfirmedDisplayTime(row: Record<string, any> | nul
   return formatNoticeSentTime(row.noticeConfirmedTime)
 }
 
-/** 部分重点字段在 patient 主表也有对应值 */
-function resolveFieldFromPatient(row: Record<string, any> | null | undefined, label: string): string {
-  if (!row) return ""
-  if (label === "病原学结果" || label === "诊断结果") return row.diagnosisResult || ""
+/** 部分重点字段在 patient 主表也有对应值（病原学/诊断结果由专用 resolve 处理，不在此回退） */
+function resolveFieldFromPatient(_row: Record<string, any> | null | undefined, _label: string): string {
   return ""
 }
 
-/** 解析患者病原学结果（与在管总览列表「病原学结果」列口径一致） */
+function isSpecialDiseasePatient(row: Record<string, any> | null | undefined): boolean {
+  if (!row) return false
+  return row.populationType === "specialDisease" || row.source === "specialDisease"
+}
+
+/**
+ * 解析患者病原学结果（在管总览「病原学结果」列）。
+ * 优先导入表「病原学结果」；专病网主表 diagnosisResult 存的是诊断结果，不能回退。
+ * 手动录入无导入「病原学结果」时，主表 diagnosisResult 即表单病原学结果。
+ */
 export function resolvePatientPathogenResult(row: Record<string, any> | null | undefined): string {
   if (!row) return ""
   const fields = resolveImportFields(row)
-  return resolvePriorityFieldValue(fields, row, "病原学结果")
+  const fromImport = String(fields["病原学结果"] || "").trim()
+  if (fromImport) return fromImport
+  // 导入已带独立「诊断结果」时，主表字段属于诊断，不当作病原学展示
+  if (String(fields["诊断结果"] || "").trim() || isSpecialDiseasePatient(row)) {
+    return ""
+  }
+  return String(row.diagnosisResult || "").trim()
+}
+
+/**
+ * 解析患者诊断结果（专病网/导入表「诊断结果」）。
+ * 优先导入字段；专病网主表 diagnosisResult 由导入「诊断结果」写入，可作回退。
+ * 手动表单写入的 diagnosisResult 是病原学结果，不回退到本列，避免与病原学列重复。
+ */
+export function resolvePatientDiagnosisResult(row: Record<string, any> | null | undefined): string {
+  if (!row) return ""
+  const fields = resolveImportFields(row)
+  const fromImport = String(fields["诊断结果"] || "").trim()
+  if (fromImport) return fromImport
+  if (isSpecialDiseasePatient(row)) {
+    return String(row.diagnosisResult || "").trim()
+  }
+  return ""
 }
 
 /** 将病原学结果映射为通知单「痰涂片」选项 */

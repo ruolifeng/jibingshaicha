@@ -6,24 +6,36 @@ export const PATIENT_MEDICATION_PICKUP_PERMISSIONS = [
   "patientManagement:pickup"
 ] as const
 
-/** 进入服药管理页 / 服药日历（有服药管理或填写领药任一即可） */
+/** 查看领药记录（独立按钮权限） */
+export const PATIENT_MEDICATION_PICKUP_VIEW_PERMISSIONS = [
+  "patientManagement:pickupView"
+] as const
+
+/** 进入服药管理页 / 服药日历（有服药管理、填写领药或查看记录任一即可） */
 export const PATIENT_MEDICATION_PAGE_PERMISSIONS = [
   "patientManagement:medication",
   "patientManagement:pickup",
+  "patientManagement:pickupView",
   "patient:medication",
   "keyPopulation:patient:medication",
   "closeContact:patient:medication"
 ] as const
 
-/** 查看领药摘要/记录（有服药管理或填写领药任一即可） */
-export const PATIENT_MEDICATION_PICKUP_VIEW_PERMISSIONS = [
-  ...PATIENT_MEDICATION_PAGE_PERMISSIONS
+/** 展示领药情况列（有服药管理、填写领药或查看记录任一即可） */
+export const PATIENT_MEDICATION_PICKUP_COLUMN_PERMISSIONS = [
+  "patientManagement:medication",
+  "patientManagement:pickup",
+  "patientManagement:pickupView",
+  "patient:medication",
+  "keyPopulation:patient:medication",
+  "closeContact:patient:medication"
 ] as const
 
 /** 潜伏感染者 — 服药管理页 */
 export const LATENT_MEDICATION_PAGE_PERMISSIONS = [
   "latentManagement:medication",
-  "latentManagement:pickup"
+  "latentManagement:pickup",
+  "latentManagement:pickupView"
 ] as const
 
 /** 潜伏感染者 — 填写领药 */
@@ -31,8 +43,13 @@ export const LATENT_MEDICATION_PICKUP_PERMISSIONS = [
   "latentManagement:pickup"
 ] as const
 
-/** 潜伏感染者 — 查看领药摘要/记录 */
+/** 潜伏感染者 — 查看领药记录（独立按钮权限） */
 export const LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS = [
+  "latentManagement:pickupView"
+] as const
+
+/** 潜伏感染者 — 展示领药情况列 */
+export const LATENT_MEDICATION_PICKUP_COLUMN_PERMISSIONS = [
   ...LATENT_MEDICATION_PAGE_PERMISSIONS
 ] as const
 

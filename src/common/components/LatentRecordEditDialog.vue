@@ -1,12 +1,22 @@
 <script lang="ts" setup>
 import {
-  INFECTION_METHOD_OPTIONS,
+  CHEST_XRAY_RESULT_OPTIONS,
+  displayInfectionJudgeResult,
+  displayInfectionScreenMethod,
+  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
+  KEY_INFECTION_SCREEN_METHOD_OPTIONS,
   LATENT_CLOSE_CONTACT_TYPE_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
-  LATENT_MANUAL_POPULATION_TYPE_OPTIONS
+  LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
+  SCHOOL_DIAGNOSIS_EDIT_OPTIONS,
+  SCHOOL_INFECTION_JUDGE_OPTIONS,
+  SCHOOL_SCREEN_METHOD_OPTIONS,
+  SCREENING_DIAGNOSIS_EDIT_OPTIONS
 } from "@@/constants/disease"
 import { CONTACT_TYPE_OPTIONS } from "@@/constants/screening-close-contact"
+import { formatDateTime } from "@@/utils/datetime"
 import { confirmEditChange } from "@@/utils/listToolbar"
+import { parseTrackingHistory, TRACK_STATUS_LABEL } from "@@/utils/referralTracking"
 import { idCardRule, normalizeIdNumber, phoneRule } from "@@/utils/validate"
 import { createLatentApi, getLatentDetailApi, updateLatentApi } from "@/pages/latent-management/apis"
 
@@ -29,9 +39,27 @@ const showKeyPopulationSubCategories = computed(() =>
 const showCloseContactType = computed(() =>
   showCrowdCategoryFields.value && form.populationType === "closeContact"
 )
+const isSchoolSource = computed(() => form.populationType === "school")
+const screenMethodOptions = computed(() =>
+  isSchoolSource.value ? SCHOOL_SCREEN_METHOD_OPTIONS : [...KEY_INFECTION_SCREEN_METHOD_OPTIONS]
+)
+const infectionResultOptions = computed(() =>
+  isSchoolSource.value ? SCHOOL_INFECTION_JUDGE_OPTIONS : [...KEY_INFECTION_JUDGE_RESULT_OPTIONS]
+)
+const diagnosisOptions = computed(() =>
+  isSchoolSource.value ? SCHOOL_DIAGNOSIS_EDIT_OPTIONS : SCREENING_DIAGNOSIS_EDIT_OPTIONS
+)
 
 const formRef = ref()
 const submitting = ref(false)
+const editTrackingHistory = ref<{ attempt: number, status: number, trackTime: string, reason: string }[]>([])
+const canEditTrackingHistory = computed(() => !isCreate.value && editTrackingHistory.value.length > 0)
+const trackStatusOptions = [
+  { label: "到位", value: 1 },
+  { label: "未到位", value: 2 },
+  { label: "其他", value: 3 }
+]
+
 const form = reactive({
   populationType: "",
   keyPopulationSubCategories: [] as string[],
@@ -47,7 +75,7 @@ const form = reactive({
   infectionScreenDate: "",
   screenMethod: "",
   infectionResult: "",
-  diagnosisFirst: "",
+  diagnosisFirst: "潜伏感染者",
   hasChestXray: "",
   chestXrayDate: "",
   chestXrayResult: "",
@@ -80,6 +108,7 @@ const rules = computed(() => ({
 
 function resetForm() {
   screeningId.value = null
+  editTrackingHistory.value = []
   Object.assign(form, {
     populationType: "",
     keyPopulationSubCategories: [],
@@ -95,7 +124,7 @@ function resetForm() {
     infectionScreenDate: "",
     screenMethod: "",
     infectionResult: "",
-    diagnosisFirst: "",
+    diagnosisFirst: "潜伏感染者",
     hasChestXray: "",
     chestXrayDate: "",
     chestXrayResult: "",
@@ -148,8 +177,8 @@ async function loadDetail() {
     householdAddress: data.householdAddress || "",
     currentAddress: data.currentAddress || "",
     infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
-    screenMethod: data.screenMethod || "",
-    infectionResult: data.infectionResult || "",
+    screenMethod: normalizeMethodForForm(data.screenMethod, data.infectionResult, data.populationType),
+    infectionResult: normalizeResultForForm(data.infectionResult, data.populationType),
     diagnosisFirst: data.diagnosisFirst || "",
     hasChestXray: data.hasChestXray || "",
     chestXrayDate: data.chestXrayDate || "",
@@ -157,13 +186,52 @@ async function loadDetail() {
     trackingRemark: data.trackingRemark || "",
     remark: data.remark || ""
   })
+  editTrackingHistory.value = parseTrackingHistory(data.trackingHistoryJson).map(item => ({
+    attempt: item.attempt,
+    status: item.status,
+    trackTime: item.trackTime,
+    reason: item.reason ?? ""
+  }))
   parseCrowdCategory(data)
+}
+
+function normalizeMethodForForm(screenMethod?: string, infectionResult?: string, populationType?: string) {
+  const raw = (screenMethod || "").trim()
+  if (populationType === "school") {
+    if (!raw) return ""
+    if (SCHOOL_SCREEN_METHOD_OPTIONS.includes(raw as typeof SCHOOL_SCREEN_METHOD_OPTIONS[number])) return raw
+    const upper = raw.toUpperCase()
+    if (upper.includes("IGRA") || raw.includes("干扰素")) return "IGRA"
+    if (upper.includes("EC") || raw.includes("结核抗原")) return "EC"
+    if (upper.includes("PPD") || raw.includes("结核菌素")) return "PPD"
+    if (raw === "未做" || raw === "未查") return "未查"
+    return raw
+  }
+  const display = displayInfectionScreenMethod(screenMethod, infectionResult)
+  return display === "-" ? "" : display
+}
+
+function normalizeResultForForm(infectionResult?: string, populationType?: string) {
+  const raw = (infectionResult || "").trim()
+  if (populationType === "school") {
+    if (!raw) return ""
+    if (SCHOOL_INFECTION_JUDGE_OPTIONS.includes(raw as typeof SCHOOL_INFECTION_JUDGE_OPTIONS[number])) return raw
+    if (raw === "未判读") return "无法判读"
+    return raw
+  }
+  const display = displayInfectionJudgeResult(infectionResult)
+  return display === "-" ? "" : display
 }
 
 watch(() => form.populationType, (val, oldVal) => {
   if (val === oldVal) return
   form.keyPopulationSubCategories = []
   form.closeContactType = ""
+  // 切换数据来源时清空口径不同的感染字段，避免提交非法值
+  if (oldVal) {
+    form.screenMethod = ""
+    form.infectionResult = ""
+  }
 })
 
 watch(() => props.visible, async (val) => {
@@ -186,6 +254,13 @@ async function handleSubmit() {
   } catch {
     return
   }
+  if (canEditTrackingHistory.value) {
+    const emptyRemark = editTrackingHistory.value.find(item => !String(item.reason || "").trim())
+    if (emptyRemark) {
+      ElMessage.warning(`请填写第${emptyRemark.attempt}次追踪备注`)
+      return
+    }
+  }
   if (!isCreate.value) {
     const name = form.name?.trim() || "该潜伏感染者"
     const confirmed = await confirmEditChange(`「${name}」信息`)
@@ -199,12 +274,22 @@ async function handleSubmit() {
       await createLatentApi({ ...form, idNumber, crowdCategory })
       ElMessage.success("新增成功")
     } else {
-      const { populationType, keyPopulationSubCategories, closeContactType, ...payload } = form
-      await updateLatentApi(props.latentId!, {
+      const { populationType, keyPopulationSubCategories, closeContactType, trackingRemark, ...payload } = form
+      const updateBody: Record<string, any> = {
         ...payload,
         idNumber,
         ...(showCrowdCategoryFields.value ? { crowdCategory } : {})
-      })
+      }
+      if (canEditTrackingHistory.value) {
+        updateBody.trackingHistory = editTrackingHistory.value.map(item => ({
+          attempt: item.attempt,
+          status: item.status,
+          reason: String(item.reason || "").trim()
+        }))
+      } else {
+        updateBody.trackingRemark = trackingRemark
+      }
+      await updateLatentApi(props.latentId!, updateBody)
       ElMessage.success("保存成功")
     }
     close()
@@ -326,20 +411,26 @@ async function handleSubmit() {
           <el-form-item label="感染筛查方法">
             <el-select
               v-model="form.screenMethod"
-              placeholder="请选择或输入"
+              placeholder="请选择"
               clearable
               filterable
-              allow-create
-              default-first-option
               style="width: 100%"
             >
-              <el-option v-for="item in INFECTION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+              <el-option v-for="item in screenMethodOptions" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="感染筛查结果">
-            <el-input v-model="form.infectionResult" />
+          <el-form-item label="结果判定">
+            <el-select
+              v-model="form.infectionResult"
+              placeholder="请选择"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option v-for="item in infectionResultOptions" :key="item" :label="item" :value="item" />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="12">
@@ -357,17 +448,63 @@ async function handleSubmit() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="胸片检查结果">
-            <el-input v-model="form.chestXrayResult" />
+            <el-select v-model="form.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+              <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="12">
           <el-form-item label="首次诊断">
-            <el-input v-model="form.diagnosisFirst" />
+            <el-select v-model="form.diagnosisFirst" placeholder="请选择" clearable style="width: 100%">
+              <el-option
+                v-for="item in diagnosisOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
-        <el-col :span="24">
+        <template v-if="canEditTrackingHistory">
+          <el-col :span="24">
+            <el-divider content-position="left">
+              追踪情况
+            </el-divider>
+          </el-col>
+          <el-col
+            v-for="item in editTrackingHistory"
+            :key="item.attempt"
+            :span="24"
+          >
+            <el-form-item :label="`第${item.attempt}次追踪`" required>
+              <div class="edit-tracking-meta">
+                <el-select v-model="item.status" style="width: 120px">
+                  <el-option
+                    v-for="opt in trackStatusOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+                <span class="edit-tracking-time">{{ formatDateTime(item.trackTime) }}</span>
+                <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                  {{ TRACK_STATUS_LABEL[item.status] || "-" }}
+                </el-tag>
+              </div>
+              <el-input
+                v-model="item.reason"
+                type="textarea"
+                :rows="2"
+                maxlength="500"
+                show-word-limit
+                placeholder="请填写追踪备注"
+              />
+            </el-form-item>
+          </el-col>
+        </template>
+        <el-col v-else :span="24">
           <el-form-item label="追踪情况">
-            <el-input v-model="form.trackingRemark" type="textarea" :rows="2" />
+            <el-input v-model="form.trackingRemark" type="textarea" :rows="2" placeholder="暂无正式追踪记录时可填写说明" />
           </el-form-item>
         </el-col>
         <el-col :span="24">
@@ -387,3 +524,18 @@ async function handleSubmit() {
     </template>
   </el-dialog>
 </template>
+
+<style scoped lang="scss">
+.edit-tracking-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.edit-tracking-time {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+</style>

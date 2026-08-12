@@ -1,6 +1,3 @@
-/** 督导表记录是否可修改（五级用户 10 天内） */
-export const SUPERVISION_EDIT_DAYS_LEVEL5 = 10
-
 /** 督导表需从潜伏档案 / 筛查回填的身份字段 */
 const SUPERVISION_PROFILE_KEYS = [
   "idNumber",
@@ -44,19 +41,14 @@ export function mergeSupervisionProfileFields(
   return form
 }
 
+/** 已提交督导表可随时修改（已归档除外；后端 editable 优先） */
 export function canEditSupervisionForm(
-  userRole: number | null | undefined,
+  _userRole: number | null | undefined,
   record: { status?: number, createTime?: string | null, editable?: boolean | null }
 ) {
   if (!record || record.status !== 1) return false
   if (record.editable != null) return record.editable
-  if (userRole == null || userRole !== 6) return true
-  if (!record.createTime) return true
-  const created = new Date(record.createTime.replace(" ", "T"))
-  if (Number.isNaN(created.getTime())) return true
-  const deadline = new Date(created)
-  deadline.setDate(deadline.getDate() + SUPERVISION_EDIT_DAYS_LEVEL5)
-  return deadline.getTime() >= Date.now()
+  return true
 }
 
 export function getSupervisionStatusLabel(status?: number) {

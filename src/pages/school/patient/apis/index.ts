@@ -27,6 +27,7 @@ export function getPatientListApi(params: {
   phone?: string
   dateFrom?: string
   dateTo?: string
+  columnFilters?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "patient/list",
@@ -45,6 +46,7 @@ export function getPatientHistoryApi(params: {
   phone?: string
   startTime?: string
   endTime?: string
+  columnFilters?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "patient/history",

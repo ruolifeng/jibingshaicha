@@ -27,6 +27,160 @@ export const HAS_PREVENTIVE_TREATMENT_OPTIONS = [
   { label: "未开展", value: "未开展" }
 ] as const
 
+/** 编辑/新增表单不展示的系统列或 Excel 自动计算列 */
+export const CLOSE_CONTACT_CASE_EDIT_EXCLUDE = new Set([
+  "creatorUsername",
+  "createTime",
+  "reportQuarter",
+  "registrationIntervalHint",
+  "ageGroup"
+])
+
+/** 日期字段（编辑用 date-picker） */
+export const CLOSE_CONTACT_CASE_DATE_FIELDS = new Set([
+  "reportDate",
+  "registrationDate",
+  "firstScreenDate",
+  "infectionCheckDate",
+  "imagingDate",
+  "sputumCheckDate",
+  "followup6DueDate",
+  "followup6ScreenDate",
+  "followup6ImagingDate",
+  "followup6SputumDate",
+  "followup12DueDate",
+  "followup12ScreenDate",
+  "followup12ImagingDate",
+  "followup12SputumDate",
+  "followup24DueDate",
+  "followup24ScreenDate",
+  "followup24ImagingDate",
+  "followup24SputumDate"
+])
+
+/** 编辑表单分组（覆盖表格全部业务列） */
+export const CLOSE_CONTACT_CASE_EDIT_GROUPS: { key: string, label: string, fields: string[] }[] = [
+  {
+    key: "source",
+    label: "原患者信息",
+    fields: [
+      "city",
+      "district",
+      "sourcePatientName",
+      "sourcePatientCaseNo",
+      "sourcePatientBacteriologyResult",
+      "sourcePatientPhone",
+      "reportDate",
+      "registrationDate"
+    ]
+  },
+  {
+    key: "contact",
+    label: "接触者基本信息",
+    fields: [
+      "name",
+      "idNumber",
+      "age",
+      "phone",
+      "gender",
+      "ethnicity",
+      "contactType",
+      "contactPlace",
+      "householdAddress",
+      "currentAddress"
+    ]
+  },
+  {
+    key: "screen",
+    label: "首次筛查与诊断",
+    fields: [
+      "firstScreenDate",
+      "symptom1",
+      "symptom2",
+      "infectionCheckDate",
+      "infectionCheckMethod",
+      "infectionCheckResult",
+      "imagingDate",
+      "imagingMethod",
+      "imagingResult",
+      "sputumCheckDate",
+      "sputumCheckMethod",
+      "sputumCheckResult",
+      "finalScreeningResult"
+    ]
+  },
+  {
+    key: "preventive",
+    label: "预防治疗",
+    fields: [
+      "hasContraindication",
+      "noTreatmentReason",
+      "contraindicationRemark",
+      "hasPreventiveTreatment",
+      "preventivePlan",
+      "preventivePlanRemark",
+      "treatmentCompleted",
+      "incompleteReason"
+    ]
+  },
+  {
+    key: "followup6",
+    label: "6月随访",
+    fields: [
+      "followup6DueDate",
+      "followup6ScreenDate",
+      "followup6Symptom1",
+      "followup6Symptom2",
+      "followup6ImagingDate",
+      "followup6ImagingMethod",
+      "followup6ImagingResult",
+      "followup6SputumDate",
+      "followup6SputumMethod",
+      "followup6SputumResult",
+      "followup6Result"
+    ]
+  },
+  {
+    key: "followup12",
+    label: "12月随访",
+    fields: [
+      "followup12DueDate",
+      "followup12ScreenDate",
+      "followup12Symptom1",
+      "followup12Symptom2",
+      "followup12ImagingDate",
+      "followup12ImagingMethod",
+      "followup12ImagingResult",
+      "followup12SputumDate",
+      "followup12SputumMethod",
+      "followup12SputumResult",
+      "followup12Result"
+    ]
+  },
+  {
+    key: "followup24",
+    label: "24月随访",
+    fields: [
+      "followup24DueDate",
+      "followup24ScreenDate",
+      "followup24Symptom1",
+      "followup24Symptom2",
+      "followup24ImagingDate",
+      "followup24ImagingMethod",
+      "followup24ImagingResult",
+      "followup24SputumDate",
+      "followup24SputumMethod",
+      "followup24SputumResult",
+      "followup24Result"
+    ]
+  },
+  {
+    key: "remark",
+    label: "备注",
+    fields: ["remark"]
+  }
+]
+
 /**
  * 电子表格预览列（顺序与 CloseContactCaseExcelHeaders / 官方模板一致）
  * 首尾追加系统字段：录入用户、录入时间
@@ -36,7 +190,7 @@ export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
   { field: "city", title: "市/州（**市或**州）", width: 140 },
   { field: "district", title: "区/县（**区/县/市）", width: 140 },
   { field: "sourcePatientName", title: "患者姓名", width: 100 },
-  { field: "sourcePatientCaseNo", title: "传报卡号", width: 180 },
+  { field: "sourcePatientCaseNo", title: "病案号", width: 180 },
   { field: "sourcePatientBacteriologyResult", title: "病原学结果", width: 160 },
   { field: "sourcePatientPhone", title: "患者电话", width: 120 },
   { field: "reportDate", title: "填表日期", width: 110 },
@@ -54,7 +208,7 @@ export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
   { field: "symptom1", title: "结核症状1", width: 160 },
   { field: "symptom2", title: "结核症状2（自行补充）", width: 160 },
   { field: "infectionCheckDate", title: "感染检测日期", width: 120 },
-  { field: "infectionCheckMethod", title: "感染检测方法", width: 180 },
+  { field: "infectionCheckMethod", title: "感染筛查方法", width: 180 },
   { field: "infectionCheckResult", title: "结果判定", width: 150 },
   { field: "imagingDate", title: "影像检查日期（填写yyyy/mm/dd格式）", width: 220 },
   { field: "imagingMethod", title: "影像方法", width: 150 },
@@ -107,3 +261,18 @@ export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
   { field: "remark", title: "备注", width: 150 },
   { field: "createTime", title: "录入时间", width: 160, fixed: "right" }
 ]
+
+/** 字段名 → 列标题（编辑标签；含表格外扩展字段） */
+export const CLOSE_CONTACT_CASE_FIELD_TITLE: Record<string, string> = {
+  ...Object.fromEntries(CLOSE_CONTACT_CASE_COLUMNS.map(col => [col.field, col.title])),
+  gender: "性别",
+  ethnicity: "民族",
+  householdAddress: "户籍地址",
+  currentAddress: "现住址"
+}
+
+/** 编辑表单用较短标签（去掉括号说明） */
+export function closeContactCaseFieldLabel(field: string): string {
+  const title = CLOSE_CONTACT_CASE_FIELD_TITLE[field] || field
+  return title.replace(/（[^）]*）/g, "").replace(/\([^)]*\)/g, "").trim() || title
+}

@@ -36,10 +36,14 @@ export interface DashboardSummaryData {
   /** 统计周期起止（自然年 1/1—12/31） */
   statPeriodFrom?: string
   statPeriodTo?: string
-  /** 病原学阳性人数（在管总览+历史患者中「病原学结果阳性」口径） */
+  /** 发病率分子人数（经典病原学阳性 + 结核性胸膜炎且0月序影像/分子阳） */
   pathogenPositiveCount?: number
-  /** 病原学阳性率（病原学结果阳性人数 / 年度管理患者数，%，保留 1 位小数） */
+  /** 发病率（分子 / 年度管理患者数，%，保留 1 位小数） */
   pathogenPositiveRate?: number
+  /** 耐药筛查人数（首次随访耐药情况为耐药/非耐药） */
+  drugResistanceScreenedCount?: number
+  /** 耐药筛查率（耐药筛查人数 / 年度管理患者数，%，保留 1 位小数） */
+  drugResistanceScreeningRate?: number
   /** 推介人数（已发送） */
   recommendCount?: number
   /** 推介到位人数 */

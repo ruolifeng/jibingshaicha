@@ -5,8 +5,8 @@ import {
   FOLLOW_UP_SYMPTOM_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OTHER,
-  STOP_TREATMENT_REASON_OPTIONS,
-  YES_NO_OPTIONS
+  FOLLOW_UP_YES_NO_HAVE_OPTIONS,
+  STOP_TREATMENT_REASON_OPTIONS
 } from "@@/constants/disease"
 
 interface Option { value: string, label: string }
@@ -33,7 +33,7 @@ export function formatFollowUpSupervisor(value?: string | null, other?: string |
 }
 
 export function formatYesNo(value?: string | null) {
-  return optionLabel(YES_NO_OPTIONS, value)
+  return optionLabel(FOLLOW_UP_YES_NO_HAVE_OPTIONS, value)
 }
 
 export function formatStopTreatmentReason(reason?: string | null, other?: string | null) {

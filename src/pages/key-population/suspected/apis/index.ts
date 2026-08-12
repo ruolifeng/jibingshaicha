@@ -14,11 +14,34 @@ export function getSuspectedListApi(params: {
   archived?: number
   referralResult?: string
   diagnosisFirst?: string
+  columnFilters?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "latent/list",
     method: "get",
     params
+  })
+}
+
+/** 导出待诊断列表（含纳入原因，便于与筛查「疑似结核」对账） */
+export function exportSuspectedListApi(params: {
+  populationType: string
+  name?: string
+  idNumber?: string
+  phone?: string
+  dateFrom?: string
+  dateTo?: string
+  trackingStatus?: number
+  archived?: number
+  referralResult?: string
+  diagnosisFirst?: string
+  columnFilters?: string
+}) {
+  return request<Blob>({
+    url: "export/suspected-list",
+    method: "get",
+    params,
+    responseType: "blob"
   })
 }
 

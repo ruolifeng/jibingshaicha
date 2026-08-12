@@ -14,6 +14,7 @@ import {
   CC_IMAGING_METHOD_OPTIONS,
   CC_IMAGING_RESULT_OPTIONS,
   CC_INFECTION_CHECK_METHOD_OPTIONS,
+  CC_INFECTION_CHECK_RESULT_OPTIONS,
   CC_SPUTUM_METHOD_OPTIONS,
   CC_SPUTUM_RESULT_OPTIONS,
   CC_SYMPTOM1_OPTIONS,
@@ -1016,7 +1017,9 @@ async function handleThreeMonthSubmit() {
               </el-col>
               <el-col :span="8">
                 <el-form-item label="结果判定">
-                  <el-input v-model="editForm.infectionCheckResult" />
+                  <el-select v-model="editForm.infectionCheckResult" placeholder="请选择" style="width:100%" clearable filterable>
+                    <el-option v-for="opt in CC_INFECTION_CHECK_RESULT_OPTIONS" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="8">

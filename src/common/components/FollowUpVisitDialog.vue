@@ -21,11 +21,12 @@ import {
   FOLLOW_UP_SYMPTOM_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OTHER,
+  FOLLOW_UP_YES_NO_HAVE_OPTIONS,
   STOP_TREATMENT_REASON_OPTIONS,
   STOP_TREATMENT_YES_NO_OPTIONS,
-  YES_NO_OPTIONS
+  TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
-import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, FOLLOW_UP_EDIT_DAYS_LEVEL5, resolveFollowUpFormDefaultNextVisitDate, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
+import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, resolveFollowUpFormDefaultNextVisitDate, resolvePreviousFollowUpChemotherapy, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitApi, getFollowUpCaseClosureStatsApi, getFollowUpDraftApi, getFollowUpListApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -126,6 +127,16 @@ interface FollowUpForm {
 }
 
 const form = reactive<FollowUpForm>(createEmptyForm())
+
+/** 标准治疗方案 + 当前值（兼容历史自由文本） */
+const chemotherapyPlanOptions = computed(() => {
+  const opts = [...TREATMENT_PLAN_OPTIONS]
+  const current = form.chemotherapyPlan?.trim()
+  if (current && !opts.includes(current)) {
+    opts.push(current)
+  }
+  return opts
+})
 
 function createEmptyForm(): FollowUpForm {
   return {
@@ -230,24 +241,25 @@ watch(
   }
 )
 
-/** 同步首次随访化疗方案；新建时顺带联动下次随访时间 */
+/** 同步上一次化疗方案；新建时顺带联动下次随访时间 */
 async function applyFirstVisitLinkage() {
   if (!props.patientId) return
   try {
     const [firstVisitRes, listRes] = await Promise.all([
       getFirstVisitApi(props.patientId).catch(() => ({ data: null })),
-      isEditMode.value
-        ? Promise.resolve({ data: [] as Array<Record<string, any>> })
-        : getFollowUpListApi(props.patientId).catch(() => ({ data: [] }))
+      getFollowUpListApi(props.patientId).catch(() => ({ data: [] as Array<Record<string, any>> }))
     ])
     const firstVisit = firstVisitRes.data
+    const completedList = (listRes.data || []).filter((item: { status?: number }) => item.status !== 0)
     applyFollowUpChemotherapyDefault(form, {
+      previousFollowUpChemotherapy: resolvePreviousFollowUpChemotherapy(completedList, {
+        beforeId: isEditMode.value ? props.initialData?.id : null
+      }),
       firstVisitChemotherapy: firstVisit?.chemotherapy,
       patientRow: props.patientRow
     })
 
     if (isEditMode.value || form.nextVisitDate) return
-    const completedList = (listRes.data || []).filter((item: { status?: number }) => item.status === 1)
     const linked = resolveFollowUpFormDefaultNextVisitDate(
       completedList,
       firstVisit?.nextVisitDate || ""
@@ -398,14 +410,6 @@ async function handleSave() {
     top="5vh"
     destroy-on-close
   >
-    <el-alert
-      v-if="formLocked"
-      type="warning"
-      :closable="false"
-      show-icon
-      class="mb-3"
-      :title="`后续随访已超过 ${FOLLOW_UP_EDIT_DAYS_LEVEL5} 天修改期限，仅可查看。如需修改请联系上级管理员。`"
-    />
     <el-form :model="form" label-width="120px" size="default" :disabled="formLocked">
       <!-- 基本信息 -->
       <el-divider content-position="left">
@@ -493,7 +497,22 @@ async function handleSave() {
       <el-row :gutter="16">
         <el-col :span="24">
           <el-form-item label="化疗方案">
-            <el-input v-model="form.chemotherapyPlan" placeholder="来自首次随访化疗方案，可修改" />
+            <el-select
+              v-model="form.chemotherapyPlan"
+              placeholder="同步上一次方案，可重新选择或输入"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in chemotherapyPlanOptions"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="8">
@@ -525,7 +544,7 @@ async function handleSave() {
         <el-col :span="8">
           <el-form-item label="药物不良反应">
             <el-radio-group v-model="form.adverseReaction">
-              <el-radio v-for="o in YES_NO_OPTIONS" :key="o.value" :value="o.value">
+              <el-radio v-for="o in FOLLOW_UP_YES_NO_HAVE_OPTIONS" :key="o.value" :value="o.value">
                 {{ o.label }}
               </el-radio>
             </el-radio-group>
@@ -539,7 +558,7 @@ async function handleSave() {
         <el-col :span="8">
           <el-form-item label="并发症/合并症">
             <el-radio-group v-model="form.complication">
-              <el-radio v-for="o in YES_NO_OPTIONS" :key="o.value" :value="o.value">
+              <el-radio v-for="o in FOLLOW_UP_YES_NO_HAVE_OPTIONS" :key="o.value" :value="o.value">
                 {{ o.label }}
               </el-radio>
             </el-radio-group>

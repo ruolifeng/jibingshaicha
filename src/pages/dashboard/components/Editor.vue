@@ -60,6 +60,11 @@ const pathogenPositiveRateText = computed(() => {
   return rate == null ? "—" : `${rate.toFixed(1)}%`
 })
 
+const drugResistanceScreeningRateText = computed(() => {
+  const rate = summary.value.drugResistanceScreeningRate
+  return rate == null ? "—" : `${rate.toFixed(1)}%`
+})
+
 const treatmentSuccessRateText = computed(() => {
   const rate = summary.value.treatmentSuccessRate
   return rate == null ? "—" : `${rate.toFixed(1)}%`
@@ -140,12 +145,16 @@ function alphaColor(hex: string, alpha = "20") {
 
       <div class="pathogen-panel">
         <div class="pathogen-title">
-          {{ managementYear }}年度病原学阳性情况
+          {{ managementYear }}年度发病率 / 耐药筛查率
         </div>
         <div class="pathogen-content">
-          <span>{{ managementYear }}年度病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+          <span>发病率分子人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
           <span class="pathogen-divider">|</span>
-          <span>病原学阳性率：<strong>{{ pathogenPositiveRateText }}</strong></span>
+          <span>发病率：<strong>{{ pathogenPositiveRateText }}</strong></span>
+          <span class="pathogen-divider">|</span>
+          <span>耐药筛查人数：<strong>{{ summary.drugResistanceScreenedCount ?? 0 }}</strong> 例</span>
+          <span class="pathogen-divider">|</span>
+          <span>耐药筛查率：<strong>{{ drugResistanceScreeningRateText }}</strong></span>
         </div>
       </div>
 

@@ -1,9 +1,6 @@
 import { SPUTUM_STATUS_OPTIONS } from "@@/constants/disease"
 import { resolveFirstTreatmentPlan, resolveImportFields } from "@@/utils/patient"
 
-/** 五级用户（role=6）已完成首次随访的可编辑天数 */
-export const FIRST_VISIT_EDIT_DAYS_LEVEL5 = 10
-
 /** 首次随访编号：8位数字 */
 export const FIRST_VISIT_FORM_NO_PATTERN = /^\d{8}$/
 
@@ -91,19 +88,12 @@ function normalizeSputumStatusOption(raw: string): string {
   return ""
 }
 
-/** 五级用户：已完成首次随访记录创建后 10 天内可修改；管理员（role≠6）随时可改 */
+/** 首次随访已完成记录可随时修改（仍受权限控制） */
 export function canEditFirstVisit(
-  userRole: number,
-  visit: { status?: number, createTime?: string | null } | null | undefined
+  _userRole: number,
+  _visit: { status?: number, createTime?: string | null } | null | undefined
 ): boolean {
-  if (!visit || visit.status !== 1) return true
-  if (userRole !== 6) return true
-  if (!visit.createTime) return true
-  const created = new Date(String(visit.createTime).replace(" ", "T"))
-  if (Number.isNaN(created.getTime())) return true
-  const deadline = new Date(created)
-  deadline.setDate(deadline.getDate() + FIRST_VISIT_EDIT_DAYS_LEVEL5)
-  return Date.now() <= deadline.getTime()
+  return true
 }
 
 /** 首次随访方式展示（含「其他」手工录入） */

@@ -15,8 +15,13 @@ public class DistrictStatisticsVO {
     @ExcelProperty("区/县")
     private String district;
 
-    @ExcelProperty("实际筛查人数")
+    /** 三个检查方法中任一项有结果录入 */
+    @ExcelProperty("接受检查人数")
     private Long actualScreenCount;
+
+    /** 按学段规范完成检查人数 */
+    @ExcelProperty("规范检查人数")
+    private Long standardizedScreenCount;
 
     @ExcelProperty("与肺结核患者密切接触的人数")
     private Long closeContactCount;

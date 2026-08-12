@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
-import { getPopulationTypeLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
+import { displayInfectionJudgeResult, displayInfectionScreenMethod, getPopulationTypeLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
+import { parseTrackingHistory } from "@@/utils/referralTracking"
 import { getLatentDetailApi } from "@/pages/latent-management/apis"
 
 const props = defineProps<{
@@ -16,24 +17,6 @@ const loading = ref(false)
 const detail = ref<Record<string, any> | null>(null)
 
 const hasCloseContactCase = computed(() => !!detail.value?.closeContactCaseId || !!detail.value?.finalScreeningResult)
-
-/** 展示感染筛查方法：优先真实字段，兼容密接完整选项名 */
-function displayScreenMethod(row: { screenMethod?: string, infectionResult?: string } | null) {
-  if (!row) return "-"
-  const method = (row.screenMethod || "").trim()
-  if (method) {
-    const upper = method.toUpperCase()
-    if (upper.includes("IGRA") || method.includes("干扰素")) return "IGRA"
-    if (upper.includes("EC") || method.includes("结核抗原")) return "EC"
-    if (upper.includes("PPD") || method.includes("结核菌素")) return "PPD"
-    return method
-  }
-  const result = row.infectionResult || ""
-  if (/IGRA/i.test(result)) return "IGRA"
-  if (/^EC/i.test(result) || /EC阳|EC阴/.test(result)) return "EC"
-  if (/^PPD/i.test(result) || /PPD/.test(result)) return "PPD"
-  return "-"
-}
 
 async function loadDetail() {
   if (!props.latentId) return
@@ -105,10 +88,10 @@ watch(() => props.visible, (val) => {
             {{ detail.infectionScreenDate || detail.screenDate || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查方法">
-            {{ displayScreenMethod(detail) }}
+            {{ displayInfectionScreenMethod(detail.screenMethod, detail.infectionResult) }}
           </el-descriptions-item>
-          <el-descriptions-item label="感染筛查结果">
-            {{ detail.infectionResult || detail.screenResult || "-" }}
+          <el-descriptions-item label="结果判定">
+            {{ displayInfectionJudgeResult(detail.infectionResult || detail.screenResult) }}
           </el-descriptions-item>
           <el-descriptions-item label="追踪状态">
             {{ TRACKING_STATUS_MAP[detail.trackingStatus] ?? "待追踪" }}
@@ -130,7 +113,7 @@ watch(() => props.visible, (val) => {
           </el-descriptions-item>
           <el-descriptions-item label="追踪情况" :span="2">
             <TrackingHistoryPanel
-              v-if="detail.trackingHistoryJson"
+              v-if="parseTrackingHistory(detail.trackingHistoryJson).length"
               :history-json="detail.trackingHistoryJson"
             />
             <span v-else>{{ detail.trackingRemark || "-" }}</span>

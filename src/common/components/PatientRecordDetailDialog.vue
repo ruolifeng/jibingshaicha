@@ -5,6 +5,8 @@ import {
   buildPriorityImportFields,
   formatNoticeSentTime,
   isRetreatmentPatient,
+  resolvePatientDiagnosisResult,
+  resolvePatientPathogenResult,
   resolveRegistrationNo,
   resolveTreatmentClass
 } from "@@/utils/patient"
@@ -34,7 +36,9 @@ const importSectionTitle = computed(() => {
 const visiblePriorityFields = computed(() => {
   if (!detail.value) return []
   return priorityFields.value.filter((item) => {
-    if (item.label === "病原学结果" && detail.value?.diagnosisResult) return false
+    // 基本信息区已展示病原学结果 / 诊断结果，避免优先区重复
+    if (item.label === "病原学结果") return false
+    if (item.label === "诊断结果") return false
     if (item.label === "登记号" && resolveRegistrationNo(detail.value)) return false
     if (item.label === "治疗分类" && resolveTreatmentClass(detail.value)) return false
     return true
@@ -111,7 +115,10 @@ watch(() => props.visible, (val) => {
             {{ detail.currentAddress || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="病原学结果">
-            {{ detail.diagnosisResult || "-" }}
+            {{ resolvePatientPathogenResult(detail) || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="诊断结果">
+            {{ resolvePatientDiagnosisResult(detail) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="人群分类">
             {{ detail.crowdCategory || "-" }}

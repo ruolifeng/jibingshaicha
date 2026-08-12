@@ -188,6 +188,11 @@ export function closeCaseApi(id: string) {
   return request<ApiResponseData<null>>({ url: `latent/close-case/${id}`, method: "post" })
 }
 
+/** 解锁结案归档的潜伏感染者（管理员） */
+export function unarchiveLatentFromCloseCaseApi(id: string) {
+  return request<ApiResponseData<null>>({ url: `latent/unarchive/${id}`, method: "post" })
+}
+
 /** 历史患者列表（已归档） */
 export function getLatentHistoryListApi(params: Record<string, any>) {
   return request<ApiResponseData<any>>({ url: "latent/history", method: "get", params })

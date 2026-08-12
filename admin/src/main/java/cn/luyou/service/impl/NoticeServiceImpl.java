@@ -68,6 +68,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             notice.setStatus(0);
             save(notice);
         }
+        syncLatentRegistrationNo(notice);
     }
 
     @Override
@@ -94,6 +95,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         } else {
             save(notice);
         }
+        syncLatentRegistrationNo(notice);
         // 发送后给接收方创建待接收消息
         if (notice.getReceiverOrgId() != null) {
             String noticeTypeText = "patient".equals(notice.getNoticeType()) ? "患者通知单" : "潜伏者通知单";
@@ -101,6 +103,14 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             String content = String.format("【%s】%s，发送方已下发，请在消息管理中点击接收通知单完成接收。", noticeTypeText, notice.getPatientName());
             sysMessageService.sendMessage(notice.getReceiverOrgId(), title, content, "notice_receive", notice.getId());
         }
+    }
+
+    /** 潜伏感染者通知单：登记号回写潜伏感染主表 */
+    private void syncLatentRegistrationNo(Notice notice) {
+        if (notice == null || !"latent".equals(notice.getNoticeType()) || notice.getBizId() == null) {
+            return;
+        }
+        latentInfectionService.syncRegistrationNoFromNotice(notice.getBizId(), notice.getRegistrationNo());
     }
 
     @Override

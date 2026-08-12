@@ -21,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,11 +108,14 @@ public class PatientController {
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String sortField,
             @RequestParam(required = false) String sortOrder,
-            @RequestParam(required = false) String formatIssue) {
+            @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String sputumCulture,
+            @RequestParam(required = false) String drugResistance) {
         return ResultRes.success(patientService.queryPage(
                 page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
                 dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters, sortField, sortOrder, formatIssue));
+                creatorUsername, columnFilters, sortField, sortOrder, formatIssue,
+                sputumCulture, drugResistance));
     }
 
     @Operation(summary = "历史患者列表")
@@ -128,9 +130,11 @@ public class PatientController {
             @RequestParam(required = false) String diagnosisResult,
             @RequestParam(required = false) String startTime,
             @RequestParam(required = false) String endTime,
-            @RequestParam(required = false) String stopTreatmentReason) {
+            @RequestParam(required = false) String stopTreatmentReason,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(patientService.queryHistoryPage(
-                page, size, populationType, name, idNumber, phone, diagnosisResult, startTime, endTime, stopTreatmentReason));
+                page, size, populationType, name, idNumber, phone, diagnosisResult, startTime, endTime,
+                stopTreatmentReason, columnFilters));
     }
 
     @Operation(summary = "历史患者统计汇总")
@@ -243,26 +247,12 @@ public class PatientController {
 
     // ==================== 首次随访 ====================
 
-    /** 五级用户已完成首次随访：创建后 10 天内可修改；管理员（非五级）随时可改 */
-    private static final int FIRST_VISIT_EDIT_DAYS_LEVEL5 = 10;
-
+    /** 已完成首次随访可随时修改（仍校验 edit 权限） */
     private void assertFirstVisitEditable(FirstVisit existing) {
         if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
             return;
         }
         assertFirstVisitEditPermission(existing);
-        Integer role = BaseContext.getCurrentRole();
-        if (role == null || role != 6) {
-            return;
-        }
-        LocalDateTime baseTime = existing.getCreateTime();
-        if (baseTime == null) {
-            return;
-        }
-        if (baseTime.plusDays(FIRST_VISIT_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "首次入户随访已超过10天修改期限，请联系上级管理员");
-        }
     }
 
     /** 修改已完成的首次随访需具备 patientManagement:firstVisit:edit 权限 */
@@ -454,26 +444,12 @@ public class PatientController {
 
     // ==================== 后续随访 ====================
 
-    /** 五级用户已完成后续随访：创建后 10 天内可修改；管理员（非五级）随时可改 */
-    private static final int FOLLOW_UP_EDIT_DAYS_LEVEL5 = 10;
-
+    /** 已完成后续随访可随时修改（仍校验 edit 权限） */
     private void assertFollowUpEditable(FollowUpVisit existing) {
         if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
             return;
         }
         assertFollowUpEditPermission(existing);
-        Integer role = BaseContext.getCurrentRole();
-        if (role == null || role != 6) {
-            return;
-        }
-        LocalDateTime baseTime = existing.getCreateTime();
-        if (baseTime == null) {
-            return;
-        }
-        if (baseTime.plusDays(FOLLOW_UP_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "后续随访已超过10天修改期限，请联系上级管理员");
-        }
     }
 
     /** 修改已提交的后续随访记录需具备 patientManagement:followUp:edit 权限 */
@@ -481,19 +457,6 @@ public class PatientController {
         if (existing != null && Integer.valueOf(1).equals(existing.getStatus())) {
             userService.checkPermissionCode("patientManagement:followUp:edit");
         }
-    }
-
-    private boolean isFollowUpEditable(Integer role, FollowUpVisit visit) {
-        if (visit == null || !Integer.valueOf(1).equals(visit.getStatus())) {
-            return true;
-        }
-        if (role == null || role != 6) {
-            return true;
-        }
-        if (visit.getCreateTime() == null) {
-            return true;
-        }
-        return !visit.getCreateTime().plusDays(FOLLOW_UP_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
     }
 
     @Operation(summary = "患者结案全程管理统计（实际访视/服药次数）")
@@ -690,8 +653,7 @@ public class PatientController {
                 .eq(FollowUpVisit::getStatus, 1)
                 .orderByAsc(FollowUpVisit::getCreateTime);
         List<FollowUpVisit> list = followUpVisitService.list(wrapper);
-        Integer role = BaseContext.getCurrentRole();
-        list.forEach(v -> v.setEditable(isFollowUpEditable(role, v)));
+        list.forEach(v -> v.setEditable(true));
         return ResultRes.success(list);
     }
 

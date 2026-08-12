@@ -2,7 +2,9 @@
 import LatentNoticeDetailDialog from "@@/components/LatentNoticeDetailDialog.vue"
 import LatentNoticeFormDialog from "@@/components/LatentNoticeFormDialog.vue"
 import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
 import { isNoticeSent } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
@@ -10,8 +12,10 @@ import {
   closeCaseApi,
   getLatentAggregateListApi
 } from "./apis"
+import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
 const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -28,17 +32,31 @@ const searchForm = reactive({
   populationType: ""
 })
 
+const {
+  genderFilterOptions,
+  populationTypeFilterOptions,
+  infectionResultFilterOptions,
+  loadGenderOptions,
+  loadPopulationTypeOptions,
+  loadInfectionResultOptions,
+  genderSourceValues,
+  populationTypeSourceValues,
+  infectionResultSourceValues
+} = useLatentTableHeaderFilters(() => searchForm.populationType)
+
 async function fetchData() {
   loading.value = true
   try {
     const { dateRange, ...rest } = searchForm
+    const columnFiltersParam = toQueryParam()
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       referralResult: "latent",
       dateFilterBy: "noticeFill",
       ...rest,
-      ...extractDateRangeParams(dateRange)
+      ...extractDateRangeParams(dateRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     }
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
@@ -64,6 +82,7 @@ function handleReset() {
   searchForm.trackingStatus = undefined
   searchForm.archived = undefined
   searchForm.populationType = ""
+  clearFilters()
   handleSearch()
 }
 
@@ -151,19 +170,78 @@ async function handleCloseCase(row: any) {
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe>
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查结果"
+              type="select"
+              :options="infectionResultFilterOptions"
+              :source-values="infectionResultSourceValues"
+              :load-options="loadInfectionResultOptions"
+              :model-value="columnFilters.infectionResult"
+              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="追踪状态">
           <template #default="{ row }">
             <el-tag :type="row.trackingStatus === 1 ? 'success' : row.trackingStatus === 2 ? 'danger' : 'info'" size="small">

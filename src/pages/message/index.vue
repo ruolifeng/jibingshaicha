@@ -786,7 +786,7 @@ const activeTab = ref("received")
           <el-descriptions-item label="感染检测时间">
             {{ noticeDetailData.infectionDate || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="检查方法">
+          <el-descriptions-item label="感染检查方法">
             {{ noticeDetailData.infectionMethod || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染检查结果" :span="2">

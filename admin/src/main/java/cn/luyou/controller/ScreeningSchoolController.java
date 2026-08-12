@@ -61,6 +61,7 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String chestXrayResult,
             @RequestParam(required = false) String sputumSmearResult,
             @RequestParam(required = false) String molecularBiologyResult,
+            @RequestParam(required = false) String sputumCultureResult,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sortField,
@@ -68,7 +69,7 @@ public class ScreeningSchoolController {
         IPage<ScreeningSchool> result = screeningSchoolService.queryPage(
                 page, PageQueryUtil.clampSize(size), name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
                 createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
-                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue, sortField, sortOrder);
+                sputumSmearResult, molecularBiologyResult, sputumCultureResult, columnFilters, formatIssue, sortField, sortOrder);
         return ResultRes.success(result);
     }
 
@@ -125,12 +126,13 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String chestXrayResult,
             @RequestParam(required = false) String sputumSmearResult,
             @RequestParam(required = false) String molecularBiologyResult,
+            @RequestParam(required = false) String sputumCultureResult,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue) {
         return ResultRes.success(screeningSchoolService.deleteByFilter(
                 name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
                 createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
-                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue));
+                sputumSmearResult, molecularBiologyResult, sputumCultureResult, columnFilters, formatIssue));
     }
 
     @Operation(summary = "删除权限范围内全部学校人群筛查记录（级联删除）")
@@ -174,6 +176,7 @@ public class ScreeningSchoolController {
             @RequestParam(required = false) String chestXrayResult,
             @RequestParam(required = false) String sputumSmearResult,
             @RequestParam(required = false) String molecularBiologyResult,
+            @RequestParam(required = false) String sputumCultureResult,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sortField,
@@ -194,7 +197,7 @@ public class ScreeningSchoolController {
         List<ScreeningSchool> list = screeningSchoolService.listForExport(
                 name, idNumber, schoolName, district, isLatent, diagnosisFirst, phone, year, entryUnit,
                 createTimeFrom, createTimeTo, creatorUsername, hasChestXray, chestXrayResult,
-                sputumSmearResult, molecularBiologyResult, columnFilters, formatIssue, sortField, sortOrder, idList);
+                sputumSmearResult, molecularBiologyResult, sputumCultureResult, columnFilters, formatIssue, sortField, sortOrder, idList);
         SchoolScreeningExcelExportSupport.write(response.getOutputStream(), list);
     }
 }

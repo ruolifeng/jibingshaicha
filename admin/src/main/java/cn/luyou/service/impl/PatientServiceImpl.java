@@ -164,7 +164,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
-            "diagnosisResult", "populationType", "ethnicity", "idType", "creatorUsername", "source"
+            "diagnosisResult", "populationType", "ethnicity", "idType", "creatorUsername", "source",
+            "registrationNo"
     );
 
     public PatientServiceImpl(
@@ -208,10 +209,11 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory,
                                      String creatorUsername, String columnFilters, String sortField, String sortOrder,
-                                     String formatIssue) {
+                                     String formatIssue, String sputumCulture, String drugResistance) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
                 dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory);
+        applyFirstVisitFieldFilter(wrapper, sputumCulture, drugResistance);
         applyCreatorUsernameFilter(wrapper, creatorUsername);
         applyColumnFilters(wrapper, columnFilters);
         IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
@@ -291,6 +293,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getIdType, value);
                 case "source" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getSource, value);
                 case "creatorUsername" -> applyCreatorUsernameFilter(wrapper, value);
+                case "registrationNo" -> {
+                    String kw = value == null ? "" : value.trim();
+                    if (StrUtil.isNotBlank(kw)) {
+                        wrapper.apply(REGISTRATION_NO_SQL_EXPR + " LIKE {0}", "%" + kw + "%");
+                    }
+                }
                 default -> { }
             }
         });
@@ -433,6 +441,23 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
     }
 
+    /** 按首次随访痰培养 / 耐药情况筛选 */
+    private void applyFirstVisitFieldFilter(LambdaQueryWrapper<Patient> wrapper,
+                                            String sputumCulture, String drugResistance) {
+        if (StrUtil.isBlank(sputumCulture) && StrUtil.isBlank(drugResistance)) {
+            return;
+        }
+        LambdaQueryWrapper<FirstVisit> visitWrapper = new LambdaQueryWrapper<>();
+        visitWrapper.eq(StrUtil.isNotBlank(sputumCulture), FirstVisit::getSputumCulture, sputumCulture.trim())
+                .eq(StrUtil.isNotBlank(drugResistance), FirstVisit::getDrugResistance, drugResistance.trim())
+                .select(FirstVisit::getPatientId);
+        Set<Long> patientIds = firstVisitMapper.selectList(visitWrapper).stream()
+                .map(FirstVisit::getPatientId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        applyPatientIdFilter(wrapper, patientIds);
+    }
+
     /** 按病案/导入信息中的登记日期（epidemic_data.登记日期）筛选 */
     private void applyRegistrationDateRange(LambdaQueryWrapper<Patient> wrapper,
                                           LocalDateTime from, LocalDateTime to) {
@@ -485,8 +510,94 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     @Override
     public long countPathogenPositivePatientsForDashboard(Integer statYear, List<Long> filterDeptIds) {
         LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear, filterDeptIds);
-        applyPathogenResultPositiveFilter(wrapper);
+        wrapper.select(Patient::getId, Patient::getDiagnosisResult, Patient::getEpidemicData);
+        List<Patient> patients = list(wrapper);
+        return patients.stream().filter(this::isIncidenceNumeratorPatient).count();
+    }
+
+    @Override
+    public long countDrugResistanceScreenedForDashboard(Integer statYear, List<Long> filterDeptIds) {
+        LambdaQueryWrapper<Patient> wrapper = buildManagedPatientDashboardWrapper(statYear, filterDeptIds);
+        wrapper.inSql(Patient::getId,
+                "SELECT patient_id FROM first_visit WHERE drug_resistance IN ('耐药','非耐药')");
         return count(wrapper);
+    }
+
+    /**
+     * 发病率分子：经典病原学阳性，或结核性胸膜炎且（0月序影像学阳/异常 或 0月序分子生物学阳）。
+     */
+    private boolean isIncidenceNumeratorPatient(Patient patient) {
+        if (patient == null) {
+            return false;
+        }
+        Map<String, String> fields = parseImportFields(patient);
+        // 病原学与诊断必须分开判断：专病网主表 diagnosisResult 存的是「诊断结果」
+        if (isClassicPathogenPositive(fields.get("病原学结果"))
+                || isClassicPathogenPositive(patient.getDiagnosisResult())) {
+            return true;
+        }
+        String diagnosisText = firstNonBlank(fields.get("诊断结果"), patient.getDiagnosisResult());
+        if (!isTbPleurisy(diagnosisText, fields)) {
+            return false;
+        }
+        String imaging = firstNonBlank(fields.get("0月序影像学结果"));
+        String molecular = firstNonBlank(
+                fields.get("0月序分子生物学结果"),
+                fields.get("0月单分子生物学结果")
+        );
+        return isMonth0ImagingPositive(imaging) || isMonth0MolecularPositive(molecular);
+    }
+
+    private static boolean isClassicPathogenPositive(String pathogen) {
+        if (StrUtil.isBlank(pathogen)) {
+            return false;
+        }
+        String text = pathogen.trim();
+        for (String v : PATHOGEN_RESULT_POSITIVE_VALUES) {
+            if (v.equals(text)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTbPleurisy(String pathogen, Map<String, String> fields) {
+        if (StrUtil.isNotBlank(pathogen) && pathogen.contains("结核性胸膜炎")) {
+            return true;
+        }
+        String lesion = fields.get("病变部位-结核性胸膜炎");
+        if (StrUtil.isBlank(lesion)) {
+            return false;
+        }
+        String v = lesion.trim();
+        return "是".equals(v) || "有".equals(v) || "1".equals(v) || "真".equalsIgnoreCase(v);
+    }
+
+    private static boolean isMonth0ImagingPositive(String value) {
+        if (StrUtil.isBlank(value)) {
+            return false;
+        }
+        String text = value.trim();
+        return text.contains("阳") || text.contains("异常");
+    }
+
+    private static boolean isMonth0MolecularPositive(String value) {
+        if (StrUtil.isBlank(value)) {
+            return false;
+        }
+        return value.trim().contains("阳");
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (StrUtil.isNotBlank(value)) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     @Override
@@ -1041,9 +1152,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         + EPIDEMIC_JSON_DIAGNOSIS_RESULT + "')) IN (" + inClause + ")"));
     }
 
-    /** 五级用户已完成首次随访的可编辑天数 */
-    private static final int FIRST_VISIT_EDIT_DAYS_LEVEL5 = 10;
-
     /** 批量查询首次随访状态并填充到每条记录 */
     private void fillFirstVisitStatus(List<Patient> patients) {
         if (patients == null || patients.isEmpty()) return;
@@ -1055,7 +1163,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         FirstVisit::getDrugResistance);
         Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
                 .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
-        Integer currentRole = BaseContext.getCurrentRole();
         patients.forEach(p -> {
             FirstVisit visit = visitMap.get(p.getId());
             if (visit == null) {
@@ -1070,7 +1177,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             boolean completed = Integer.valueOf(1).equals(visit.getStatus());
             p.setHasFirstVisit(completed);
             p.setFirstVisitStatus(visit.getStatus());
-            p.setFirstVisitEditable(isFirstVisitEditable(currentRole, visit));
+            p.setFirstVisitEditable(true);
             p.setFirstVisitSputumCulture(visit.getSputumCulture());
             p.setFirstVisitDrugResistance(visit.getDrugResistance());
             p.setSputumCultureSupplementStatus(visit.getSputumCultureSupplementStatus());
@@ -1201,20 +1308,6 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         } catch (Exception e) {
             return null;
         }
-    }
-
-    /** 五级用户：已完成首次随访创建后 10 天内可改；管理员（非五级）随时可改 */
-    private boolean isFirstVisitEditable(Integer role, FirstVisit visit) {
-        if (visit == null || !Integer.valueOf(1).equals(visit.getStatus())) {
-            return true;
-        }
-        if (role == null || role != 6) {
-            return true;
-        }
-        if (visit.getCreateTime() == null) {
-            return true;
-        }
-        return !visit.getCreateTime().plusDays(FIRST_VISIT_EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
     }
 
     /** 从筛查表关联填充胸片检查日期和结果（仅转诊确诊患者有 screeningId） */
@@ -1676,7 +1769,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     public IPage<Patient> queryHistoryPage(int page, int size, String populationType,
                                             String name, String idNumber, String phone,
                                             String diagnosisResult, String startTime, String endTime,
-                                            String stopTreatmentReason) {
+                                            String stopTreatmentReason, String columnFilters) {
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .eq(Patient::getArchived, 1)
@@ -1691,6 +1784,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .le(StrUtil.isNotBlank(endTime), Patient::getArchivedTime, endTime + " 23:59:59")
                 .orderByDesc(Patient::getArchivedTime);
         applyDiagnosisResultFilter(wrapper, diagnosisResult);
+        applyColumnFilters(wrapper, columnFilters);
         if (StrUtil.isNotBlank(stopTreatmentReason)) {
             List<Long> matchedPatientIds = findPatientIdsByPreferredStopTreatmentReason(stopTreatmentReason);
             if (matchedPatientIds.isEmpty()) {
@@ -2566,7 +2660,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             if ("数据来源".equals(header) || "姓名".equals(header) || "性别".equals(header)
                     || "出生日期".equals(header) || "年龄".equals(header) || "证件类型".equals(header)
                     || "证件号".equals(header) || "民族".equals(header) || "联系电话".equals(header)
-                    || "户籍地址".equals(header) || "现住址".equals(header) || "诊断结果".equals(header)) {
+                    || "户籍地址".equals(header) || "现住址".equals(header)) {
                 continue;
             }
             String value = getImportField(row, headerIndex, header);

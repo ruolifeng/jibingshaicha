@@ -184,25 +184,34 @@ async function handleEpidemicFileChange(uploadFile: any) {
     if ((preview.data?.duplicateCount ?? 0) > 0) {
       const duplicateNames = (preview.data?.duplicates ?? [])
         .slice(0, 5)
-        .map(item => `${item.name}（${item.idNumber}）`)
+        .map((item) => {
+          const loc = [item.township, item.cardId ? `原卡片${item.cardId}` : ""].filter(Boolean).join(" / ")
+          return `${item.name}（${item.idNumber}${loc ? `，${loc}` : ""}）`
+        })
         .join("、")
       const more = (preview.data?.duplicateCount ?? 0) > 5 ? ` 等共 ${preview.data?.duplicateCount} 人` : ""
       try {
         await ElMessageBox.confirm(
-          `检测到 ${preview.data?.duplicateCount} 条患者信息已导入过（身份证+姓名相同）：${duplicateNames}${more}。\n是否增加新追踪记录？选择「是」将新增记录，原有记录保留。`,
+          `本单位已有同姓名+身份证追踪记录：${duplicateNames}${more}。\n默认将「更新已有记录」写入最新报告卡信息（满足 48 小时上报）；若需另建一条追踪请选「新增」。`,
           "重复患者确认",
-          { confirmButtonText: "是，新增记录", cancelButtonText: "否，跳过重复", type: "warning" }
+          { confirmButtonText: "更新已有记录", cancelButtonText: "新增一条追踪", distinguishCancelAndClose: true, type: "warning" }
         )
-        addDuplicateRecords = true
-      } catch {
         addDuplicateRecords = false
+      } catch (action) {
+        // Element Plus：cancel = 点取消按钮；close = 点右上角/遮罩
+        if (action === "cancel") {
+          addDuplicateRecords = true
+        } else {
+          ElMessage.info("已取消导入")
+          return
+        }
       }
     }
     const res = await importEpidemicTrackApi(file, addDuplicateRecords)
     importResult.value = res.data
     const skipped = res.data.skipped ?? 0
     ElMessage.success(
-      `导入完成：新建 ${res.data.count} 条，更新 ${res.data.updated ?? 0} 条${skipped > 0 ? `，跳过重复 ${skipped} 条` : ""}`
+      `导入完成：新建 ${res.data.count} 条，更新 ${res.data.updated ?? 0} 条${skipped > 0 ? `，跨镇权限跳过 ${skipped} 条` : ""}`
     )
     importDialogVisible.value = false
     fetchList()
@@ -428,6 +437,7 @@ async function handleEditSave() {
   if (canEditTrackingHistory.value) {
     payload.trackingHistory = editTrackingHistory.value.map(item => ({
       attempt: item.attempt,
+      status: item.status,
       reason: item.reason.trim()
     }))
   }
@@ -1381,7 +1391,7 @@ function getRowClass({ row }: { row: any }) {
           <template v-if="canEditTrackingHistory">
             <el-col :span="24">
               <el-divider content-position="left">
-                追踪过程备注
+                追踪过程
               </el-divider>
             </el-col>
             <el-col
@@ -1389,12 +1399,17 @@ function getRowClass({ row }: { row: any }) {
               :key="item.attempt"
               :span="24"
             >
-              <el-form-item :label="`第${item.attempt}次备注`" required>
+              <el-form-item :label="`第${item.attempt}次追踪`" required>
                 <div class="edit-tracking-meta">
+                  <el-select v-model="item.status" style="width: 120px" size="small">
+                    <el-option label="到位" :value="1" />
+                    <el-option label="未到位" :value="2" />
+                    <el-option label="其他" :value="3" />
+                  </el-select>
+                  <span class="edit-tracking-time">{{ formatDateTime(item.trackTime) }}</span>
                   <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
                     {{ TRACK_STATUS_LABEL[item.status] || "-" }}
                   </el-tag>
-                  <span class="edit-tracking-time">{{ formatDateTime(item.trackTime) }}</span>
                 </div>
                 <el-input
                   v-model="item.reason"

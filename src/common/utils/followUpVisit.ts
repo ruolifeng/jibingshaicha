@@ -2,9 +2,6 @@ import { formatFirstVisitMethod } from "@@/utils/firstVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import { resolveFirstTreatmentPlan } from "@@/utils/patient"
 
-/** 五级用户（role=6）已完成后续随访的可编辑天数 */
-export const FOLLOW_UP_EDIT_DAYS_LEVEL5 = 10
-
 export interface FollowUpCaseClosureStats {
   actualVisitCount: number
   actualDoseCount: number
@@ -20,17 +17,24 @@ export function shouldIncludeCurrentFollowUpInStats(
 
 /**
  * 后续随访化疗方案预填（已有值则不覆盖）：
- * 1. 优先同步首次随访的化疗方案
- * 2. 其次回退病案「首次治疗方案」
+ * 1. 优先同步上一次后续随访的化疗方案
+ * 2. 其次同步首次随访的化疗方案
+ * 3. 再次回退病案「首次治疗方案」
  */
 export function applyFollowUpChemotherapyDefault(
   form: { chemotherapyPlan?: string },
   options?: {
+    previousFollowUpChemotherapy?: string | null
     firstVisitChemotherapy?: string | null
     patientRow?: Record<string, any> | null
   }
 ) {
   if (form.chemotherapyPlan?.trim()) return
+  const fromPrevious = options?.previousFollowUpChemotherapy?.trim()
+  if (fromPrevious) {
+    form.chemotherapyPlan = fromPrevious
+    return
+  }
   const fromFirstVisit = options?.firstVisitChemotherapy?.trim()
   if (fromFirstVisit) {
     form.chemotherapyPlan = fromFirstVisit
@@ -38,6 +42,28 @@ export function applyFollowUpChemotherapyDefault(
   }
   const plan = resolveFirstTreatmentPlan(options?.patientRow)
   if (plan) form.chemotherapyPlan = plan
+}
+
+/** 取最近一次已完成后续随访的化疗方案；编辑时可限定为当前记录之前的随访 */
+export function resolvePreviousFollowUpChemotherapy(
+  completedList: Array<{ id?: string | number, chemotherapyPlan?: string | null }>,
+  options?: { beforeId?: string | number | null }
+): string {
+  let list = completedList
+  const beforeId = options?.beforeId
+  if (beforeId != null && String(beforeId) !== "") {
+    const idx = completedList.findIndex(item => String(item.id) === String(beforeId))
+    if (idx >= 0) {
+      list = completedList.slice(0, idx)
+    } else {
+      list = completedList.filter(item => String(item.id) !== String(beforeId))
+    }
+  }
+  for (let i = list.length - 1; i >= 0; i--) {
+    const plan = list[i]?.chemotherapyPlan?.trim()
+    if (plan) return plan
+  }
+  return ""
 }
 
 /** 停止治疗原因：转入耐多药治疗（不归档，可继续随访） */
@@ -56,21 +82,14 @@ export function isStopTreatmentArchive(archiveRemark?: string | null): boolean {
   return !!archiveRemark?.startsWith(ARCHIVE_REMARK_STOP_TREATMENT_PREFIX)
 }
 
-/** 五级用户：已完成后续随访记录创建后 10 天内可修改；管理员（role≠6）随时可改 */
+/** 后续随访已完成记录可随时修改（仍受权限控制；后端 editable 优先） */
 export function canEditFollowUpVisit(
-  userRole: number,
+  _userRole: number,
   visit: { status?: number, createTime?: string | null, editable?: boolean | null } | null | undefined
 ): boolean {
   if (!visit) return false
   if (visit.editable != null) return visit.editable
-  if (visit.status !== 1) return true
-  if (userRole !== 6) return true
-  if (!visit.createTime) return true
-  const created = new Date(String(visit.createTime).replace(" ", "T"))
-  if (Number.isNaN(created.getTime())) return true
-  const deadline = new Date(created)
-  deadline.setDate(deadline.getDate() + FOLLOW_UP_EDIT_DAYS_LEVEL5)
-  return Date.now() <= deadline.getTime()
+  return true
 }
 
 /** 随访记录列表行：首次随访 + 后续随访统一展示 */

@@ -36,12 +36,29 @@ public final class ImportIdentitySupport {
                 || "—".equals(v);
     }
 
-    /** 规范化证件号：占位符转为空字符串，便于入库与去重。 */
+    /** 规范化证件号：去空白、Excel 文本前缀引号；占位符转为空字符串，便于入库与去重。 */
     public static String normalizeIdNumber(String idNumber) {
         if (isBlankOrPlaceholder(idNumber)) {
             return "";
         }
-        return idNumber.trim();
+        return stripExcelTextMarker(idNumber.trim());
+    }
+
+    /**
+     * 去掉大疫情网导出常见的文本前缀（如 {@code '5103...}、{@code "5103..."}）。
+     */
+    public static String stripExcelTextMarker(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return "";
+        }
+        String text = raw.trim();
+        while (text.startsWith("'") || text.startsWith("\"") || text.startsWith("`")) {
+            text = text.substring(1).trim();
+        }
+        while (text.endsWith("'") || text.endsWith("\"") || text.endsWith("`")) {
+            text = text.substring(0, text.length() - 1).trim();
+        }
+        return text;
     }
 
     /**

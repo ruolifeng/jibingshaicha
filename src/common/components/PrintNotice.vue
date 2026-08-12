@@ -70,6 +70,12 @@ function handlePrint() {
             <th>联系电话</th>
             <td>{{ noticeData?.phone }}</td>
           </tr>
+          <tr v-if="!isPatient">
+            <th>登记号</th>
+            <td colspan="3" class="party-cell">
+              {{ noticeData?.registrationNo }}
+            </td>
+          </tr>
           <tr>
             <th>现居住地址</th>
             <td colspan="3" class="party-cell">
@@ -128,7 +134,7 @@ function handlePrint() {
             <tr>
               <th>感染检查日期</th>
               <td>{{ noticeData?.infectionDate }}</td>
-              <th>检查方法</th>
+              <th>感染检查方法</th>
               <td>{{ noticeData?.infectionMethod }}</td>
             </tr>
             <tr>
