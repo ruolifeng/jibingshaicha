@@ -1,4 +1,5 @@
-import { resolveRouteTagTitle, type RouteTagTitleMatch, type RouteTagTitleSource } from "@@/utils/route-tag-title"
+import type { RouteTagTitleMatch, RouteTagTitleSource } from "@@/utils/route-tag-title"
+import { resolveRouteTagTitle } from "@@/utils/route-tag-title"
 import { describe, expect, it } from "vitest"
 
 function mockRoute(
@@ -30,13 +31,13 @@ describe("resolveRouteTagTitle", () => {
 
   it("已配置带连字符的 tagTitle 优先使用", () => {
     const route = mockRoute(
-      { title: "在管总览", tagTitle: "潜伏-在管总览" },
+      { title: "潜伏感染者在管总览", tagTitle: "潜伏感染者在管总览" },
       [
         { name: "LatentManagement", meta: { title: "潜伏感染者管理" } },
-        { meta: { title: "在管总览" } }
+        { meta: { title: "潜伏感染者在管总览" } }
       ]
     )
-    expect(resolveRouteTagTitle(route)).toBe("潜伏-在管总览")
+    expect(resolveRouteTagTitle(route)).toBe("潜伏感染者在管总览")
   })
 
   it("系统管理子路由自动拼接", () => {

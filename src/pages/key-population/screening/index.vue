@@ -6,7 +6,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, KEY_INFECTION_JUDGE_RESULT_OPTIONS, KEY_INFECTION_SCREEN_METHOD_OPTIONS, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
@@ -25,11 +25,8 @@ const genderFilterOptions = [
   { text: "女", value: "女" }
 ]
 const diagnosisFilterOptions = SCREENING_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
-const screenMethodFilterOptions = [
-  { text: "PPD", value: "PPD" },
-  { text: "IGRA", value: "IGRA" },
-  { text: "EC", value: "EC" }
-]
+const screenMethodFilterOptions = KEY_INFECTION_SCREEN_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+const infectionResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 
 const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
   const { data } = await getScreeningKeyPopulationColumnDistinctApi(field)
@@ -586,10 +583,13 @@ watch(
           </el-select>
         </el-form-item>
         <el-form-item label="感染筛查方法">
-          <el-select v-model="searchForm.screenMethod" placeholder="全部" clearable style="width: 120px">
-            <el-option label="PPD" value="PPD" />
-            <el-option label="IGRA" value="IGRA" />
-            <el-option label="EC" value="EC" />
+          <el-select v-model="searchForm.screenMethod" placeholder="全部" clearable filterable style="width: 220px">
+            <el-option
+              v-for="opt in KEY_INFECTION_SCREEN_METHOD_OPTIONS"
+              :key="opt"
+              :label="opt"
+              :value="opt"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="是否进行胸片检查">
@@ -826,6 +826,7 @@ watch(
               <TableHeaderFilter
                 label="感染筛查结果"
                 type="select"
+                :options="infectionResultFilterOptions"
                 :source-values="distinctValues('infectionResult').value"
                 :load-options="loadInfectionResultOptions"
                 :model-value="columnFilters.infectionResult"
@@ -1061,10 +1062,13 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="筛查方法">
-              <el-select v-model="editForm.screenMethod" style="width:100%" clearable>
-                <el-option label="PPD" value="PPD" />
-                <el-option label="IGRA" value="IGRA" />
-                <el-option label="EC" value="EC" />
+              <el-select v-model="editForm.screenMethod" style="width:100%" clearable filterable>
+                <el-option
+                  v-for="opt in KEY_INFECTION_SCREEN_METHOD_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -1075,15 +1079,13 @@ watch(
           </el-col>
           <el-col :span="16">
             <el-form-item label="感染筛查结果" prop="infectionResult" :required="editForm.hasInfectionScreen === '是'">
-              <el-select v-model="editForm.infectionResult" style="width:100%" clearable>
-                <el-option label="PPD阴性" value="PPD阴性" />
-                <el-option label="PPD+" value="PPD+" />
-                <el-option label="PPD++" value="PPD++" />
-                <el-option label="PPD+++" value="PPD+++" />
-                <el-option label="EC阴性" value="EC阴性" />
-                <el-option label="EC阳性" value="EC阳性" />
-                <el-option label="IGRA阴性" value="IGRA阴性" />
-                <el-option label="IGRA阳性" value="IGRA阳性" />
+              <el-select v-model="editForm.infectionResult" style="width:100%" clearable filterable>
+                <el-option
+                  v-for="opt in KEY_INFECTION_JUDGE_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
               </el-select>
             </el-form-item>
           </el-col>

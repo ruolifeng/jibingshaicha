@@ -29,10 +29,12 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
     private final RolePermissionMapper rolePermissionMapper;
     private final UserPermissionMapper userPermissionMapper;
 
-    /** 填写领药 → 对应服药管理菜单（领药入口在服药管理页上） */
+    /** 填写领药 / 查看记录 → 对应服药管理菜单（入口在服药管理页上） */
     private static final Map<String, String> PICKUP_IMPLIES_MEDICATION = Map.of(
             "patientManagement:pickup", "patientManagement:medication",
-            "latentManagement:pickup", "latentManagement:medication"
+            "latentManagement:pickup", "latentManagement:medication",
+            "patientManagement:pickupView", "patientManagement:medication",
+            "latentManagement:pickupView", "latentManagement:medication"
     );
 
     @Override

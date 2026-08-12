@@ -6,9 +6,11 @@ import ReferralDialog from "@@/components/ReferralDialog.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
 import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
 import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
   CHECK_PERIOD_OPTIONS,
   CHECK_RESULT_OPTIONS,
@@ -18,12 +20,15 @@ import {
   formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
   isLatentIndividualPlan,
+  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
   LATENT_TREATMENT_PLAN_OPTIONS,
   MEDICATION_STATUS_OPTIONS,
   normalizeLatentTreatmentPlan,
   NOTICE_STATUS_MAP,
   parseLatentNoticeTreatmentPlan,
   REFERRAL_RESULT_OPTIONS,
+  SCHOOL_DIAGNOSIS_SEARCH_OPTIONS,
+  SCHOOL_INFECTION_JUDGE_OPTIONS,
   TREATMENT_PHASE_MAP
 } from "@@/constants/disease"
 import { parseTrackingHistory } from "@@/utils/referralTracking"
@@ -66,6 +71,21 @@ onMounted(() => {
 })
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const infectionResultFilterOptions = [
+  ...SCHOOL_INFECTION_JUDGE_OPTIONS.map(item => ({ text: item, value: item })),
+  ...KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+]
+const chestXrayFilterOptions = CHEST_XRAY_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({
+  text: item.label,
+  value: item.value
+}))
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -83,13 +103,15 @@ async function fetchData() {
   loading.value = true
   try {
     const { dateRange, ...rest } = searchForm
+    const columnFiltersParam = toQueryParam()
     const { data } = await getLatentListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       populationType: "school",
       referralResult: "latent",
       ...rest,
-      ...extractDateRangeParams(dateRange)
+      ...extractDateRangeParams(dateRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
     tableData.value = data.records
     total.value = data.total
@@ -109,6 +131,7 @@ function handleReset() {
   searchForm.phone = ""
   searchForm.dateRange = []
   searchForm.archived = undefined
+  clearFilters()
   handleSearch()
 }
 
@@ -698,14 +721,78 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" />
-        <el-table-column prop="chestXrayResult" label="胸片结果" />
-        <el-table-column prop="diagnosisFirst" label="诊断结果" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查结果"
+              type="select"
+              :options="infectionResultFilterOptions"
+              :model-value="columnFilters.infectionResult"
+              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="chestXrayResult" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="胸片结果"
+              type="select"
+              :options="chestXrayFilterOptions"
+              :model-value="columnFilters.chestXrayResult"
+              @change="(v) => { setFilter('chestXrayResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisFirst" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="诊断结果"
+              type="select"
+              :options="diagnosisFilterOptions"
+              :model-value="columnFilters.diagnosisFirst"
+              @change="(v) => { setFilter('diagnosisFirst', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="通知单">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewNotice(row)">
@@ -982,7 +1069,7 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="检查方法">
+            <el-form-item label="感染检查方法">
               <el-select v-model="noticeForm.infectionMethod" style="width: 100%">
                 <el-option v-for="item in INFECTION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
@@ -1089,7 +1176,7 @@ watch(
         <el-descriptions-item label="感染检测时间">
           {{ noticeDetailData.infectionDate || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="检查方法">
+        <el-descriptions-item label="感染检查方法">
           {{ noticeDetailData.infectionMethod || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="感染检查结果" :span="2">

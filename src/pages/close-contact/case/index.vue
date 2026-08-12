@@ -4,9 +4,21 @@ import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { CLOSE_CONTACT_CASE_COLUMNS, DIAGNOSIS_RESULT_OPTIONS, HAS_PREVENTIVE_TREATMENT_OPTIONS, REPORT_QUARTER_OPTIONS } from "@@/constants/close-contact-case"
+import {
+  CLOSE_CONTACT_CASE_COLUMNS,
+  CLOSE_CONTACT_CASE_DATE_FIELDS,
+  CLOSE_CONTACT_CASE_EDIT_GROUPS,
+  closeContactCaseFieldLabel,
+  DIAGNOSIS_RESULT_OPTIONS,
+  HAS_PREVENTIVE_TREATMENT_OPTIONS,
+  REPORT_QUARTER_OPTIONS
+} from "@@/constants/close-contact-case"
 import { PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
+import {
+  CC_INFECTION_CHECK_METHOD_OPTIONS,
+  CC_INFECTION_CHECK_RESULT_OPTIONS
+} from "@@/constants/screening-close-contact"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete, confirmEditChange } from "@@/utils/listToolbar"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
@@ -285,57 +297,82 @@ function handleExportSelected() {
   handleExport(ids, undefined, "selected")
 }
 
-/** 编辑弹窗 */
+/** 编辑弹窗（覆盖表格全部业务字段，清空即覆盖入库） */
 const editVisible = ref(false)
 const editSaving = ref(false)
 const editForm = ref<Record<string, any>>({})
 const editMode = ref<"create" | "edit">("edit")
+const editActiveTab = ref(CLOSE_CONTACT_CASE_EDIT_GROUPS[0]?.key || "source")
+
+const EDIT_TEXTAREA_FIELDS = new Set([
+  "remark",
+  "contraindicationRemark",
+  "preventivePlanRemark",
+  "noTreatmentReason",
+  "incompleteReason",
+  "householdAddress",
+  "currentAddress",
+  "symptom2",
+  "followup6Symptom2",
+  "followup12Symptom2",
+  "followup24Symptom2"
+])
+
+const EDIT_WIDE_FIELDS = new Set([
+  ...EDIT_TEXTAREA_FIELDS,
+  "householdAddress",
+  "currentAddress"
+])
 
 function getEmptyEditForm() {
-  return {
-    city: "",
-    district: "",
-    sourcePatientName: "",
-    sourcePatientCaseNo: "",
-    sourcePatientPhone: "",
-    name: "",
-    idNumber: "",
-    age: undefined,
-    phone: "",
-    gender: "",
-    ethnicity: "",
-    contactType: "",
-    contactPlace: "",
-    registrationDate: "",
-    firstScreenDate: "",
-    symptom1: "",
-    symptom2: "",
-    infectionCheckDate: "",
-    infectionCheckMethod: "",
-    infectionCheckResult: "",
-    imagingDate: "",
-    imagingMethod: "",
-    imagingResult: "",
-    sputumCheckDate: "",
-    sputumCheckMethod: "",
-    sputumCheckResult: "",
-    finalScreeningResult: "",
-    hasPreventiveTreatment: "",
-    preventivePlan: "",
-    treatmentCompleted: "",
-    remark: ""
+  const form: Record<string, any> = {}
+  for (const group of CLOSE_CONTACT_CASE_EDIT_GROUPS) {
+    for (const field of group.fields) {
+      if (field === "age") {
+        form[field] = undefined
+      } else if (CLOSE_CONTACT_CASE_DATE_FIELDS.has(field)) {
+        form[field] = null
+      } else {
+        form[field] = ""
+      }
+    }
   }
+  return form
+}
+
+/** 提交前：空日期/空年龄转 null，保证 ALWAYS 策略能清空入库 */
+function buildEditPayload() {
+  const payload: Record<string, any> = { ...editForm.value }
+  for (const field of CLOSE_CONTACT_CASE_DATE_FIELDS) {
+    if (payload[field] === "" || payload[field] === undefined) payload[field] = null
+  }
+  if (payload.age === "" || payload.age === undefined) payload.age = null
+  // 系统/自动计算列不由表单改写（列表展示值可能被 DerivedSupport 临时填入）
+  delete payload.reportQuarter
+  delete payload.registrationIntervalHint
+  delete payload.ageGroup
+  delete payload.createTime
+  delete payload.updateTime
+  delete payload.creatorUsername
+  delete payload.departmentId
+  delete payload.uploadBatch
+  delete payload.importRowNo
+  delete payload.sourcePatientIdNumber
+  return payload
 }
 
 function handleCreate() {
   editMode.value = "create"
+  editActiveTab.value = CLOSE_CONTACT_CASE_EDIT_GROUPS[0]?.key || "source"
   editForm.value = getEmptyEditForm()
   editVisible.value = true
 }
 
 function handleEdit(row: any) {
   editMode.value = "edit"
-  editForm.value = { ...row }
+  editActiveTab.value = CLOSE_CONTACT_CASE_EDIT_GROUPS[0]?.key || "source"
+  // 先铺满空字段再合并行数据，保证未展示过的列清空后能覆盖入库
+  editForm.value = { ...getEmptyEditForm(), ...row }
   editVisible.value = true
 }
 
@@ -347,11 +384,12 @@ async function handleSave() {
   }
   editSaving.value = true
   try {
+    const payload = buildEditPayload()
     if (editMode.value === "create") {
-      await createCloseContactCaseApi(editForm.value)
+      await createCloseContactCaseApi(payload)
       ElMessage.success("新增成功")
     } else {
-      await updateCloseContactCaseApi(editForm.value.id, editForm.value)
+      await updateCloseContactCaseApi(payload.id, payload)
       ElMessage.success("保存成功")
     }
     editVisible.value = false
@@ -714,164 +752,123 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       </div>
     </el-card>
 
-    <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增个案' : '编辑个案'" width="960px" :close-on-click-modal="false">
-      <el-tabs>
-        <el-tab-pane label="原患者信息">
-          <el-form :model="editForm" label-width="130px">
+    <!-- 编辑弹窗：覆盖表格全部业务字段（系统列/自动计算列除外） -->
+    <el-dialog
+      v-model="editVisible"
+      :title="editMode === 'create' ? '新增个案' : '编辑个案'"
+      width="1100px"
+      top="4vh"
+      :close-on-click-modal="false"
+      class="case-edit-dialog"
+    >
+      <el-tabs v-model="editActiveTab">
+        <el-tab-pane
+          v-for="group in CLOSE_CONTACT_CASE_EDIT_GROUPS"
+          :key="group.key"
+          :label="group.label"
+          :name="group.key"
+        >
+          <el-form :model="editForm" label-width="150px" class="case-edit-form">
             <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="市/州">
-                  <el-input v-model="editForm.city" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="区/县">
-                  <el-input v-model="editForm.district" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="患者姓名">
-                  <el-input v-model="editForm.sourcePatientName" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="传报卡号">
-                  <el-input v-model="editForm.sourcePatientCaseNo" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="患者电话">
-                  <el-input v-model="editForm.sourcePatientPhone" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </el-tab-pane>
-        <el-tab-pane label="接触者基本信息">
-          <el-form :model="editForm" label-width="130px">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="接触者姓名">
-                  <el-input v-model="editForm.name" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="身份证号">
-                  <el-input v-model="editForm.idNumber" placeholder="可填无" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="年龄">
-                  <el-input-number v-model="editForm.age" :min="0" :max="150" style="width:100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="接触者电话">
-                  <el-input v-model="editForm.phone" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="性别">
-                  <el-select v-model="editForm.gender" style="width:100%">
-                    <el-option label="男" value="男" /><el-option label="女" value="女" />
+              <el-col
+                v-for="field in group.fields"
+                :key="field"
+                :span="EDIT_WIDE_FIELDS.has(field) ? 24 : 8"
+              >
+                <el-form-item :label="closeContactCaseFieldLabel(field)">
+                  <el-date-picker
+                    v-if="CLOSE_CONTACT_CASE_DATE_FIELDS.has(field)"
+                    v-model="editForm[field]"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    clearable
+                    style="width:100%"
+                  />
+                  <el-input-number
+                    v-else-if="field === 'age'"
+                    v-model="editForm.age"
+                    :min="0"
+                    :max="150"
+                    controls-position="right"
+                    style="width:100%"
+                  />
+                  <el-select
+                    v-else-if="field === 'gender'"
+                    v-model="editForm.gender"
+                    clearable
+                    style="width:100%"
+                  >
+                    <el-option label="男" value="男" />
+                    <el-option label="女" value="女" />
                   </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="民族">
-                  <el-input v-model="editForm.ethnicity" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="接触类型">
-                  <el-input v-model="editForm.contactType" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="接触场所">
-                  <el-input v-model="editForm.contactPlace" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="登记日期">
-                  <el-date-picker v-model="editForm.registrationDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </el-tab-pane>
-        <el-tab-pane label="筛查与诊断">
-          <el-form :model="editForm" label-width="130px">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="首次筛查日期">
-                  <el-date-picker v-model="editForm.firstScreenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="感染检测方法">
-                  <el-input v-model="editForm.infectionCheckMethod" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="感染检测结果">
-                  <el-input v-model="editForm.infectionCheckResult" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="影像方法">
-                  <el-input v-model="editForm.imagingMethod" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="影像结果">
-                  <el-input v-model="editForm.imagingResult" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="痰检方法">
-                  <el-input v-model="editForm.sputumCheckMethod" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="痰检结果">
-                  <el-input v-model="editForm.sputumCheckResult" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="最终筛查结果">
-                  <el-select v-model="editForm.finalScreeningResult" style="width:100%" clearable>
-                    <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                  <el-select
+                    v-else-if="field === 'finalScreeningResult'"
+                    v-model="editForm.finalScreeningResult"
+                    clearable
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in DIAGNOSIS_RESULT_OPTIONS"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
                   </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </el-tab-pane>
-        <el-tab-pane label="预防治疗">
-          <el-form :model="editForm" label-width="160px">
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="是否开展预防治疗">
-                  <el-select v-model="editForm.hasPreventiveTreatment" style="width:100%" clearable placeholder="请选择">
-                    <el-option v-for="opt in HAS_PREVENTIVE_TREATMENT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+                  <el-select
+                    v-else-if="field === 'hasPreventiveTreatment'"
+                    v-model="editForm.hasPreventiveTreatment"
+                    clearable
+                    placeholder="请选择"
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in HAS_PREVENTIVE_TREATMENT_OPTIONS"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
                   </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="预防性治疗方案">
-                  <el-input v-model="editForm.preventivePlan" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="是否完成治疗">
-                  <el-input v-model="editForm.treatmentCompleted" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="备注">
-                  <el-input v-model="editForm.remark" type="textarea" :rows="2" />
+                  <el-select
+                    v-else-if="field === 'infectionCheckMethod'"
+                    v-model="editForm.infectionCheckMethod"
+                    clearable
+                    filterable
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in CC_INFECTION_CHECK_METHOD_OPTIONS"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
+                    />
+                  </el-select>
+                  <el-select
+                    v-else-if="field === 'infectionCheckResult'"
+                    v-model="editForm.infectionCheckResult"
+                    clearable
+                    filterable
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in CC_INFECTION_CHECK_RESULT_OPTIONS"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
+                    />
+                  </el-select>
+                  <el-input
+                    v-else-if="EDIT_TEXTAREA_FIELDS.has(field)"
+                    v-model="editForm[field]"
+                    type="textarea"
+                    :rows="2"
+                    clearable
+                  />
+                  <el-input
+                    v-else
+                    v-model="editForm[field]"
+                    :placeholder="field === 'idNumber' ? '可填无' : undefined"
+                    clearable
+                  />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -888,7 +885,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
       </template>
     </el-dialog>
 
-    <!-- 详情弹窗：展示全部字段（与表格列一致），手动新增表单字段保持不变 -->
+    <!-- 详情弹窗：展示全部字段（与表格列一致） -->
     <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} — 密接个案详情`" width="960px" top="5vh">
       <el-descriptions v-if="detailRow" :column="2" border class="case-detail-desc">
         <el-descriptions-item
@@ -964,5 +961,11 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
 .case-detail-desc {
   max-height: 70vh;
   overflow-y: auto;
+}
+
+.case-edit-form {
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 </style>

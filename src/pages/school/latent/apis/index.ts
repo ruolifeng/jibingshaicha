@@ -31,6 +31,7 @@ export function getLatentListApi(params: {
   trackingStatus?: number
   archived?: number
   referralResult?: string
+  columnFilters?: string
 }) {
   return request<ApiResponseData<any>>({
     url: "latent/list",

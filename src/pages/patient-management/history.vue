@@ -1,10 +1,13 @@
 <script lang="ts" setup>
 import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, STOP_TREATMENT_REASON_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { isStopTreatmentArchive } from "@@/utils/followUpVisit"
 import { formatStopTreatmentReason } from "@@/utils/followUpVisitFormat"
+import { resolvePatientDiagnosisResult, resolvePatientPathogenResult } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import {
   batchDeletePatientsApi,
@@ -12,10 +15,24 @@ import {
   getPatientHistoryListApi,
   unarchivePatientFromStopTreatmentApi
 } from "./apis"
+import { usePatientTableHeaderFilters } from "./composables/usePatientTableHeaderFilters"
 
 const userStore = useUserStore()
 
 const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const {
+  genderFilterOptions,
+  pathogenFilterOptions,
+  populationTypeFilterOptions,
+  loadGenderOptions,
+  loadPathogenOptions,
+  loadPopulationTypeOptions,
+  genderSourceValues,
+  pathogenSourceValues,
+  populationTypeSourceValues
+} = usePatientTableHeaderFilters(1)
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -41,10 +58,12 @@ function handleSelectionChange(rows: any[]) {
 async function fetchData() {
   loading.value = true
   try {
+    const columnFiltersParam = toQueryParam()
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      ...searchForm
+      ...searchForm,
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     }
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
@@ -66,6 +85,7 @@ function handleSearch() {
 }
 function handleReset() {
   Object.assign(searchForm, { name: "", idNumber: "", phone: "", diagnosisResult: "", populationType: "", startTime: "", endTime: "", stopTreatmentReason: "" })
+  clearFilters()
   handleSearch()
 }
 
@@ -214,19 +234,86 @@ async function handleUnarchive(row: Record<string, any>) {
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="病原学结果" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisResult" min-width="110" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="病原学结果"
+              type="select"
+              :options="pathogenFilterOptions"
+              :source-values="pathogenSourceValues"
+              :load-options="loadPathogenOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ resolvePatientPathogenResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="诊断结果" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolvePatientDiagnosisResult(row) || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="停止治疗原因" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatStopTreatmentReason(row.stopTreatmentReason, row.stopTreatmentReasonOther) }}

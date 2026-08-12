@@ -21,6 +21,7 @@ import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.InfectionScreenFieldSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
@@ -126,6 +127,19 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                     if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
                         result.addError(row, data.getName(), "接触者手机号格式不正确");
                     }
+                    if (!InfectionScreenFieldSupport.isValidMethod(data.getInfectionCheckMethod())) {
+                        result.addError(row, data.getName(),
+                                "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做（兼容PPD/EC/IGRA/未查）");
+                        return;
+                    }
+                    if (!InfectionScreenFieldSupport.isValidResult(data.getInfectionCheckResult())) {
+                        result.addError(row, data.getName(),
+                                "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                        return;
+                    }
+                    InfectionScreenFieldSupport.applyNormalized(
+                            data::setInfectionCheckMethod, data.getInfectionCheckMethod(),
+                            data::setInfectionCheckResult, data.getInfectionCheckResult());
                     if (data.getRegistrationDate() != null) {
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
                     }
@@ -284,7 +298,10 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
+        } else {
+            data.setYear(null);
         }
+        CloseContactCaseExcelDerivedSupport.apply(data);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         data.setCreatorUsername(CreatorUserSupport.resolveCurrentUsername(userMapper));
         save(data);
@@ -305,10 +322,16 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
+        } else {
+            data.setYear(null);
         }
-        // 录入用户与部门不可被前端覆盖
+        // 系统字段不可被前端覆盖（ALWAYS 策略下缺省/null 会清空库中值）
         data.setCreatorUsername(existing.getCreatorUsername());
         data.setDepartmentId(existing.getDepartmentId());
+        data.setUploadBatch(existing.getUploadBatch());
+        data.setImportRowNo(existing.getImportRowNo());
+        data.setSourcePatientIdNumber(existing.getSourcePatientIdNumber());
+        // 不在此调用 ExcelDerivedSupport.apply：其中 ensureFollowupDueDates 会把用户清空的随访到期日再写回
         updateById(data);
         CloseContactCase latest = getById(data.getId());
         try {

@@ -68,6 +68,23 @@ function canOperateRecommendTrack(row: any) {
   return false
 }
 
+/** 详情中修正追踪过程：已接受即可（含归档后），同步到操作列追踪过程 */
+function canEditRecommendTrackingHistory(row: any) {
+  if (!row || row.recommendStatus !== 2) return false
+  if (!parseTrackingHistory(row.trackingHistoryJson).length) return false
+  if (userStore.userRole === 1) return true
+  const uid = String(userStore.userId)
+  if (uid === String(row.receiverUserId)) return true
+  if (isJointTrackingEnabled(row) && uid === String(row.creatorId)) return true
+  return false
+}
+
+const TRACK_STATUS_EDIT_OPTIONS = [
+  { label: "到位", value: 1 },
+  { label: "未到位", value: 2 },
+  { label: "其他", value: 3 }
+] as const
+
 /** 超级管理员或拥有新增权限的一至五级用户可发起推介 */
 const canCreateRecommend = computed(() =>
   userStore.userRole === 1 || ([2, 3, 4, 5, 6].includes(userStore.userRole) && userStore.hasPermission("referralManagement:create"))
@@ -420,11 +437,16 @@ const viewDetail = ref<any>(null)
 const viewTrackingHistory = computed(() =>
   parseTrackingHistory(viewDetail.value?.trackingHistoryJson)
 )
+const viewTrackingEditMode = ref(false)
+const viewTrackingSaving = ref(false)
+const editViewTrackingHistory = ref<{ attempt: number, status: number, trackTime: string, reason: string }[]>([])
 
 async function openViewDialog(row: any) {
   viewDialogVisible.value = true
   viewLoading.value = true
   viewDetail.value = null
+  viewTrackingEditMode.value = false
+  editViewTrackingHistory.value = []
   try {
     const res = await getReferralTrackingDetailApi(row.id)
     viewDetail.value = res.data
@@ -433,6 +455,56 @@ async function openViewDialog(row: any) {
     viewDialogVisible.value = false
   } finally {
     viewLoading.value = false
+  }
+}
+
+function startEditViewTracking() {
+  if (!viewDetail.value) return
+  editViewTrackingHistory.value = parseTrackingHistory(viewDetail.value.trackingHistoryJson).map(item => ({
+    attempt: item.attempt,
+    status: item.status,
+    trackTime: item.trackTime,
+    reason: item.reason ?? ""
+  }))
+  viewTrackingEditMode.value = true
+}
+
+function cancelEditViewTracking() {
+  viewTrackingEditMode.value = false
+  editViewTrackingHistory.value = []
+}
+
+async function saveEditViewTracking() {
+  if (!viewDetail.value?.id) return
+  const emptyRemark = editViewTrackingHistory.value.find(item => !String(item.reason || "").trim())
+  if (emptyRemark) {
+    ElMessage.warning(`请填写第${emptyRemark.attempt}次追踪备注`)
+    return
+  }
+  const invalidStatus = editViewTrackingHistory.value.find(item => ![1, 2, 3].includes(Number(item.status)))
+  if (invalidStatus) {
+    ElMessage.warning(`请选择第${invalidStatus.attempt}次追踪状态`)
+    return
+  }
+  viewTrackingSaving.value = true
+  try {
+    await updateReferralTrackingApi(viewDetail.value.id, {
+      trackingHistory: editViewTrackingHistory.value.map(item => ({
+        attempt: item.attempt,
+        status: item.status,
+        reason: String(item.reason || "").trim()
+      }))
+    })
+    ElMessage.success("追踪情况已更新")
+    const res = await getReferralTrackingDetailApi(viewDetail.value.id)
+    viewDetail.value = res.data
+    viewTrackingEditMode.value = false
+    editViewTrackingHistory.value = []
+    fetchList()
+  } catch {
+    ElMessage.error("保存失败")
+  } finally {
+    viewTrackingSaving.value = false
   }
 }
 
@@ -1331,11 +1403,51 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               {{ formatDateTime(viewDetail.jointTrackingTime) }}
             </el-descriptions-item>
           </el-descriptions>
-          <div v-if="viewTrackingHistory.length" class="view-tracking-section">
-            <div class="view-tracking-title">
-              {{ viewDetail.jointTracking === 1 ? "共同追踪过程" : "对方追踪过程" }}
+          <div v-if="viewTrackingHistory.length || viewTrackingEditMode" class="view-tracking-section">
+            <div class="view-tracking-title-row">
+              <div class="view-tracking-title">
+                {{ viewDetail.jointTracking === 1 ? "共同追踪过程" : "对方追踪过程" }}
+              </div>
+              <el-button
+                v-if="!viewTrackingEditMode && canEditRecommendTrackingHistory(viewDetail)"
+                v-permission="'referralManagement:trackOperate'"
+                type="warning"
+                link
+                size="small"
+                @click="startEditViewTracking"
+              >
+                修改追踪情况
+              </el-button>
             </div>
-            <div class="tracking-history">
+            <div v-if="viewTrackingEditMode" class="tracking-history edit-tracking-history">
+              <div
+                v-for="item in editViewTrackingHistory"
+                :key="item.attempt"
+                class="tracking-history-item edit-tracking-history-item"
+              >
+                <div class="edit-tracking-meta">
+                  <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
+                  <el-select v-model="item.status" style="width: 120px" size="small">
+                    <el-option
+                      v-for="opt in TRACK_STATUS_EDIT_OPTIONS"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+                  <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+                </div>
+                <el-input
+                  v-model="item.reason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  show-word-limit
+                  placeholder="请填写追踪备注"
+                />
+              </div>
+            </div>
+            <div v-else class="tracking-history">
               <div v-for="item in viewTrackingHistory" :key="item.attempt" class="tracking-history-item">
                 <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
                 <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
@@ -1349,12 +1461,22 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         </template>
       </div>
       <template #footer>
-        <el-button @click="openViewPrint">
-          打印 / 保存PDF
-        </el-button>
-        <el-button @click="viewDialogVisible = false">
-          关闭
-        </el-button>
+        <template v-if="viewTrackingEditMode">
+          <el-button @click="cancelEditViewTracking">
+            取消修改
+          </el-button>
+          <el-button type="primary" :loading="viewTrackingSaving" @click="saveEditViewTracking">
+            保存追踪情况
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button @click="openViewPrint">
+            打印 / 保存PDF
+          </el-button>
+          <el-button @click="viewDialogVisible = false">
+            关闭
+          </el-button>
+        </template>
       </template>
     </el-dialog>
 
@@ -1688,10 +1810,31 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
   margin-top: 16px;
 }
 
-.view-tracking-title {
+.view-tracking-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 8px;
+}
+
+.view-tracking-title {
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.edit-tracking-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.edit-tracking-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .recommend-dialog-footer {

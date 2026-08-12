@@ -40,6 +40,8 @@ public class Notice extends BaseEntity {
     private String currentAddress;
     /** 户籍地址 */
     private String householdAddress;
+    /** 登记号（潜伏感染者通知单填写，同步至潜伏感染主表） */
+    private String registrationNo;
 
     // ===== 检查信息（两类共用）=====
     private LocalDate chestXrayDate;

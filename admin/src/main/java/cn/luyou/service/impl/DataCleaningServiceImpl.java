@@ -11,6 +11,8 @@ import cn.luyou.service.DataCleaningService;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.InfectionScreenFieldSupport;
+import cn.luyou.utils.ScreeningDiagnosisSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
 import lombok.Data;
@@ -66,27 +68,27 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     private static final Path RESULT_DIR = Path.of(System.getProperty("java.io.tmpdir"), "disease-cleaning");
     private static final DataFormatter DATA_FORMATTER = new DataFormatter();
     private static final List<String> SCHOOL_HEADER_TOP = List.of(
-            "序号", "年份", "市（州）", "县（市、区）", "姓名", "性别", "出生日期", "年龄", "证件类型", "证件号",
-            "民族", "联系电话", "户籍所在地（XX市XX县、区）", "现地址", "学校类型", "学校名称", "班级（院系）",
-            "既往结核病史", "密切接触史", "结核病可疑症状", "学校人群感染筛查情况", "学校人群感染筛查情况",
-            "学校人群感染筛查情况", "学校人群感染筛查情况", "学校人群感染筛查情况", "学校人群胸片检查",
-            "学校人群胸片检查", "学校人群胸片检查", "痰涂片结果", "分子生物学结果", "诊断结果",
-            "潜伏感染者管理情况", "潜伏感染者管理情况", "潜伏感染者管理情况", "潜伏感染者管理情况",
-            "潜伏感染者管理情况", "潜伏感染者管理情况"
+            "填报机构", "市州", "县区", "乡镇/街道", "类型", "是否寄宿制", "学校名称（全称）", "姓名", "年份", "性别", "身份证号",
+            "年龄", "户籍所在地", "年级", "班级", "民族", "是否参加筛查", "有无既往结核病史", "有无肺结核接触史",
+            "结核病可疑症状", "结核病可疑症状", "结核病可疑症状",
+            "感染筛查", "感染筛查", "感染筛查", "感染筛查",
+            "胸部影像学", "胸部影像学", "胸部影像学",
+            "分子生物学结果", "痰培养结果", "筛查结果", "备注"
     );
     private static final List<String> SCHOOL_HEADER_SUB = List.of(
-            "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
-            "是否进行感染筛", "感染筛查日期", "方法", "结果（PPD：mmXmm；EC及IGRA：阳性/阴性）", "感染筛查结果",
-            "是否进行胸片检查", "胸片检查日期", "胸片结果", "", "", "", "是否进行预防者治疗", "预防性治疗方案",
-            "预防性治疗开始时间（年月日）", "预防性治疗完成时间（年月日）", "预防性治疗结果", "预防性治疗期间随访管理人员"
+            "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+            "咳嗽，咳痰≥两周", "咯血或血痰", "其他",
+            "感染筛查时间", "方法", "结果", "判定结果",
+            "胸片检查时间", "方法", "结果",
+            "", "", "", ""
     );
     private static final List<String> SCHOOL_FIELD_KEYS = List.of(
-            "seq", "year", "city", "district", "name", "gender", "birthDate", "age", "idType", "idNumber",
-            "ethnicity", "phone", "householdAddress", "currentAddress", "schoolType", "schoolName", "className",
-            "tbHistory", "closeContactHistory", "suspiciousSymptoms", "hasInfectionScreen", "screenDate",
-            "screenMethod", "screenResult", "infectionResult", "hasChestXray", "chestXrayDate", "chestXrayResult",
-            "sputumSmearResult", "molecularBiologyResult", "diagnosisResult", "hasPreventiveTreatment",
-            "preventivePlan", "preventiveStartDate", "preventiveEndDate", "preventiveResult", "preventiveManager"
+            "reportingOrg", "city", "district", "township", "schoolType", "boardingType", "schoolName", "name", "year", "gender", "idNumber",
+            "age", "householdAddress", "gradeName", "className", "ethnicity", "participatedScreening", "tbHistory", "closeContactHistory",
+            "symptomCough", "symptomHemoptysis", "symptomOther",
+            "screenDate", "screenMethod", "screenResult", "infectionResult",
+            "chestXrayDate", "chestXrayMethod", "chestXrayResult",
+            "molecularBiologyResult", "sputumCultureResult", "diagnosisResult", "remark"
     );
 
     private final Map<String, CleaningFileMeta> resultFileStore = new ConcurrentHashMap<>();
@@ -253,38 +255,84 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             CloseContactColumnLayout closeLayout
     ) {
         List<RowValidationError> result = new ArrayList<>();
-        int nameCol = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? closeLayout.nameCol() : 4);
+        int nameCol = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? closeLayout.nameCol() : 7);
         String name = getCellString(row, nameCol);
 
         String idCard;
         String phone;
         String infectionResult;
         if (TYPE_SCHOOL.equals(type)) {
-            idCard = getCellString(row, 9);
-            phone = getCellString(row, 11);
-            infectionResult = getCellString(row, 24);
-            appendCommonValidation(result, excelRowIndex, name, idCard, 9, phone, 11, infectionResult, 24);
-            String gender = getCellString(row, 5);
+            // 新表：姓名=7，身份证号=10；无电话列；含是否寄宿制、年级
+            idCard = getCellString(row, 10);
+            if (ImportIdentitySupport.isBlankOrPlaceholder(idCard)) {
+                result.add(err(excelRowIndex, name, 10, "未填写身份证号（可继续，建议后续补全）"));
+            } else if (!isValidIdCard(idCard)) {
+                result.add(err(excelRowIndex, name, 10, "身份证号格式不正确"));
+            }
+            String gender = getCellString(row, 9);
             if (StrUtil.isNotBlank(gender) && !isInOptions(gender, "男", "女")) {
-                result.add(err(excelRowIndex, name, 5, "性别仅支持：男/女"));
+                result.add(err(excelRowIndex, name, 9, "性别仅支持：男/女"));
             }
-            String idType = getCellString(row, 8);
-            if (StrUtil.isNotBlank(idType) && !isInOptions(idType, "身份证", "居民身份证", "其它", "其他")) {
-                result.add(err(excelRowIndex, name, 8, "证件类型仅支持：身份证/其它"));
-            }
+            validateOption(result, excelRowIndex, name, row, 4, "类型仅支持：1-7或对应中文",
+                    "1", "2", "3", "4", "5", "6", "7",
+                    "托幼机构", "小学", "初中", "高中阶段教育学校", "高等教育学校", "教职工", "其他");
+            validateOption(result, excelRowIndex, name, row, 5, "是否寄宿制仅支持：1-4或对应中文",
+                    "1", "2", "3", "4",
+                    "寄宿制", "非寄宿制", "大学", "其他");
+            validateOption(result, excelRowIndex, name, row, 16, "是否参加筛查仅支持：是/否", "是", "否");
             validateOption(result, excelRowIndex, name, row, 17, "既往结核病史仅支持：有/无", "有", "无");
-            validateOption(result, excelRowIndex, name, row, 18, "密切接触史仅支持：有/无", "有", "无");
-            validateOption(result, excelRowIndex, name, row, 20, "是否进行感染筛仅支持：是/否", "是", "否");
-            validateOption(result, excelRowIndex, name, row, 22, "感染筛查方法仅支持：PPD/EC/IGRA", "PPD", "EC", "IGRA");
-            validateOption(result, excelRowIndex, name, row, 25, "是否进行胸片检查仅支持：是/否", "是", "否");
-            validateOption(result, excelRowIndex, name, row, 27, "胸片结果仅支持：正常/异常/未查", "正常", "异常", "未查");
-            validateOption(result, excelRowIndex, name, row, 30, "诊断结果仅支持：排除/疑似结核/潜伏感染者/确诊患者/其他",
-                    "排除", "疑似结核", "疑似肺结核", "潜伏感染者", "确诊患者", "其他");
+            validateOption(result, excelRowIndex, name, row, 18, "肺结核接触史仅支持：有/无", "有", "无");
+            validateOption(result, excelRowIndex, name, row, 19, "咳嗽咳痰≥两周仅支持：有/无", "有", "无");
+            validateOption(result, excelRowIndex, name, row, 20, "咯血或血痰仅支持：有/无", "有", "无");
+            validateOption(result, excelRowIndex, name, row, 21, "可疑症状-其他仅支持：有/无", "有", "无");
+            validateOption(result, excelRowIndex, name, row, 23, "感染筛查方法仅支持：1-4或PPD/EC/IGRA/未查",
+                    "1", "2", "3", "4", "PPD", "EC", "IGRA", "未查");
+            validateOption(result, excelRowIndex, name, row, 25, "判定结果仅支持：0-3或对应中文",
+                    "0", "1", "2", "3", "未感染", "感染", "无法判读", "未查",
+                    "PPD阴性", "PPD+", "PPD++", "PPD+++", "EC阴性", "EC阳性", "IGRA阴性", "IGRA阳性");
+            validateOption(result, excelRowIndex, name, row, 27, "胸部影像学方法仅支持：1-4或对应中文",
+                    "1", "2", "3", "4", "胸部X线", "胸部CT", "其他", "未查");
+            validateOption(result, excelRowIndex, name, row, 28, "胸部影像学结果仅支持：0-4或对应中文",
+                    "0", "1", "2", "3", "4",
+                    "未见异常", "异常（疑似活动性结核病变）", "异常（非活动性结核病变）", "其他", "未查",
+                    "正常", "异常");
+            validateOption(result, excelRowIndex, name, row, 29, "分子生物学结果仅支持：0-3或对应中文",
+                    "0", "1", "2", "3", "阴性", "阳性", "无法判读", "未查");
+            validateOption(result, excelRowIndex, name, row, 30, "痰培养结果仅支持：0-3或对应中文",
+                    "0", "1", "2", "3", "阴性", "阳性", "无法判读", "未查");
+            validateOption(result, excelRowIndex, name, row, 31, "筛查结果仅支持：0-4或系统诊断文案",
+                    "0", "1", "2", "3", "4",
+                    "未发现异常", "活动性肺结核", "疑似肺结核", "潜伏感染者", "其他", "其它",
+                    "排除", "确诊患者", "疑似结核", "正常");
+            // EC/IGRA 结果、未查结果
+            String screenMethod = getCellString(row, 23);
+            String screenResult = getCellString(row, 24);
+            if (StrUtil.isNotBlank(screenResult)) {
+                if (isInOptions(screenMethod, "2", "3", "EC", "IGRA")
+                        && !isInOptions(screenResult, "阳性", "阴性")) {
+                    result.add(err(excelRowIndex, name, 24, "感染筛查结果（EC/IGRA）仅支持：阳性/阴性"));
+                } else if (isInOptions(screenMethod, "4", "未查") && !"无".equals(screenResult)) {
+                    result.add(err(excelRowIndex, name, 24, "感染筛查方法为未查时，结果仅支持填写「无」"));
+                }
+            }
         } else if (TYPE_KEY.equals(type)) {
             idCard = getCellString(row, 9);
             phone = getCellString(row, 11);
             infectionResult = getCellString(row, 36);
-            appendCommonValidation(result, excelRowIndex, name, idCard, 9, phone, 11, infectionResult, 36);
+            // 感染结果单独按新口径校验，此处不传 infectionResult
+            appendCommonValidation(result, excelRowIndex, name, idCard, 9, phone, 11, null, -1);
+            String screenMethod = getCellString(row, 34);
+            if (StrUtil.isNotBlank(screenMethod) && !InfectionScreenFieldSupport.isValidMethod(screenMethod)) {
+                result.add(err(excelRowIndex, name, 34,
+                        "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做（兼容PPD/EC/IGRA/未查）"));
+            }
+            if (StrUtil.isNotBlank(infectionResult) && !InfectionScreenFieldSupport.isValidResult(infectionResult)) {
+                result.add(err(excelRowIndex, name, 36,
+                        "感染筛查结果仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读"));
+            }
+            validateKeyPopulationDiagnosisCell(result, excelRowIndex, name, row, 40, "首次诊断结果");
+            validateKeyPopulationDiagnosisCell(result, excelRowIndex, name, row, 41, "半年诊断结果");
+            validateKeyPopulationDiagnosisCell(result, excelRowIndex, name, row, 42, "一年诊断结果");
             for (int idx = 15; idx <= 22; idx++) {
                 String value = getCellString(row, idx);
                 if (StrUtil.isNotBlank(value) && !isInOptions(value, "是", "否")) {
@@ -298,6 +346,18 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             idCard = getCellString(row, idCol);
             phone = getCellString(row, phoneCol);
             appendCommonValidation(result, excelRowIndex, name, idCard, idCol, phone, phoneCol, null, -1);
+            int infectionMethodCol = finalResultCol - 8;
+            int infectionResultCol = finalResultCol - 7;
+            String infectionMethod = getCellString(row, infectionMethodCol);
+            String infectionJudge = getCellString(row, infectionResultCol);
+            if (StrUtil.isNotBlank(infectionMethod) && !InfectionScreenFieldSupport.isValidMethod(infectionMethod)) {
+                result.add(err(excelRowIndex, name, infectionMethodCol,
+                        "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做（兼容PPD/EC/IGRA/未查）"));
+            }
+            if (StrUtil.isNotBlank(infectionJudge) && !InfectionScreenFieldSupport.isValidResult(infectionJudge)) {
+                result.add(err(excelRowIndex, name, infectionResultCol,
+                        "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读"));
+            }
             String finalResult = getCellString(row, finalResultCol);
             if (StrUtil.isNotBlank(finalResult)
                     && !isInOptions(finalResult, "活动性肺结核", "潜伏感染者", "未做", "未发现异常")) {
@@ -309,8 +369,19 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     private boolean shouldSkipValidationRow(String type, List<Object> row, CloseContactColumnLayout closeLayout) {
-        int nameIndex = TYPE_KEY.equals(type) ? 4 : (TYPE_CLOSE.equals(type) ? closeLayout.nameCol() : 4);
-        int idIndex = TYPE_CLOSE.equals(type) ? closeLayout.idCol() : 9;
+        int nameIndex;
+        int idIndex;
+        if (TYPE_KEY.equals(type)) {
+            nameIndex = 4;
+            idIndex = 9;
+        } else if (TYPE_CLOSE.equals(type)) {
+            nameIndex = closeLayout.nameCol();
+            idIndex = closeLayout.idCol();
+        } else {
+            // 学生筛查新表：姓名=7，身份证号=10
+            nameIndex = 7;
+            idIndex = 10;
+        }
         return StrUtil.isBlank(getCellString(row, nameIndex))
                 && ImportIdentitySupport.isBlankOrPlaceholder(getCellString(row, idIndex));
     }
@@ -350,12 +421,35 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         return new RowValidationError(rowIndex, colIndex, reason, msg);
     }
 
+    private void validateKeyPopulationDiagnosisCell(List<RowValidationError> result, int excelRowIndex, String name,
+                                                    List<Object> row, int colIndex, String fieldLabel) {
+        String value = getCellString(row, colIndex);
+        if (StrUtil.isNotBlank(value) && !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(value)) {
+            result.add(err(excelRowIndex, name, colIndex,
+                    fieldLabel + "仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者"));
+        }
+    }
+
     private boolean isInOptions(String value, String... options) {
         if (value == null) return false;
+        String normalized = normalizeOptionToken(value);
         for (String option : options) {
-            if (option.equals(value.trim())) return true;
+            if (option == null) continue;
+            String opt = normalizeOptionToken(option);
+            if (opt.equals(normalized)) return true;
+            // 其他（需注明）/其他（培训学校…）
+            if (normalized.startsWith(opt + "（") || normalized.startsWith(opt + "(")) return true;
         }
         return false;
+    }
+
+    /** Excel 数值 1.0、以及「（需注明）」说明后缀归一化 */
+    private String normalizeOptionToken(String value) {
+        String trimmed = value.trim();
+        if (trimmed.matches("\\d+(\\.0+)?")) {
+            trimmed = trimmed.replaceAll("\\.0+$", "");
+        }
+        return trimmed.replaceAll("[（(]需注明[）)]", "").trim();
     }
 
     private boolean isValidIdCard(String id) {
@@ -370,7 +464,13 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         if (index < 0 || row == null || index >= row.size()) return "";
         Object value = row.get(index);
         if (value == null) return "";
-        return String.valueOf(value).trim();
+        if (value instanceof Number number) {
+            double d = number.doubleValue();
+            if (!Double.isInfinite(d) && !Double.isNaN(d) && d == Math.floor(d)) {
+                return String.valueOf(number.longValue());
+            }
+        }
+        return normalizeOptionToken(String.valueOf(value));
     }
 
     private void validateOption(List<RowValidationError> result, int excelRowIndex, String name,
@@ -442,14 +542,71 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         Row main = sheet.getRow(location.headerRow());
         Row sub = location.dataStartRow() - location.headerRow() > 1 ? sheet.getRow(location.headerRow() + 1) : null;
         int last = Math.max(main == null ? 0 : main.getLastCellNum(), sub == null ? 0 : sub.getLastCellNum());
+        String carriedGroup = "";
+        Integer nameCol = null;
         for (int col = 0; col < last; col++) {
             String mainText = getPoiCellString(main, col);
             String subText = getPoiCellString(sub, col);
+            if (StrUtil.isNotBlank(mainText)) {
+                String normalizedMain = normalizeHeader(mainText);
+                if ("结核病可疑症状".equals(normalizedMain)
+                        || "感染筛查".equals(normalizedMain)
+                        || "胸部影像学".equals(normalizedMain)
+                        || normalizedMain.contains("感染筛查情况")
+                        || normalizedMain.contains("胸片检查")) {
+                    carriedGroup = mainText;
+                } else if (StrUtil.isBlank(subText)) {
+                    carriedGroup = "";
+                }
+            }
+            String resolved = resolveMatchHeaderKey(mainText, subText, carriedGroup);
+            putMatchAlias(index, resolved, col);
             putMatchAlias(index, mainText, col);
             putMatchAlias(index, subText, col);
-            putMatchAlias(index, mainText + subText, col);
+            if ("姓名".equals(normalizeHeader(mainText)) || "姓名".equals(normalizeHeader(subText))) {
+                nameCol = col;
+            }
+        }
+        // 年份：优先姓名右侧列
+        Integer yearCol = null;
+        Integer yearFallback = null;
+        for (int col = 0; col < last; col++) {
+            String h = normalizeHeader(getPoiCellString(main, col));
+            String s = normalizeHeader(getPoiCellString(sub, col));
+            if (!"年份".equals(h) && !"年度".equals(h) && !"年份".equals(s) && !"年度".equals(s)) {
+                continue;
+            }
+            yearFallback = col;
+            if (nameCol != null && col > nameCol) {
+                yearCol = col;
+                break;
+            }
+        }
+        if (yearCol == null) yearCol = yearFallback;
+        if (yearCol != null) {
+            index.put("year", yearCol);
         }
         return index;
+    }
+
+    private String resolveMatchHeaderKey(String main, String sub, String carriedGroup) {
+        String m = StrUtil.blankToDefault(main, "");
+        String s = StrUtil.blankToDefault(sub, "");
+        String g = StrUtil.blankToDefault(carriedGroup, "");
+        if (StrUtil.isNotBlank(s)) {
+            if ("方法".equals(s)) {
+                if (g.contains("感染") || m.contains("感染")) return "感染筛查方法";
+                if (g.contains("胸") || m.contains("胸")) return "胸部影像学方法";
+            }
+            if ("结果".equals(s) || s.startsWith("结果")) {
+                if (g.contains("感染") || m.contains("感染")) return "感染筛查原始结果";
+                if (g.contains("胸") || m.contains("胸")) return "胸片结果";
+            }
+            if ("其他".equals(s) && (g.contains("可疑") || m.contains("可疑"))) {
+                return "可疑症状其他";
+            }
+        }
+        return StrUtil.isNotBlank(s) ? s : m;
     }
 
     private void putMatchAlias(Map<String, Integer> index, String rawHeader, int col) {
@@ -459,8 +616,10 @@ public class DataCleaningServiceImpl implements DataCleaningService {
         String key = switch (header) {
             case "序号" -> "seq";
             case "年份", "年度" -> "year";
+            case "填报机构" -> "reportingOrg";
             case "市州" -> "city";
-            case "县市区", "区县" -> "district";
+            case "县市区", "区县", "县区" -> "district";
+            case "乡镇街道", "乡镇社区" -> "township";
             case "姓名" -> "name";
             case "性别" -> "gender";
             case "出生日期" -> "birthDate";
@@ -468,26 +627,34 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             case "证件类型" -> "idType";
             case "证件号", "身份证号", "身份证号码" -> "idNumber";
             case "民族" -> "ethnicity";
+            case "是否参加筛查" -> "participatedScreening";
             case "联系电话" -> "phone";
             case "户籍所在地XX市XX县区", "户籍所在地" -> "householdAddress";
             case "现地址", "现住址" -> "currentAddress";
-            case "学校类型" -> "schoolType";
-            case "学校名称" -> "schoolName";
-            case "班级院系" -> "className";
-            case "既往结核病史" -> "tbHistory";
-            case "密切接触史" -> "closeContactHistory";
+            case "学校类型", "类型" -> "schoolType";
+            case "是否寄宿制" -> "boardingType";
+            case "学校名称", "学校名称全称" -> "schoolName";
+            case "年级" -> "gradeName";
+            case "班级院系", "班级" -> "className";
+            case "既往结核病史", "有无既往结核病史" -> "tbHistory";
+            case "密切接触史", "有无肺结核接触史" -> "closeContactHistory";
             case "结核病可疑症状" -> "suspiciousSymptoms";
+            case "咳嗽咳痰两周", "咳嗽咳痰≥两周", "咳嗽咳痰" -> "symptomCough";
+            case "咯血或血痰" -> "symptomHemoptysis";
+            case "其他", "可疑症状其他" -> "symptomOther";
             case "是否进行感染筛" -> "hasInfectionScreen";
-            case "感染筛查日期" -> "screenDate";
+            case "感染筛查日期", "感染筛查时间" -> "screenDate";
             case "方法", "感染筛查方法" -> "screenMethod";
-            case "结果PPDmmXmmEC及IGRA阳性阴性" -> "screenResult";
+            case "结果PPDmmXmmEC及IGRA阳性阴性", "结果", "感染筛查原始结果" -> "screenResult";
             case "感染筛查结果", "判定结果", "感染筛查判定结果" -> "infectionResult";
             case "是否进行胸片检查" -> "hasChestXray";
-            case "胸片检查日期" -> "chestXrayDate";
+            case "胸片检查日期", "胸片检查时间" -> "chestXrayDate";
+            case "胸部影像学方法" -> "chestXrayMethod";
             case "胸片结果", "胸部DR" -> "chestXrayResult";
             case "痰涂片", "痰涂片结果" -> "sputumSmearResult";
             case "分子生物学", "分子生物学结果" -> "molecularBiologyResult";
-            case "诊断", "诊断结果" -> "diagnosisResult";
+            case "痰培养", "痰培养结果" -> "sputumCultureResult";
+            case "诊断", "诊断结果", "筛查结果" -> "diagnosisResult";
             case "符合潜伏治疗条件者是否进行预防性治疗是写出方案否填写原因", "是否进行预防者治疗", "是否进行预防性治疗", "是否开展预防治疗" -> "hasPreventiveTreatment";
             case "预防性治疗方案" -> "preventivePlan";
             case "预防性治疗开始时间年月日" -> "preventiveStartDate";

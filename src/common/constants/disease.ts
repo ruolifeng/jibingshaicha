@@ -99,11 +99,21 @@ export const REFERRAL_RESULT_OPTIONS = [
 /** 胸片检查结果选项 */
 export const CHEST_XRAY_RESULT_OPTIONS = ["正常", "异常", "未查"]
 
-/** 待诊断-确认诊断选项（学生/重点/疫情筛查） */
+/** 待诊断-确认诊断选项（学生筛查，保留「确诊患者」） */
 export const SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS = [
   { label: "确诊患者", value: "确诊患者" },
   { label: "排除", value: "排除" },
   { label: "潜伏感染者", value: "潜伏感染者" }
+]
+
+/** 待诊断-确认诊断选项（重点人群/疫情筛查） */
+export const KEY_SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS = [
+  { label: "确诊结核", value: "确诊结核" },
+  { label: "排除", value: "排除" },
+  { label: "正常", value: "正常" },
+  { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
+  { label: "潜伏感染者", value: "潜伏感染者" },
+  { label: "在治患者", value: "在治患者" }
 ]
 
 /** 待诊断-确认诊断对应的转诊结果码 */
@@ -116,24 +126,38 @@ export const SUSPECTED_REFERRAL_RESULT_OPTIONS = [
 /** 待诊断-诊断中文 → 转诊码 */
 export const SUSPECTED_DIAGNOSIS_TO_REFERRAL: Record<string, string> = {
   排除: "excluded",
+  正常: "excluded",
   确诊患者: "confirmed",
+  确诊结核: "confirmed",
+  在治患者: "confirmed",
+  [SUSPECTED_TB_DIAGNOSIS]: "suspected",
   潜伏感染者: "latent"
 }
 
-/** 筛查管理列表 — 诊断结果搜索选项 */
+/** 筛查管理列表 — 重点人群/疫情筛查诊断结果（统一口径） */
 export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
   { label: "排除", value: "排除" },
   { label: "正常", value: "正常" },
   { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
-  { label: "确诊患者", value: "确诊患者" },
-  { label: "潜伏感染者", value: "潜伏感染者" }
+  { label: "确诊结核", value: "确诊结核" },
+  { label: "潜伏感染者", value: "潜伏感染者" },
+  { label: "在治患者", value: "在治患者" }
 ]
 
-/** 筛查管理编辑 — 诊断结果选项（含「其他」兼容历史数据） */
-export const SCREENING_DIAGNOSIS_EDIT_OPTIONS = [
-  ...SCREENING_DIAGNOSIS_SEARCH_OPTIONS,
+/** 筛查管理编辑 — 重点人群/疫情筛查诊断结果 */
+export const SCREENING_DIAGNOSIS_EDIT_OPTIONS = [...SCREENING_DIAGNOSIS_SEARCH_OPTIONS]
+
+/** 学生筛查 — 筛查结果/诊断（与秋季新生表口径一致，含历史「确诊患者」） */
+export const SCHOOL_DIAGNOSIS_SEARCH_OPTIONS = [
+  { label: "排除", value: "排除" },
+  { label: "正常", value: "正常" },
+  { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
+  { label: "确诊患者", value: "确诊患者" },
+  { label: "潜伏感染者", value: "潜伏感染者" },
   { label: "其他", value: "其他" }
 ]
+
+export const SCHOOL_DIAGNOSIS_EDIT_OPTIONS = [...SCHOOL_DIAGNOSIS_SEARCH_OPTIONS]
 /** 终态正常类诊断值列表（供后端筛选等使用） */
 export const NORMAL_TERMINAL_DIAGNOSIS_VALUES = ["排除", "正常", "其它", "其他"]
 
@@ -145,12 +169,13 @@ export function getScreeningLatentStatusLabel(row: {
   isLatent?: number
   diagnosisFirst?: string
 }): string {
-  if (row.isLatent !== 1) return "正常"
   const diagnosis = row.diagnosisFirst?.trim()
+  // 筛查结果码优先：确诊结核/确诊患者标红保留；3=已进潜伏感染管理
+  if (diagnosis === "确诊结核" || diagnosis === "确诊患者" || diagnosis === "在治患者") return "已确诊患者"
+  if (diagnosis === "潜伏感染者") return "已确诊潜伏感染者"
+  if (row.isLatent !== 1) return "正常"
   if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "正常"
   if (isSuspectedTbDiagnosis(diagnosis)) return "待诊断"
-  if (diagnosis === "确诊患者") return "已确诊患者"
-  if (diagnosis === "潜伏感染者") return "已确诊潜伏感染者"
   return "待诊断"
 }
 
@@ -159,11 +184,11 @@ export function getScreeningLatentStatusTagType(row: {
   isLatent?: number
   diagnosisFirst?: string
 }): "success" | "warning" | "danger" {
-  if (row.isLatent !== 1) return "success"
   const diagnosis = row.diagnosisFirst?.trim()
-  if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "success"
+  if (diagnosis === "确诊结核" || diagnosis === "确诊患者" || diagnosis === "在治患者") return "danger"
   if (diagnosis === "潜伏感染者") return "warning"
-  if (diagnosis === "确诊患者") return "danger"
+  if (row.isLatent !== 1) return "success"
+  if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "success"
   if (isSuspectedTbDiagnosis(diagnosis)) return "warning"
   return "warning"
 }
@@ -175,10 +200,15 @@ export function isConfirmedPatientDiagnosis(row: {
   referralResult?: string
   diagnosisResult?: string
 }): boolean {
-  return row.diagnosisFirst === "确诊患者"
-    || row.screeningDiagnosisFirst === "确诊患者"
+  return isConfirmedTbDiagnosisText(row.diagnosisFirst)
+    || isConfirmedTbDiagnosisText(row.screeningDiagnosisFirst)
     || row.referralResult === "confirmed"
-    || row.diagnosisResult === "确诊患者"
+    || isConfirmedTbDiagnosisText(row.diagnosisResult)
+}
+
+function isConfirmedTbDiagnosisText(value?: string | null): boolean {
+  const text = value?.trim()
+  return text === "确诊结核" || text === "确诊患者" || text === "在治患者"
 }
 
 /** 确认诊断列若误存日期，统一为 yyyy-MM-dd，避免窄列换行裁切 */
@@ -200,8 +230,10 @@ export function getSuspectedConfirmDiagnosisLabel(row: {
   if (draft) {
     if (NORMAL_TERMINAL_DIAGNOSIS.has(draft)) return "正常"
     if (isSuspectedTbDiagnosis(draft)) return SUSPECTED_TB_DIAGNOSIS
-    if (draft === "确诊患者") return "确诊患者"
+    if (draft === "确诊患者" || draft === "确诊结核") return draft
+    if (draft === "在治患者") return "在治患者"
     const matched = SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === draft)
+      || KEY_SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.find(o => o.value === draft)
     if (matched) return matched.label
     return normalizeConfirmDiagnosisDisplay(draft)
   }
@@ -453,8 +485,126 @@ export const PATHOGEN_RESULT_FILTER_OPTIONS = [
   "病原学阴性"
 ] as const
 
-/** 感染检查方法 */
+/** 感染检查方法（通知单等短码） */
 export const INFECTION_METHOD_OPTIONS = ["PPD", "EC", "IGRA"]
+
+/**
+ * 重点人群 / 疫情筛查 / 密接个案 — 感染筛查方法（官方下拉）
+ */
+export const KEY_INFECTION_SCREEN_METHOD_OPTIONS = [
+  "结核菌素皮肤试验_PPD",
+  "结核抗原皮肤试验_EC",
+  "γ干扰素释放试验_IGRA",
+  "未做"
+] as const
+
+/**
+ * 重点人群 / 疫情筛查 / 密接个案 — 感染检测结果 / 结果判定（官方下拉）
+ */
+export const KEY_INFECTION_JUDGE_RESULT_OPTIONS = [
+  "一般阳性",
+  "中度阳性",
+  "强阳性",
+  "阳性",
+  "阴性",
+  "未判读"
+] as const
+
+/** 展示感染筛查方法：短码/别名 → 官方下拉文案 */
+export function displayInfectionScreenMethod(screenMethod?: string | null, infectionResult?: string | null): string {
+  const method = (screenMethod || "").trim()
+  if (method) {
+    const upper = method.toUpperCase()
+    if (method === "未做" || method === "未查") return "未做"
+    if (KEY_INFECTION_SCREEN_METHOD_OPTIONS.includes(method as typeof KEY_INFECTION_SCREEN_METHOD_OPTIONS[number])) {
+      return method
+    }
+    if (upper.includes("IGRA") || method.includes("干扰素")) return "γ干扰素释放试验_IGRA"
+    if (upper === "EC" || upper.includes("EC") || method.includes("结核抗原")) return "结核抗原皮肤试验_EC"
+    if (upper === "PPD" || upper.includes("PPD") || method.includes("结核菌素")) return "结核菌素皮肤试验_PPD"
+    return method
+  }
+  const result = (infectionResult || "").trim()
+  if (/IGRA/i.test(result)) return "γ干扰素释放试验_IGRA"
+  if (/^EC/i.test(result) || /EC阳|EC阴/.test(result)) return "结核抗原皮肤试验_EC"
+  if (/^PPD/i.test(result) || /PPD/.test(result)) return "结核菌素皮肤试验_PPD"
+  return "-"
+}
+
+/** 展示结果判定：历史文案 → 官方下拉 */
+export function displayInfectionJudgeResult(infectionResult?: string | null): string {
+  const raw = (infectionResult || "").trim()
+  if (!raw) return "-"
+  if (KEY_INFECTION_JUDGE_RESULT_OPTIONS.includes(raw as typeof KEY_INFECTION_JUDGE_RESULT_OPTIONS[number])) {
+    return raw
+  }
+  if (raw === "无法判读" || raw === "未判读") return "未判读"
+  if (raw.includes("PPD+++") || raw.includes("强阳")) return "强阳性"
+  if (raw.includes("PPD++") || raw.includes("中度阳")) return "中度阳性"
+  if (raw.includes("PPD+") || raw.includes("一般阳")) return "一般阳性"
+  if (/阳性/.test(raw)) return "阳性"
+  if (/阴性/.test(raw)) return "阴性"
+  return raw
+}
+
+/** 学生筛查 — 学校类型（2026 秋季新生入学表） */
+export const SCHOOL_TYPE_OPTIONS = [
+  "托幼机构",
+  "小学",
+  "初中",
+  "高中阶段教育学校",
+  "高等教育学校",
+  "教职工",
+  "其他"
+]
+
+/** 学生筛查 — 是否寄宿制 */
+export const SCHOOL_BOARDING_TYPE_OPTIONS = ["寄宿制", "非寄宿制", "大学", "其他"]
+
+/** 学生筛查 — 感染筛查方法（含未查） */
+export const SCHOOL_SCREEN_METHOD_OPTIONS = ["PPD", "EC", "IGRA", "未查"]
+
+/** 学生筛查 — 判定结果 */
+export const SCHOOL_INFECTION_JUDGE_OPTIONS = ["未感染", "感染", "无法判读", "未查"]
+
+/** 学生筛查 — 胸部影像学方法 */
+export const SCHOOL_CHEST_METHOD_OPTIONS = ["胸部X线", "胸部CT", "其他", "未查"]
+
+/** 学生筛查 — 胸部影像学结果（细分类） */
+export const SCHOOL_CHEST_RESULT_OPTIONS = [
+  "未见异常",
+  "异常（疑似活动性结核病变）",
+  "异常（非活动性结核病变）",
+  "其他",
+  "未查",
+  // 兼容历史
+  "正常",
+  "异常"
+]
+
+/** 学生筛查 — 分子生物学/痰培养 */
+export const SCHOOL_LAB_RESULT_OPTIONS = ["阴性", "阳性", "无法判读", "未查"]
+
+/**
+ * 学生筛查列表 — 表头点击展示的数字码/填写说明
+ * （对齐《2026年秋季新生入学结核病筛查记录表新》说明行）
+ */
+export const SCHOOL_SCREENING_FIELD_HINTS = {
+  schoolType: "填写数字，1=托幼机构，2=小学，3=初中，4=高中阶段教育学校，5=高等教育学校，6=教职工，7=其他（培训学校、特殊教育学校和专门学校等）",
+  boardingType: "填写数字，1=寄宿制，2=非寄宿制，3=大学，4=其他",
+  screenMethod: "填写数字，1=结核菌素纯蛋白衍生物（PPD），2=重组结核分枝杆菌融合蛋白（EC），3=γ-干扰素释放试验（IGRA），4=未查",
+  screenResult: "PPD填写横径×纵径（mm）及有无双圈、水泡、坏死、淋巴管炎等；EC和IGRA填写阳性/阴性；未查填写「无」",
+  infectionResult: "填写数字，0=未感染，1=感染，2=无法判读，3=未查",
+  chestXrayMethod: "填写数字，1=胸部X线，2=胸部CT，3=其他（需注明），4=未查",
+  chestXrayResult: "填写数字，0=未见异常，1=异常（疑似活动性结核病变），2=异常（非活动性结核病变），3=其他（需注明），4=未查",
+  molecularBiologyResult: "填写数字，0=阴性，1=阳性，2=无法判读，3=未查",
+  sputumCultureResult: "0=阴性，1=阳性，2=无法判读，3=未查",
+  diagnosisFirst: "填写数字，0=未发现异常，1=活动性肺结核，2=疑似肺结核，3=潜伏感染者，4=其他（需注明）"
+} as const
+
+/** 有无类选项 */
+export const YES_NO_HAVE_OPTIONS = ["有", "无"]
+export const YES_NO_OPTIONS = ["是", "否"]
 
 /** 密接人群阳性轮次 */
 export const ACTIVE_ROUND_MAP: Record<number, string> = {
@@ -646,8 +796,8 @@ export const FOLLOW_UP_DRUG_FORM_OPTIONS = [
   { value: "4", label: "注射剂" }
 ]
 
-/** 是/否（1无/2有） */
-export const YES_NO_OPTIONS = [
+/** 后续随访：有无（1无/2有） */
+export const FOLLOW_UP_YES_NO_HAVE_OPTIONS = [
   { value: "1", label: "无" },
   { value: "2", label: "有" }
 ]

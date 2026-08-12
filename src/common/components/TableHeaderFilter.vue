@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { Filter } from "@element-plus/icons-vue"
+import TableHeaderHint from "./TableHeaderHint.vue"
 
 export interface HeaderFilterOption {
   text: string
@@ -17,12 +18,15 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   /** 打开时加载实际内容选项 */
   loadOptions?: () => void | Promise<void>
+  /** 点击列名展示的数字码/填写说明 */
+  hint?: string
 }>(), {
   modelValue: "",
   type: "text",
   options: () => [],
   sourceValues: () => [],
-  placeholder: "输入后筛选"
+  placeholder: "输入后筛选",
+  hint: ""
 })
 
 const emit = defineEmits<{
@@ -112,7 +116,7 @@ function onTextKeydown(e: Event | KeyboardEvent) {
 
 <template>
   <span class="table-header-filter">
-    <span class="table-header-filter__label">{{ label }}</span>
+    <TableHeaderHint :label="label" :hint="hint" />
     <el-popover v-model:visible="visible" placement="bottom" :width="240" trigger="click">
       <template #reference>
         <el-icon
@@ -171,12 +175,6 @@ function onTextKeydown(e: Event | KeyboardEvent) {
   align-items: center;
   gap: 4px;
   max-width: 100%;
-}
-
-.table-header-filter__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .table-header-filter__icon {

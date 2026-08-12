@@ -11,11 +11,12 @@ import {
   SPUTUM_CULTURE_OPTIONS,
   SPUTUM_STATUS_OPTIONS,
   SYMPTOM_OPTIONS,
+  TREATMENT_PLAN_OPTIONS,
   VENTILATION_OPTIONS,
   VISIT_METHOD_OPTIONS,
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
-import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_EDIT_DAYS_LEVEL5, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -66,6 +67,17 @@ function createEmptyForm() {
 }
 
 const firstVisitForm = reactive(createEmptyForm())
+
+/** 标准治疗方案 + 当前值（兼容历史自由文本/病案预填） */
+const chemotherapyOptions = computed(() => {
+  const opts = [...TREATMENT_PLAN_OPTIONS]
+  const current = firstVisitForm.chemotherapy?.trim()
+  if (current && !opts.includes(current)) {
+    opts.push(current)
+  }
+  return opts
+})
+
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const draftSaving = ref(false)
@@ -96,7 +108,7 @@ const rules: FormRules = {
   sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
   sputumCulture: [{ required: true, message: "请选择或录入痰培养情况", trigger: "change" }],
   drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
-  chemotherapy: [{ required: true, whitespace: true, message: "请填写化疗方案", trigger: "blur" }],
+  chemotherapy: [{ required: true, whitespace: true, message: "请选择或录入化疗方案", trigger: "change" }],
   medicationUsage: [{ required: true, message: "请选择用法", trigger: "change" }],
   supervisor: [{ required: true, message: "请选择督导人员", trigger: "change" }],
   drugForm: [{
@@ -265,14 +277,6 @@ async function handleSave() {
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
-    <el-alert
-      v-if="formLocked"
-      type="warning"
-      :closable="false"
-      show-icon
-      class="mb-3"
-      :title="`首次入户随访已超过 ${FIRST_VISIT_EDIT_DAYS_LEVEL5} 天修改期限，仅可查看。如需修改请联系上级管理员。`"
-    />
     <el-form ref="formRef" :model="firstVisitForm" :rules="rules" label-width="110px" size="default" :disabled="formLocked">
       <el-row justify="end" class="form-no-row">
         <el-col :span="8">
@@ -369,7 +373,22 @@ async function handleSave() {
       <el-row :gutter="16">
         <el-col :span="8">
           <el-form-item label="化疗方案" prop="chemotherapy">
-            <el-input v-model="firstVisitForm.chemotherapy" placeholder="来自病案首次治疗方案，可修改" />
+            <el-select
+              v-model="firstVisitForm.chemotherapy"
+              placeholder="来自病案首次治疗方案，可选择或输入"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in chemotherapyOptions"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="8">

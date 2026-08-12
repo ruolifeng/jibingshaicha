@@ -24,6 +24,10 @@ function hasMedicationUnitSearch(options?: PatientListOptions) {
     || options?.firstVisitSearch || options?.followUpSearch)
 }
 
+function hasFirstVisitFieldSearch(options?: PatientListOptions) {
+  return !!options?.firstVisitSearch
+}
+
 export function usePatientList(defaultArchived?: number, options?: PatientListOptions) {
   const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
   const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
@@ -50,7 +54,8 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     dateRange: [] as string[],
     archived: defaultArchived,
     formatIssue: "",
-    ...(hasMedicationUnitSearch(options) ? { medicationManagementUnit: "" } : {})
+    ...(hasMedicationUnitSearch(options) ? { medicationManagementUnit: "" } : {}),
+    ...(hasFirstVisitFieldSearch(options) ? { sputumCulture: "", drugResistance: "" } : {})
   })
 
   async function fetchData() {
@@ -85,6 +90,8 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
       if (!params.diagnosisResult) delete params.diagnosisResult
       if (!params.creatorUsername) delete params.creatorUsername
       if (!params.medicationManagementUnit) delete params.medicationManagementUnit
+      if (!params.sputumCulture) delete params.sputumCulture
+      if (!params.drugResistance) delete params.drugResistance
       const { data } = await getPatientListApi(params)
       tableData.value = data.records
       total.value = data.total
@@ -110,6 +117,10 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     searchForm.formatIssue = ""
     if (hasMedicationUnitSearch(options) && "medicationManagementUnit" in searchForm) {
       searchForm.medicationManagementUnit = ""
+    }
+    if (hasFirstVisitFieldSearch(options)) {
+      if ("sputumCulture" in searchForm) searchForm.sputumCulture = ""
+      if ("drugResistance" in searchForm) searchForm.drugResistance = ""
     }
     clearFilters()
     resetSort()

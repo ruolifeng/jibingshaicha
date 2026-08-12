@@ -26,7 +26,7 @@ public final class LatentImportHeaders {
             "现住地址",
             "感染筛查日期",
             "感染筛查方法",
-            "感染筛查结果",
+            "结果判定",
             "是否胸片检查",
             "胸片检查日期",
             "胸片检查结果",
@@ -39,6 +39,8 @@ public final class LatentImportHeaders {
     public static final Map<String, String> HEADER_ALIASES = Map.of(
             "感染筛查时间", "感染筛查日期",
             "筛查方法", "感染筛查方法",
+            "感染检测方法", "感染筛查方法",
+            "感染筛查结果", "结果判定",
             "现住址", "现住地址",
             "追踪备注", "追踪情况"
     );

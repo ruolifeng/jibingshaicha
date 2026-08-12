@@ -2,6 +2,7 @@
 import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import {
   getPatientTransferStatusLabel,
@@ -14,8 +15,35 @@ import {
 } from "@@/utils/patient"
 import { deletePatientApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
+import { usePatientTableHeaderFilters } from "./composables/usePatientTableHeaderFilters"
 
-const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex, loading, tableData, total, searchForm, fetchData, handleSearch, handleReset } = usePatientList(0, { noticeSearch: true })
+const {
+  paginationData,
+  handleCurrentChange,
+  handleSizeChange,
+  getTableIndex,
+  loading,
+  tableData,
+  total,
+  searchForm,
+  columnFilters,
+  setFilter,
+  fetchData,
+  handleSearch,
+  handleReset
+} = usePatientList(0, { noticeSearch: true })
+
+const {
+  genderFilterOptions,
+  pathogenFilterOptions,
+  populationTypeFilterOptions,
+  loadGenderOptions,
+  loadPathogenOptions,
+  loadPopulationTypeOptions,
+  genderSourceValues,
+  pathogenSourceValues,
+  populationTypeSourceValues
+} = usePatientTableHeaderFilters(0)
 
 const noticeDialogVisible = ref(false)
 const noticeDetailVisible = ref(false)
@@ -104,19 +132,78 @@ function getNoticeRowClass({ row }: { row: any }) {
     <el-card shadow="never" style="margin-top:10px">
       <el-table :data="tableData" v-loading="loading" border stripe :row-class-name="getNoticeRowClass">
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="病原学结果" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="病原学结果"
+              type="select"
+              :options="pathogenFilterOptions"
+              :source-values="pathogenSourceValues"
+              :load-options="loadPathogenOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="发送时间" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span :class="{ 'notice-overdue-text': isNoticeReceiveOverdue(row) }">

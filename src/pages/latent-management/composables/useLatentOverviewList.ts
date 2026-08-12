@@ -3,8 +3,13 @@ import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { getLatentAggregateListApi } from "../apis"
 
+export interface LatentOverviewListOptions {
+  /** 固定追踪状态筛选（如督导表/服药管理仅显示到位=1） */
+  trackingStatus?: number
+}
+
 /** 在管潜伏感染者总览列表（含手动/导入密接，排除密接筛查同步数据） */
-export function useLatentOverviewList() {
+export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
   const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
   const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
@@ -40,7 +45,8 @@ export function useLatentOverviewList() {
           ? { crowdCategory: keyPopulationSubCategories.join(",") }
           : {}),
         ...(formatIssue ? { formatIssue } : {}),
-        ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+        ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+        ...(options.trackingStatus != null ? { trackingStatus: options.trackingStatus } : {})
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone

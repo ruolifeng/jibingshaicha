@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { FormInstance, FormRules } from "element-plus"
+import { getDepartmentListApi } from "@@/apis/department"
 import ImageUploader from "@@/components/ImageUploader.vue"
 import {
   formatLatentSupervisionTreatmentPlan,
@@ -46,6 +47,9 @@ const draftSaving = ref(false)
 const archiving = ref(false)
 const draftId = ref<string | undefined>(undefined)
 const recordCreateTime = ref<string | null>(null)
+/** 系统部门/机构名称（管理单位下拉） */
+const orgNameOptions = ref<string[]>([])
+const orgOptionsLoading = ref(false)
 
 const isEditMode = computed(() => !!props.initialData?.id)
 const formLocked = computed(() =>
@@ -167,6 +171,9 @@ function resetFormFromRow(row: any) {
   supervisionForm.treatmentPlan = ""
   supervisionForm.customPlanDetail = ""
   supervisionForm.managingUnit = row.managingUnit || row.preventiveManager || ""
+  if (!supervisionForm.managingUnit.trim()) {
+    supervisionForm.managingUnit = (userStore.orgName || userStore.departmentName || "").trim()
+  }
   supervisionForm.supervisingDoctor = row.supervisingDoctor || ""
   supervisionForm.supervisionRecords = [createEmptyRecord()]
   supervisionForm.treatmentCompletionStatus = ""
@@ -250,11 +257,39 @@ async function initForm() {
   }
 }
 
+/** 加载系统机构名称（部门名称）作为管理单位选项 */
+async function loadOrgNameOptions() {
+  orgOptionsLoading.value = true
+  try {
+    const { data } = await getDepartmentListApi()
+    const names = (Array.isArray(data) ? data : [])
+      .map(item => (item.name || "").trim())
+      .filter(Boolean)
+    const extras = [
+      userStore.orgName,
+      userStore.departmentName,
+      supervisionForm.managingUnit
+    ]
+      .map(item => (item || "").trim())
+      .filter(Boolean)
+    orgNameOptions.value = Array.from(new Set([...names, ...extras]))
+  } catch {
+    orgNameOptions.value = []
+  } finally {
+    orgOptionsLoading.value = false
+  }
+}
+
 watch(
   () => [visible.value, props.latentRow?.id, props.initialData?.id] as const,
-  ([open]) => {
+  async ([open]) => {
     if (open && props.latentRow) {
-      initForm()
+      await Promise.all([initForm(), loadOrgNameOptions()])
+      // 表单加载后再补一次，确保已有管理单位出现在下拉中
+      const current = supervisionForm.managingUnit?.trim()
+      if (current && !orgNameOptions.value.includes(current)) {
+        orgNameOptions.value = [...orgNameOptions.value, current]
+      }
       nextTick(() => formRef.value?.clearValidate())
     }
   },
@@ -525,7 +560,21 @@ async function handleArchive() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="管理单位">
-            <el-input v-model="supervisionForm.managingUnit" placeholder="请输入管理单位" />
+            <el-select
+              v-model="supervisionForm.managingUnit"
+              placeholder="请选择管理单位"
+              clearable
+              filterable
+              :loading="orgOptionsLoading"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="name in orgNameOptions"
+                :key="name"
+                :label="name"
+                :value="name"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
       </el-row>

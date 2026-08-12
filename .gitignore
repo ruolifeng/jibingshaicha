@@ -21,3 +21,6 @@ yarn.lock
 *.jar
 *.xlsx
 chouyang/
+
+# Database backups
+admin/backups/

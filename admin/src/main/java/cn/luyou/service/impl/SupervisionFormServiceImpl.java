@@ -4,13 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.cuenum.StatusEnum;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.model.LatentInfection;
-import cn.luyou.model.ScreeningCloseContact;
-import cn.luyou.model.ScreeningKeyPopulation;
-import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.SupervisionForm;
-import cn.luyou.mapper.ScreeningCloseContactMapper;
-import cn.luyou.mapper.ScreeningKeyPopulationMapper;
-import cn.luyou.mapper.ScreeningSchoolMapper;
 import cn.luyou.mapper.SupervisionFormMapper;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.SupervisionFormService;
@@ -28,22 +22,10 @@ import java.util.List;
 public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMapper, SupervisionForm>
         implements SupervisionFormService {
 
-    private static final int EDIT_DAYS_LEVEL5 = 10;
-
     private final LatentInfectionService latentInfectionService;
-    private final ScreeningSchoolMapper screeningSchoolMapper;
-    private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
-    private final ScreeningCloseContactMapper screeningCloseContactMapper;
 
-    public SupervisionFormServiceImpl(
-            @Lazy LatentInfectionService latentInfectionService,
-            ScreeningSchoolMapper screeningSchoolMapper,
-            ScreeningKeyPopulationMapper screeningKeyPopulationMapper,
-            ScreeningCloseContactMapper screeningCloseContactMapper) {
+    public SupervisionFormServiceImpl(@Lazy LatentInfectionService latentInfectionService) {
         this.latentInfectionService = latentInfectionService;
-        this.screeningSchoolMapper = screeningSchoolMapper;
-        this.screeningKeyPopulationMapper = screeningKeyPopulationMapper;
-        this.screeningCloseContactMapper = screeningCloseContactMapper;
     }
 
     @Override
@@ -135,9 +117,6 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
                 if (Integer.valueOf(2).equals(existing.getStatus())) {
                     throw new ServiceException(StatusEnum.PARAM_INVALID, "该督导表已归档，不可重复归档");
                 }
-                if (Integer.valueOf(1).equals(existing.getStatus())) {
-                    assertEditable(existing);
-                }
                 if (Integer.valueOf(0).equals(existing.getStatus())) {
                     form.setFormSeq(nextFormSeq(form.getLatentInfectionId()));
                 } else {
@@ -161,7 +140,7 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
                 .ge(SupervisionForm::getStatus, 1)
                 .orderByAsc(SupervisionForm::getCreateTime);
         List<SupervisionForm> list = list(wrapper);
-        list.forEach(form -> form.setEditable(isEditable(role, form)));
+        list.forEach(form -> form.setEditable(Integer.valueOf(1).equals(form.getStatus())));
         return list;
     }
 
@@ -173,32 +152,9 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
         return (int) count + 1;
     }
 
-    private boolean isEditable(Integer role, SupervisionForm form) {
-        if (form == null || !Integer.valueOf(1).equals(form.getStatus())) {
-            return false;
-        }
-        if (role == null || role != 6) {
-            return true;
-        }
-        if (form.getCreateTime() == null) {
-            return true;
-        }
-        return !form.getCreateTime().plusDays(EDIT_DAYS_LEVEL5).isBefore(LocalDateTime.now());
-    }
-
     private void assertSubmittable(SupervisionForm existing) {
         if (Integer.valueOf(2).equals(existing.getStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可修改");
-        }
-        if (Integer.valueOf(1).equals(existing.getStatus())) {
-            assertEditable(existing);
-        }
-    }
-
-    private void assertEditable(SupervisionForm existing) {
-        if (!isEditable(BaseContext.getCurrentRole(), existing)) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "督导表已超过10天修改期限，请联系上级管理员");
         }
     }
 
@@ -209,61 +165,10 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
         if (latent == null) return;
 
         // 督导表归档 → 潜伏感染进入"预防治疗中"阶段
+        // 筛查表预防性治疗字段：待潜伏感染者结案进入历史患者后再回写
         if (Integer.valueOf(0).equals(latent.getTreatmentPhase())) {
             latent.setTreatmentPhase(1);
             latentInfectionService.updateById(latent);
-        }
-
-        // V4/V5 sheet2：将预防性治疗数据回写到对应筛查表
-        writeBackPreventiveToScreening(latent, form);
-    }
-
-    /**
-     * 将督导表中的预防性治疗字段回写到对应的筛查管理表。
-     * 学校 → screening_school (AF-AK)
-     * 重点人群 → screening_key_population (AQ-AV)
-     * 密接 → screening_close_contact (AU-AZ)
-     */
-    private void writeBackPreventiveToScreening(LatentInfection latent, SupervisionForm form) {
-        Long screeningId = latent.getScreeningId();
-        if (screeningId == null) return;
-        String type = latent.getPopulationType();
-        if (StrUtil.isBlank(type)) return;
-
-        switch (type) {
-            case "school" -> {
-                ScreeningSchool s = screeningSchoolMapper.selectById(screeningId);
-                if (s != null) {
-                    s.setHasPreventiveTreatment(form.getHasPreventiveTreatment());
-                    s.setPreventivePlan(form.getTreatmentPlan());
-                    s.setPreventiveStartDate(form.getTreatmentStartDate());
-                    s.setPreventiveEndDate(form.getTreatmentEndDate());
-                    s.setPreventiveResult(form.getPreventiveResult());
-                    s.setPreventiveManager(form.getPreventiveManager());
-                    screeningSchoolMapper.updateById(s);
-                }
-            }
-            case "keyPopulation", "regular" -> {
-                ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(screeningId);
-                if (k != null) {
-                    k.setHasPreventiveTreatment(form.getHasPreventiveTreatment());
-                    k.setPreventivePlan(form.getTreatmentPlan());
-                    k.setPreventiveStartDate(form.getTreatmentStartDate());
-                    k.setPreventiveEndDate(form.getTreatmentEndDate());
-                    k.setPreventiveResult(form.getPreventiveResult());
-                    k.setPreventiveManager(form.getPreventiveManager());
-                    screeningKeyPopulationMapper.updateById(k);
-                }
-            }
-            case "closeContact" -> {
-                ScreeningCloseContact c = screeningCloseContactMapper.selectById(screeningId);
-                if (c != null) {
-                    c.setHasPreventiveTreatment("是");
-                    c.setPreventivePlan(form.getTreatmentPlan());
-                    screeningCloseContactMapper.updateById(c);
-                }
-            }
-            default -> { /* 未知类型不处理 */ }
         }
     }
 

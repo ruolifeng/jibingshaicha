@@ -1,11 +1,24 @@
 <script lang="ts" setup>
 import ArchivedPatientRecordsActions from "@@/components/ArchivedPatientRecordsActions.vue"
 import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { DIAGNOSIS_RESULT_OPTIONS } from "@@/constants/disease"
 import { getScreeningKeyPopulationDetailApi } from "@/pages/key-population/screening/apis"
 import { getPatientHistoryApi, getPatientHistoryStatsApi } from "./apis"
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const genderFilterOptions = [
+  { text: "男", value: "男" },
+  { text: "女", value: "女" }
+]
+const diagnosisResultFilterOptions = DIAGNOSIS_RESULT_OPTIONS.map(item => ({
+  text: item.label,
+  value: item.value
+}))
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -31,6 +44,7 @@ async function fetchStats() {
 async function fetchData() {
   loading.value = true
   try {
+    const columnFiltersParam = toQueryParam()
     const params: Parameters<typeof getPatientHistoryApi>[0] = {
       page: paginationData.currentPage ?? 1,
       size: paginationData.pageSize ?? 10,
@@ -39,7 +53,8 @@ async function fetchData() {
       idNumber: searchForm.idNumber || undefined,
       phone: searchForm.phone || undefined,
       startTime: searchForm.startTime || undefined,
-      endTime: searchForm.endTime || undefined
+      endTime: searchForm.endTime || undefined,
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     }
     const { data } = await getPatientHistoryApi(params)
     tableData.value = data.records
@@ -64,6 +79,7 @@ function handleReset() {
   searchForm.phone = ""
   searchForm.startTime = ""
   searchForm.endTime = ""
+  clearFilters()
   handleSearch()
 }
 
@@ -164,12 +180,56 @@ watch(
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="诊断结果" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="诊断结果"
+              type="select"
+              :options="diagnosisResultFilterOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="source" label="来源">
           <template #default="{ row }">
             {{ row.source === "confirmed" ? "诊断确诊" : "大疫情导入" }}

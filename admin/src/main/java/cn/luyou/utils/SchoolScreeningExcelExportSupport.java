@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 学生/学校人群筛查 — 按系统一致的二级表头导出（含序号、录入用户、录入时间、预防治疗列）。
+ * 学生筛查 — 按 2026 秋季新生入学表头导出（含录入用户、录入时间）。
  */
 public final class SchoolScreeningExcelExportSupport {
 
@@ -21,10 +21,9 @@ public final class SchoolScreeningExcelExportSupport {
 
     public static void write(OutputStream outputStream, List<ScreeningSchool> records) {
         List<SchoolScreeningExcelExportRow> rows = new ArrayList<>(records == null ? 0 : records.size());
-        int seq = 1;
         if (records != null) {
             for (ScreeningSchool record : records) {
-                rows.add(SchoolScreeningExcelExportRow.from(record, seq++));
+                rows.add(SchoolScreeningExcelExportRow.from(record));
             }
         }
         EasyExcel.write(outputStream, SchoolScreeningExcelExportRow.class)

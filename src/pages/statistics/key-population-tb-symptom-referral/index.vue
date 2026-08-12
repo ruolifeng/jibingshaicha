@@ -3,9 +3,9 @@ import type { TableColumnCtx } from "element-plus"
 import type { KeyPopulationTbSymptomReferralStatisticsVO } from "@/pages/statistics/apis/key-population-tb-symptom-referral"
 import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
-import { getDistrictOptionsApi } from "@/pages/statistics/apis"
 import {
   exportKeyPopulationTbSymptomReferralStatisticsApi,
+  getKeyPopulationTbSymptomReferralRegionOptionsApi,
   getKeyPopulationTbSymptomReferralStatisticsApi
 } from "@/pages/statistics/apis/key-population-tb-symptom-referral"
 
@@ -23,10 +23,43 @@ const loading = ref(false)
 const tableData = ref<KeyPopulationTbSymptomReferralStatisticsVO[]>([])
 /** 有可选部门时才展示「部门」筛选项 */
 const showDepartmentFilter = ref(false)
+/** 手工改老年人数后强制合计行刷新 */
+const summaryVersion = ref(0)
+
+/** 切换筛选前保留各地区已填「老年人数」 */
+const elderCountDraft = ref<Record<string, number | null>>({})
+
+function rememberElderCounts() {
+  const next = { ...elderCountDraft.value }
+  for (const row of tableData.value) {
+    const key = row.district || ""
+    if (!key) continue
+    next[key] = row.elderCount ?? null
+  }
+  elderCountDraft.value = next
+}
+
+function applyElderCountDraft(rows: KeyPopulationTbSymptomReferralStatisticsVO[]) {
+  return rows.map((row) => {
+    const key = row.district || ""
+    if (key && Object.prototype.hasOwnProperty.call(elderCountDraft.value, key)) {
+      return { ...row, elderCount: elderCountDraft.value[key] }
+    }
+    return { ...row, elderCount: row.elderCount ?? null }
+  })
+}
+
+function onElderCountChange(row: KeyPopulationTbSymptomReferralStatisticsVO) {
+  const key = row.district || ""
+  if (key) {
+    elderCountDraft.value = { ...elderCountDraft.value, [key]: row.elderCount ?? null }
+  }
+  summaryVersion.value += 1
+}
 
 async function loadDistrictOptions() {
   try {
-    const { data } = await getDistrictOptionsApi(filterForm.departmentIds)
+    const { data } = await getKeyPopulationTbSymptomReferralRegionOptionsApi(filterForm.departmentIds)
     districtOptions.value = data || []
   } catch { /* ignore */ }
 }
@@ -34,12 +67,13 @@ async function loadDistrictOptions() {
 async function fetchData() {
   loading.value = true
   try {
+    rememberElderCounts()
     const { data } = await getKeyPopulationTbSymptomReferralStatisticsApi({
       year: filterForm.year,
       district: filterForm.district,
       departmentIds: filterForm.departmentIds
     })
-    tableData.value = data || []
+    tableData.value = applyElderCountDraft(data || [])
   } catch { /* handled */ } finally {
     loading.value = false
   }
@@ -54,6 +88,7 @@ function handleReset() {
   filterForm.year = String(getCurrentStatYear())
   filterForm.district = ""
   filterForm.departmentIds = []
+  elderCountDraft.value = {}
   handleSearch()
 }
 
@@ -68,11 +103,11 @@ function downloadBlob(blob: Blob, filename: string) {
 
 async function handleExport() {
   try {
-    const data = await exportKeyPopulationTbSymptomReferralStatisticsApi({
-      year: filterForm.year,
-      district: filterForm.district,
-      departmentIds: filterForm.departmentIds
-    })
+    rememberElderCounts()
+    const data = await exportKeyPopulationTbSymptomReferralStatisticsApi(
+      filterForm.year,
+      tableData.value
+    )
     downloadBlob(
       data as unknown as Blob,
       `重点人群肺结核可疑症状筛查和推介情况报表_${filterForm.year || "全部"}.xlsx`
@@ -88,7 +123,7 @@ interface SummaryMethodProps {
   data: KeyPopulationTbSymptomReferralStatisticsVO[]
 }
 
-function getSummaries(param: SummaryMethodProps) {
+function buildSummaries(param: SummaryMethodProps) {
   const { columns, data } = param
   const sums: string[] = []
   columns.forEach((column, index) => {
@@ -101,11 +136,31 @@ function getSummaries(param: SummaryMethodProps) {
       sums[index] = ""
       return
     }
+    // 老年人数：仅汇总已填写值；全空则合计留空
+    if (prop === "elderCount") {
+      let total = 0
+      let hasValue = false
+      for (const row of data) {
+        const value = row.elderCount
+        if (value != null && value !== ("" as any)) {
+          total += Number(value)
+          hasValue = true
+        }
+      }
+      sums[index] = hasValue ? String(total) : ""
+      return
+    }
     const total = data.reduce((acc, row) => acc + Number(row[prop] ?? 0), 0)
     sums[index] = String(total)
   })
   return sums
 }
+
+/** 随 summaryVersion 换新引用，驱动合计行刷新 */
+const getSummaries = computed(() => {
+  void summaryVersion.value
+  return (param: SummaryMethodProps) => buildSummaries(param)
+})
 
 onMounted(() => {
   loadDistrictOptions()
@@ -128,8 +183,14 @@ onMounted(() => {
             <el-option v-for="y in yearOptions" :key="y" :label="y" :value="y" />
           </el-select>
         </el-form-item>
-        <el-form-item label="区县">
-          <el-select v-model="filterForm.district" placeholder="全部区县" clearable style="width: 160px">
+        <el-form-item label="地区">
+          <el-select
+            v-model="filterForm.district"
+            placeholder="全部区县/乡镇"
+            clearable
+            filterable
+            style="width: 200px"
+          >
             <el-option v-for="d in districtOptions" :key="d" :label="d" :value="d" />
           </el-select>
         </el-form-item>
@@ -165,7 +226,19 @@ onMounted(() => {
         <el-table-column prop="district" label="地区" fixed min-width="110" />
 
         <el-table-column label="老年人" align="center">
-          <el-table-column prop="elderCount" label="老年人数" min-width="100" />
+          <el-table-column prop="elderCount" label="老年人数" min-width="120">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.elderCount"
+                :min="0"
+                :controls="false"
+                :value-on-clear="null"
+                placeholder="请填写"
+                class="elder-count-input"
+                @change="() => onElderCountChange(row)"
+              />
+            </template>
+          </el-table-column>
           <el-table-column prop="elderAnnualExamCount" label="参加年度体检人数" min-width="130" />
           <el-table-column label="筛查方式" align="center">
             <el-table-column prop="elderSymptomScreenCount" label="进行症状筛查人数" min-width="130" />
@@ -222,5 +295,13 @@ onMounted(() => {
   font-weight: 600;
   text-align: center;
   color: var(--el-text-color-primary);
+}
+
+.elder-count-input {
+  width: 100%;
+
+  :deep(.el-input__inner) {
+    text-align: center;
+  }
 }
 </style>

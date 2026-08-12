@@ -2,15 +2,20 @@
 import PrintSupervision from "@@/components/PrintSupervision.vue"
 import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
 import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import TableHeaderHint from "@@/components/TableHeaderHint.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { canEditSupervisionForm, getSupervisionStatusLabel, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import { useUserStore } from "@/pinia/stores/user"
 import { getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
+import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
 const userStore = useUserStore()
 const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -26,17 +31,29 @@ const searchForm = reactive({
   populationType: ""
 })
 
+const {
+  genderFilterOptions,
+  populationTypeFilterOptions,
+  loadGenderOptions,
+  loadPopulationTypeOptions,
+  genderSourceValues,
+  populationTypeSourceValues
+} = useLatentTableHeaderFilters(() => searchForm.populationType)
+
 async function fetchData() {
   loading.value = true
   try {
     const { dateRange, ...rest } = searchForm
+    const columnFiltersParam = toQueryParam()
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       referralResult: "latent",
+      trackingStatus: 1,
       dateFilterBy: "supervisionFill",
       ...rest,
-      ...extractDateRangeParams(dateRange)
+      ...extractDateRangeParams(dateRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     }
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
@@ -62,6 +79,7 @@ function handleReset() {
   searchForm.creatorName = ""
   searchForm.archived = undefined
   searchForm.populationType = ""
+  clearFilters()
   handleSearch()
 }
 
@@ -199,18 +217,73 @@ async function openPrint(row: Record<string, any>) {
     <el-card shadow="never" style="margin-top:10px">
       <el-table v-loading="loading" :data="tableData" border stripe>
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderHint label="登记号" hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）" />
+          </template>
+          <template #default="{ row }">
+            {{ row.registrationNo || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}

@@ -1,8 +1,6 @@
 package cn.luyou.model;
 
-import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
-import com.alibaba.excel.annotation.ExcelProperty;
 import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -16,8 +14,7 @@ import java.time.LocalDate;
 
 /**
  * 学校人群筛查数据（学生筛查模板）
- * Excel 导入字段范围：A-AE（序号~诊断结果），预防治疗列由系统回写
- * 胸片检查与诊断结果可由 Excel 直接导入，导入后同步进入疑似结核管理
+ * 对齐《2026年秋季新生入学结核病筛查记录表》；预防治疗列由系统回写
  */
 @Data
 @Builder
@@ -27,123 +24,159 @@ import java.time.LocalDate;
 @TableName("screening_school")
 public class ScreeningSchool extends BaseEntity {
 
-    @ExcelProperty(value = "年度", index = 1)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String year;
 
-    @ExcelProperty(value = "市/州", index = 2)
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String reportingOrg;
+
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String city;
 
-    @ExcelProperty(value = "区/县", index = 3)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String district;
 
-    @ExcelProperty(value = "姓名", index = 4)
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String township;
+
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String name;
 
-    @ExcelProperty(value = "性别", index = 5)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String gender;
 
-    @ExcelProperty(value = "出生日期", index = 6, converter = FlexibleLocalDateConverter.class)
+    /** 历史字段：新模板不再导入，库表保留 */
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate birthDate;
 
-    @ExcelProperty(value = "年龄", index = 7)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer age;
 
-    @ExcelProperty(value = "证件类型", index = 8)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String idType;
 
-    @ExcelProperty(value = "证件号", index = 9)
+    @ExcelIgnore
     private String idNumber;
 
-    @ExcelProperty(value = "民族", index = 10)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String ethnicity;
 
-    @ExcelProperty(value = "联系电话", index = 11)
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String participatedScreening;
+
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String phone;
 
-    @ExcelProperty(value = "户籍地址", index = 12)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String householdAddress;
 
-    @ExcelProperty(value = "现住址", index = 13)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String currentAddress;
 
-    @ExcelProperty(value = "学校类型", index = 14)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String schoolType;
 
-    @ExcelProperty(value = "学校名称", index = 15)
+    /** 是否寄宿制：寄宿制/非寄宿制/大学/其他 */
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String boardingType;
+
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String schoolName;
 
-    @ExcelProperty(value = "班级", index = 16)
+    /** 年级 */
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String gradeName;
+
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String className;
 
-    @ExcelProperty(value = "既往结核病史", index = 17)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String tbHistory;
 
-    @ExcelProperty(value = "密切接触史", index = 18)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String closeContactHistory;
 
-    @ExcelProperty(value = "有无可疑症状", index = 19)
+    /** 汇总：症状三列任一为「有」则为有 */
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String suspiciousSymptoms;
 
-    /** 是否进行感染筛（列20） */
-    @ExcelProperty(value = "是否感染筛查", index = 20)
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String symptomCough;
+
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String symptomHemoptysis;
+
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String symptomOther;
+
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String hasInfectionScreen;
 
-    /** 感染筛查日期（列21）；编辑可清空 */
-    @ExcelProperty(value = "感染筛查日期", index = 21, converter = FlexibleLocalDateConverter.class)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate screenDate;
 
-    /** 方法（PPD/EC/IGRA，列22） */
-    @ExcelProperty(value = "感染筛查方法", index = 22)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String screenMethod;
 
-    /** 结果（mmXmm/EC阴性/EC阳性/IGRA阴性/IGRA阳性，列23） */
-    @ExcelProperty(value = "筛查结果", index = 23)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String screenResult;
 
-    /** 感染筛查结果（V4：PPD阴性/PPD+/PPD++/PPD+++/EC阴性/EC阳性/IGRA阴性/IGRA阳性，列24） */
-    @ExcelProperty(value = "感染筛查结果", index = 24)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String infectionResult;
 
-    // ===== 胸片、病原学与诊断（Z-AE，index 25-30）：支持 Excel 直接导入 =====
-    @ExcelProperty(value = "是否进行胸片检查", index = 25)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String hasChestXray;
-    @ExcelProperty(value = "胸片检查日期", index = 26, converter = FlexibleLocalDateConverter.class)
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String chestXrayMethod;
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate chestXrayDate;
-    @ExcelProperty(value = "胸片检查结果", index = 27)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String chestXrayResult;
-    @ExcelProperty(value = "痰涂片结果", index = 28)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String sputumSmearResult;
-    @ExcelProperty(value = "分子生物学结果", index = 29)
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String molecularBiologyResult;
-    @ExcelProperty(value = "诊断结果", index = 30)
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String sputumCultureResult;
+    @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisFirst;
 
@@ -155,7 +188,7 @@ public class ScreeningSchool extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String diagnosisOneYear;
 
-    // V4 AF-AK（index 31-36）：预防性治疗情况，由督导表归档后系统写入
+    // V4 AF-AK（index 31-36）：预防性治疗情况，由潜伏感染者结案进入历史患者后系统写入
     @ExcelIgnore
     private String hasPreventiveTreatment;
     @ExcelIgnore

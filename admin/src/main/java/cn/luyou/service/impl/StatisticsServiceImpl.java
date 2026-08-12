@@ -13,10 +13,13 @@ import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.vo.DistrictStatisticsVO;
 import cn.luyou.model.vo.KeyPopulationTbSymptomReferralStatisticsVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
+import cn.luyou.model.vo.StudentReportStatisticsVO;
+import cn.luyou.utils.SchoolScreeningStatSupport.ReportCategory;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.StatisticsService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DepartmentFilterSupport;
+import cn.luyou.utils.SchoolScreeningStatSupport;
 import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
@@ -27,9 +30,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -64,6 +69,47 @@ public class StatisticsServiceImpl implements StatisticsService {
             String[] parts = entry.getKey().split("\\|", 2);
             List<ScreeningSchool> list = entry.getValue();
             result.add(buildSchoolVO(parts[0], parts[1], list, latentByScreeningId));
+        }
+        return result;
+    }
+
+    @Override
+    public List<StudentReportStatisticsVO> getStudentReportStatistics(
+            String year, String district, List<String> schoolCategories, List<Long> filterDeptIds) {
+        List<ScreeningSchool> records = queryRecords(year, district, filterDeptIds);
+
+        Map<ReportCategory, List<ScreeningSchool>> grouped = new LinkedHashMap<>();
+        for (ReportCategory category : ReportCategory.ordered()) {
+            grouped.put(category, new ArrayList<>());
+        }
+        for (ScreeningSchool row : records) {
+            ReportCategory category = SchoolScreeningStatSupport.resolveReportCategory(row);
+            grouped.computeIfAbsent(category, k -> new ArrayList<>()).add(row);
+        }
+
+        Set<String> categoryFilter = null;
+        if (schoolCategories != null && !schoolCategories.isEmpty()) {
+            categoryFilter = schoolCategories.stream()
+                    .filter(StrUtil::isNotBlank)
+                    .map(String::trim)
+                    .collect(Collectors.toCollection(HashSet::new));
+        }
+
+        List<StudentReportStatisticsVO> result = new ArrayList<>();
+        for (ReportCategory category : ReportCategory.ordered()) {
+            if (categoryFilter != null && !categoryFilter.contains(category.label())) {
+                continue;
+            }
+            List<ScreeningSchool> list = grouped.getOrDefault(category, List.of());
+            result.add(StudentReportStatisticsVO.builder()
+                    .schoolCategory(category.label())
+                    .enrollmentCount((long) list.size())
+                    .acceptedExamCount(list.stream().filter(SchoolScreeningStatSupport::isAcceptedExamined).count())
+                    .standardizedExamCount(list.stream()
+                            .filter(r -> SchoolScreeningStatSupport.isStandardizedExamined(r, category))
+                            .count())
+                    .tbPatientCount(list.stream().filter(SchoolScreeningStatSupport::isTbPatientFound).count())
+                    .build());
         }
         return result;
     }
@@ -126,28 +172,64 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     @Override
+    public List<String> getKeyPopulationRegionOptions(List<Long> filterDeptIds) {
+        LinkedHashMap<String, Boolean> regions = new LinkedHashMap<>();
+        LambdaQueryWrapper<ScreeningKeyPopulation> districtWrapper = Wrappers.<ScreeningKeyPopulation>lambdaQuery()
+                .select(ScreeningKeyPopulation::getDistrict)
+                .eq(ScreeningKeyPopulation::getSourceType, "keyPopulation")
+                .isNotNull(ScreeningKeyPopulation::getDistrict)
+                .groupBy(ScreeningKeyPopulation::getDistrict)
+                .orderByAsc(ScreeningKeyPopulation::getDistrict);
+        screeningScopeHelper.applyDepartmentScope(
+                districtWrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        applyKeyPopulationStatsDepartmentFilter(districtWrapper, filterDeptIds);
+        screeningKeyPopulationMapper.selectList(districtWrapper).stream()
+                .map(ScreeningKeyPopulation::getDistrict)
+                .filter(StrUtil::isNotBlank)
+                .forEach(d -> regions.put(d.trim(), Boolean.TRUE));
+
+        LambdaQueryWrapper<ScreeningKeyPopulation> townshipWrapper = Wrappers.<ScreeningKeyPopulation>lambdaQuery()
+                .select(ScreeningKeyPopulation::getTownshipCommunity)
+                .eq(ScreeningKeyPopulation::getSourceType, "keyPopulation")
+                .isNotNull(ScreeningKeyPopulation::getTownshipCommunity)
+                .groupBy(ScreeningKeyPopulation::getTownshipCommunity)
+                .orderByAsc(ScreeningKeyPopulation::getTownshipCommunity);
+        screeningScopeHelper.applyDepartmentScope(
+                townshipWrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+        applyKeyPopulationStatsDepartmentFilter(townshipWrapper, filterDeptIds);
+        screeningKeyPopulationMapper.selectList(townshipWrapper).stream()
+                .map(ScreeningKeyPopulation::getTownshipCommunity)
+                .filter(StrUtil::isNotBlank)
+                .forEach(t -> regions.put(t.trim(), Boolean.TRUE));
+
+        List<String> result = new ArrayList<>(regions.keySet());
+        result.sort(String::compareTo);
+        return result;
+    }
+
+    @Override
     public List<KeyPopulationTbSymptomReferralStatisticsVO> getKeyPopulationTbSymptomReferralStatistics(
-            String year, String district, List<Long> filterDeptIds) {
-        List<ScreeningKeyPopulation> records = queryKeyPopulationRecords(year, district, filterDeptIds);
+            String year, String region, List<Long> filterDeptIds) {
+        List<ScreeningKeyPopulation> records = queryKeyPopulationRecords(year, region, filterDeptIds);
         Map<String, Long> elderArrivedByDistrict = countReferralArrivedByDistrict(year, filterDeptIds, true);
         Map<String, Long> diabetesArrivedByDistrict = countReferralArrivedByDistrict(year, filterDeptIds, false);
 
         Map<String, List<ScreeningKeyPopulation>> grouped = new LinkedHashMap<>();
-        for (ScreeningKeyPopulation r : records) {
-            String key = StrUtil.blankToDefault(r.getDistrict(), "未知");
-            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-        }
-
-        // 推介到位可能落在筛查无数据的区县，一并纳入
-        for (String key : elderArrivedByDistrict.keySet()) {
-            grouped.computeIfAbsent(key, k -> new ArrayList<>());
-        }
-        for (String key : diabetesArrivedByDistrict.keySet()) {
-            grouped.computeIfAbsent(key, k -> new ArrayList<>());
-        }
-        if (StrUtil.isNotBlank(district)) {
-            grouped.keySet().removeIf(k -> !district.equals(k));
-            grouped.computeIfAbsent(district, k -> new ArrayList<>());
+        if (StrUtil.isNotBlank(region)) {
+            // 选定具体区县/乡镇时，汇总为一行，地区名用筛选项本身
+            grouped.put(region.trim(), new ArrayList<>(records));
+        } else {
+            for (ScreeningKeyPopulation r : records) {
+                String key = StrUtil.blankToDefault(r.getDistrict(), "未知");
+                grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+            }
+            // 推介到位可能落在筛查无数据的区县，一并纳入
+            for (String key : elderArrivedByDistrict.keySet()) {
+                grouped.computeIfAbsent(key, k -> new ArrayList<>());
+            }
+            for (String key : diabetesArrivedByDistrict.keySet()) {
+                grouped.computeIfAbsent(key, k -> new ArrayList<>());
+            }
         }
 
         List<KeyPopulationTbSymptomReferralStatisticsVO> result = new ArrayList<>();
@@ -175,13 +257,14 @@ public class StatisticsServiceImpl implements StatisticsService {
         return screeningSchoolMapper.selectList(wrapper);
     }
 
-    private List<ScreeningKeyPopulation> queryKeyPopulationRecords(String year, String district,
+    private List<ScreeningKeyPopulation> queryKeyPopulationRecords(String year, String region,
                                                                   List<Long> filterDeptIds) {
         // 仅查报表统计所需字段，避免实体字段与库表短暂不一致时全字段查询失败
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(
                         ScreeningKeyPopulation::getId,
                         ScreeningKeyPopulation::getDistrict,
+                        ScreeningKeyPopulation::getTownshipCommunity,
                         ScreeningKeyPopulation::getYear,
                         ScreeningKeyPopulation::getSourceType,
                         ScreeningKeyPopulation::getDepartmentId,
@@ -200,13 +283,50 @@ public class StatisticsServiceImpl implements StatisticsService {
                         ScreeningKeyPopulation::getInfectionResult,
                         ScreeningKeyPopulation::getDiagnosisFirst)
                 .eq(ScreeningKeyPopulation::getSourceType, "keyPopulation")
-                .eq(StrUtil.isNotBlank(year), ScreeningKeyPopulation::getYear, year)
-                .eq(StrUtil.isNotBlank(district), ScreeningKeyPopulation::getDistrict, district);
+                .eq(StrUtil.isNotBlank(year), ScreeningKeyPopulation::getYear, year);
+        if (StrUtil.isNotBlank(region)) {
+            String regionValue = region.trim();
+            // 区县或乡镇/社区均可筛选（此前仅 district 精确匹配，选乡镇无数据）
+            wrapper.and(w -> w.eq(ScreeningKeyPopulation::getDistrict, regionValue)
+                    .or()
+                    .eq(ScreeningKeyPopulation::getTownshipCommunity, regionValue));
+        }
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        departmentFilterSupport.applyDepartmentIdFilter(
-                wrapper, ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
+        applyKeyPopulationStatsDepartmentFilter(wrapper, filterDeptIds);
         return screeningKeyPopulationMapper.selectList(wrapper);
+    }
+
+    /**
+     * 本报表部门筛选：除 department_id 外，兼容乡镇部门下筛查数据仍挂在区县部门的情况，
+     * 按部门名称匹配 district / township_community。
+     */
+    private void applyKeyPopulationStatsDepartmentFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper,
+                                                         List<Long> filterDeptIds) {
+        if (!departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
+            return;
+        }
+        if (filterDeptIds.size() == 1
+                && Objects.equals(filterDeptIds.get(0), DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)) {
+            wrapper.eq(ScreeningKeyPopulation::getDepartmentId, DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID);
+            return;
+        }
+        Set<Long> idSet = new HashSet<>(filterDeptIds);
+        List<String> names = departmentService.listAll().stream()
+                .filter(d -> d.getId() != null && idSet.contains(d.getId()))
+                .map(Department::getName)
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        wrapper.and(w -> {
+            w.in(ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
+            if (!names.isEmpty()) {
+                w.or().in(ScreeningKeyPopulation::getDistrict, names)
+                        .or()
+                        .in(ScreeningKeyPopulation::getTownshipCommunity, names);
+            }
+        });
     }
 
     /**
@@ -338,8 +458,9 @@ public class StatisticsServiceImpl implements StatisticsService {
 
         return KeyPopulationTbSymptomReferralStatisticsVO.builder()
                 .district(district)
-                // 老年人：老年人数 / 体检人数 / 症状筛查人数 口径同模板均为该人群总数
-                .elderCount(elderCount)
+                // 老年人数：季度报表模板无系统数据来源，留空由页面手工填写
+                .elderCount(null)
+                // 参加年度体检人数 / 进行症状筛查人数：老年人及老年人+糖尿病总人数
                 .elderAnnualExamCount(elderCount)
                 .elderSymptomScreenCount(elderCount)
                 .elderChestXrayCount(countKeyEquals(elders, ScreeningKeyPopulation::getHasChestXray, "是"))
@@ -411,7 +532,7 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     /**
-     * 感染筛查异常：PPD 中度/强阳性（PPD++/+++）、EC 阳性、IGRA 阳性。
+     * 感染筛查异常：官方结果判定阳性档及历史文案（PPD++/+++、EC/IGRA阳性等）。
      */
     private long countInfectionAbnormal(List<ScreeningKeyPopulation> list) {
         return list.stream().filter(r -> isInfectionAbnormal(r.getInfectionResult())).count();
@@ -421,17 +542,8 @@ public class StatisticsServiceImpl implements StatisticsService {
         if (StrUtil.isBlank(infectionResult)) {
             return false;
         }
-        String val = infectionResult.trim();
-        if (val.contains("EC阳性") || val.contains("IGRA阳性")) {
-            return true;
-        }
-        if (val.contains("中度阳性") || val.contains("强阳性")) {
-            return true;
-        }
-        if (val.contains("PPD+++")) {
-            return true;
-        }
-        return val.contains("PPD++") && !val.contains("PPD+++");
+        // 官方结果判定 / 历史文案统一按阳性档识别
+        return ScreeningDiagnosisSupport.isPositiveInfection(infectionResult);
     }
 
     private long countSuspectedTb(List<ScreeningKeyPopulation> list) {
@@ -448,7 +560,8 @@ public class StatisticsServiceImpl implements StatisticsService {
             }
             return "确诊患者".equals(diag)
                     || "确诊结核".equals(diag)
-                    || "确诊肺结核".equals(diag);
+                    || "确诊肺结核".equals(diag)
+                    || "在治患者".equals(diag);
         }).count();
     }
 
@@ -489,6 +602,8 @@ public class StatisticsServiceImpl implements StatisticsService {
                     }
                     String trimmed = diag.trim();
                     return "确诊患者".equals(trimmed)
+                            || "确诊结核".equals(trimmed)
+                            || "在治患者".equals(trimmed)
                             || ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(trimmed)
                             || trimmed.contains("肺结核");
                 })
@@ -511,7 +626,8 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .district(district)
                 .schoolName(schoolName)
                 .shouldScreenCount((long) list.size())
-                .actualScreenCount(countEquals(list, ScreeningSchool::getHasInfectionScreen, "是"))
+                .actualScreenCount(list.stream().filter(SchoolScreeningStatSupport::isAcceptedExamined).count())
+                .standardizedScreenCount(list.stream().filter(SchoolScreeningStatSupport::isStandardizedExamined).count())
                 .closeContactCount(countContains(list, ScreeningSchool::getCloseContactHistory, "有"))
                 .suspiciousSymptomCount(countContains(list, ScreeningSchool::getSuspiciousSymptoms, "有"))
                 .chestXrayCount(countLatentXray(ids, latentByScreeningId))
@@ -543,7 +659,8 @@ public class StatisticsServiceImpl implements StatisticsService {
         Set<Long> ids = list.stream().map(ScreeningSchool::getId).collect(Collectors.toSet());
         return DistrictStatisticsVO.builder()
                 .district(district)
-                .actualScreenCount(countEquals(list, ScreeningSchool::getHasInfectionScreen, "是"))
+                .actualScreenCount(list.stream().filter(SchoolScreeningStatSupport::isAcceptedExamined).count())
+                .standardizedScreenCount(list.stream().filter(SchoolScreeningStatSupport::isStandardizedExamined).count())
                 .closeContactCount(countContains(list, ScreeningSchool::getCloseContactHistory, "有"))
                 .suspiciousSymptomCount(countContains(list, ScreeningSchool::getSuspiciousSymptoms, "有"))
                 .chestXrayCount(countLatentXray(ids, latentByScreeningId))
@@ -570,14 +687,6 @@ public class StatisticsServiceImpl implements StatisticsService {
                     String val = getter.apply(r);
                     return StrUtil.isNotBlank(val) && val.contains(keyword);
                 })
-                .count();
-    }
-
-    private long countEquals(List<ScreeningSchool> list,
-                             java.util.function.Function<ScreeningSchool, String> getter,
-                             String value) {
-        return list.stream()
-                .filter(r -> value.equals(getter.apply(r)))
                 .count();
     }
 

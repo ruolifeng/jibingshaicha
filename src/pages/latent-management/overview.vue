@@ -4,14 +4,18 @@ import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import TableHeaderHint from "@@/components/TableHeaderHint.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import {
+  displayInfectionJudgeResult,
+  displayInfectionScreenMethod,
   getLatentPopulationDisplayLabel,
   getPopulationTypeTagType,
-  INFECTION_METHOD_OPTIONS,
+  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
+  KEY_INFECTION_SCREEN_METHOD_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
   TRACKING_STATUS_MAP
@@ -67,26 +71,9 @@ const { load: loadDistinct, sourceValues: distinctValues, clearCache } = useColu
 })
 const loadGenderOptions = () => loadDistinct("gender")
 const loadPopulationTypeOptions = () => loadDistinct("populationType")
-const loadInfectionResultOptions = () => loadDistinct("infectionResult")
 const loadCreatorOptions = () => loadDistinct("creatorUsername")
-const screenMethodFilterOptions = INFECTION_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
-
-/** 展示感染筛查方法：优先真实字段，兼容密接完整选项名；无方法时才从结果推断 */
-function displayScreenMethod(row: { screenMethod?: string, infectionResult?: string }) {
-  const method = (row.screenMethod || "").trim()
-  if (method) {
-    const upper = method.toUpperCase()
-    if (upper.includes("IGRA") || method.includes("干扰素")) return "IGRA"
-    if (upper.includes("EC") || method.includes("结核抗原")) return "EC"
-    if (upper.includes("PPD") || method.includes("结核菌素")) return "PPD"
-    return method
-  }
-  const result = row.infectionResult || ""
-  if (/IGRA/i.test(result)) return "IGRA"
-  if (/^EC/i.test(result) || /EC阳|EC阴/.test(result)) return "EC"
-  if (/^PPD/i.test(result) || /PPD/.test(result)) return "PPD"
-  return "-"
-}
+const screenMethodFilterOptions = KEY_INFECTION_SCREEN_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+const infectionResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 
 watch(() => searchForm.populationType, (val) => {
   clearCache()
@@ -502,6 +489,14 @@ async function handleImport(uploadFile: any) {
             />
           </template>
         </el-table-column>
+        <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderHint label="登记号" hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）" />
+          </template>
+          <template #default="{ row }">
+            {{ row.registrationNo || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="gender" min-width="80">
           <template #header>
             <TableHeaderFilter
@@ -534,7 +529,7 @@ async function handleImport(uploadFile: any) {
             />
           </template>
         </el-table-column>
-        <el-table-column prop="screenMethod" min-width="120" show-overflow-tooltip>
+        <el-table-column prop="screenMethod" min-width="180" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
               label="感染筛查方法"
@@ -545,19 +540,21 @@ async function handleImport(uploadFile: any) {
             />
           </template>
           <template #default="{ row }">
-            {{ displayScreenMethod(row) }}
+            {{ displayInfectionScreenMethod(row.screenMethod, row.infectionResult) }}
           </template>
         </el-table-column>
         <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
-              label="感染筛查结果"
+              label="结果判定"
               type="select"
-              :source-values="distinctValues('infectionResult').value"
-              :load-options="loadInfectionResultOptions"
+              :options="infectionResultFilterOptions"
               :model-value="columnFilters.infectionResult"
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionResult) }}
           </template>
         </el-table-column>
         <el-table-column prop="creatorUsername" min-width="100">

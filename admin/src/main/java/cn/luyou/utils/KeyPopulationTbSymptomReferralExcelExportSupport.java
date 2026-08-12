@@ -153,14 +153,20 @@ public final class KeyPopulationTbSymptomReferralExcelExportSupport {
                                        Function<KeyPopulationTbSymptomReferralStatisticsVO, Long> getter,
                                        CellStyle style) {
         long sum = 0L;
+        boolean hasValue = false;
         for (KeyPopulationTbSymptomReferralStatisticsVO r : rows) {
             Long value = getter.apply(r);
             if (value != null) {
                 sum += value;
+                hasValue = true;
             }
         }
         Cell cell = row.createCell(col);
-        cell.setCellValue(sum);
+        if (hasValue) {
+            cell.setCellValue(sum);
+        } else {
+            cell.setBlank();
+        }
         cell.setCellStyle(style);
     }
 
@@ -172,7 +178,11 @@ public final class KeyPopulationTbSymptomReferralExcelExportSupport {
 
     private static void setLong(Row row, int col, Long value, CellStyle style) {
         Cell cell = row.createCell(col);
-        cell.setCellValue(value == null ? 0L : value);
+        if (value == null) {
+            cell.setBlank();
+        } else {
+            cell.setCellValue(value);
+        }
         cell.setCellStyle(style);
     }
 

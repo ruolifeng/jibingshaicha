@@ -97,11 +97,14 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     /** 结案归档（按期检查通过后） */
     void closeCase(Long id);
 
+    /** 结案归档解锁（管理员操作，恢复为在管） */
+    void unarchiveFromCloseCase(Long id);
+
     /** 历史患者（已归档潜伏感染者）列表 */
     IPage<LatentInfection> queryHistoryPage(int page, int size, String populationType,
                                             String name, String idNumber, String phone,
                                             String startTime, String endTime,
-                                            String treatmentCompletionStatus);
+                                            String treatmentCompletionStatus, String columnFilters);
 
     /** 按督导表优先记录的治疗完成情况筛选潜伏感染 ID */
     List<Long> findLatentIdsByPreferredTreatmentCompletionStatus(String treatmentCompletionStatus);
@@ -176,4 +179,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
     Long copyLatentForTransferOut(Long sourceLatentId, Long receiverUserId);
 
     void assertLatentOperable(Long id);
+
+    /** 将通知单中的登记号同步到潜伏感染主表 */
+    void syncRegistrationNoFromNotice(Long latentId, String registrationNo);
 }

@@ -4,6 +4,7 @@ import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
 import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 /**
  * 密接人群 — 潜伏感染者管理
  *
@@ -16,11 +17,13 @@ import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
  * 注：未做/未发现异常两类人群的随访监测已移至【待诊断-监测随访】页面管理
  */
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
   formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
   isLatentIndividualPlan,
+  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
   LATENT_TREATMENT_PLAN_OPTIONS,
   normalizeLatentTreatmentPlan,
   NOTICE_STATUS_MAP,
@@ -62,6 +65,12 @@ function openTierCare(row: any) {
 }
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+
+const infectionCheckResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({
+  text: item,
+  value: item
+}))
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -90,6 +99,7 @@ function getFollowupTag(result: string | undefined): string {
 async function fetchData() {
   loading.value = true
   try {
+    const columnFiltersParam = toQueryParam()
     const { data } = await getScreeningCloseContactListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
@@ -97,7 +107,8 @@ async function fetchData() {
       idNumber: searchForm.idNumber || undefined,
       phone: searchForm.phone || undefined,
       finalScreeningResult: "潜伏感染者",
-      ...extractDateRangeParams(searchForm.dateRange)
+      ...extractDateRangeParams(searchForm.dateRange),
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     })
     tableData.value = data.records
     total.value = data.total
@@ -115,6 +126,7 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.phone = ""
   searchForm.dateRange = []
+  clearFilters()
   handleSearch()
 }
 
@@ -474,13 +486,47 @@ async function handleSaveFollowupInput() {
       </template>
 
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600">
-        <el-table-column prop="name" label="姓名" fixed />
-        <el-table-column prop="idNumber" label="身份证号" />
+        <el-table-column prop="name" min-width="90" fixed>
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="身份证号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="phone" label="联系电话" />
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="sourcePatientName" label="原患者" />
         <el-table-column prop="registrationDate" label="登记日期" />
-        <el-table-column prop="infectionCheckResult" label="感染检测结果" />
+        <el-table-column prop="infectionCheckResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染检测结果"
+              type="select"
+              :options="infectionCheckResultFilterOptions"
+              :model-value="columnFilters.infectionCheckResult"
+              @change="(v) => { setFilter('infectionCheckResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="是否开展预防治疗">
           <template #default="{ row }">
             <el-tag v-if="row.hasPreventiveTreatment" :type="row.hasPreventiveTreatment === '开展' ? 'success' : 'info'" size="small">
@@ -748,7 +794,7 @@ async function handleSaveFollowupInput() {
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="检查方法">
+            <el-form-item label="感染检查方法">
               <el-select v-model="noticeForm.infectionMethod" style="width: 100%">
                 <el-option v-for="item in INFECTION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
@@ -834,7 +880,7 @@ async function handleSaveFollowupInput() {
         <el-descriptions-item label="感染检测时间">
           {{ noticeDetailData.infectionDate || "—" }}
         </el-descriptions-item>
-        <el-descriptions-item label="检查方法">
+        <el-descriptions-item label="感染检查方法">
           {{ noticeDetailData.infectionMethod || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="感染检查结果" :span="2">

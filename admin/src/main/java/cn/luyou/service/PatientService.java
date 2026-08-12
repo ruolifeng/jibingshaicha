@@ -50,7 +50,18 @@ public interface PatientService extends IService<Patient> {
                               String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                               String dateFilterBy, String medicationManagementUnit, String crowdCategory,
                               String creatorUsername, String columnFilters, String sortField, String sortOrder,
-                              String formatIssue);
+                              String formatIssue, String sputumCulture, String drugResistance);
+
+    default IPage<Patient> queryPage(int page, int size, String populationType,
+                                     String name, String idNumber, String phone, String currentAddress,
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory,
+                                     String creatorUsername, String columnFilters, String sortField, String sortOrder,
+                                     String formatIssue) {
+        return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
+                diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                creatorUsername, columnFilters, sortField, sortOrder, formatIssue, null, null);
+    }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
@@ -59,7 +70,7 @@ public interface PatientService extends IService<Patient> {
                                      String creatorUsername, String columnFilters, String sortField, String sortOrder) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters, sortField, sortOrder, null);
+                creatorUsername, columnFilters, sortField, sortOrder, null, null, null);
     }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
@@ -154,7 +165,7 @@ public interface PatientService extends IService<Patient> {
     IPage<Patient> queryHistoryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone,
                                      String diagnosisResult, String startTime, String endTime,
-                                     String stopTreatmentReason);
+                                     String stopTreatmentReason, String columnFilters);
 
     /** 按后续随访优先记录的停止治疗原因筛选患者 ID */
     List<Long> findPatientIdsByPreferredStopTreatmentReason(String stopTreatmentReason);
@@ -187,10 +198,16 @@ public interface PatientService extends IService<Patient> {
     long countManagedPatientsForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
-     * 首页统计：病原学阳性人数（阳性率分子）。
-     * 在年度管理患者子集上，匹配列表筛选项「病原学结果阳性」（阳性/病原学阳性/病原学结果阳性）。
+     * 首页统计：病原学阳性 / 发病率分子。
+     * 经典病原学阳性，或「结核性胸膜炎」且 0月序影像学阳/异常 或 0月序分子生物学阳。
      */
     long countPathogenPositivePatientsForDashboard(Integer statYear, List<Long> filterDeptIds);
+
+    /**
+     * 首页统计：耐药筛查人数（首次随访耐药情况为耐药/非耐药，即已检测）。
+     * 分母同年度管理患者（在管+历史）。
+     */
+    long countDrugResistanceScreenedForDashboard(Integer statYear, List<Long> filterDeptIds);
 
     /**
      * 首页统计：治疗成功人数。分母为 statYear 年度管理患者；分子为其中任意时间完成疗程者（可跨年）。

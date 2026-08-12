@@ -10,10 +10,13 @@ import {
   exportCustomApi,
   exportDistrictStatisticsApi,
   exportSchoolStatisticsApi,
+  exportStudentReportStatisticsApi,
   exportWideTableApi,
   getDistrictOptionsApi,
   getDistrictStatisticsApi,
-  getSchoolStatisticsApi
+  getSchoolStatisticsApi,
+  getStudentReportStatisticsApi,
+  STUDENT_REPORT_SCHOOL_CATEGORIES
 } from "./apis"
 import WorkbenchStatsPanel from "./components/WorkbenchStatsPanel.vue"
 
@@ -62,6 +65,26 @@ async function fetchSchoolStatistics() {
   }
 }
 
+// ==================== 学生报表（新生入学体检） ====================
+const studentReportLoading = ref(false)
+const studentReportData = ref<any[]>([])
+const studentReportCategories = ref<string[]>([...STUDENT_REPORT_SCHOOL_CATEGORIES])
+
+async function fetchStudentReportStatistics() {
+  studentReportLoading.value = true
+  try {
+    const { data } = await getStudentReportStatisticsApi({
+      year: filterForm.year,
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds,
+      schoolCategories: studentReportCategories.value
+    })
+    studentReportData.value = data || []
+  } catch { /* handled */ } finally {
+    studentReportLoading.value = false
+  }
+}
+
 // ==================== 区县统计 ====================
 const districtLoading = ref(false)
 const districtData = ref<any[]>([])
@@ -94,6 +117,8 @@ function handleSearch() {
   }
   if (activeTab.value === "school") {
     fetchSchoolStatistics()
+  } else if (activeTab.value === "studentReport") {
+    fetchStudentReportStatistics()
   } else if (activeTab.value === "district") {
     fetchDistrictStatistics()
   } else if (activeTab.value === "workbench") {
@@ -105,6 +130,7 @@ function handleReset() {
   filterForm.year = String(getCurrentStatYear())
   filterForm.district = ""
   filterForm.departmentIds = []
+  studentReportCategories.value = [...STUDENT_REPORT_SCHOOL_CATEGORIES]
   handleSearch()
 }
 
@@ -126,6 +152,25 @@ async function handleExportSchool() {
       departmentIds: filterForm.departmentIds
     })
     downloadBlob(data as unknown as Blob, `学校人群统计总表_${filterForm.year}.xlsx`)
+    ElMessage.success("导出成功")
+  } catch {
+    ElMessage.error("导出失败")
+  }
+}
+
+async function handleExportStudentReport() {
+  if (!studentReportCategories.value.length) {
+    ElMessage.warning("请至少选择一个学校分类")
+    return
+  }
+  try {
+    const data = await exportStudentReportStatisticsApi({
+      year: filterForm.year,
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds,
+      schoolCategories: studentReportCategories.value
+    })
+    downloadBlob(data as unknown as Blob, `学生统计报表_${filterForm.year || "全部"}.xlsx`)
     ElMessage.success("导出成功")
   } catch {
     ElMessage.error("导出失败")
@@ -295,6 +340,8 @@ async function handleExportAllLatent() {
 function handleTabChange(tab: string | number) {
   if (tab === "school") {
     fetchSchoolStatistics()
+  } else if (tab === "studentReport") {
+    fetchStudentReportStatistics()
   } else if (tab === "district") {
     fetchDistrictStatistics()
   } else if (tab === "workbench") {
@@ -387,7 +434,8 @@ onMounted(() => {
             <el-table-column prop="district" label="区县" fixed />
             <el-table-column prop="schoolName" label="学校名称" />
             <el-table-column prop="shouldScreenCount" label="应筛查人数" />
-            <el-table-column prop="actualScreenCount" label="实际筛查人数" />
+            <el-table-column prop="actualScreenCount" label="接受检查人数" />
+            <el-table-column prop="standardizedScreenCount" label="规范检查人数" />
             <el-table-column prop="closeContactCount" label="与肺结核患者密切接触的人数" />
             <el-table-column prop="suspiciousSymptomCount" label="有肺结核可疑症状者人数" />
             <el-table-column prop="chestXrayCount" label="胸片检查人数" />
@@ -406,6 +454,45 @@ onMounted(() => {
           </el-table>
         </el-tab-pane>
 
+        <!-- 学生报表：新生入学体检结核病检查情况 -->
+        <el-tab-pane label="学生报表" name="studentReport">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-sm text-gray-600">学校分类</span>
+              <el-select
+                v-model="studentReportCategories"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="全部学校分类"
+                style="min-width: 280px"
+              >
+                <el-option
+                  v-for="c in STUDENT_REPORT_SCHOOL_CATEGORIES"
+                  :key="c"
+                  :label="c"
+                  :value="c"
+                />
+              </el-select>
+              <el-button type="primary" @click="fetchStudentReportStatistics">
+                按分类查询
+              </el-button>
+            </div>
+            <el-button type="success" v-permission="'statistics:export'" @click="handleExportStudentReport">
+              导出 Excel
+            </el-button>
+          </div>
+          <el-table v-loading="studentReportLoading" :data="studentReportData" border stripe max-height="600" show-summary>
+            <el-table-column prop="schoolCategory" label="学校分类" min-width="160" fixed />
+            <el-table-column prop="enrollmentCount" label="入学新生人数" min-width="120" />
+            <el-table-column label="结核病检查情况" align="center">
+              <el-table-column prop="acceptedExamCount" label="接受检查人数" min-width="120" />
+              <el-table-column prop="standardizedExamCount" label="接受规范检查人数" min-width="140" />
+            </el-table-column>
+            <el-table-column prop="tbPatientCount" label="发现肺结核患者例数" min-width="150" />
+          </el-table>
+        </el-tab-pane>
+
         <!-- 区县统计表 -->
         <el-tab-pane label="区县统计表" name="district">
           <div class="mb-3 flex justify-end">
@@ -415,7 +502,8 @@ onMounted(() => {
           </div>
           <el-table v-loading="districtLoading" :data="districtData" border stripe max-height="600" show-summary>
             <el-table-column prop="district" label="区/县" fixed />
-            <el-table-column prop="actualScreenCount" label="实际筛查人数" />
+            <el-table-column prop="actualScreenCount" label="接受检查人数" />
+            <el-table-column prop="standardizedScreenCount" label="规范检查人数" />
             <el-table-column prop="closeContactCount" label="与肺结核患者密切接触的人数" />
             <el-table-column prop="suspiciousSymptomCount" label="有肺结核可疑症状者人数" />
             <el-table-column prop="chestXrayCount" label="胸片检查人数" />

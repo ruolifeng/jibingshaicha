@@ -44,6 +44,7 @@ const noticeForm = reactive({
   crowdCategory: "",
   currentAddress: "",
   householdAddress: "",
+  registrationNo: "",
   infectionDate: "",
   infectionMethod: "",
   infectionResultValue: "",
@@ -76,6 +77,7 @@ function resetFormFromRow(row: Record<string, any>) {
     crowdCategory: row.crowdCategory || "",
     currentAddress: row.currentAddress || "",
     householdAddress: row.householdAddress || "",
+    registrationNo: row.registrationNo || "",
     infectionDate: row.screenDate || row.infectionDate || "",
     infectionMethod: row.screenMethod || row.infectionMethod || "",
     infectionResultValue: row.screenResult || row.infectionResult || row.infectionResultValue || "",
@@ -100,6 +102,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     crowdCategory: notice.crowdCategory || row.crowdCategory || "",
     currentAddress: notice.currentAddress || row.currentAddress || "",
     householdAddress: notice.householdAddress || row.householdAddress || "",
+    registrationNo: notice.registrationNo || row.registrationNo || "",
     infectionDate: notice.infectionDate || row.screenDate || "",
     infectionMethod: notice.infectionMethod || row.screenMethod || "",
     infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
@@ -258,7 +261,12 @@ async function handleSaveDraft() {
         </el-col>
       </el-row>
       <el-row :gutter="12">
-        <el-col :span="24">
+        <el-col :span="12">
+          <el-form-item label="登记号">
+            <el-input v-model="noticeForm.registrationNo" placeholder="填写后同步至在管总览/督导表" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
           <el-form-item label="人群分类">
             <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
               <el-option v-for="item in CROWD_CATEGORY_OPTIONS" :key="item" :label="item" :value="item" />
@@ -288,7 +296,7 @@ async function handleSaveDraft() {
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="检查方法">
+          <el-form-item label="感染检查方法">
             <el-select v-model="noticeForm.infectionMethod" style="width: 100%">
               <el-option v-for="item in INFECTION_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>

@@ -11,7 +11,7 @@ import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveMedicationManagementUnit, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -510,6 +510,13 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column prop="registrationNo" label="登记号" min-width="120" show-overflow-tooltip sortable="custom">
+          <template #header>
+            <TableHeaderFilter
+              label="登记号"
+              :model-value="columnFilters.registrationNo"
+              @change="(v) => { setFilter('registrationNo', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             {{ resolveRegistrationNo(row) || "-" }}
           </template>
@@ -580,6 +587,14 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ resolvePatientPathogenResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolvePatientDiagnosisResult(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="creatorUsername" min-width="100">

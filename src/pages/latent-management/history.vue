@@ -1,15 +1,23 @@
 <script lang="ts" setup>
 import ArchivedLatentRecordsActions from "@@/components/ArchivedLatentRecordsActions.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
+import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, TREATMENT_COMPLETION_STATUS_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
+import { useUserStore } from "@/pinia/stores/user"
 import {
   batchDeleteLatentApi,
   exportLatentHistoryApi,
-  getLatentHistoryListApi
+  getLatentHistoryListApi,
+  unarchiveLatentFromCloseCaseApi
 } from "./apis"
+import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
+
+const userStore = useUserStore()
 
 const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
+const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -27,6 +35,18 @@ const searchForm = reactive({
   treatmentCompletionStatus: ""
 })
 
+const {
+  genderFilterOptions,
+  populationTypeFilterOptions,
+  infectionResultFilterOptions,
+  loadGenderOptions,
+  loadPopulationTypeOptions,
+  loadInfectionResultOptions,
+  genderSourceValues,
+  populationTypeSourceValues,
+  infectionResultSourceValues
+} = useLatentTableHeaderFilters(() => searchForm.populationType)
+
 function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
@@ -34,10 +54,12 @@ function handleSelectionChange(rows: any[]) {
 async function fetchData() {
   loading.value = true
   try {
+    const columnFiltersParam = toQueryParam()
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      ...searchForm
+      ...searchForm,
+      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
     }
     if (!params.name) delete params.name
     if (!params.idNumber) delete params.idNumber
@@ -61,6 +83,7 @@ function handleSearch() {
 
 function handleReset() {
   Object.assign(searchForm, { name: "", idNumber: "", phone: "", populationType: "", startTime: "", endTime: "", treatmentCompletionStatus: "" })
+  clearFilters()
   handleSearch()
 }
 
@@ -107,6 +130,19 @@ async function handleBatchDelete() {
   } catch (err: any) {
     if (err !== "cancel") ElMessage.error("删除失败")
   }
+}
+
+async function handleUnarchive(row: Record<string, any>) {
+  try {
+    await ElMessageBox.confirm(
+      `确认解锁潜伏感染者 ${row.name} 的档案？解锁后可重新填写督导表与服药管理。`,
+      "解锁档案",
+      { type: "warning" }
+    )
+    await unarchiveLatentFromCloseCaseApi(row.id)
+    ElMessage.success("已解锁，已恢复为在管状态")
+    fetchData()
+  } catch { /* cancelled or handled */ }
 }
 
 function treatmentPhaseLabel(phase?: number) {
@@ -198,19 +234,78 @@ function treatmentPhaseLabel(phase?: number) {
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" label="证件号" show-overflow-tooltip />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="infectionResult" label="感染筛查结果" show-overflow-tooltip />
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="感染筛查结果"
+              type="select"
+              :options="infectionResultFilterOptions"
+              :source-values="infectionResultSourceValues"
+              :load-options="loadInfectionResultOptions"
+              :model-value="columnFilters.infectionResult"
+              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="治疗阶段">
           <template #default="{ row }">
             {{ treatmentPhaseLabel(row.treatmentPhase) }}
@@ -218,8 +313,17 @@ function treatmentPhaseLabel(phase?: number) {
         </el-table-column>
         <el-table-column prop="archivedTime" label="归档时间" />
         <el-table-column prop="treatmentCompletionStatus" label="治疗完成情况" show-overflow-tooltip />
-        <el-table-column label="操作" fixed="right" width="320">
+        <el-table-column label="操作" fixed="right" width="380">
           <template #default="{ row }">
+            <el-button
+              v-if="userStore.userRole !== 6"
+              type="warning"
+              link
+              size="small"
+              @click="handleUnarchive(row)"
+            >
+              解锁
+            </el-button>
             <ArchivedLatentRecordsActions :row="row" />
           </template>
         </el-table-column>

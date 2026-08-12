@@ -91,6 +91,58 @@ export function exportSchoolStatisticsApi(params: StatParams) {
   })
 }
 
+/** 学生报表学校分类（对齐《学生统计报表》） */
+export const STUDENT_REPORT_SCHOOL_CATEGORIES = [
+  "幼儿园、小学",
+  "非寄宿制初中",
+  "高中和寄宿制初中",
+  "大学",
+  "其他（教职工）"
+] as const
+
+export interface StudentReportStatisticsVO {
+  schoolCategory?: string
+  enrollmentCount?: number
+  acceptedExamCount?: number
+  standardizedExamCount?: number
+  tbPatientCount?: number
+}
+
+interface StudentReportParams extends StatParams {
+  /** 学校分类（多选）；空则全部 */
+  schoolCategories?: string[]
+}
+
+function withStudentReportParams(params: StudentReportParams) {
+  const { schoolCategories, departmentIds, ...rest } = params
+  return withDepartmentIds(
+    {
+      ...rest,
+      ...(schoolCategories?.length ? { schoolCategories: schoolCategories.join(",") } : {})
+    },
+    departmentIds
+  )
+}
+
+/** 新生入学体检结核病检查情况（学生报表） */
+export function getStudentReportStatisticsApi(params: StudentReportParams) {
+  return request<ApiResponseData<StudentReportStatisticsVO[]>>({
+    url: "statistics/student-report",
+    method: "get",
+    params: withStudentReportParams(params)
+  })
+}
+
+/** 导出学生报表 Excel（可按学校分类筛选） */
+export function exportStudentReportStatisticsApi(params: StudentReportParams) {
+  return request<Blob>({
+    url: "statistics/student-report/export",
+    method: "get",
+    params: withStudentReportParams(params),
+    responseType: "blob"
+  })
+}
+
 /** 导出区县统计 Excel */
 export function exportDistrictStatisticsApi(params: StatParams) {
   return request<Blob>({

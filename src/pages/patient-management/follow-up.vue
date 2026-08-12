@@ -5,6 +5,7 @@ import FollowUpVisitDetailDialog from "@@/components/FollowUpVisitDetailDialog.v
 import FollowUpVisitDialog from "@@/components/FollowUpVisitDialog.vue"
 import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
+import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import {
@@ -16,6 +17,7 @@ import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistra
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
+import { usePatientTableHeaderFilters } from "./composables/usePatientTableHeaderFilters"
 
 const userStore = useUserStore()
 
@@ -28,12 +30,26 @@ const {
   tableData,
   total,
   searchForm,
+  columnFilters,
+  setFilter,
   defaultSort,
   handleSortChange,
   fetchData,
   handleSearch,
   handleReset
 } = usePatientList(0, { followUpSearch: true })
+
+const {
+  genderFilterOptions,
+  pathogenFilterOptions,
+  populationTypeFilterOptions,
+  loadGenderOptions,
+  loadPathogenOptions,
+  loadPopulationTypeOptions,
+  genderSourceValues,
+  pathogenSourceValues,
+  populationTypeSourceValues
+} = usePatientTableHeaderFilters(0)
 
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
@@ -243,23 +259,89 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
-        <el-table-column prop="registrationNo" label="登记号" min-width="120" show-overflow-tooltip sortable="custom">
+        <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip sortable="custom">
+          <template #header>
+            <TableHeaderFilter
+              label="登记号"
+              :model-value="columnFilters.registrationNo"
+              @change="(v) => { setFilter('registrationNo', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             {{ resolveRegistrationNo(row) || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="数据来源">
+        <el-table-column prop="populationType" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="数据来源"
+              type="select"
+              :options="populationTypeFilterOptions"
+              :source-values="populationTypeSourceValues"
+              :load-options="loadPopulationTypeOptions"
+              :model-value="columnFilters.populationType"
+              @change="(v) => { setFilter('populationType', v); handleSearch() }"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
               {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="gender" label="性别" />
-        <el-table-column prop="idNumber" label="证件号" />
-        <el-table-column prop="phone" label="联系电话" />
-        <el-table-column prop="diagnosisResult" label="病原学结果" />
+        <el-table-column prop="name" min-width="90">
+          <template #header>
+            <TableHeaderFilter
+              label="姓名"
+              :model-value="columnFilters.name"
+              @change="(v) => { setFilter('name', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gender" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="性别"
+              type="select"
+              :options="genderFilterOptions"
+              :source-values="genderSourceValues"
+              :load-options="loadGenderOptions"
+              :model-value="columnFilters.gender"
+              @change="(v) => { setFilter('gender', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="证件号"
+              :model-value="columnFilters.idNumber"
+              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="phone" min-width="120">
+          <template #header>
+            <TableHeaderFilter
+              label="联系电话"
+              :model-value="columnFilters.phone"
+              @change="(v) => { setFilter('phone', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="diagnosisResult" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="病原学结果"
+              type="select"
+              :options="pathogenFilterOptions"
+              :source-values="pathogenSourceValues"
+              :load-options="loadPathogenOptions"
+              :model-value="columnFilters.diagnosisResult"
+              @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
             <template v-if="!isPatientTransferLocked(row)">

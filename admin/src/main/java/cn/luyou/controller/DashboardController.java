@@ -372,7 +372,7 @@ public class DashboardController {
 
     private long countKeyPopulationConfirmedPatients(boolean filterByBatch, String batch, List<Long> filterDeptIds) {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = scopedKeyPopulationWrapper(filterDeptIds)
-                .eq(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者");
+                .in(ScreeningKeyPopulation::getDiagnosisFirst, "确诊患者", "确诊结核", "在治患者");
         if (filterByBatch) {
             wrapper.eq(ScreeningKeyPopulation::getUploadBatch, batch);
         }

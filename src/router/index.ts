@@ -122,7 +122,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "overview",
         component: () => import("@/pages/latent-management/overview.vue"),
         name: "LatentManagementOverview",
-        meta: { title: "在管总览", tagTitle: "潜伏-在管总览", keepAlive: true, permission: "latentManagement:overview" }
+        meta: { title: "潜伏感染者在管总览", tagTitle: "潜伏感染者在管总览", keepAlive: true, permission: "latentManagement:overview" }
       },
       {
         path: "notice",
@@ -146,7 +146,8 @@ export const constantRoutes: RouteRecordRaw[] = [
           keepAlive: true,
           anyPermission: [
             "latentManagement:medication",
-            "latentManagement:pickup"
+            "latentManagement:pickup",
+            "latentManagement:pickupView"
           ]
         }
       },
@@ -202,6 +203,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           anyPermission: [
             "patientManagement:medication",
             "patientManagement:pickup",
+            "patientManagement:pickupView",
             "patient:medication",
             "keyPopulation:patient:medication",
             "closeContact:patient:medication"
@@ -291,7 +293,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { hidden: true, title: "学校人群（旧）", permission: "school" },
     children: [
       { path: "screening", component: () => import("@/pages/school/screening/index.vue"), name: "SchoolScreening", meta: { hidden: true, title: "筛查管理", permission: "school:screening" } },
-      { path: "suspected", component: () => import("@/pages/school/suspected/index.vue"), name: "SchoolSuspected", meta: { hidden: true, title: "待诊断", permission: "school:suspected" } },
+      { path: "suspected", component: () => import("@/pages/school/suspected/index.vue"), name: "SchoolSuspected", meta: { hidden: true, title: "学生报表统计", permission: "school:suspected" } },
       { path: "latent", component: () => import("@/pages/school/latent/index.vue"), name: "SchoolLatent", meta: { hidden: true, title: "潜伏感染", permission: "school:latent" } },
       { path: "patient", component: () => import("@/pages/school/patient/index.vue"), name: "SchoolPatient", meta: { hidden: true, title: "患者管理", permission: "school:patient" } },
       { path: "patient/history", component: () => import("@/pages/school/patient/history.vue"), name: "SchoolPatientHistory", meta: { hidden: true, title: "历史患者", permission: "school:history" } }

@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 import RecommendCreateDialog from "@@/components/RecommendCreateDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
+import TableHeaderHint from "@@/components/TableHeaderHint.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_TYPE_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
@@ -24,7 +25,7 @@ const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
 ]
-const diagnosisFilterOptions = SCREENING_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
 
 const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
   const { data } = await getScreeningSchoolColumnDistinctApi(field)
@@ -46,7 +47,6 @@ const searchForm = reactive({
   idNumber: "",
   schoolName: "",
   district: "",
-  phone: "",
   entryUnit: "",
   creatorUsername: "",
   year: "" as string,
@@ -54,8 +54,8 @@ const searchForm = reactive({
   diagnosisFirst: "" as string,
   hasChestXray: "" as string,
   chestXrayResult: "" as string,
-  sputumSmearResult: "" as string,
   molecularBiologyResult: "" as string,
+  sputumCultureResult: "" as string,
   formatIssue: "" as string,
   entryTimeRange: [] as string[]
 })
@@ -83,8 +83,8 @@ function buildListQueryParams() {
     entryTimeRange,
     hasChestXray,
     chestXrayResult,
-    sputumSmearResult,
     molecularBiologyResult,
+    sputumCultureResult,
     formatIssue,
     ...rest
   } = searchForm
@@ -97,8 +97,8 @@ function buildListQueryParams() {
     ...(creatorUsername ? { creatorUsername } : {}),
     ...(hasChestXray ? { hasChestXray } : {}),
     ...(chestXrayResult ? { chestXrayResult } : {}),
-    ...(sputumSmearResult ? { sputumSmearResult } : {}),
     ...(molecularBiologyResult ? { molecularBiologyResult } : {}),
+    ...(sputumCultureResult ? { sputumCultureResult } : {}),
     ...(formatIssue ? { formatIssue } : {}),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...toSortQueryParam()
@@ -120,7 +120,6 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.schoolName = ""
   searchForm.district = ""
-  searchForm.phone = ""
   searchForm.entryUnit = ""
   searchForm.creatorUsername = ""
   searchForm.year = ""
@@ -128,8 +127,8 @@ function handleReset() {
   searchForm.diagnosisFirst = ""
   searchForm.hasChestXray = ""
   searchForm.chestXrayResult = ""
-  searchForm.sputumSmearResult = ""
   searchForm.molecularBiologyResult = ""
+  searchForm.sputumCultureResult = ""
   searchForm.formatIssue = ""
   searchForm.entryTimeRange = []
   clearFilters()
@@ -262,53 +261,68 @@ const editMode = ref<"create" | "edit">("edit")
 const detailVisible = ref(false)
 const detailRow = ref<any>(null)
 
-function onHasInfectionScreenChange() {
-  if (editForm.value.hasInfectionScreen !== "是") {
-    editForm.value.screenDate = null
-    editForm.value.screenMethod = ""
-    editForm.value.screenResult = ""
-    editForm.value.infectionResult = ""
+function onScreenMethodChange() {
+  if (editForm.value.screenMethod === "未查") {
+    editForm.value.hasInfectionScreen = "否"
+  } else if (editForm.value.screenMethod) {
+    editForm.value.hasInfectionScreen = "是"
   }
 }
 
-function onHasChestXrayChange() {
-  if (editForm.value.hasChestXray !== "是") {
-    editForm.value.chestXrayDate = null
-    editForm.value.chestXrayResult = ""
+function onChestMethodChange() {
+  if (editForm.value.chestXrayMethod === "未查") {
+    editForm.value.hasChestXray = "否"
+  } else if (editForm.value.chestXrayMethod) {
+    editForm.value.hasChestXray = "是"
+  }
+}
+
+function syncSuspiciousSymptoms() {
+  const yes = (v: string) => v === "有" || v === "是" || v === "1"
+  const { symptomCough, symptomHemoptysis, symptomOther } = editForm.value
+  if (yes(symptomCough) || yes(symptomHemoptysis) || yes(symptomOther)) {
+    editForm.value.suspiciousSymptoms = "有"
+  } else if (symptomCough || symptomHemoptysis || symptomOther) {
+    editForm.value.suspiciousSymptoms = "无"
   }
 }
 
 function getEmptyEditForm() {
   return {
     year: "",
+    reportingOrg: "",
     city: "",
     district: "",
+    township: "",
     name: "",
     gender: "",
-    birthDate: "",
     age: undefined,
-    idType: "",
     idNumber: "",
     ethnicity: "",
-    phone: "",
+    participatedScreening: "",
     householdAddress: "",
-    currentAddress: "",
     schoolType: "",
+    boardingType: "",
     schoolName: "",
+    gradeName: "",
     className: "",
     tbHistory: "",
     closeContactHistory: "",
     suspiciousSymptoms: "",
+    symptomCough: "",
+    symptomHemoptysis: "",
+    symptomOther: "",
     hasInfectionScreen: "",
     screenDate: "",
     screenMethod: "",
     screenResult: "",
     infectionResult: "",
     hasChestXray: "",
+    chestXrayMethod: "",
     chestXrayDate: "",
     chestXrayResult: "",
-    sputumSmearResult: "",
     molecularBiologyResult: "",
+    sputumCultureResult: "",
     diagnosisFirst: "",
     remark: ""
   }
@@ -337,6 +351,9 @@ async function handleSave() {
     const confirmed = await confirmEditChange(`「${name}」信息`)
     if (!confirmed) return
   }
+  syncSuspiciousSymptoms()
+  onScreenMethodChange()
+  onChestMethodChange()
   editSaving.value = true
   try {
     if (editMode.value === "create") {
@@ -439,9 +456,6 @@ watch(
             <el-option v-for="item in distinctValues('district').value" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="联系电话">
-          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
-        </el-form-item>
         <el-form-item label="年度">
           <el-date-picker
             v-model="searchForm.year"
@@ -470,15 +484,19 @@ watch(
           </el-select>
         </el-form-item>
         <el-form-item label="胸片结果">
-          <el-select v-model="searchForm.chestXrayResult" placeholder="全部" clearable style="width: 120px">
-            <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          <el-select v-model="searchForm.chestXrayResult" placeholder="全部" clearable style="width: 200px">
+            <el-option v-for="item in SCHOOL_CHEST_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="痰涂片结果">
-          <el-input v-model="searchForm.sputumSmearResult" placeholder="请输入" clearable style="width: 140px" />
-        </el-form-item>
         <el-form-item label="分子生物学结果">
-          <el-input v-model="searchForm.molecularBiologyResult" placeholder="请输入" clearable style="width: 160px" />
+          <el-select v-model="searchForm.molecularBiologyResult" placeholder="全部" clearable style="width: 140px">
+            <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="痰培养结果">
+          <el-select v-model="searchForm.sputumCultureResult" placeholder="全部" clearable style="width: 140px">
+            <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="判定结果">
           <el-select v-model="searchForm.isLatent" placeholder="全部" clearable style="width: 120px">
@@ -488,7 +506,7 @@ watch(
         </el-form-item>
         <el-form-item label="诊断结果">
           <el-select v-model="searchForm.diagnosisFirst" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="item in SCREENING_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option v-for="item in SCHOOL_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="录入时间">
@@ -554,7 +572,7 @@ watch(
         </div>
       </template>
 
-      <!-- V4：移除胸片/诊断/痰涂片/分子生物学列（已移至潜伏感染追踪阶段录入），新增预防性治疗完成情况列 -->
+      <!-- 对齐 2026 秋季新生入学筛查表字段 -->
       <el-table
         v-loading="loading"
         class="screening-data-table"
@@ -604,25 +622,18 @@ watch(
         <el-table-column prop="idNumber" min-width="160">
           <template #header>
             <TableHeaderFilter
-              label="证件号"
+              label="身份证号"
               :model-value="columnFilters.idNumber"
               @change="(v) => { setFilter('idNumber', v); handleSearch() }"
             />
           </template>
         </el-table-column>
-        <el-table-column prop="phone" min-width="120">
-          <template #header>
-            <TableHeaderFilter
-              label="联系电话"
-              :model-value="columnFilters.phone"
-              @change="(v) => { setFilter('phone', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
+        <el-table-column prop="year" label="年份" min-width="80" sortable="custom" />
+        <el-table-column prop="reportingOrg" label="填报机构" min-width="110" show-overflow-tooltip />
         <el-table-column prop="district" min-width="90" sortable="custom">
           <template #header>
             <TableHeaderFilter
-              label="区县"
+              label="县区"
               type="select"
               :source-values="distinctValues('district').value"
               :load-options="loadDistrictOptions"
@@ -631,12 +642,32 @@ watch(
             />
           </template>
         </el-table-column>
+        <el-table-column prop="township" label="乡镇/街道" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="schoolType" min-width="100">
+          <template #header>
+            <TableHeaderHint label="类型" :hint="SCHOOL_SCREENING_FIELD_HINTS.schoolType" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="boardingType" min-width="100">
+          <template #header>
+            <TableHeaderHint label="是否寄宿制" :hint="SCHOOL_SCREENING_FIELD_HINTS.boardingType" />
+          </template>
+        </el-table-column>
         <el-table-column prop="schoolName" min-width="120" sortable="custom">
           <template #header>
             <TableHeaderFilter
               label="学校名称"
               :model-value="columnFilters.schoolName"
               @change="(v) => { setFilter('schoolName', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="gradeName" min-width="80">
+          <template #header>
+            <TableHeaderFilter
+              label="年级"
+              :model-value="columnFilters.gradeName"
+              @change="(v) => { setFilter('gradeName', v); handleSearch() }"
             />
           </template>
         </el-table-column>
@@ -649,25 +680,36 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="schoolType" label="学校类型" />
         <el-table-column prop="ethnicity" label="民族" />
-        <el-table-column prop="tbHistory" label="既往结核病史" />
-        <el-table-column prop="closeContactHistory" label="密切接触史" />
-        <el-table-column prop="suspiciousSymptoms" label="可疑症状" />
-        <el-table-column label="学校人群感染筛查情况">
-          <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
-          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" sortable="custom" />
-          <el-table-column prop="screenMethod" label="方法" min-width="80" />
-          <el-table-column label="结果（PPD：mmXmm；EC及IGRA：阳性/阴性）" min-width="140" show-overflow-tooltip>
+        <el-table-column prop="participatedScreening" label="是否参加筛查" min-width="110" />
+        <el-table-column prop="tbHistory" label="既往结核病史" min-width="110" />
+        <el-table-column prop="closeContactHistory" label="肺结核接触史" min-width="110" />
+        <el-table-column label="结核病可疑症状">
+          <el-table-column prop="symptomCough" label="咳嗽咳痰≥两周" min-width="120" />
+          <el-table-column prop="symptomHemoptysis" label="咯血或血痰" min-width="100" />
+          <el-table-column prop="symptomOther" label="其他" min-width="80" />
+        </el-table-column>
+        <el-table-column label="感染筛查">
+          <el-table-column prop="screenDate" label="感染筛查时间" min-width="110" sortable="custom" />
+          <el-table-column prop="screenMethod" min-width="80">
+            <template #header>
+              <TableHeaderHint label="方法" :hint="SCHOOL_SCREENING_FIELD_HINTS.screenMethod" />
+            </template>
+          </el-table-column>
+          <el-table-column min-width="120" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderHint label="结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.screenResult" />
+            </template>
             <template #default="{ row }">
               {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
             </template>
           </el-table-column>
-          <el-table-column prop="infectionResult" min-width="110">
+          <el-table-column prop="infectionResult" min-width="100">
             <template #header>
               <TableHeaderFilter
-                label="感染筛查结果"
+                label="判定结果"
                 type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.infectionResult"
                 :source-values="distinctValues('infectionResult').value"
                 :load-options="loadInfectionResultOptions"
                 :model-value="columnFilters.infectionResult"
@@ -676,18 +718,35 @@ watch(
             </template>
           </el-table-column>
         </el-table-column>
-        <el-table-column label="学校人群胸片检查">
-          <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
-          <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
-          <el-table-column prop="chestXrayResult" label="胸片结果" min-width="90" />
+        <el-table-column label="胸部影像学">
+          <el-table-column prop="chestXrayDate" label="胸片检查时间" min-width="110" />
+          <el-table-column prop="chestXrayMethod" min-width="90">
+            <template #header>
+              <TableHeaderHint label="方法" :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayMethod" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="chestXrayResult" min-width="140" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderHint label="结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayResult" />
+            </template>
+          </el-table-column>
         </el-table-column>
-        <el-table-column prop="sputumSmearResult" label="痰涂片结果" />
-        <el-table-column prop="molecularBiologyResult" label="分子生物学结果" />
+        <el-table-column prop="molecularBiologyResult" min-width="120">
+          <template #header>
+            <TableHeaderHint label="分子生物学结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.molecularBiologyResult" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="sputumCultureResult" min-width="100">
+          <template #header>
+            <TableHeaderHint label="痰培养结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.sputumCultureResult" />
+          </template>
+        </el-table-column>
         <el-table-column prop="diagnosisFirst" min-width="110">
           <template #header>
             <TableHeaderFilter
-              label="诊断结果"
+              label="筛查结果"
               type="select"
+              :hint="SCHOOL_SCREENING_FIELD_HINTS.diagnosisFirst"
               :options="diagnosisFilterOptions"
               :source-values="distinctValues('diagnosisFirst').value"
               :load-options="loadDiagnosisFirstOptions"
@@ -696,7 +755,7 @@ watch(
             />
           </template>
         </el-table-column>
-        <!-- 预防性治疗情况（督导表归档后同步） -->
+        <!-- 预防性治疗情况（结案进入历史患者后同步） -->
         <el-table-column label="潜伏感染者管理情况">
           <el-table-column prop="preventivePlan" label="预防性治疗方案" min-width="120" show-overflow-tooltip />
           <el-table-column prop="preventiveStartDate" label="预防性治疗开始时间（年月日）" min-width="150" />
@@ -745,7 +804,7 @@ watch(
     </el-card>
 
     <!-- 编辑弹窗 -->
-    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="900px" :close-on-click-modal="false">
+    <el-dialog v-model="editVisible" :title="editMode === 'create' ? '新增筛查记录' : '编辑筛查记录'" width="960px" :close-on-click-modal="false">
       <el-form :model="editForm" label-width="150px" class="edit-form">
         <el-divider content-position="left">
           基本信息
@@ -757,13 +816,42 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="市（州）">
+            <el-form-item label="填报机构">
+              <el-input v-model="editForm.reportingOrg" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="市州">
               <el-input v-model="editForm.city" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="区县">
+            <el-form-item label="县区">
               <el-input v-model="editForm.district" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="乡镇/街道">
+              <el-input v-model="editForm.township" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="类型">
+              <el-select v-model="editForm.schoolType" style="width:100%" clearable>
+                <el-option v-for="item in SCHOOL_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="是否寄宿制">
+              <el-select v-model="editForm.boardingType" style="width:100%" clearable>
+                <el-option v-for="item in SCHOOL_BOARDING_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="学校名称">
+              <el-input v-model="editForm.schoolName" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -779,8 +867,8 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="出生日期">
-              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            <el-form-item label="身份证号">
+              <el-input v-model="editForm.idNumber" placeholder="可填无" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -789,77 +877,70 @@ watch(
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="证件类型">
-              <el-input v-model="editForm.idType" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="证件号">
-              <el-input v-model="editForm.idNumber" placeholder="可填无" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
             <el-form-item label="民族">
               <el-input v-model="editForm.ethnicity" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="联系电话">
-              <el-input v-model="editForm.phone" />
+            <el-form-item label="年级">
+              <el-input v-model="editForm.gradeName" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="班级">
+              <el-input v-model="editForm.className" />
             </el-form-item>
           </el-col>
           <el-col :span="16">
-            <el-form-item label="户籍地址">
+            <el-form-item label="户籍所在地">
               <el-input v-model="editForm.householdAddress" />
             </el-form-item>
           </el-col>
-          <el-col :span="24">
-            <el-form-item label="现住址">
-              <el-input v-model="editForm.currentAddress" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-divider content-position="left">
-          学校信息
-        </el-divider>
-        <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="学校类型">
-              <el-input v-model="editForm.schoolType" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="学校名称">
-              <el-input v-model="editForm.schoolName" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="班级（院系）">
-              <el-input v-model="editForm.className" />
+            <el-form-item label="是否参加筛查">
+              <el-select v-model="editForm.participatedScreening" style="width:100%" clearable>
+                <el-option v-for="item in YES_NO_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="既往结核病史">
               <el-select v-model="editForm.tbHistory" style="width:100%" clearable>
-                <el-option label="有" value="有" />
-                <el-option label="无" value="无" />
+                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="密切接触史">
+            <el-form-item label="肺结核接触史">
               <el-select v-model="editForm.closeContactHistory" style="width:100%" clearable>
-                <el-option label="有" value="有" />
-                <el-option label="无" value="无" />
+                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">
+          结核病可疑症状
+        </el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="咳嗽咳痰≥两周">
+              <el-select v-model="editForm.symptomCough" style="width:100%" clearable>
+                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="可疑症状">
-              <el-select v-model="editForm.suspiciousSymptoms" style="width:100%" clearable>
-                <el-option label="有" value="有" />
-                <el-option label="无" value="无" />
+            <el-form-item label="咯血或血痰">
+              <el-select v-model="editForm.symptomHemoptysis" style="width:100%" clearable>
+                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="其他">
+              <el-select v-model="editForm.symptomOther" style="width:100%" clearable>
+                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -870,84 +951,72 @@ watch(
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行感染筛查">
-              <el-select v-model="editForm.hasInfectionScreen" style="width:100%" clearable @change="onHasInfectionScreenChange">
-                <el-option label="是" value="是" />
-                <el-option label="否" value="否" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="感染筛查日期">
+            <el-form-item label="感染筛查时间">
               <el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="筛查方法">
-              <el-input v-model="editForm.screenMethod" />
+            <el-form-item label="方法">
+              <el-select v-model="editForm.screenMethod" style="width:100%" clearable @change="onScreenMethodChange">
+                <el-option v-for="item in SCHOOL_SCREEN_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="筛查结果（mm*mm）">
-              <el-input v-model="editForm.screenResult" placeholder="PPD 斑痕如：3*6" />
+            <el-form-item label="结果">
+              <el-input v-model="editForm.screenResult" placeholder="PPD：横径×纵径；EC/IGRA：阳性/阴性" />
             </el-form-item>
           </el-col>
-          <el-col :span="16">
-            <el-form-item label="感染筛查结果">
+          <el-col :span="8">
+            <el-form-item label="判定结果">
               <el-select v-model="editForm.infectionResult" style="width:100%" clearable>
-                <el-option label="PPD阴性" value="PPD阴性" />
-                <el-option label="PPD+" value="PPD+" />
-                <el-option label="PPD++" value="PPD++" />
-                <el-option label="PPD+++" value="PPD+++" />
-                <el-option label="EC阴性" value="EC阴性" />
-                <el-option label="EC阳性" value="EC阳性" />
-                <el-option label="IGRA阴性" value="IGRA阴性" />
-                <el-option label="IGRA阳性" value="IGRA阳性" />
+                <el-option v-for="item in SCHOOL_INFECTION_JUDGE_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
 
         <el-divider content-position="left">
-          胸片与诊断
+          胸部影像学与筛查结果
         </el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="是否进行胸片检查">
-              <el-select v-model="editForm.hasChestXray" style="width:100%" clearable @change="onHasChestXrayChange">
-                <el-option label="是" value="是" />
-                <el-option label="否" value="否" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="胸片检查日期">
+            <el-form-item label="胸片检查时间">
               <el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="胸片结果">
-              <el-select v-model="editForm.chestXrayResult" style="width:100%" clearable>
-                <el-option label="正常" value="正常" />
-                <el-option label="异常" value="异常" />
-                <el-option label="未查" value="未查" />
+            <el-form-item label="影像方法">
+              <el-select v-model="editForm.chestXrayMethod" style="width:100%" clearable @change="onChestMethodChange">
+                <el-option v-for="item in SCHOOL_CHEST_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="24">
-            <el-form-item label="痰涂片结果">
-              <el-input v-model="editForm.sputumSmearResult" />
+          <el-col :span="8">
+            <el-form-item label="影像结果">
+              <el-select v-model="editForm.chestXrayResult" style="width:100%" clearable>
+                <el-option v-for="item in SCHOOL_CHEST_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="24">
+          <el-col :span="8">
             <el-form-item label="分子生物学结果">
-              <el-input v-model="editForm.molecularBiologyResult" />
+              <el-select v-model="editForm.molecularBiologyResult" style="width:100%" clearable>
+                <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="24">
-            <el-form-item label="诊断结果">
+          <el-col :span="8">
+            <el-form-item label="痰培养结果">
+              <el-select v-model="editForm.sputumCultureResult" style="width:100%" clearable>
+                <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="筛查结果">
               <el-select v-model="editForm.diagnosisFirst" style="width:100%" clearable>
-                <el-option v-for="item in SCREENING_DIAGNOSIS_EDIT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+                <el-option v-for="item in SCHOOL_DIAGNOSIS_EDIT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -971,16 +1040,31 @@ watch(
     </el-dialog>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} - 详情`" width="900px">
+    <el-dialog v-model="detailVisible" :title="`${detailRow?.name || ''} - 详情`" width="960px">
       <el-descriptions v-if="detailRow" :column="3" border>
         <el-descriptions-item label="年份">
           {{ detailRow.year }}
         </el-descriptions-item>
-        <el-descriptions-item label="市（州）">
+        <el-descriptions-item label="填报机构">
+          {{ detailRow.reportingOrg || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="市州">
           {{ detailRow.city }}
         </el-descriptions-item>
-        <el-descriptions-item label="区县">
+        <el-descriptions-item label="县区">
           {{ detailRow.district }}
+        </el-descriptions-item>
+        <el-descriptions-item label="乡镇/街道">
+          {{ detailRow.township || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="类型">
+          {{ detailRow.schoolType }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否寄宿制">
+          {{ detailRow.boardingType || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="学校名称">
+          {{ detailRow.schoolName }}
         </el-descriptions-item>
         <el-descriptions-item label="姓名">
           {{ detailRow.name }}
@@ -988,46 +1072,40 @@ watch(
         <el-descriptions-item label="性别">
           {{ detailRow.gender }}
         </el-descriptions-item>
-        <el-descriptions-item label="出生日期">
-          {{ detailRow.birthDate }}
+        <el-descriptions-item label="身份证号">
+          {{ detailRow.idNumber }}
         </el-descriptions-item>
         <el-descriptions-item label="年龄">
           {{ detailRow.age }}
         </el-descriptions-item>
-        <el-descriptions-item label="证件类型">
-          {{ detailRow.idType }}
-        </el-descriptions-item>
-        <el-descriptions-item label="证件号">
-          {{ detailRow.idNumber }}
-        </el-descriptions-item>
         <el-descriptions-item label="民族">
           {{ detailRow.ethnicity }}
         </el-descriptions-item>
-        <el-descriptions-item label="联系电话">
-          {{ detailRow.phone }}
+        <el-descriptions-item label="年级">
+          {{ detailRow.gradeName || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="学校类型">
-          {{ detailRow.schoolType }}
-        </el-descriptions-item>
-        <el-descriptions-item label="学校名称">
-          {{ detailRow.schoolName }}
-        </el-descriptions-item>
-        <el-descriptions-item label="班级（院系）">
+        <el-descriptions-item label="班级">
           {{ detailRow.className }}
+        </el-descriptions-item>
+        <el-descriptions-item label="是否参加筛查">
+          {{ detailRow.participatedScreening || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="既往结核病史">
           {{ detailRow.tbHistory }}
         </el-descriptions-item>
-        <el-descriptions-item label="密切接触史">
+        <el-descriptions-item label="肺结核接触史">
           {{ detailRow.closeContactHistory }}
         </el-descriptions-item>
-        <el-descriptions-item label="可疑症状">
-          {{ detailRow.suspiciousSymptoms }}
+        <el-descriptions-item label="咳嗽咳痰≥两周">
+          {{ detailRow.symptomCough || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="是否进行感染筛">
-          {{ detailRow.hasInfectionScreen }}
+        <el-descriptions-item label="咯血或血痰">
+          {{ detailRow.symptomHemoptysis || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="感染筛查日期">
+        <el-descriptions-item label="可疑症状其他">
+          {{ detailRow.symptomOther || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="感染筛查时间">
           {{ detailRow.screenDate }}
         </el-descriptions-item>
         <el-descriptions-item label="筛查方法">
@@ -1036,35 +1114,32 @@ watch(
         <el-descriptions-item label="筛查结果">
           {{ formatScreenResultDisplay(detailRow.screenResult, detailRow.screenMethod) || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="感染筛查结果">
+        <el-descriptions-item label="判定结果">
           {{ detailRow.infectionResult }}
         </el-descriptions-item>
-        <el-descriptions-item label="判定结果">
+        <el-descriptions-item label="待确诊状态">
           {{ getScreeningLatentStatusLabel(detailRow) }}
         </el-descriptions-item>
-        <el-descriptions-item label="是否进行胸片检查">
-          {{ detailRow.hasChestXray }}
-        </el-descriptions-item>
-        <el-descriptions-item label="胸片检查日期">
+        <el-descriptions-item label="胸片检查时间">
           {{ detailRow.chestXrayDate }}
         </el-descriptions-item>
-        <el-descriptions-item label="胸片结果">
-          {{ detailRow.chestXrayResult }}
+        <el-descriptions-item label="影像方法">
+          {{ detailRow.chestXrayMethod || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="痰涂片结果">
-          {{ detailRow.sputumSmearResult || "-" }}
+        <el-descriptions-item label="影像结果">
+          {{ detailRow.chestXrayResult }}
         </el-descriptions-item>
         <el-descriptions-item label="分子生物学结果">
           {{ detailRow.molecularBiologyResult || "-" }}
         </el-descriptions-item>
-        <el-descriptions-item label="诊断结果">
+        <el-descriptions-item label="痰培养结果">
+          {{ detailRow.sputumCultureResult || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item label="筛查结果（诊断）">
           {{ detailRow.diagnosisFirst }}
         </el-descriptions-item>
-        <el-descriptions-item label="户籍地址" :span="3">
+        <el-descriptions-item label="户籍所在地" :span="3">
           {{ detailRow.householdAddress }}
-        </el-descriptions-item>
-        <el-descriptions-item label="现住址" :span="3">
-          {{ detailRow.currentAddress }}
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="3">
           {{ detailRow.remark || "-" }}

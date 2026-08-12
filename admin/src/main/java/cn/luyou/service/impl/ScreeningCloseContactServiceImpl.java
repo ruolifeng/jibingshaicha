@@ -33,6 +33,7 @@ import cn.luyou.utils.ScreeningImportMergeSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.InfectionScreenFieldSupport;
 import cn.luyou.utils.UploadBatchSupport;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
@@ -171,6 +172,19 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
                     if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
                         result.addError(row, data.getName(), "接触者手机号格式不正确");
                     }
+                    if (!InfectionScreenFieldSupport.isValidMethod(data.getInfectionCheckMethod())) {
+                        result.addError(row, data.getName(),
+                                "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做（兼容PPD/EC/IGRA/未查）");
+                        return;
+                    }
+                    if (!InfectionScreenFieldSupport.isValidResult(data.getInfectionCheckResult())) {
+                        result.addError(row, data.getName(),
+                                "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                        return;
+                    }
+                    InfectionScreenFieldSupport.applyNormalized(
+                            data::setInfectionCheckMethod, data.getInfectionCheckMethod(),
+                            data::setInfectionCheckResult, data.getInfectionCheckResult());
                     // 从登记日期提取年份
                     if (data.getRegistrationDate() != null) {
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
@@ -499,7 +513,9 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         validateContactBasicInfo(data);
         validateFirstScreenInfo(data);
         if (StrUtil.isNotBlank(data.getFinalScreeningResult())) {
-            data.setFinalScreeningResult(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getFinalScreeningResult()));
+            // 密接最终筛查结果保持模板原文（活动性肺结核/未发现异常/潜伏感染者/未做），
+            // 不可走学校 normalizeDiagnosis（会改成确诊患者/排除，导致状态判定失效）
+            data.setFinalScreeningResult(data.getFinalScreeningResult().trim());
         }
         if (data.getRegistrationDate() != null) {
             data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
@@ -550,7 +566,8 @@ public class ScreeningCloseContactServiceImpl extends ServiceImpl<ScreeningClose
         validateContactBasicInfo(data);
         validateFirstScreenInfo(data);
         if (StrUtil.isNotBlank(data.getFinalScreeningResult())) {
-            data.setFinalScreeningResult(ScreeningDiagnosisSupport.normalizeDiagnosis(data.getFinalScreeningResult()));
+            // 密接最终筛查结果保持模板原文，不可走学校 normalizeDiagnosis
+            data.setFinalScreeningResult(data.getFinalScreeningResult().trim());
         } else {
             data.setFinalScreeningResult(null);
         }

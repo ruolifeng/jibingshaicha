@@ -17,6 +17,7 @@ import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.MedicationManagementService;
 import cn.luyou.service.MedicationPickupService;
 import cn.luyou.service.UserService;
+import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -63,9 +64,11 @@ public class LatentInfectionController {
             @RequestParam(required = false) String phone,
             @RequestParam(required = false) String startTime,
             @RequestParam(required = false) String endTime,
-            @RequestParam(required = false) String treatmentCompletionStatus) {
+            @RequestParam(required = false) String treatmentCompletionStatus,
+            @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(latentInfectionService.queryHistoryPage(
-                page, size, populationType, name, idNumber, phone, startTime, endTime, treatmentCompletionStatus));
+                page, size, populationType, name, idNumber, phone, startTime, endTime,
+                treatmentCompletionStatus, columnFilters));
     }
 
     @Operation(summary = "表头筛选：某列实际去重值（Excel 式）")
@@ -287,6 +290,18 @@ public class LatentInfectionController {
     @OperationLog(type = "update", module = "latent", action = "潜伏感染结案归档")
     public ResultResponse<Void> closeCase(@PathVariable Long id) {
         latentInfectionService.closeCase(id);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "解锁结案归档的潜伏感染者（管理员）")
+    @PostMapping("/unarchive/{id}")
+    @OperationLog(type = "update", module = "latent", action = "解锁结案归档潜伏感染者")
+    public ResultResponse<Void> unarchiveFromCloseCase(@PathVariable Long id) {
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role == 6) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无权限解锁潜伏感染者档案");
+        }
+        latentInfectionService.unarchiveFromCloseCase(id);
         return ResultRes.success(null);
     }
 
