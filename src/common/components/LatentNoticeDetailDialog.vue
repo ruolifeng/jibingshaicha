@@ -85,6 +85,9 @@ async function handleConfirmNotice(noticeId: string) {
       <el-descriptions-item label="民族">
         {{ noticeDetailData.ethnicity || "-" }}
       </el-descriptions-item>
+      <el-descriptions-item label="登记号">
+        {{ noticeDetailData.registrationNo || "-" }}
+      </el-descriptions-item>
       <el-descriptions-item label="人群分类">
         {{ noticeDetailData.crowdCategory || "-" }}
       </el-descriptions-item>
@@ -93,9 +96,6 @@ async function handleConfirmNotice(noticeId: string) {
       </el-descriptions-item>
       <el-descriptions-item label="户籍地址" :span="2">
         {{ noticeDetailData.householdAddress || "-" }}
-      </el-descriptions-item>
-      <el-descriptions-item label="登记号">
-        {{ noticeDetailData.registrationNo || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="感染检测时间">
         {{ noticeDetailData.infectionDate || "-" }}

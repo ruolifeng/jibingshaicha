@@ -3,7 +3,6 @@ import PrintSupervision from "@@/components/PrintSupervision.vue"
 import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
 import SupervisionFormDialog from "@@/components/SupervisionFormDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
-import TableHeaderHint from "@@/components/TableHeaderHint.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
@@ -246,7 +245,12 @@ async function openPrint(row: Record<string, any>) {
         </el-table-column>
         <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip>
           <template #header>
-            <TableHeaderHint label="登记号" hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）" />
+            <TableHeaderFilter
+              label="登记号"
+              hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）"
+              :model-value="columnFilters.registrationNo"
+              @change="(v) => { setFilter('registrationNo', v); handleSearch() }"
+            />
           </template>
           <template #default="{ row }">
             {{ row.registrationNo || "-" }}

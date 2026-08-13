@@ -4,7 +4,6 @@ import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue
 import LatentRecordEditDialog from "@@/components/LatentRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
-import TableHeaderHint from "@@/components/TableHeaderHint.vue"
 import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
@@ -491,7 +490,12 @@ async function handleImport(uploadFile: any) {
         </el-table-column>
         <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip>
           <template #header>
-            <TableHeaderHint label="登记号" hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）" />
+            <TableHeaderFilter
+              label="登记号"
+              hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）"
+              :model-value="columnFilters.registrationNo"
+              @change="(v) => { setFilter('registrationNo', v); handleSearch() }"
+            />
           </template>
           <template #default="{ row }">
             {{ row.registrationNo || "-" }}

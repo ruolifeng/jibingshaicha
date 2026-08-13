@@ -121,7 +121,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final CloseContactCaseLatentSyncSupport closeContactCaseLatentSyncSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
-            "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
+            "name", "registrationNo", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
             "infectionResult", "screenMethod", "diagnosisFirst", "diagnosisResult", "populationType",
             "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark"
     );
@@ -379,6 +379,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
             switch (field) {
                 case "name" -> ColumnFilterSupport.like(wrapper, LatentInfection::getName, value);
+                case "registrationNo" -> ColumnFilterSupport.like(wrapper, LatentInfection::getRegistrationNo, value);
                 case "gender" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getGender, value);
                 case "idNumber" -> ColumnFilterSupport.like(wrapper, LatentInfection::getIdNumber, value);
                 case "phone" -> ColumnFilterSupport.like(wrapper, LatentInfection::getPhone, value);
