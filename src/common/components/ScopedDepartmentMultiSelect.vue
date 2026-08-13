@@ -18,6 +18,8 @@ const emit = defineEmits<{
   "update:modelValue": [value: string[]]
   /** 是否有可选部门（无选项时父级应隐藏「部门」表单项，避免只剩空标签） */
   "visibilityChange": [visible: boolean]
+  /** 选中值变化（便于父级立即按部门刷新） */
+  "change": [value: string[]]
 }>()
 
 const loading = ref(false)
@@ -26,11 +28,20 @@ const visible = ref(false)
 
 const treeData = computed(() => options.value)
 
+function normalizeOptionIds(nodes: DepartmentFilterOption[]): DepartmentFilterOption[] {
+  return (nodes || []).map(node => ({
+    ...node,
+    id: String(node.id),
+    parentId: node.parentId == null ? node.parentId : String(node.parentId),
+    children: node.children ? normalizeOptionIds(node.children) : undefined
+  }))
+}
+
 async function loadOptions() {
   loading.value = true
   try {
     const { data } = await getDepartmentFilterOptionsApi()
-    options.value = data || []
+    options.value = normalizeOptionIds(data || [])
     visible.value = options.value.length > 0
   } catch {
     options.value = []
@@ -41,16 +52,15 @@ async function loadOptions() {
   }
 }
 
-function handleChange(value: string[] | string | undefined) {
+function handleChange(value: string[] | string | number[] | number | undefined) {
+  let next: string[] = []
   if (Array.isArray(value)) {
-    emit("update:modelValue", value)
-    return
+    next = value.map(item => String(item))
+  } else if (value != null) {
+    next = [String(value)]
   }
-  if (value == null) {
-    emit("update:modelValue", [])
-    return
-  }
-  emit("update:modelValue", [value])
+  emit("update:modelValue", next)
+  emit("change", next)
 }
 
 onMounted(loadOptions)
