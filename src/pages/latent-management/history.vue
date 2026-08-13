@@ -261,6 +261,19 @@ function treatmentPhaseLabel(phase?: number) {
             />
           </template>
         </el-table-column>
+        <el-table-column prop="registrationNo" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="登记号"
+              hint="数据来源：通知单（填写/保存潜伏感染者通知单后同步）"
+              :model-value="columnFilters.registrationNo"
+              @change="(v) => { setFilter('registrationNo', v); handleSearch() }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ row.registrationNo || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="gender" min-width="80">
           <template #header>
             <TableHeaderFilter

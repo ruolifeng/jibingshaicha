@@ -213,9 +213,14 @@ async function handleSaveDraft() {
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form ref="noticeFormRef" :model="noticeForm" :rules="noticeFormRules" label-width="110px">
-      <el-divider content-position="left">
-        基本信息
-      </el-divider>
+      <div class="basic-info-header">
+        <el-divider content-position="left">
+          基本信息
+        </el-divider>
+        <el-form-item label="登记号" label-width="64px" class="registration-no-item">
+          <el-input v-model="noticeForm.registrationNo" placeholder="手工填写，保存后同步至总览" />
+        </el-form-item>
+      </div>
       <el-row :gutter="12">
         <el-col :span="12">
           <el-form-item label="姓名">
@@ -261,11 +266,6 @@ async function handleSaveDraft() {
         </el-col>
       </el-row>
       <el-row :gutter="12">
-        <el-col :span="12">
-          <el-form-item label="登记号">
-            <el-input v-model="noticeForm.registrationNo" placeholder="填写后同步至在管总览/督导表" />
-          </el-form-item>
-        </el-col>
         <el-col :span="12">
           <el-form-item label="人群分类">
             <el-select v-model="noticeForm.crowdCategory" style="width: 100%">
@@ -375,3 +375,24 @@ async function handleSaveDraft() {
     </template>
   </el-dialog>
 </template>
+
+<style scoped lang="scss">
+.basic-info-header {
+  position: relative;
+
+  .registration-no-item {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    z-index: 1;
+    margin-bottom: 0;
+    padding-left: 12px;
+    background: var(--el-bg-color);
+    transform: translateY(-50%);
+
+    :deep(.el-form-item__content) {
+      width: 220px;
+    }
+  }
+}
+</style>
