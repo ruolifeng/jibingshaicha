@@ -180,6 +180,24 @@ async function handleEpidemicFileChange(uploadFile: any) {
   importResult.value = null
   try {
     const preview = await previewEpidemicTrackImportApi(file)
+    const previewSkipped = preview.data?.skippedItems ?? []
+    if (previewSkipped.length > 0) {
+      const previewText = previewSkipped
+        .slice(0, 5)
+        .map(item => item.message || `${item.name}（${item.idNumber}，乡镇：${item.township || "未知"}）`)
+        .join("\n")
+      const more = previewSkipped.length > 5 ? `\n... 等共 ${previewSkipped.length} 条` : ""
+      try {
+        await ElMessageBox.confirm(
+          `以下 ${previewSkipped.length} 条因「现住址乡镇」与当前五级账号单位不一致将被跳过（不是身份证重复）：\n${previewText}${more}\n\n可改用对应乡镇账号或区县及以上账号导入。是否继续导入其余可写入数据？`,
+          "跨镇数据无法写入",
+          { confirmButtonText: "继续导入其余", cancelButtonText: "取消", type: "warning" }
+        )
+      } catch {
+        ElMessage.info("已取消导入")
+        return
+      }
+    }
     let addDuplicateRecords = false
     if ((preview.data?.duplicateCount ?? 0) > 0) {
       const duplicateNames = (preview.data?.duplicates ?? [])
@@ -209,10 +227,28 @@ async function handleEpidemicFileChange(uploadFile: any) {
     }
     const res = await importEpidemicTrackApi(file, addDuplicateRecords)
     importResult.value = res.data
-    const skipped = res.data.skipped ?? 0
-    ElMessage.success(
-      `导入完成：新建 ${res.data.count} 条，更新 ${res.data.updated ?? 0} 条${skipped > 0 ? `，跨镇权限跳过 ${skipped} 条` : ""}`
-    )
+    const skippedItems = res.data.skippedItems ?? []
+    const skipped = res.data.skipped ?? skippedItems.length
+    const parts = [
+      `新建 ${res.data.count} 条`,
+      `更新 ${res.data.updated ?? 0} 条`
+    ]
+    if (skipped > 0) {
+      parts.push(`跨镇权限跳过 ${skipped} 条`)
+    }
+    ElMessage.success(`导入完成：${parts.join("，")}`)
+    if (skippedItems.length > 0) {
+      const detail = skippedItems
+        .slice(0, 5)
+        .map(item => item.message || `${item.name}（${item.township || "未知乡镇"}）`)
+        .join("\n")
+      const more = skippedItems.length > 5 ? `\n... 等共 ${skippedItems.length} 条` : ""
+      ElMessageBox.alert(
+        `${detail}${more}\n\n请使用对应乡镇账号或区县及以上账号重新导入。`,
+        "跨镇跳过说明",
+        { confirmButtonText: "知道了", type: "warning" }
+      )
+    }
     importDialogVisible.value = false
     fetchList()
   } catch {

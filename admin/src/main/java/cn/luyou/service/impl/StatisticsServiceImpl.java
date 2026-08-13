@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -180,9 +181,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .isNotNull(ScreeningKeyPopulation::getDistrict)
                 .groupBy(ScreeningKeyPopulation::getDistrict)
                 .orderByAsc(ScreeningKeyPopulation::getDistrict);
-        screeningScopeHelper.applyDepartmentScope(
-                districtWrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        applyKeyPopulationStatsDepartmentFilter(districtWrapper, filterDeptIds);
+        applyKeyPopulationReportAccess(districtWrapper, filterDeptIds);
         screeningKeyPopulationMapper.selectList(districtWrapper).stream()
                 .map(ScreeningKeyPopulation::getDistrict)
                 .filter(StrUtil::isNotBlank)
@@ -194,9 +193,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .isNotNull(ScreeningKeyPopulation::getTownshipCommunity)
                 .groupBy(ScreeningKeyPopulation::getTownshipCommunity)
                 .orderByAsc(ScreeningKeyPopulation::getTownshipCommunity);
-        screeningScopeHelper.applyDepartmentScope(
-                townshipWrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        applyKeyPopulationStatsDepartmentFilter(townshipWrapper, filterDeptIds);
+        applyKeyPopulationReportAccess(townshipWrapper, filterDeptIds);
         screeningKeyPopulationMapper.selectList(townshipWrapper).stream()
                 .map(ScreeningKeyPopulation::getTownshipCommunity)
                 .filter(StrUtil::isNotBlank)
@@ -213,6 +210,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<ScreeningKeyPopulation> records = queryKeyPopulationRecords(year, region, filterDeptIds);
         Map<String, Long> elderArrivedByDistrict = countReferralArrivedByDistrict(year, filterDeptIds, true);
         Map<String, Long> diabetesArrivedByDistrict = countReferralArrivedByDistrict(year, filterDeptIds, false);
+        boolean groupByTownship = shouldGroupKeyPopulationByTownship(filterDeptIds, region);
 
         Map<String, List<ScreeningKeyPopulation>> grouped = new LinkedHashMap<>();
         if (StrUtil.isNotBlank(region)) {
@@ -220,15 +218,17 @@ public class StatisticsServiceImpl implements StatisticsService {
             grouped.put(region.trim(), new ArrayList<>(records));
         } else {
             for (ScreeningKeyPopulation r : records) {
-                String key = StrUtil.blankToDefault(r.getDistrict(), "未知");
+                String key = resolveKeyPopulationGroupKey(r, groupByTownship);
                 grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
             }
-            // 推介到位可能落在筛查无数据的区县，一并纳入
-            for (String key : elderArrivedByDistrict.keySet()) {
-                grouped.computeIfAbsent(key, k -> new ArrayList<>());
-            }
-            for (String key : diabetesArrivedByDistrict.keySet()) {
-                grouped.computeIfAbsent(key, k -> new ArrayList<>());
+            // 未做部门/乡镇收窄时，推介到位可能落在筛查无数据的区县，一并纳入
+            if (!departmentFilterSupport.hasActiveFilter(filterDeptIds) && !groupByTownship) {
+                for (String key : elderArrivedByDistrict.keySet()) {
+                    grouped.computeIfAbsent(key, k -> new ArrayList<>());
+                }
+                for (String key : diabetesArrivedByDistrict.keySet()) {
+                    grouped.computeIfAbsent(key, k -> new ArrayList<>());
+                }
             }
         }
 
@@ -244,6 +244,28 @@ public class StatisticsServiceImpl implements StatisticsService {
         result.sort((a, b) -> StrUtil.blankToDefault(a.getDistrict(), "")
                 .compareTo(StrUtil.blankToDefault(b.getDistrict(), "")));
         return result;
+    }
+
+    /** 仅选乡镇/社区部门时按乡镇分行，避免仍显示上级区县而看起来像「部门筛选无效」 */
+    private boolean shouldGroupKeyPopulationByTownship(List<Long> filterDeptIds, String region) {
+        if (StrUtil.isNotBlank(region) || !departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
+            return false;
+        }
+        if (filterDeptIds.size() == 1
+                && Objects.equals(filterDeptIds.get(0), DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)) {
+            return false;
+        }
+        Set<Long> idSet = new HashSet<>(filterDeptIds);
+        return departmentService.listAll().stream()
+                .filter(d -> d.getId() != null && idSet.contains(d.getId()))
+                .allMatch(d -> d.getLevel() != null && d.getLevel() >= 3);
+    }
+
+    private String resolveKeyPopulationGroupKey(ScreeningKeyPopulation row, boolean groupByTownship) {
+        if (groupByTownship && StrUtil.isNotBlank(row.getTownshipCommunity())) {
+            return row.getTownshipCommunity().trim();
+        }
+        return StrUtil.blankToDefault(row.getDistrict(), "未知");
     }
 
     private List<ScreeningSchool> queryRecords(String year, String district, List<Long> filterDeptIds) {
@@ -287,19 +309,32 @@ public class StatisticsServiceImpl implements StatisticsService {
         if (StrUtil.isNotBlank(region)) {
             String regionValue = region.trim();
             // 区县或乡镇/社区均可筛选（此前仅 district 精确匹配，选乡镇无数据）
-            wrapper.and(w -> w.eq(ScreeningKeyPopulation::getDistrict, regionValue)
+            List<String> regionAliases = expandGeoNameAliases(List.of(regionValue));
+            wrapper.and(w -> w.in(ScreeningKeyPopulation::getDistrict, regionAliases)
                     .or()
-                    .eq(ScreeningKeyPopulation::getTownshipCommunity, regionValue));
+                    .in(ScreeningKeyPopulation::getTownshipCommunity, regionAliases));
         }
-        screeningScopeHelper.applyDepartmentScope(
-                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
-        applyKeyPopulationStatsDepartmentFilter(wrapper, filterDeptIds);
+        // 有部门筛选时：不再叠加「department_id IN 辖区」硬条件。
+        // 筛查记录常挂在区县 department_id，选乡镇时硬过滤会把名称本可匹配的数据全部滤空。
+        // resolveFilterDepartmentIds 已与用户辖区取交集，这里按部门 ID + 地理名称匹配即可。
+        applyKeyPopulationReportAccess(wrapper, filterDeptIds);
         return screeningKeyPopulationMapper.selectList(wrapper);
     }
 
+    /** 重点人群报表统一数据范围：有部门筛选用地理匹配，否则用常规辖区隔离 */
+    private void applyKeyPopulationReportAccess(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper,
+                                                List<Long> filterDeptIds) {
+        if (departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
+            applyKeyPopulationStatsDepartmentFilter(wrapper, filterDeptIds);
+            return;
+        }
+        screeningScopeHelper.applyDepartmentScope(
+                wrapper, ScreeningKeyPopulation::getDepartmentId, ScreeningKeyPopulation::getId, "key");
+    }
+
     /**
-     * 本报表部门筛选：除 department_id 外，兼容乡镇部门下筛查数据仍挂在区县部门的情况，
-     * 按部门名称匹配 district / township_community。
+     * 本报表部门筛选：除 department_id 外，兼容乡镇部门下筛查数据仍挂在区县部门 / department_id 为空的情况，
+     * 按部门名称（及去后缀别名）匹配 district / township_community。
      */
     private void applyKeyPopulationStatsDepartmentFilter(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper,
                                                          List<Long> filterDeptIds) {
@@ -311,14 +346,7 @@ public class StatisticsServiceImpl implements StatisticsService {
             wrapper.eq(ScreeningKeyPopulation::getDepartmentId, DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID);
             return;
         }
-        Set<Long> idSet = new HashSet<>(filterDeptIds);
-        List<String> names = departmentService.listAll().stream()
-                .filter(d -> d.getId() != null && idSet.contains(d.getId()))
-                .map(Department::getName)
-                .filter(StrUtil::isNotBlank)
-                .map(String::trim)
-                .distinct()
-                .toList();
+        List<String> names = resolveDepartmentGeoNames(filterDeptIds);
         wrapper.and(w -> {
             w.in(ScreeningKeyPopulation::getDepartmentId, filterDeptIds);
             if (!names.isEmpty()) {
@@ -327,6 +355,61 @@ public class StatisticsServiceImpl implements StatisticsService {
                         .in(ScreeningKeyPopulation::getTownshipCommunity, names);
             }
         });
+    }
+
+    /** 部门 ID → 可用于匹配 district / township_community 的名称集合（含去后缀别名） */
+    private List<String> resolveDepartmentGeoNames(List<Long> deptIds) {
+        if (deptIds == null || deptIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> idSet = new HashSet<>(deptIds);
+        List<String> rawNames = departmentService.listAll().stream()
+                .filter(d -> d.getId() != null && idSet.contains(d.getId()))
+                .map(Department::getName)
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        return expandGeoNameAliases(rawNames);
+    }
+
+    /**
+     * 扩展地理名称别名，兼容「富顺/富顺县」「邓井关/邓井关街道」等部门名与筛查字段不一致。
+     */
+    private List<String> expandGeoNameAliases(List<String> names) {
+        LinkedHashSet<String> aliases = new LinkedHashSet<>();
+        for (String name : names) {
+            if (StrUtil.isBlank(name)) {
+                continue;
+            }
+            String trimmed = name.trim();
+            aliases.add(trimmed);
+            String normalized = stripGeoSuffix(trimmed);
+            if (StrUtil.isNotBlank(normalized)) {
+                aliases.add(normalized);
+                aliases.add(normalized + "县");
+                aliases.add(normalized + "区");
+                aliases.add(normalized + "市");
+                aliases.add(normalized + "镇");
+                aliases.add(normalized + "乡");
+                aliases.add(normalized + "街道");
+                aliases.add(normalized + "社区");
+            }
+        }
+        return new ArrayList<>(aliases);
+    }
+
+    private String stripGeoSuffix(String name) {
+        if (StrUtil.isBlank(name)) {
+            return name;
+        }
+        String value = name.trim();
+        for (String suffix : List.of("办事处", "街道办事处", "街道", "社区", "镇", "乡", "县", "区", "市")) {
+            if (value.endsWith(suffix) && value.length() > suffix.length()) {
+                return value.substring(0, value.length() - suffix.length());
+            }
+        }
+        return value;
     }
 
     /**
@@ -368,11 +451,18 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     /**
-     * 推介到位统计部门范围：优先使用页面部门筛选；否则按当前用户辖区隔离（与筛查统计一致）。
+     * 推介到位统计部门范围：优先使用页面部门筛选（含地理名称兼容）；否则按当前用户辖区隔离。
      */
     private void applyReferralDepartmentScope(LambdaQueryWrapper<ReferralTracking> wrapper,
                                               List<Long> filterDeptIds) {
         if (departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
+            if (filterDeptIds.size() == 1
+                    && Objects.equals(filterDeptIds.get(0), DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)) {
+                wrapper.and(w -> w.eq(ReferralTracking::getDepartmentId, DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)
+                        .and(x -> x.eq(ReferralTracking::getReceiverDeptId, DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)));
+                return;
+            }
+            // 推介记录也可能挂在区县部门：按选中部门 ID 匹配；乡镇筛选时到位常为 0 属预期
             wrapper.and(w -> w.in(ReferralTracking::getDepartmentId, filterDeptIds)
                     .or()
                     .in(ReferralTracking::getReceiverDeptId, filterDeptIds));

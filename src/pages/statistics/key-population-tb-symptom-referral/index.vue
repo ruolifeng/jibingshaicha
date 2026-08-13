@@ -92,6 +92,16 @@ function handleReset() {
   handleSearch()
 }
 
+/** 部门变更后清空地区，避免沿用旧地区导致空结果；老年人数草稿也不再跨部门回填 */
+function handleDepartmentChange(departmentIds?: string[]) {
+  if (Array.isArray(departmentIds)) {
+    filterForm.departmentIds = departmentIds
+  }
+  filterForm.district = ""
+  elderCountDraft.value = {}
+  handleSearch()
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement("a")
@@ -176,6 +186,7 @@ onMounted(() => {
           <ScopedDepartmentMultiSelect
             v-model="filterForm.departmentIds"
             @visibility-change="showDepartmentFilter = $event"
+            @change="handleDepartmentChange"
           />
         </el-form-item>
         <el-form-item label="年份">

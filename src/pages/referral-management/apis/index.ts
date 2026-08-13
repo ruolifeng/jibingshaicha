@@ -142,6 +142,17 @@ export function checkReferralDuplicateApi(params: { bizMode: string, idNumber: s
   })
 }
 
+/** 大疫情导入：五级跨镇跳过明细 */
+export interface EpidemicImportSkippedItem {
+  name: string
+  idNumber: string
+  cardId?: string
+  township?: string
+  currentDepartment?: string
+  reason?: string
+  message?: string
+}
+
 /** 大疫情表导入预览（检测重复患者） */
 export function previewEpidemicTrackImportApi(file: File) {
   const formData = new FormData()
@@ -150,6 +161,7 @@ export function previewEpidemicTrackImportApi(file: File) {
     duplicateCount: number
     newCount: number
     updateCount: number
+    skipped?: number
     duplicates: {
       name: string
       idNumber: string
@@ -157,6 +169,7 @@ export function previewEpidemicTrackImportApi(file: File) {
       township?: string
       existingId?: string
     }[]
+    skippedItems?: EpidemicImportSkippedItem[]
   }>>({
     url: "referral-tracking/import-epidemic/preview",
     method: "post",
@@ -168,7 +181,13 @@ export function previewEpidemicTrackImportApi(file: File) {
 export function importEpidemicTrackApi(file: File, addDuplicateRecords = false) {
   const formData = new FormData()
   formData.append("file", file)
-  return request<ApiResponseData<{ count: number, updated?: number, skipped?: number, batchNo: string }>>({
+  return request<ApiResponseData<{
+    count: number
+    updated?: number
+    skipped?: number
+    batchNo: string
+    skippedItems?: EpidemicImportSkippedItem[]
+  }>>({
     url: "referral-tracking/import-epidemic",
     method: "post",
     params: { addDuplicateRecords },

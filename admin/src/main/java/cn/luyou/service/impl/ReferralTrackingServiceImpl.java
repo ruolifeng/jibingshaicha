@@ -231,17 +231,18 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     public Map<String, Object> previewEpidemicImport(MultipartFile file) {
         List<EpidemicImportRow> rows = parseEpidemicImportRows(file);
         List<Map<String, String>> duplicates = new ArrayList<>();
+        List<Map<String, String>> skippedItems = new ArrayList<>();
         int newCount = 0;
         int updateCount = 0;
-        int skipped = 0;
         Long currentDeptId = BaseContext.getCurrentDepartmentId();
         Integer role = BaseContext.getCurrentRole();
+        String currentDeptName = resolveDepartmentName(currentDeptId);
 
         for (EpidemicImportRow row : rows) {
             Long targetDeptId = resolveTrackDepartmentId(row.township(), currentDeptId);
             if (Integer.valueOf(6).equals(role) && currentDeptId != null
                     && targetDeptId != null && !currentDeptId.equals(targetDeptId)) {
-                skipped++;
+                skippedItems.add(buildCrossTownshipSkipItem(row, currentDeptName));
                 continue;
             }
             ReferralTracking existingByCard = findEpidemicRecordByCardId(row.cardId(), targetDeptId);
@@ -265,13 +266,14 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             }
         }
 
-        return Map.of(
-                "duplicateCount", duplicates.size(),
-                "newCount", newCount,
-                "updateCount", updateCount,
-                "skipped", skipped,
-                "duplicates", duplicates
-        );
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("duplicateCount", duplicates.size());
+        result.put("newCount", newCount);
+        result.put("updateCount", updateCount);
+        result.put("skipped", skippedItems.size());
+        result.put("duplicates", duplicates);
+        result.put("skippedItems", skippedItems);
+        return result;
     }
 
     @Override
@@ -280,23 +282,30 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         String batchNo = IdUtil.fastSimpleUUID();
         List<EpidemicImportRow> rows = parseEpidemicImportRows(file);
         if (rows.isEmpty()) {
-            return Map.of("count", 0, "updated", 0, "skipped", 0, "batchNo", batchNo);
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("count", 0);
+            empty.put("updated", 0);
+            empty.put("skipped", 0);
+            empty.put("batchNo", batchNo);
+            empty.put("skippedItems", List.of());
+            return empty;
         }
 
         Long currentUserId = BaseContext.getCurrentId();
         Long currentDeptId = BaseContext.getCurrentDepartmentId();
         Integer role = BaseContext.getCurrentRole();
+        String currentDeptName = resolveDepartmentName(currentDeptId);
         int count = 0;
         int updated = 0;
-        int skipped = 0;
+        List<Map<String, String>> skippedItems = new ArrayList<>();
 
         for (EpidemicImportRow row : rows) {
             // 按乡镇字段归属部门，避免全县 Excel 全部挂到导入人部门导致镇级数据串扰
             Long targetDeptId = resolveTrackDepartmentId(row.township(), currentDeptId);
             if (Integer.valueOf(6).equals(role) && currentDeptId != null
                     && targetDeptId != null && !currentDeptId.equals(targetDeptId)) {
-                // 五级仅可写入本镇数据，跳过其它乡镇行
-                skipped++;
+                // 五级仅可写入本镇数据，跳过其它乡镇行（不是身份证重复）
+                skippedItems.add(buildCrossTownshipSkipItem(row, currentDeptName));
                 continue;
             }
 
@@ -335,8 +344,40 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
 
         log.info("大疫情导入追踪记录完成，created={}, updated={}, skipped={}, addDuplicateRecords={}, batchNo={}",
-                count, updated, skipped, addDuplicateRecords, batchNo);
-        return Map.of("count", count, "updated", updated, "skipped", skipped, "batchNo", batchNo);
+                count, updated, skippedItems.size(), addDuplicateRecords, batchNo);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("count", count);
+        result.put("updated", updated);
+        result.put("skipped", skippedItems.size());
+        result.put("batchNo", batchNo);
+        result.put("skippedItems", skippedItems);
+        return result;
+    }
+
+    /** 五级跨镇跳过明细（便于前端提示，避免误报成「身份证重复」） */
+    private Map<String, String> buildCrossTownshipSkipItem(EpidemicImportRow row, String currentDeptName) {
+        Map<String, String> item = new LinkedHashMap<>();
+        item.put("name", StrUtil.blankToDefault(row.name(), ""));
+        item.put("idNumber", StrUtil.blankToDefault(row.idNumber(), ""));
+        item.put("cardId", StrUtil.blankToDefault(row.cardId(), ""));
+        item.put("township", StrUtil.blankToDefault(row.township(), ""));
+        item.put("currentDepartment", StrUtil.blankToDefault(currentDeptName, ""));
+        item.put("reason", "cross_township");
+        item.put("message", String.format(
+                "%s（%s）现住址乡镇为「%s」，与当前账号单位「%s」不一致，五级账号仅可导入本镇数据",
+                StrUtil.blankToDefault(row.name(), "未知姓名"),
+                StrUtil.blankToDefault(row.idNumber(), "无证件号"),
+                StrUtil.blankToDefault(row.township(), "未知乡镇"),
+                StrUtil.blankToDefault(currentDeptName, "当前单位")));
+        return item;
+    }
+
+    private String resolveDepartmentName(Long deptId) {
+        if (deptId == null) {
+            return "";
+        }
+        Department dept = departmentService.getById(deptId);
+        return dept == null ? "" : StrUtil.blankToDefault(dept.getName(), "");
     }
 
     private List<EpidemicImportRow> parseEpidemicImportRows(MultipartFile file) {
