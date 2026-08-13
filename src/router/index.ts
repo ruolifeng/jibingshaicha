@@ -122,7 +122,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "overview",
         component: () => import("@/pages/latent-management/overview.vue"),
         name: "LatentManagementOverview",
-        meta: { title: "潜伏感染者在管总览", tagTitle: "潜伏感染者在管总览", keepAlive: true, permission: "latentManagement:overview" }
+        meta: { title: "潜伏感染者总览", tagTitle: "潜伏感染者总览", keepAlive: true, permission: "latentManagement:overview" }
       },
       {
         path: "notice",

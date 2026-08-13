@@ -1580,7 +1580,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (411, 'epidemic:screening',             '大疫情导入筛查',       1, 400, 5),
 -- 聚合潜伏感染者管理（一级菜单）
 (412, 'latentManagement',               '潜伏感染者管理',       1, 0,   11),
-(460, 'latentManagement:overview',      '潜伏感染者在管总览',   1, 412, 0),
+(460, 'latentManagement:overview',      '潜伏感染者总览',       1, 412, 0),
 (461, 'latentManagement:edit',          '修改信息',             2, 460, 1),
 (413, 'latentManagement:notice',        '通知单管理',           1, 412, 1),
 (414, 'latentManagement:track',         '追踪',                 2, 460, 3),
@@ -1729,7 +1729,7 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
 
 -- 兼容已部署环境：在管总览菜单权限（可重复执行）
 -- INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
--- (460, 'latentManagement:overview', '潜伏感染者在管总览', 1, 412, 0),
+-- (460, 'latentManagement:overview', '潜伏感染者总览', 1, 412, 0),
 -- (461, 'latentManagement:edit', '修改信息', 2, 460, 1),
 -- (462, 'patientManagement:overview', '在管总览', 1, 420, 0),
 -- (463, 'patientManagement:edit', '修改信息', 2, 462, 1);
@@ -4150,3 +4150,8 @@ WHERE src.view_code IS NOT NULL
         SELECT 1 FROM `user_permission` x
         WHERE x.user_id = src.user_id AND x.permission_id = view_p.id
     );
+
+-- ==================== V113：潜伏感染者总览改名（去掉「在管」） ====================
+UPDATE `permission`
+SET `name` = '潜伏感染者总览'
+WHERE `code` = 'latentManagement:overview';
