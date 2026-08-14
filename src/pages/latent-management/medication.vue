@@ -4,6 +4,7 @@ import LatentMedicationPickupDialog from "@@/components/LatentMedicationPickupDi
 import PatientMedicationPickupDetailDialog from "@@/components/PatientMedicationPickupDetailDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import {
+  displayInfectionJudgeResult,
   getLatentPopulationDisplayLabel,
   getPopulationTypeTagType,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS
@@ -263,6 +264,9 @@ function viewDetail(record: Record<string, any>) {
               :model-value="columnFilters.infectionResult"
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionResult) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" :width="canViewPickup ? 100 : 120">

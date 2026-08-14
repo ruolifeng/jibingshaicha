@@ -385,7 +385,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 case "phone" -> ColumnFilterSupport.like(wrapper, LatentInfection::getPhone, value);
                 case "currentAddress" -> ColumnFilterSupport.like(wrapper, LatentInfection::getCurrentAddress, value);
                 case "householdAddress" -> ColumnFilterSupport.like(wrapper, LatentInfection::getHouseholdAddress, value);
-                case "infectionResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getInfectionResult, value);
+                case "infectionResult" -> applyInfectionResultFilter(wrapper, value);
                 case "screenMethod" -> applyScreenMethodFilter(wrapper, value);
                 case "diagnosisFirst" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getDiagnosisFirst, value);
                 case "diagnosisResult" -> ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getDiagnosisResult, value);
@@ -403,6 +403,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 default -> { }
             }
         });
+    }
+
+    /** 感染筛查结果筛选：官方下拉同时匹配学校历史文案 */
+    private void applyInfectionResultFilter(LambdaQueryWrapper<LatentInfection> wrapper, String value) {
+        List<String> variants = ColumnFilterSupport.splitValues(value).stream()
+                .flatMap(v -> InfectionScreenFieldSupport.expandFilterVariants(v).stream())
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .toList();
+        if (variants.isEmpty()) {
+            return;
+        }
+        ColumnFilterSupport.eqOrIn(wrapper, LatentInfection::getInfectionResult, String.join(",", variants));
     }
 
     /**
@@ -1156,9 +1169,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         }
         if (StrUtil.isNotBlank(result) && !isValidInfectionResultForPopulation(populationType, result)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "school".equals(populationType)
-                            ? "结果判定仅支持：未感染/感染/无法判读/未查"
-                            : "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                    "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
         }
     }
 
@@ -1214,23 +1225,14 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             return null;
         }
         String trimmed = result.trim();
-        if ("school".equals(populationType)) {
-            if (SCHOOL_INFECTION_RESULTS.contains(trimmed)) {
-                return trimmed;
-            }
-            String official = InfectionScreenFieldSupport.normalizeResult(trimmed);
-            if (official == null) {
-                return trimmed;
-            }
-            return switch (official) {
-                case "阴性" -> "未感染";
-                case "一般阳性", "中度阳性", "强阳性", "阳性" -> "感染";
-                case "未判读" -> "无法判读";
-                default -> trimmed;
-            };
+        String official = InfectionScreenFieldSupport.normalizeResult(trimmed);
+        if (official != null) {
+            return official;
         }
-        String normalized = InfectionScreenFieldSupport.normalizeResult(trimmed);
-        return normalized != null ? normalized : trimmed;
+        if ("school".equals(populationType) && SCHOOL_INFECTION_RESULTS.contains(trimmed)) {
+            return trimmed;
+        }
+        return trimmed;
     }
 
     /**
@@ -2843,7 +2845,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         return switch (field) {
             case "gender" -> row.getGender();
             case "populationType" -> row.getPopulationType();
-            case "infectionResult" -> row.getInfectionResult();
+            case "infectionResult" -> {
+                String raw = row.getInfectionResult();
+                String official = InfectionScreenFieldSupport.normalizeResult(raw);
+                yield official != null ? official : raw;
+            }
             case "diagnosisFirst" -> row.getDiagnosisFirst();
             case "diagnosisResult" -> row.getDiagnosisResult();
             case "hasChestXray" -> row.getHasChestXray();

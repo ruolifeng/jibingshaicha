@@ -5,9 +5,11 @@ import {
   CROWD_CATEGORY_OPTIONS,
   formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
+  infectionJudgeSelectOptions,
   isLatentIndividualPlan,
   LATENT_TREATMENT_PLAN_OPTIONS,
-  parseLatentNoticeTreatmentPlan
+  parseLatentNoticeTreatmentPlan,
+  resolveInfectionJudgeSelectValue
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/latent-management/apis"
@@ -65,6 +67,8 @@ function getNowDateStr() {
   return `${year}-${month}-${day}`
 }
 
+const infectionResultOptions = computed(() => infectionJudgeSelectOptions(noticeForm.infectionResultValue))
+
 function resetFormFromRow(row: Record<string, any>) {
   const parsedPlan = parseLatentNoticeTreatmentPlan(row.preventivePlan || "")
   Object.assign(noticeForm, {
@@ -80,7 +84,7 @@ function resetFormFromRow(row: Record<string, any>) {
     registrationNo: row.registrationNo || "",
     infectionDate: row.screenDate || row.infectionDate || "",
     infectionMethod: row.screenMethod || row.infectionMethod || "",
-    infectionResultValue: row.screenResult || row.infectionResult || row.infectionResultValue || "",
+    infectionResultValue: resolveInfectionJudgeSelectValue(row.infectionResult, row.infectionResultValue, row.screenResult),
     chestXrayDate: row.chestXrayDate || "",
     chestXrayResult: row.chestXrayResult || "",
     treatmentPlan: parsedPlan.treatmentPlan,
@@ -105,7 +109,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     registrationNo: notice.registrationNo || row.registrationNo || "",
     infectionDate: notice.infectionDate || row.screenDate || "",
     infectionMethod: notice.infectionMethod || row.screenMethod || "",
-    infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
+    infectionResultValue: resolveInfectionJudgeSelectValue(notice.infectionResultValue, row.infectionResult, row.screenResult),
     chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
     chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
     treatmentInstitution: notice.treatmentInstitution || "",
@@ -304,7 +308,15 @@ async function handleSaveDraft() {
         </el-col>
         <el-col :span="8">
           <el-form-item label="检查结果">
-            <el-input v-model="noticeForm.infectionResultValue" />
+            <el-select
+              v-model="noticeForm.infectionResultValue"
+              placeholder="请选择"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option v-for="item in infectionResultOptions" :key="item" :label="item" :value="item" />
+            </el-select>
           </el-form-item>
         </el-col>
       </el-row>

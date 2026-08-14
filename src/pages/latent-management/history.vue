@@ -3,7 +3,7 @@ import ArchivedLatentRecordsActions from "@@/components/ArchivedLatentRecordsAct
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { getPopulationTypeLabel, getPopulationTypeTagType, TREATMENT_COMPLETION_STATUS_OPTIONS } from "@@/constants/disease"
+import { displayInfectionJudgeResult, getPopulationTypeLabel, getPopulationTypeTagType, TREATMENT_COMPLETION_STATUS_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { useUserStore } from "@/pinia/stores/user"
 import {
@@ -317,6 +317,9 @@ function treatmentPhaseLabel(phase?: number) {
               :model-value="columnFilters.infectionResult"
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionResult) }}
           </template>
         </el-table-column>
         <el-table-column label="治疗阶段">

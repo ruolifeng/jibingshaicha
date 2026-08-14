@@ -2,7 +2,7 @@
 import type { ReferralDetailVO, SentNoticeVO, SentReferralVO } from "./apis"
 import ConfirmReferralDialog from "@@/components/ConfirmReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { displayInfectionJudgeResult, getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { formatReferralDisplay } from "@@/utils/referralTracking"
 import { useRouter } from "vue-router"
 import {
@@ -790,7 +790,7 @@ const activeTab = ref("received")
             {{ noticeDetailData.infectionMethod || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染检查结果" :span="2">
-            {{ noticeDetailData.infectionResultValue || "-" }}
+            {{ displayInfectionJudgeResult(noticeDetailData.infectionResultValue) }}
           </el-descriptions-item>
           <el-descriptions-item label="胸片检查时间">
             {{ noticeDetailData.chestXrayDate || "-" }}

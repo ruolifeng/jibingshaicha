@@ -20,14 +20,17 @@ import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
   CHEST_XRAY_RESULT_OPTIONS,
+  displayInfectionJudgeResult,
   formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
+  infectionJudgeSelectOptions,
   isLatentIndividualPlan,
   KEY_INFECTION_JUDGE_RESULT_OPTIONS,
   LATENT_TREATMENT_PLAN_OPTIONS,
   normalizeLatentTreatmentPlan,
   NOTICE_STATUS_MAP,
-  parseLatentNoticeTreatmentPlan
+  parseLatentNoticeTreatmentPlan,
+  resolveInfectionJudgeSelectValue
 } from "@@/constants/disease"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { idCardRule } from "@@/utils/validate"
@@ -267,6 +270,7 @@ const noticeForm = reactive({
   issuedTime: "",
   receiverOrgId: undefined as string | undefined
 })
+const noticeInfectionResultOptions = computed(() => infectionJudgeSelectOptions(noticeForm.infectionResultValue))
 
 function getNowDateStr() {
   const d = new Date()
@@ -288,7 +292,7 @@ function openNoticeDialog(row: any) {
     householdAddress: row.householdAddress || "",
     infectionDate: row.infectionCheckDate || "",
     infectionMethod: row.infectionCheckMethod || "",
-    infectionResultValue: row.infectionCheckResult || "",
+    infectionResultValue: resolveInfectionJudgeSelectValue(row.infectionCheckResult, row.infectionResult, row.infectionResultValue),
     chestXrayDate: row.imagingDate || "",
     chestXrayResult: row.imagingResult || "",
     treatmentPlan: parsedPlan.treatmentPlan,
@@ -525,6 +529,9 @@ async function handleSaveFollowupInput() {
               :model-value="columnFilters.infectionCheckResult"
               @change="(v) => { setFilter('infectionCheckResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionCheckResult) }}
           </template>
         </el-table-column>
         <el-table-column label="是否开展预防治疗">
@@ -802,7 +809,15 @@ async function handleSaveFollowupInput() {
           </el-col>
           <el-col :span="8">
             <el-form-item label="检查结果">
-              <el-input v-model="noticeForm.infectionResultValue" />
+              <el-select
+                v-model="noticeForm.infectionResultValue"
+                placeholder="请选择"
+                clearable
+                filterable
+                style="width: 100%"
+              >
+                <el-option v-for="item in noticeInfectionResultOptions" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -884,7 +899,7 @@ async function handleSaveFollowupInput() {
           {{ noticeDetailData.infectionMethod || "—" }}
         </el-descriptions-item>
         <el-descriptions-item label="感染检查结果" :span="2">
-          {{ noticeDetailData.infectionResultValue || "—" }}
+          {{ displayInfectionJudgeResult(noticeDetailData.infectionResultValue) }}
         </el-descriptions-item>
         <el-descriptions-item label="胸片检查时间">
           {{ noticeDetailData.chestXrayDate || "—" }}

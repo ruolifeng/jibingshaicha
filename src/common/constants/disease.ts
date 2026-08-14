@@ -539,12 +539,33 @@ export function displayInfectionJudgeResult(infectionResult?: string | null): st
     return raw
   }
   if (raw === "无法判读" || raw === "未判读") return "未判读"
+  if (raw === "未感染") return "阴性"
+  if (raw === "感染") return "阳性"
   if (raw.includes("PPD+++") || raw.includes("强阳")) return "强阳性"
   if (raw.includes("PPD++") || raw.includes("中度阳")) return "中度阳性"
   if (raw.includes("PPD+") || raw.includes("一般阳")) return "一般阳性"
   if (/阳性/.test(raw)) return "阳性"
   if (/阴性/.test(raw)) return "阴性"
   return raw
+}
+
+/** 通知单/编辑下拉：从多个候选值里取出可展示的结果判定 */
+export function resolveInfectionJudgeSelectValue(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    const display = displayInfectionJudgeResult(typeof candidate === "string" ? candidate : "")
+    if (display && display !== "-") return display
+  }
+  return ""
+}
+
+/** 通知单/编辑下拉：官方选项 + 当前历史值（若尚未归一） */
+export function infectionJudgeSelectOptions(current?: string | null): string[] {
+  const options = [...KEY_INFECTION_JUDGE_RESULT_OPTIONS]
+  const value = (current || "").trim()
+  if (value && !options.includes(value as typeof KEY_INFECTION_JUDGE_RESULT_OPTIONS[number])) {
+    return [value, ...options]
+  }
+  return options
 }
 
 /** 学生筛查 — 学校类型（2026 秋季新生入学表） */

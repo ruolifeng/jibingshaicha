@@ -5,7 +5,7 @@ import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
+import { displayInfectionJudgeResult, getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
 import { isNoticeSent } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
@@ -253,6 +253,9 @@ async function handleCloseCase(row: any) {
               :model-value="columnFilters.infectionResult"
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionResult) }}
           </template>
         </el-table-column>
         <el-table-column label="追踪状态">

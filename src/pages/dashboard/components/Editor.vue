@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { DashboardSummaryData } from "../apis"
 import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
-import { DASHBOARD_EDITOR_WELCOME } from "@@/constants/app"
+import { DASHBOARD_ADMIN_TITLE, DASHBOARD_EDITOR_WELCOME } from "@@/constants/app"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
-import { Bell, Calendar, FirstAidKit, Search } from "@element-plus/icons-vue"
+import { Bell, Calendar, FirstAidKit, Refresh, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
@@ -39,16 +39,16 @@ watch(selectedDepartmentIds, () => {
   fetchSummary()
 }, { deep: true })
 
-const cards = [
-  { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search },
-  { label: "年度管理患者数", key: "pendingVisit" as const, color: "#e6a23c", icon: FirstAidKit },
-  { label: "待确认通知单", key: "pendingNotice" as const, color: "#409eff", icon: Bell },
-  { label: "复查（15天内）", key: "upcomingReview" as const, color: "#67c23a", icon: Calendar }
+const statCards = [
+  { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search, bg: "#fff5f5" },
+  { label: "年度管理患者数", key: "pendingVisit" as const, color: "#e6a23c", icon: FirstAidKit, bg: "#fffbf0" },
+  { label: "待确认通知单", key: "pendingNotice" as const, color: "#409eff", icon: Bell, bg: "#f0f7ff" },
+  { label: "近期复查(15天)", key: "upcomingReview" as const, color: "#67c23a", icon: Calendar, bg: "#f0fff4" }
 ]
 
 const managementYear = computed(() => summary.value.managementYear ?? getCurrentStatYear())
 
-function getCardLabel(key: string, label: string) {
+function getStatCardLabel(key: string, label: string) {
   if (key === "pendingVisit") {
     return `${managementYear.value}年度管理患者数`
   }
@@ -89,24 +89,20 @@ const trackingPeriodText = computed(() => {
   if (!from || !to) return ""
   return `统计周期：${from} 至 ${to}`
 })
-
-function alphaColor(hex: string, alpha = "20") {
-  return hex + alpha
-}
 </script>
 
 <template>
-  <div class="dashboard">
-    <div class="dashboard-header">
-      <div class="dashboard-header-left">
-        <div class="dashboard-title">
-          我的工作台
+  <div class="dashboard-wrap">
+    <div class="db-header">
+      <div class="db-header-left">
+        <div class="db-title">
+          {{ DASHBOARD_ADMIN_TITLE }}
         </div>
-        <div class="dashboard-subtitle">
+        <div class="db-subtitle">
           {{ DASHBOARD_EDITOR_WELCOME }}
         </div>
       </div>
-      <div class="dashboard-header-right">
+      <div class="db-header-right">
         <ScopedDepartmentMultiSelect v-model="selectedDepartmentIds" width="240px" />
         <el-select
           v-model="selectedStatYear"
@@ -115,33 +111,38 @@ function alphaColor(hex: string, alpha = "20") {
         >
           <el-option v-for="y in yearOptions" :key="y" :label="`${y}年度`" :value="y" />
         </el-select>
+        <el-button :icon="Refresh" circle :loading="summaryLoading" @click="fetchSummary" />
       </div>
     </div>
+
+    <div class="section-label">
+      <span class="label-bar" />待处理事项
+    </div>
+    <el-row :gutter="20" v-loading="summaryLoading" class="stat-row">
+      <el-col v-for="card in statCards" :key="card.key" :xs="12" :sm="12" :md="6">
+        <div class="stat-card" :style="{ '--card-color': card.color, 'backgroundColor': card.bg }">
+          <div class="stat-icon-wrap">
+            <el-icon :size="24" :style="{ color: card.color }">
+              <component :is="card.icon" />
+            </el-icon>
+          </div>
+          <div class="stat-body">
+            <div class="stat-num">
+              {{ summary[card.key] ?? "—" }}
+            </div>
+            <div class="stat-label">
+              {{ getStatCardLabel(card.key, card.label) }}
+            </div>
+          </div>
+          <div class="stat-deco" :style="{ borderColor: card.color }" />
+        </div>
+      </el-col>
+    </el-row>
 
     <div v-loading="summaryLoading" class="year-stats-section">
       <div v-if="trackingPeriodText" class="year-stats-period">
         {{ trackingPeriodText }}
       </div>
-
-      <el-row :gutter="24">
-        <el-col v-for="card in cards" :key="card.key" :xs="12" :sm="12" :md="6">
-          <div class="stat-card" :style="{ borderTopColor: card.color }">
-            <div class="stat-icon-wrap" :style="{ backgroundColor: alphaColor(card.color) }">
-              <el-icon :size="22" :style="{ color: card.color }">
-                <component :is="card.icon" />
-              </el-icon>
-            </div>
-            <div class="stat-body">
-              <div class="stat-num" :style="{ color: card.color }">
-                {{ summary[card.key] ?? "—" }}
-              </div>
-              <div class="stat-label">
-                {{ getCardLabel(card.key, card.label) }}
-              </div>
-            </div>
-          </div>
-        </el-col>
-      </el-row>
 
       <div class="pathogen-panel">
         <div class="pathogen-title">
@@ -199,37 +200,87 @@ function alphaColor(hex: string, alpha = "20") {
 </template>
 
 <style lang="scss" scoped>
-.dashboard {
-  padding: 40px 48px;
-  max-width: 1200px;
-  margin: 0 auto;
+.dashboard-wrap {
+  padding: 28px 32px;
+  min-height: 100%;
+  background: var(--el-bg-color-page);
 }
 
-.dashboard-header {
+.db-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 36px;
+  background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+  border-radius: 16px;
+  padding: 28px 32px;
+  margin-bottom: 28px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(26, 115, 232, 0.3);
 }
 
-.dashboard-header-left {
-  flex: 1;
+.db-header-left {
+  .db-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .db-subtitle {
+    font-size: 13px;
+    margin-top: 6px;
+    opacity: 0.85;
+  }
 }
 
-.dashboard-header-right {
+.db-header-right {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0;
+
+  .year-select {
+    width: 140px;
+
+    :deep(.el-input__wrapper) {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+    :deep(.el-input__inner) {
+      color: #fff;
+    }
+    :deep(.el-input__inner::placeholder) {
+      color: rgba(255, 255, 255, 0.7);
+    }
+    :deep(.el-select__caret),
+    :deep(.el-input__prefix-inner) {
+      color: rgba(255, 255, 255, 0.8);
+    }
+  }
 }
 
-.year-select {
-  width: 140px;
-  flex-shrink: 0;
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  margin-bottom: 16px;
+
+  .label-bar {
+    display: inline-block;
+    width: 4px;
+    height: 16px;
+    background: var(--el-color-primary);
+    border-radius: 2px;
+  }
+}
+
+.stat-row {
+  margin-bottom: 0;
 }
 
 .year-stats-section {
-  margin-bottom: 24px;
+  margin: 4px 0 28px;
 }
 
 .year-stats-period {
@@ -241,61 +292,67 @@ function alphaColor(hex: string, alpha = "20") {
   border-radius: 8px;
 }
 
-.dashboard-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-}
-
-.dashboard-subtitle {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-  margin-top: 6px;
-}
-
 .stat-card {
-  background: var(--el-bg-color);
-  border-radius: 12px;
-  border-top: 3px solid transparent;
-  padding: 24px 20px;
+  border-radius: 14px;
+  padding: 22px 20px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  box-shadow: var(--el-box-shadow-light);
-  margin-bottom: 24px;
-  transition: box-shadow 0.2s;
+  gap: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
-    box-shadow: var(--el-box-shadow);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
   }
 
   .stat-icon-wrap {
-    width: 56px;
-    height: 56px;
-    border-radius: 14px;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.8);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
 
   .stat-body {
     .stat-num {
-      font-size: 34px;
+      font-size: 32px;
       font-weight: 700;
+      color: var(--card-color);
       line-height: 1;
     }
     .stat-label {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--el-text-color-secondary);
       margin-top: 6px;
       white-space: nowrap;
     }
   }
+
+  .stat-deco {
+    position: absolute;
+    right: -10px;
+    bottom: -10px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 10px solid;
+    opacity: 0.12;
+  }
 }
 
 .pathogen-panel {
-  margin: 0 0 8px;
+  margin: 4px 0 28px;
   padding: 18px 24px;
   border-radius: 12px;
   background: #fffbf0;
@@ -306,12 +363,6 @@ function alphaColor(hex: string, alpha = "20") {
     font-size: 15px;
     font-weight: 600;
     color: #e6a23c;
-    margin-bottom: 10px;
-  }
-
-  .stat-period {
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
     margin-bottom: 10px;
   }
 
@@ -336,7 +387,7 @@ function alphaColor(hex: string, alpha = "20") {
 }
 
 .treatment-panel {
-  margin: 0 0 8px;
+  margin: 4px 0 16px;
   padding: 18px 24px;
   border-radius: 12px;
   background: #fff5f5;
@@ -371,7 +422,7 @@ function alphaColor(hex: string, alpha = "20") {
 }
 
 .referral-panel {
-  margin: 0 0 8px;
+  margin: 4px 0 28px;
   padding: 18px 24px;
   border-radius: 12px;
   background: #f0f7ff;
@@ -406,7 +457,7 @@ function alphaColor(hex: string, alpha = "20") {
 }
 
 .tracking-panel {
-  margin: 0 0 8px;
+  margin: 4px 0 28px;
   padding: 18px 24px;
   border-radius: 12px;
   background: #f0fff4;
@@ -418,12 +469,6 @@ function alphaColor(hex: string, alpha = "20") {
     font-weight: 600;
     color: #67c23a;
     margin-bottom: 6px;
-  }
-
-  .tracking-period {
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
-    margin-bottom: 10px;
   }
 
   .tracking-content {
