@@ -63,6 +63,8 @@ public final class InfectionScreenFieldSupport {
         RESULT_ALIASES.put("IGRA阳性", "阳性");
         RESULT_ALIASES.put("无法判读", "未判读");
         RESULT_ALIASES.put("未判读", "未判读");
+        RESULT_ALIASES.put("未感染", "阴性");
+        RESULT_ALIASES.put("感染", "阳性");
         RESULT_ALIASES.put("阴性", "阴性");
         RESULT_ALIASES.put("阳性", "阳性");
         RESULT_ALIASES.put("一般阳性", "一般阳性");
@@ -96,6 +98,29 @@ public final class InfectionScreenFieldSupport {
         }
         String upper = token.toUpperCase(Locale.ROOT);
         return METHOD_ALIASES.get(upper);
+    }
+
+    /**
+     * 筛选时展开官方结果 → 兼容历史文案（学生潜伏记录可能仍存「未感染/感染/无法判读」）。
+     * 「阳性」不包含一般/中度/强阳性，避免筛选项串味。
+     */
+    public static List<String> expandFilterVariants(String result) {
+        if (StrUtil.isBlank(result)) {
+            return List.of();
+        }
+        String trimmed = result.trim();
+        java.util.LinkedHashSet<String> variants = new java.util.LinkedHashSet<>();
+        variants.add(trimmed);
+        String official = normalizeResult(trimmed);
+        if (official != null) {
+            variants.add(official);
+            for (Map.Entry<String, String> entry : RESULT_ALIASES.entrySet()) {
+                if (official.equals(entry.getValue())) {
+                    variants.add(entry.getKey());
+                }
+            }
+        }
+        return List.copyOf(variants);
     }
 
     /** 归一为官方结果文案；无法识别返回 null */

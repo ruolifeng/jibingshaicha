@@ -3,13 +3,12 @@ import {
   CHEST_XRAY_RESULT_OPTIONS,
   displayInfectionJudgeResult,
   displayInfectionScreenMethod,
-  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
+  infectionJudgeSelectOptions,
   KEY_INFECTION_SCREEN_METHOD_OPTIONS,
   LATENT_CLOSE_CONTACT_TYPE_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
   SCHOOL_DIAGNOSIS_EDIT_OPTIONS,
-  SCHOOL_INFECTION_JUDGE_OPTIONS,
   SCHOOL_SCREEN_METHOD_OPTIONS,
   SCREENING_DIAGNOSIS_EDIT_OPTIONS
 } from "@@/constants/disease"
@@ -43,9 +42,7 @@ const isSchoolSource = computed(() => form.populationType === "school")
 const screenMethodOptions = computed(() =>
   isSchoolSource.value ? SCHOOL_SCREEN_METHOD_OPTIONS : [...KEY_INFECTION_SCREEN_METHOD_OPTIONS]
 )
-const infectionResultOptions = computed(() =>
-  isSchoolSource.value ? SCHOOL_INFECTION_JUDGE_OPTIONS : [...KEY_INFECTION_JUDGE_RESULT_OPTIONS]
-)
+const infectionResultOptions = computed(() => infectionJudgeSelectOptions(form.infectionResult))
 const diagnosisOptions = computed(() =>
   isSchoolSource.value ? SCHOOL_DIAGNOSIS_EDIT_OPTIONS : SCREENING_DIAGNOSIS_EDIT_OPTIONS
 )
@@ -178,7 +175,7 @@ async function loadDetail() {
     currentAddress: data.currentAddress || "",
     infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
     screenMethod: normalizeMethodForForm(data.screenMethod, data.infectionResult, data.populationType),
-    infectionResult: normalizeResultForForm(data.infectionResult, data.populationType),
+    infectionResult: normalizeResultForForm(data.infectionResult),
     diagnosisFirst: data.diagnosisFirst || "",
     hasChestXray: data.hasChestXray || "",
     chestXrayDate: data.chestXrayDate || "",
@@ -211,14 +208,7 @@ function normalizeMethodForForm(screenMethod?: string, infectionResult?: string,
   return display === "-" ? "" : display
 }
 
-function normalizeResultForForm(infectionResult?: string, populationType?: string) {
-  const raw = (infectionResult || "").trim()
-  if (populationType === "school") {
-    if (!raw) return ""
-    if (SCHOOL_INFECTION_JUDGE_OPTIONS.includes(raw as typeof SCHOOL_INFECTION_JUDGE_OPTIONS[number])) return raw
-    if (raw === "未判读") return "无法判读"
-    return raw
-  }
+function normalizeResultForForm(infectionResult?: string) {
   const display = displayInfectionJudgeResult(infectionResult)
   return display === "-" ? "" : display
 }

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { displayInfectionJudgeResult } from "@@/constants/disease"
 import { formatNoticeSentTime } from "@@/utils/patient"
 import { printElement } from "@@/utils/print"
 import "@@/assets/styles/print-forms.css"
@@ -140,7 +141,7 @@ function handlePrint() {
             <tr>
               <th>检查结果</th>
               <td class="party-cell">
-                {{ noticeData?.infectionResultValue }}
+                {{ displayInfectionJudgeResult(noticeData?.infectionResultValue) }}
               </td>
               <th>胸片日期</th>
               <td>{{ noticeData?.chestXrayDate }}</td>

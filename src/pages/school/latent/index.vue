@@ -17,8 +17,10 @@ import {
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
   DIAGNOSIS_RESULT_OPTIONS,
+  displayInfectionJudgeResult,
   formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
+  infectionJudgeSelectOptions,
   isLatentIndividualPlan,
   KEY_INFECTION_JUDGE_RESULT_OPTIONS,
   LATENT_TREATMENT_PLAN_OPTIONS,
@@ -27,8 +29,8 @@ import {
   NOTICE_STATUS_MAP,
   parseLatentNoticeTreatmentPlan,
   REFERRAL_RESULT_OPTIONS,
+  resolveInfectionJudgeSelectValue,
   SCHOOL_DIAGNOSIS_SEARCH_OPTIONS,
-  SCHOOL_INFECTION_JUDGE_OPTIONS,
   TREATMENT_PHASE_MAP
 } from "@@/constants/disease"
 import { parseTrackingHistory } from "@@/utils/referralTracking"
@@ -77,10 +79,7 @@ const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
 ]
-const infectionResultFilterOptions = [
-  ...SCHOOL_INFECTION_JUDGE_OPTIONS.map(item => ({ text: item, value: item })),
-  ...KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
-]
+const infectionResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 const chestXrayFilterOptions = CHEST_XRAY_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({
   text: item.label,
@@ -331,6 +330,7 @@ const noticeForm = reactive({
   issuedTime: "",
   receiverOrgId: undefined as string | undefined
 })
+const noticeInfectionResultOptions = computed(() => infectionJudgeSelectOptions(noticeForm.infectionResultValue))
 
 function getNowDateStr() {
   const now = new Date()
@@ -361,7 +361,7 @@ function resetNoticeFormFromRow(row: any) {
     householdAddress: row.householdAddress || "",
     infectionDate: row.screenDate || "",
     infectionMethod: row.screenMethod || "",
-    infectionResultValue: row.screenResult || row.infectionResult || "",
+    infectionResultValue: resolveInfectionJudgeSelectValue(row.infectionResult, row.infectionResultValue, row.screenResult),
     chestXrayDate: row.chestXrayDate || "",
     chestXrayResult: row.chestXrayResult || "",
     treatmentPlan: parsedPlan.treatmentPlan,
@@ -391,7 +391,7 @@ async function loadNoticeDraft(row: any) {
       householdAddress: notice.householdAddress || row.householdAddress || "",
       infectionDate: notice.infectionDate || row.screenDate || "",
       infectionMethod: notice.infectionMethod || row.screenMethod || "",
-      infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
+      infectionResultValue: resolveInfectionJudgeSelectValue(notice.infectionResultValue, row.infectionResult, row.screenResult),
       chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
       chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
       treatmentInstitution: notice.treatmentInstitution || "",
@@ -770,6 +770,9 @@ watch(
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
           </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionResult) }}
+          </template>
         </el-table-column>
         <el-table-column prop="chestXrayResult" min-width="100">
           <template #header>
@@ -1077,7 +1080,15 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="检查结果">
-              <el-input v-model="noticeForm.infectionResultValue" />
+              <el-select
+                v-model="noticeForm.infectionResultValue"
+                placeholder="请选择"
+                clearable
+                filterable
+                style="width: 100%"
+              >
+                <el-option v-for="item in noticeInfectionResultOptions" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -1180,7 +1191,7 @@ watch(
           {{ noticeDetailData.infectionMethod || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="感染检查结果" :span="2">
-          {{ noticeDetailData.infectionResultValue || "-" }}
+          {{ displayInfectionJudgeResult(noticeDetailData.infectionResultValue) }}
         </el-descriptions-item>
         <el-descriptions-item label="胸片检查时间">
           {{ noticeDetailData.chestXrayDate || "-" }}
@@ -1402,7 +1413,7 @@ watch(
           {{ aggregateRow?.phone }}
         </el-descriptions-item>
         <el-descriptions-item label="感染筛查结果">
-          {{ aggregateRow?.infectionResult }}
+          {{ displayInfectionJudgeResult(aggregateRow?.infectionResult) }}
         </el-descriptions-item>
         <el-descriptions-item label="胸片检查">
           {{ aggregateRow?.hasChestXray || "-" }}

@@ -16,8 +16,10 @@ import {
   CHECK_RESULT_OPTIONS,
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
+  displayInfectionJudgeResult,
   formatLatentNoticeTreatmentPlan,
   INFECTION_METHOD_OPTIONS,
+  infectionJudgeSelectOptions,
   isLatentIndividualPlan,
   KEY_INFECTION_JUDGE_RESULT_OPTIONS,
   LATENT_TREATMENT_PLAN_OPTIONS,
@@ -26,6 +28,7 @@ import {
   NOTICE_STATUS_MAP,
   parseLatentNoticeTreatmentPlan,
   REFERRAL_RESULT_OPTIONS,
+  resolveInfectionJudgeSelectValue,
   SCREENING_DIAGNOSIS_EDIT_OPTIONS,
   TREATMENT_PHASE_MAP
 } from "@@/constants/disease"
@@ -331,6 +334,7 @@ const noticeForm = reactive({
   issuedTime: "",
   receiverOrgId: undefined as string | undefined
 })
+const noticeInfectionResultOptions = computed(() => infectionJudgeSelectOptions(noticeForm.infectionResultValue))
 
 function getNowDateStr() {
   const now = new Date()
@@ -361,7 +365,7 @@ function resetNoticeFormFromRow(row: any) {
     householdAddress: row.householdAddress || "",
     infectionDate: row.screenDate || "",
     infectionMethod: row.screenMethod || "",
-    infectionResultValue: row.screenResult || row.infectionResult || "",
+    infectionResultValue: resolveInfectionJudgeSelectValue(row.infectionResult, row.infectionResultValue, row.screenResult),
     chestXrayDate: row.chestXrayDate || "",
     chestXrayResult: row.chestXrayResult || "",
     treatmentPlan: parsedPlan.treatmentPlan,
@@ -391,7 +395,7 @@ async function loadNoticeDraft(row: any) {
       householdAddress: notice.householdAddress || row.householdAddress || "",
       infectionDate: notice.infectionDate || row.screenDate || "",
       infectionMethod: notice.infectionMethod || row.screenMethod || "",
-      infectionResultValue: notice.infectionResultValue || row.infectionResult || "",
+      infectionResultValue: resolveInfectionJudgeSelectValue(notice.infectionResultValue, row.infectionResult, row.screenResult),
       chestXrayDate: notice.chestXrayDate || row.chestXrayDate || "",
       chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
       treatmentInstitution: notice.treatmentInstitution || "",
@@ -756,6 +760,9 @@ watch(
               @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
             />
           </template>
+          <template #default="{ row }">
+            {{ displayInfectionJudgeResult(row.infectionResult) }}
+          </template>
         </el-table-column>
         <el-table-column prop="chestXrayResult" min-width="100">
           <template #header>
@@ -1044,7 +1051,15 @@ watch(
           </el-col>
           <el-col :span="8">
             <el-form-item label="检查结果">
-              <el-input v-model="noticeForm.infectionResultValue" />
+              <el-select
+                v-model="noticeForm.infectionResultValue"
+                placeholder="请选择"
+                clearable
+                filterable
+                style="width: 100%"
+              >
+                <el-option v-for="item in noticeInfectionResultOptions" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
