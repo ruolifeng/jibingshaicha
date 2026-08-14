@@ -115,7 +115,8 @@ const searchForm = reactive({
   phone: "",
   township: "",
   creatorOrEntryUnit: "",
-  dateRange: [] as string[]
+  dateRange: [] as string[],
+  trackingStatus: undefined as number | undefined
 })
 const paginationData = reactive({ currentPage: 1, pageSize: 20 })
 
@@ -129,6 +130,7 @@ function buildFilterParams() {
     phone: searchForm.phone || undefined,
     township: searchForm.township || undefined,
     creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
+    trackingStatus: searchForm.trackingStatus,
     ...extractDateRangeParams(searchForm.dateRange),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
   }
@@ -168,6 +170,7 @@ function handleReset() {
   searchForm.township = ""
   searchForm.creatorOrEntryUnit = ""
   searchForm.dateRange = []
+  searchForm.trackingStatus = undefined
   clearFilters()
   handleSearch()
 }
@@ -786,6 +789,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             end-placeholder="结束日期"
             style="width: 240px"
           />
+        </el-form-item>
+        <el-form-item label="追踪状态">
+          <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width: 120px">
+            <el-option
+              v-for="(item, val) in TRACKING_STATUS_MAP"
+              :key="val"
+              :label="item.label"
+              :value="Number(val)"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">

@@ -109,6 +109,7 @@ function buildListQueryParams() {
       ? searchForm.keyPopulationSubCategories.join(",")
       : undefined,
     formatIssue: searchForm.formatIssue || undefined,
+    trackingStatus: searchForm.trackingStatus,
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)
   }
@@ -404,6 +405,11 @@ async function handleImport(uploadFile: any) {
             <el-option v-for="item in FORMAT_ISSUE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="追踪状态">
+          <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width: 120px">
+            <el-option v-for="(label, val) in TRACKING_STATUS_MAP" :key="val" :label="label" :value="Number(val)" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -550,7 +556,7 @@ async function handleImport(uploadFile: any) {
         <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
-              label="结果判定"
+              label="感染筛查结果"
               type="select"
               :options="infectionResultFilterOptions"
               :model-value="columnFilters.infectionResult"

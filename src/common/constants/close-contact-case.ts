@@ -1,3 +1,5 @@
+import { LATENT_TREATMENT_PLAN_OPTIONS } from "./disease"
+
 /** 密接个案表 — 线上预览列定义（与官方 72 列 Excel 模板字段、顺序一致） */
 export interface CloseContactCaseColumn {
   field: string
@@ -25,6 +27,14 @@ export const REPORT_QUARTER_OPTIONS = [
 export const HAS_PREVENTIVE_TREATMENT_OPTIONS = [
   { label: "开展", value: "开展" },
   { label: "未开展", value: "未开展" }
+] as const
+
+/**
+ * 预防性治疗方案（与潜伏感染者通知单一致，另含「其他」对应「其他方案，请备注」）
+ */
+export const PREVENTIVE_PLAN_OPTIONS = [
+  ...LATENT_TREATMENT_PLAN_OPTIONS,
+  "其他"
 ] as const
 
 /** 编辑/新增表单不展示的系统列或 Excel 自动计算列 */

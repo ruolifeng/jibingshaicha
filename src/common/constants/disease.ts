@@ -587,11 +587,17 @@ export const SCHOOL_LAB_RESULT_OPTIONS = ["阴性", "阳性", "无法判读", "�
 
 /**
  * 学生筛查列表 — 表头点击展示的数字码/填写说明
- * （对齐《2026年秋季新生入学结核病筛查记录表新》说明行）
+ * （对齐《2026年秋季新生入学结核病筛查记录表新》第 5 行说明）
  */
 export const SCHOOL_SCREENING_FIELD_HINTS = {
   schoolType: "填写数字，1=托幼机构，2=小学，3=初中，4=高中阶段教育学校，5=高等教育学校，6=教职工，7=其他（培训学校、特殊教育学校和专门学校等）",
   boardingType: "填写数字，1=寄宿制，2=非寄宿制，3=大学，4=其他",
+  participatedScreening: "填写是/否",
+  tbHistory: "填写有/无",
+  closeContactHistory: "填写有/无",
+  symptomCough: "填写有/无",
+  symptomHemoptysis: "填写有/无",
+  symptomOther: "填写有/无",
   screenMethod: "填写数字，1=结核菌素纯蛋白衍生物（PPD），2=重组结核分枝杆菌融合蛋白（EC），3=γ-干扰素释放试验（IGRA），4=未查",
   screenResult: "PPD填写横径×纵径（mm）及有无双圈、水泡、坏死、淋巴管炎等；EC和IGRA填写阳性/阴性；未查填写「无」",
   infectionResult: "填写数字，0=未感染，1=感染，2=无法判读，3=未查",
@@ -601,6 +607,26 @@ export const SCHOOL_SCREENING_FIELD_HINTS = {
   sputumCultureResult: "0=阴性，1=阳性，2=无法判读，3=未查",
   diagnosisFirst: "填写数字，0=未发现异常，1=活动性肺结核，2=疑似肺结核，3=潜伏感染者，4=其他（需注明）"
 } as const
+
+/** 填写说明弹窗：字段与《2026年秋季新生入学结核病筛查记录表新》说明行一致 */
+export const SCHOOL_SCREENING_FILL_INSTRUCTIONS = [
+  { field: "类型", hint: SCHOOL_SCREENING_FIELD_HINTS.schoolType },
+  { field: "是否寄宿制", hint: SCHOOL_SCREENING_FIELD_HINTS.boardingType },
+  { field: "是否参加筛查", hint: SCHOOL_SCREENING_FIELD_HINTS.participatedScreening },
+  { field: "有无既往结核病史", hint: SCHOOL_SCREENING_FIELD_HINTS.tbHistory },
+  { field: "有无肺结核接触史", hint: SCHOOL_SCREENING_FIELD_HINTS.closeContactHistory },
+  { field: "咳嗽，咳痰≥两周", hint: SCHOOL_SCREENING_FIELD_HINTS.symptomCough },
+  { field: "咯血或血痰", hint: SCHOOL_SCREENING_FIELD_HINTS.symptomHemoptysis },
+  { field: "可疑症状-其他", hint: SCHOOL_SCREENING_FIELD_HINTS.symptomOther },
+  { field: "感染筛查-方法", hint: SCHOOL_SCREENING_FIELD_HINTS.screenMethod },
+  { field: "感染筛查-结果", hint: SCHOOL_SCREENING_FIELD_HINTS.screenResult },
+  { field: "判定结果", hint: SCHOOL_SCREENING_FIELD_HINTS.infectionResult },
+  { field: "胸部影像学-方法", hint: SCHOOL_SCREENING_FIELD_HINTS.chestXrayMethod },
+  { field: "胸部影像学-结果", hint: SCHOOL_SCREENING_FIELD_HINTS.chestXrayResult },
+  { field: "分子生物学结果", hint: SCHOOL_SCREENING_FIELD_HINTS.molecularBiologyResult },
+  { field: "痰培养结果", hint: SCHOOL_SCREENING_FIELD_HINTS.sputumCultureResult },
+  { field: "筛查结果", hint: SCHOOL_SCREENING_FIELD_HINTS.diagnosisFirst }
+]
 
 /** 有无类选项 */
 export const YES_NO_HAVE_OPTIONS = ["有", "无"]

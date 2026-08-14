@@ -26,7 +26,8 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     keyPopulationSubCategories: [] as string[],
     creatorName: "",
     dateRange: [] as string[],
-    formatIssue: ""
+    formatIssue: "",
+    trackingStatus: undefined as number | undefined
   })
 
   async function fetchData() {
@@ -51,6 +52,7 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
       if (!params.creatorName) delete params.creatorName
+      if (params.trackingStatus == null) delete params.trackingStatus
       const { data } = await getLatentAggregateListApi(params)
       const records = data.records ?? []
       const start = (paginationData.currentPage - 1) * paginationData.pageSize
@@ -76,6 +78,7 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     searchForm.creatorName = ""
     searchForm.dateRange = []
     searchForm.formatIssue = ""
+    searchForm.trackingStatus = undefined
     clearFilters()
     handleSearch()
   }

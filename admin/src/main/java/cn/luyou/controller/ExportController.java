@@ -1,6 +1,9 @@
 package cn.luyou.controller;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.FollowUpVisitMapper;
@@ -61,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Tag(name = "数据导出")
@@ -832,9 +836,14 @@ public class ExportController {
         writeExcel(response, "患者信息总表", rows, ALL_PATIENT_EXPORT_HEADERS);
     }
 
+    /** 首次/后续随访导出共用的患者基本列 */
+    private static final List<String> PATIENT_VISIT_BASIC_HEADERS = List.of(
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "服药管理单位"
+    );
+
     /** 首次入户随访导出列（不含附件） */
     private static final List<String> FIRST_VISIT_EXPORT_HEADERS = List.of(
-            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果",
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "服药管理单位",
             "编号", "随访时间", "随访方式", "患者类型", "痰菌情况", "痰培养", "痰培养补充", "耐药情况", "症状及体征", "其他症状",
             "化疗方案", "用法", "督导人员", "药品剂型", "单独居室", "通风情况", "吸烟(支/天)", "饮酒(两/天)",
             "取药地点", "取药时间", "健康教育及培训", "下次随访时间", "评估医生签名", "备注", "状态", "填写时间"
@@ -842,13 +851,22 @@ public class ExportController {
 
     /** 后续随访导出列（不含附件；同一患者多条记录各占一行） */
     private static final List<String> FOLLOW_UP_VISIT_EXPORT_HEADERS = List.of(
-            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果",
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "服药管理单位",
             "第几次", "随访时间", "治疗月序", "督导人员", "随访方式", "症状及体征", "症状-其它",
             "吸烟(支/天)", "饮酒(两/天)", "化疗方案", "用法", "药品剂型", "漏服药次数",
             "药物不良反应", "不良反应详情", "并发症/合并症", "并发症详情",
             "转诊科别", "转诊原因", "2周内随访结果", "处理意见", "下次随访时间", "随访医生签名",
             "是否停止治疗", "停止治疗时间", "停止治疗原因", "应访视次数", "实际访视次数",
             "应服药次数", "实际服药次数", "服药率(%)", "评估医生签名", "备注", "状态", "填写时间"
+    );
+
+    /** 潜伏感染者督导表导出列（同一感染者多条记录各占一行） */
+    private static final List<String> SUPERVISION_FORM_EXPORT_HEADERS = List.of(
+            "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话",
+            "第几次", "类别", "管理单位", "督导医生",
+            "是否开始预防性治疗", "治疗方案", "治疗开始时间", "治疗结束时间",
+            "督导记录", "治疗完成情况", "中断用药", "中断次数", "用药率",
+            "督导管理人员类型", "督导管理人员姓名", "备注", "状态", "填写时间"
     );
 
     private static final Map<String, String> FIRST_VISIT_SYMPTOM_LABEL = Map.ofEntries(
@@ -883,43 +901,52 @@ public class ExportController {
 
     private static final Map<String, String> YES_NO_LABEL = Map.of("1", "无", "2", "有");
 
-    @Operation(summary = "导出勾选患者的首次入户随访信息")
+    @Operation(summary = "导出首次入户随访（ids 勾选；否则按当前筛选）")
     @GetMapping("/patient-first-visits")
     @OperationLog(type = "export", module = "statistics", action = "导出首次入户随访")
     public void exportPatientFirstVisits(
-            @RequestParam String ids,
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String sputumCulture,
+            @RequestParam(required = false) String drugResistance,
             HttpServletResponse response) throws IOException {
-        List<Long> patientIds = parseIdList(ids);
-        if (patientIds.isEmpty()) {
+        List<Patient> patients = loadPatientsForVisitExport(
+                ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                dateFrom, dateTo, StrUtil.blankToDefault(dateFilterBy, "firstVisitFill"),
+                medicationManagementUnit, crowdCategory, creatorUsername, columnFilters, formatIssue,
+                sputumCulture, drugResistance);
+        if (patients.isEmpty()) {
             writeExcel(response, "首次入户随访", List.of(), FIRST_VISIT_EXPORT_HEADERS);
             return;
         }
-        patientIds.forEach(dataScopeHelper::assertPatientAccessible);
-
-        LambdaQueryWrapper<Patient> patientWrapper = new LambdaQueryWrapper<>();
-        patientWrapper.in(Patient::getId, patientIds).orderByAsc(Patient::getPopulationType);
-        dataScopeHelper.applyPatientScope(patientWrapper);
-        List<Patient> patients = patientService.list(patientWrapper);
-        Map<Long, Patient> patientMap = patients.stream()
-                .collect(Collectors.toMap(Patient::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+        List<Long> patientIds = patients.stream().map(Patient::getId).toList();
+        Map<Long, Notice> noticeMap = loadLatestNoticeMap(patientIds, "patient");
 
         Map<Long, FirstVisit> visitMap = new HashMap<>();
-        if (!patientMap.isEmpty()) {
-            firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
-                            .in(FirstVisit::getPatientId, patientMap.keySet())
-                            .orderByDesc(FirstVisit::getId))
-                    .forEach(v -> visitMap.putIfAbsent(v.getPatientId(), v));
-        }
+        firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
+                        .in(FirstVisit::getPatientId, patientIds)
+                        .orderByDesc(FirstVisit::getId))
+                .forEach(v -> visitMap.putIfAbsent(v.getPatientId(), v));
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Long patientId : patientIds) {
-            Patient p = patientMap.get(patientId);
-            if (p == null) {
-                continue;
-            }
-            FirstVisit v = visitMap.get(patientId);
+        for (Patient p : patients) {
+            FirstVisit v = visitMap.get(p.getId());
             Map<String, Object> row = new LinkedHashMap<>();
-            putPatientBasicColumns(row, p);
+            putPatientBasicColumns(row, p, noticeMap.get(p.getId()));
             if (v != null) {
                 row.put("编号", nullToEmpty(v.getFormNo()));
                 row.put("随访时间", formatDate(v.getVisitDate()));
@@ -949,7 +976,7 @@ public class ExportController {
                 row.put("填写时间", formatDateTime(v.getCreateTime()));
             } else {
                 FIRST_VISIT_EXPORT_HEADERS.stream()
-                        .filter(h -> !List.of("数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果").contains(h))
+                        .filter(h -> !PATIENT_VISIT_BASIC_HEADERS.contains(h))
                         .forEach(h -> row.put(h, ""));
                 row.put("状态", "待填写");
             }
@@ -959,58 +986,130 @@ public class ExportController {
         writeExcel(response, "首次入户随访", rows, FIRST_VISIT_EXPORT_HEADERS);
     }
 
-    @Operation(summary = "导出勾选患者的后续随访信息")
+    @Operation(summary = "导出后续随访（ids 勾选；否则按当前筛选）")
     @GetMapping("/patient-follow-up-visits")
+    @OperationLog(type = "export", module = "statistics", action = "导出后续随访")
     public void exportPatientFollowUpVisits(
-            @RequestParam String ids,
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
             HttpServletResponse response) throws IOException {
-        List<Long> patientIds = parseIdList(ids);
-        if (patientIds.isEmpty()) {
+        List<Patient> patients = loadPatientsForVisitExport(
+                ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                dateFrom, dateTo, StrUtil.blankToDefault(dateFilterBy, "followUpFill"),
+                medicationManagementUnit, crowdCategory, creatorUsername, columnFilters, formatIssue,
+                null, null);
+        if (patients.isEmpty()) {
             writeExcel(response, "后续随访", List.of(), FOLLOW_UP_VISIT_EXPORT_HEADERS);
             return;
         }
-        patientIds.forEach(dataScopeHelper::assertPatientAccessible);
-
-        LambdaQueryWrapper<Patient> patientWrapper = new LambdaQueryWrapper<>();
-        patientWrapper.in(Patient::getId, patientIds).orderByAsc(Patient::getPopulationType);
-        dataScopeHelper.applyPatientScope(patientWrapper);
-        List<Patient> patients = patientService.list(patientWrapper);
-        Map<Long, Patient> patientMap = patients.stream()
-                .collect(Collectors.toMap(Patient::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+        List<Long> patientIds = patients.stream().map(Patient::getId).toList();
+        Map<Long, Notice> noticeMap = loadLatestNoticeMap(patientIds, "patient");
 
         Map<Long, List<FollowUpVisit>> visitMap = new HashMap<>();
-        if (!patientMap.isEmpty()) {
-            followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
-                            .in(FollowUpVisit::getPatientId, patientMap.keySet())
-                            .orderByAsc(FollowUpVisit::getPatientId)
-                            .orderByAsc(FollowUpVisit::getVisitSeq)
-                            .orderByAsc(FollowUpVisit::getId))
-                    .forEach(v -> visitMap.computeIfAbsent(v.getPatientId(), k -> new ArrayList<>()).add(v));
-        }
+        followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
+                        .in(FollowUpVisit::getPatientId, patientIds)
+                        .orderByAsc(FollowUpVisit::getPatientId)
+                        .orderByAsc(FollowUpVisit::getVisitSeq)
+                        .orderByAsc(FollowUpVisit::getId))
+                .forEach(v -> visitMap.computeIfAbsent(v.getPatientId(), k -> new ArrayList<>()).add(v));
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Long patientId : patientIds) {
-            Patient p = patientMap.get(patientId);
-            if (p == null) {
-                continue;
-            }
-            List<FollowUpVisit> visits = visitMap.getOrDefault(patientId, List.of());
+        for (Patient p : patients) {
+            Notice notice = noticeMap.get(p.getId());
+            List<FollowUpVisit> visits = visitMap.getOrDefault(p.getId(), List.of());
             if (visits.isEmpty()) {
                 Map<String, Object> row = new LinkedHashMap<>();
-                putPatientBasicColumns(row, p);
+                putPatientBasicColumns(row, p, notice);
                 FOLLOW_UP_VISIT_EXPORT_HEADERS.stream()
-                        .filter(h -> !List.of("数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果").contains(h))
+                        .filter(h -> !PATIENT_VISIT_BASIC_HEADERS.contains(h))
                         .forEach(h -> row.put(h, ""));
                 row.put("状态", "暂无记录");
                 rows.add(row);
                 continue;
             }
             for (FollowUpVisit v : visits) {
-                rows.add(buildFollowUpExportRow(p, v));
+                rows.add(buildFollowUpExportRow(p, v, notice));
             }
         }
         log.info("[导出] 后续随访 {} 条", rows.size());
         writeExcel(response, "后续随访", rows, FOLLOW_UP_VISIT_EXPORT_HEADERS);
+    }
+
+    @Operation(summary = "导出潜伏感染者督导表（ids 勾选；否则按当前筛选）")
+    @GetMapping("/latent-supervision-forms")
+    @OperationLog(type = "export", module = "statistics", action = "导出督导表")
+    public void exportLatentSupervisionForms(
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) String referralResult,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String departmentIds,
+            HttpServletResponse response) throws IOException {
+        List<LatentInfection> latents = loadLatentsForSupervisionExport(
+                ids, populationType, name, idNumber, phone, dateFrom, dateTo,
+                StrUtil.blankToDefault(dateFilterBy, "supervisionFill"),
+                creatorName, archived, trackingStatus != null ? trackingStatus : 1,
+                StrUtil.blankToDefault(referralResult, "latent"),
+                crowdCategory, columnFilters, formatIssue, departmentIds);
+        if (latents.isEmpty()) {
+            writeExcel(response, "督导表", List.of(), SUPERVISION_FORM_EXPORT_HEADERS);
+            return;
+        }
+        List<Long> latentIds = latents.stream().map(LatentInfection::getId).toList();
+        Map<Long, List<SupervisionForm>> formMap = new HashMap<>();
+        supervisionFormService.lambdaQuery()
+                .in(SupervisionForm::getLatentInfectionId, latentIds)
+                .ne(SupervisionForm::getStatus, 0)
+                .orderByAsc(SupervisionForm::getLatentInfectionId)
+                .orderByAsc(SupervisionForm::getFormSeq)
+                .orderByAsc(SupervisionForm::getId)
+                .list()
+                .forEach(f -> formMap.computeIfAbsent(f.getLatentInfectionId(), k -> new ArrayList<>()).add(f));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (LatentInfection r : latents) {
+            List<SupervisionForm> forms = formMap.getOrDefault(r.getId(), List.of());
+            if (forms.isEmpty()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                putLatentSupervisionBasicColumns(row, r);
+                SUPERVISION_FORM_EXPORT_HEADERS.stream()
+                        .filter(h -> !List.of("数据来源", "姓名", "性别", "年龄", "证件号", "联系电话").contains(h))
+                        .forEach(h -> row.put(h, ""));
+                row.put("状态", "暂无记录");
+                rows.add(row);
+                continue;
+            }
+            for (SupervisionForm f : forms) {
+                rows.add(buildSupervisionExportRow(r, f));
+            }
+        }
+        log.info("[导出] 督导表 {} 条", rows.size());
+        writeExcel(response, "督导表", rows, SUPERVISION_FORM_EXPORT_HEADERS);
     }
 
     private List<Long> parseIdList(String ids) {
@@ -1025,18 +1124,187 @@ public class ExportController {
                 .toList();
     }
 
-    private void putPatientBasicColumns(Map<String, Object> row, Patient p) {
+    private List<Patient> loadPatientsForVisitExport(
+            String ids, Integer archived,
+            String populationType, String name, String idNumber, String phone,
+            String currentAddress, String diagnosisResult,
+            String dateFrom, String dateTo, String dateFilterBy,
+            String medicationManagementUnit, String crowdCategory,
+            String creatorUsername, String columnFilters, String formatIssue,
+            String sputumCulture, String drugResistance) {
+        List<Long> idList = parseIdList(ids);
+        if (!idList.isEmpty()) {
+            idList.forEach(dataScopeHelper::assertPatientAccessible);
+            Map<Long, Patient> map = patientService.listByIdsForExport(idList, archived).stream()
+                    .collect(Collectors.toMap(Patient::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+            List<Patient> ordered = new ArrayList<>();
+            for (Long id : idList) {
+                Patient p = map.get(id);
+                if (p != null) {
+                    ordered.add(p);
+                }
+            }
+            return ordered;
+        }
+        List<Patient> all = new ArrayList<>();
+        int pageNum = 1;
+        final int pageSize = 2000;
+        Integer archivedVal = archived != null ? archived : 0;
+        while (true) {
+            var page = patientService.queryPage(
+                    pageNum, pageSize, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                    archivedVal, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                    creatorUsername, columnFilters, null, null, formatIssue, sputumCulture, drugResistance);
+            if (page.getRecords() == null || page.getRecords().isEmpty()) {
+                break;
+            }
+            all.addAll(page.getRecords());
+            if ((long) pageNum * pageSize >= page.getTotal()) {
+                break;
+            }
+            pageNum++;
+        }
+        return all;
+    }
+
+    private List<LatentInfection> loadLatentsForSupervisionExport(
+            String ids, String populationType, String name, String idNumber, String phone,
+            String dateFrom, String dateTo, String dateFilterBy, String creatorName,
+            Integer archived, Integer trackingStatus, String referralResult,
+            String crowdCategory, String columnFilters, String formatIssue, String departmentIds) {
+        List<Long> idList = parseIdList(ids);
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        if (!idList.isEmpty()) {
+            idList.forEach(dataScopeHelper::assertLatentAccessible);
+            Map<Long, LatentInfection> map = latentInfectionService.listByIds(idList).stream()
+                    .collect(Collectors.toMap(LatentInfection::getId, r -> r, (a, b) -> a, LinkedHashMap::new));
+            List<LatentInfection> ordered = new ArrayList<>();
+            for (Long id : idList) {
+                LatentInfection r = map.get(id);
+                if (r != null) {
+                    ordered.add(r);
+                }
+            }
+            return ordered;
+        }
+        List<LatentInfection> all = new ArrayList<>();
+        int pageNum = 1;
+        final int pageSize = 2000;
+        while (true) {
+            var page = latentInfectionService.queryPage(
+                    pageNum, pageSize, populationType, name, idNumber, trackingStatus,
+                    archived != null ? archived : 0, referralResult, null, phone, dateFrom, dateTo,
+                    dateFilterBy, creatorName, crowdCategory, filterDeptIds, columnFilters, formatIssue);
+            if (page.getRecords() == null || page.getRecords().isEmpty()) {
+                break;
+            }
+            all.addAll(page.getRecords());
+            if ((long) pageNum * pageSize >= page.getTotal()) {
+                break;
+            }
+            pageNum++;
+        }
+        return all;
+    }
+
+    private Map<Long, Notice> loadLatestNoticeMap(List<Long> bizIds, String noticeType) {
+        Map<Long, Notice> noticeMap = new HashMap<>();
+        if (bizIds == null || bizIds.isEmpty()) {
+            return noticeMap;
+        }
+        noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                        .in(Notice::getBizId, bizIds)
+                        .eq(Notice::getNoticeType, noticeType)
+                        .orderByDesc(Notice::getId))
+                .forEach(n -> noticeMap.putIfAbsent(n.getBizId(), n));
+        return noticeMap;
+    }
+
+    private void putPatientBasicColumns(Map<String, Object> row, Patient p, Notice notice) {
         row.put("数据来源", POP_TYPE_LABEL.getOrDefault(p.getPopulationType(), p.getPopulationType()));
         row.put("姓名", nullToEmpty(p.getName()));
         row.put("性别", nullToEmpty(p.getGender()));
         row.put("证件号", nullToEmpty(p.getIdNumber()));
         row.put("联系电话", nullToEmpty(p.getPhone()));
         row.put("病原学结果", resolvePatientPathogenResultForExport(p));
+        row.put("服药管理单位", resolvePatientMedicationUnit(p, notice));
     }
 
-    private Map<String, Object> buildFollowUpExportRow(Patient p, FollowUpVisit v) {
+    private void putLatentSupervisionBasicColumns(Map<String, Object> row, LatentInfection r) {
+        row.put("数据来源", formatLatentPopulationLabel(r.getPopulationType(), r.getCrowdCategory()));
+        row.put("姓名", nullToEmpty(r.getName()));
+        row.put("性别", nullToEmpty(r.getGender()));
+        row.put("年龄", r.getAge() != null ? r.getAge() : "");
+        row.put("证件号", nullToEmpty(r.getIdNumber()));
+        row.put("联系电话", nullToEmpty(r.getPhone()));
+    }
+
+    private Map<String, Object> buildSupervisionExportRow(LatentInfection r, SupervisionForm f) {
         Map<String, Object> row = new LinkedHashMap<>();
-        putPatientBasicColumns(row, p);
+        putLatentSupervisionBasicColumns(row, r);
+        row.put("第几次", f.getFormSeq() != null ? f.getFormSeq() : "");
+        row.put("类别", nullToEmpty(f.getCategory()));
+        row.put("管理单位", nullToEmpty(f.getManagingUnit()));
+        row.put("督导医生", nullToEmpty(f.getSupervisingDoctor()));
+        row.put("是否开始预防性治疗", nullToEmpty(f.getHasPreventiveTreatment()));
+        row.put("治疗方案", nullToEmpty(f.getTreatmentPlan()));
+        row.put("治疗开始时间", formatDate(f.getTreatmentStartDate()));
+        row.put("治疗结束时间", formatDate(f.getTreatmentEndDate()));
+        row.put("督导记录", formatSupervisionRecords(f.getSupervisionRecords()));
+        row.put("治疗完成情况", nullToEmpty(f.getTreatmentCompletionStatus()));
+        row.put("中断用药", nullToEmpty(f.getInterruptMedication()));
+        row.put("中断次数", f.getInterruptCount() != null ? f.getInterruptCount() : "");
+        row.put("用药率", nullToEmpty(f.getMedicationRate()));
+        row.put("督导管理人员类型", nullToEmpty(f.getManagerType()));
+        row.put("督导管理人员姓名", nullToEmpty(f.getManagerName()));
+        row.put("备注", nullToEmpty(f.getRemark()));
+        row.put("状态", supervisionStatusLabel(f.getStatus()));
+        row.put("填写时间", formatDateTime(f.getCreateTime()));
+        return row;
+    }
+
+    private String supervisionStatusLabel(Integer status) {
+        if (status == null) {
+            return "未填写";
+        }
+        return switch (status) {
+            case 2 -> "已归档";
+            case 1 -> "已提交";
+            case 0 -> "草稿";
+            default -> String.valueOf(status);
+        };
+    }
+
+    private String formatSupervisionRecords(String json) {
+        if (StrUtil.isBlank(json)) {
+            return "";
+        }
+        try {
+            JSONArray array = JSONUtil.parseArray(json);
+            List<String> parts = new ArrayList<>();
+            for (Object item : array) {
+                if (!(item instanceof JSONObject obj)) {
+                    continue;
+                }
+                String time = obj.getStr("time", obj.getStr("date", ""));
+                String method = obj.getStr("method", "");
+                String content = obj.getStr("content", "");
+                String joined = Stream.of(time, method, content)
+                        .filter(StrUtil::isNotBlank)
+                        .collect(Collectors.joining("/"));
+                if (StrUtil.isNotBlank(joined)) {
+                    parts.add(joined);
+                }
+            }
+            return String.join("；", parts);
+        } catch (Exception ignored) {
+            return json;
+        }
+    }
+
+    private Map<String, Object> buildFollowUpExportRow(Patient p, FollowUpVisit v, Notice notice) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        putPatientBasicColumns(row, p, notice);
         row.put("第几次", v.getVisitSeq() != null ? v.getVisitSeq() : "");
         row.put("随访时间", formatDate(v.getVisitDate()));
         row.put("治疗月序", v.getTreatmentMonth() != null ? v.getTreatmentMonth() : "");
@@ -1214,6 +1482,7 @@ public class ExportController {
             @RequestParam(required = false) String departmentIds,
             @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) Integer trackingStatus,
             HttpServletResponse response) throws IOException {
 
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
@@ -1249,6 +1518,7 @@ public class ExportController {
             wrapper.like(StrUtil.isNotBlank(name), LatentInfection::getName, name)
                     .like(StrUtil.isNotBlank(idNumber), LatentInfection::getIdNumber, idNumber)
                     .like(StrUtil.isNotBlank(phone), LatentInfection::getPhone, phone)
+                    .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                     .in(creatorUserIds != null, LatentInfection::getCreatorId, creatorUserIds);
             if (StrUtil.isNotBlank(populationType)) {
                 wrapper.eq(LatentInfection::getPopulationType, populationType);

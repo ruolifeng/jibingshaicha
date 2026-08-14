@@ -107,7 +107,8 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String sourceType,
-            @RequestParam(required = false) String creatorOrEntryUnit) {
+            @RequestParam(required = false) String creatorOrEntryUnit,
+            @RequestParam(required = false) Integer trackingStatus) {
         userService.checkPermissionCode("referralManagement:export");
         List<Long> idList = null;
         if (ids != null && !ids.isBlank()) {
@@ -118,7 +119,8 @@ public class ReferralTrackingController {
                     .toList();
         }
         referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township,
-                dateFrom, dateTo, sourceType, creatorOrEntryUnit, idList, createTimeFrom, createTimeTo);
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, idList, createTimeFrom, createTimeTo,
+                trackingStatus);
     }
 
     @OperationLog(type = "create", module = "referral", action = "新增推介/追踪记录")

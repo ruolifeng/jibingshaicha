@@ -498,7 +498,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                             String name, String idNumber, String phone, String township,
                             String dateFrom, String dateTo, String sourceType,
                             String creatorOrEntryUnit, List<Long> ids,
-                            String createTimeFrom, String createTimeTo) {
+                            String createTimeFrom, String createTimeTo, Integer trackingStatus) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
         LambdaQueryWrapper<ReferralTracking> wrapper;
@@ -509,7 +509,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
         } else {
             wrapper = buildQueryWrapper(
-                    bizMode, name, idNumber, null, null, phone, township, dateFrom, dateTo, sourceType);
+                    bizMode, name, idNumber, trackingStatus, null, phone, township, dateFrom, dateTo, sourceType);
             applyCreateTimeFilter(wrapper, createTimeFrom, createTimeTo);
             applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
             applyUserScopeFilter(wrapper, bizMode, level5RecommendView);

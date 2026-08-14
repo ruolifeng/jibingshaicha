@@ -441,21 +441,25 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         }
     }
 
-    /** 按首次随访痰培养 / 耐药情况筛选 */
+    /** 按首次随访痰培养 / 耐药情况筛选（子查询，避免二次 id IN 大列表导致分页解析失败） */
     private void applyFirstVisitFieldFilter(LambdaQueryWrapper<Patient> wrapper,
                                             String sputumCulture, String drugResistance) {
         if (StrUtil.isBlank(sputumCulture) && StrUtil.isBlank(drugResistance)) {
             return;
         }
-        LambdaQueryWrapper<FirstVisit> visitWrapper = new LambdaQueryWrapper<>();
-        visitWrapper.eq(StrUtil.isNotBlank(sputumCulture), FirstVisit::getSputumCulture, sputumCulture.trim())
-                .eq(StrUtil.isNotBlank(drugResistance), FirstVisit::getDrugResistance, drugResistance.trim())
-                .select(FirstVisit::getPatientId);
-        Set<Long> patientIds = firstVisitMapper.selectList(visitWrapper).stream()
-                .map(FirstVisit::getPatientId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        applyPatientIdFilter(wrapper, patientIds);
+        StringBuilder sql = new StringBuilder(
+                "SELECT patient_id FROM first_visit WHERE deleted = 0 AND patient_id IS NOT NULL");
+        if (StrUtil.isNotBlank(sputumCulture)) {
+            sql.append(" AND sputum_culture = '")
+                    .append(sputumCulture.trim().replace("'", "''"))
+                    .append("'");
+        }
+        if (StrUtil.isNotBlank(drugResistance)) {
+            sql.append(" AND drug_resistance = '")
+                    .append(drugResistance.trim().replace("'", "''"))
+                    .append("'");
+        }
+        wrapper.inSql(Patient::getId, sql.toString());
     }
 
     /** 按病案/导入信息中的登记日期（epidemic_data.登记日期）筛选 */

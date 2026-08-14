@@ -421,7 +421,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="结果判定">
+          <el-form-item label="感染筛查结果">
             <el-select
               v-model="form.infectionResult"
               placeholder="请选择"

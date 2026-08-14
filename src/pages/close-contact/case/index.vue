@@ -11,6 +11,7 @@ import {
   closeContactCaseFieldLabel,
   DIAGNOSIS_RESULT_OPTIONS,
   HAS_PREVENTIVE_TREATMENT_OPTIONS,
+  PREVENTIVE_PLAN_OPTIONS,
   REPORT_QUARTER_OPTIONS
 } from "@@/constants/close-contact-case"
 import { PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
@@ -826,6 +827,21 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                       :key="opt.value"
                       :label="opt.label"
                       :value="opt.value"
+                    />
+                  </el-select>
+                  <el-select
+                    v-else-if="field === 'preventivePlan'"
+                    v-model="editForm.preventivePlan"
+                    clearable
+                    filterable
+                    placeholder="请选择"
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in PREVENTIVE_PLAN_OPTIONS"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
                     />
                   </el-select>
                   <el-select

@@ -90,7 +90,7 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="感染筛查方法">
             {{ displayInfectionScreenMethod(detail.screenMethod, detail.infectionResult) }}
           </el-descriptions-item>
-          <el-descriptions-item label="结果判定">
+          <el-descriptions-item label="感染筛查结果">
             {{ displayInfectionJudgeResult(detail.infectionResult || detail.screenResult) }}
           </el-descriptions-item>
           <el-descriptions-item label="追踪状态">

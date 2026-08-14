@@ -14,6 +14,7 @@ import {
   toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
 import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
+import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
@@ -32,6 +33,7 @@ const {
   searchForm,
   columnFilters,
   setFilter,
+  toQueryParam,
   defaultSort,
   handleSortChange,
   fetchData,
@@ -46,9 +48,11 @@ const {
   loadGenderOptions,
   loadPathogenOptions,
   loadPopulationTypeOptions,
+  loadMedicationUnitOptions,
   genderSourceValues,
   pathogenSourceValues,
-  populationTypeSourceValues
+  populationTypeSourceValues,
+  medicationUnitSourceValues
 } = usePatientTableHeaderFilters(0)
 
 const selectedRows = ref<any[]>([])
@@ -58,20 +62,32 @@ function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
 
-async function handleExportSelected() {
-  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
-  if (!ids.length) {
-    ElMessage.warning("请先勾选要导出的患者")
-    return
+function buildListQueryParams() {
+  const columnFiltersParam = toQueryParam()
+  return {
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    diagnosisResult: searchForm.diagnosisResult || undefined,
+    populationType: searchForm.populationType || undefined,
+    medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
+    dateFilterBy: "followUpFill",
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...extractDateRangeParams(searchForm.dateRange)
   }
+}
+
+async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: string[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected ? `选中的 ${ids!.length} 位患者` : "当前筛选条件下的"
   try {
-    await ElMessageBox.confirm(`确认导出选中的 ${ids.length} 位患者的后续随访信息吗？`, "导出确认", {
+    await ElMessageBox.confirm(`确认导出${label}后续随访信息吗？`, "导出确认", {
       confirmButtonText: "确认导出",
       cancelButtonText: "取消",
       type: "warning"
     })
     exporting.value = true
-    const blob = await exportPatientFollowUpVisitsApi(ids)
+    const blob = await exportPatientFollowUpVisitsApi(isSelected ? { ids } : buildListQueryParams())
     downloadBlob(blob as unknown as Blob, "后续随访.xlsx")
     ElMessage.success("导出成功")
   } catch (err: any) {
@@ -79,6 +95,15 @@ async function handleExportSelected() {
   } finally {
     exporting.value = false
   }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的患者")
+    return
+  }
+  handleExport("selected", ids)
 }
 
 const followUpDialogVisible = ref(false)
@@ -208,12 +233,23 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
           />
         </el-form-item>
         <el-form-item label="服药管理单位">
-          <el-input
+          <el-select
             v-model="searchForm.medicationManagementUnit"
-            placeholder="请输入"
+            placeholder="全部"
             clearable
-            style="width: 160px"
-          />
+            filterable
+            allow-create
+            default-first-option
+            style="width: 200px"
+            @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+          >
+            <el-option
+              v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
@@ -238,14 +274,24 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <div style="margin-bottom: 10px">
+      <div class="toolbar flex items-center justify-end gap-2 flex-wrap" style="margin-bottom: 12px">
         <el-button
-          type="success"
+          v-permission="'patientManagement:followUp'"
+          type="primary"
+          plain
           :loading="exporting"
+          @click="handleExport('filtered')"
+        >
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'patientManagement:followUp'"
+          type="warning"
           :disabled="!selectedRows.length"
+          :loading="exporting"
           @click="handleExportSelected"
         >
-          导出
+          导出勾选
         </el-button>
       </div>
       <el-table
@@ -253,6 +299,7 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
         v-loading="loading"
         border
         stripe
+        row-key="id"
         :default-sort="defaultSort"
         @selection-change="handleSelectionChange"
         @sort-change="handleSortChange"

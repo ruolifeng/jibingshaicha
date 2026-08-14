@@ -5,7 +5,7 @@ import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { HAS_PREVENTIVE_TREATMENT_OPTIONS } from "@@/constants/close-contact-case"
+import { HAS_PREVENTIVE_TREATMENT_OPTIONS, PREVENTIVE_PLAN_OPTIONS } from "@@/constants/close-contact-case"
 import { isSuspectedTbDiagnosis, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, SUSPECTED_TB_DIAGNOSIS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import {
@@ -1147,7 +1147,9 @@ async function handleThreeMonthSubmit() {
               </el-col>
               <el-col :span="12">
                 <el-form-item label="预防性治疗方案">
-                  <el-input v-model="editForm.preventivePlan" />
+                  <el-select v-model="editForm.preventivePlan" style="width:100%" clearable filterable placeholder="请选择">
+                    <el-option v-for="opt in PREVENTIVE_PLAN_OPTIONS" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
