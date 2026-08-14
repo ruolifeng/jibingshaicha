@@ -64,22 +64,32 @@ export function exportAllPatientsApi(params: Record<string, any>) {
   })
 }
 
-/** 导出勾选患者的首次入户随访信息 */
-export function exportPatientFirstVisitsApi(ids: string[]) {
+/** 导出首次入户随访（ids 勾选；否则按当前筛选） */
+export function exportPatientFirstVisitsApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
   return request<Blob>({
     url: "export/patient-first-visits",
     method: "get",
-    params: { ids: ids.join(",") },
+    params: {
+      archived: 0,
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob"
   })
 }
 
-/** 导出勾选患者的后续随访信息 */
-export function exportPatientFollowUpVisitsApi(ids: string[]) {
+/** 导出后续随访（ids 勾选；否则按当前筛选） */
+export function exportPatientFollowUpVisitsApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
   return request<Blob>({
     url: "export/patient-follow-up-visits",
     method: "get",
-    params: { ids: ids.join(",") },
+    params: {
+      archived: 0,
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
     responseType: "blob"
   })
 }

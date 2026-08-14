@@ -95,8 +95,9 @@ public class StatisticsController {
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String departmentIds) {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<Long> selectedDeptIds = departmentFilterSupport.parseSelectedDepartmentIds(departmentIds);
         return ResultRes.success(statisticsService.getKeyPopulationTbSymptomReferralStatistics(
-                year, district, filterDeptIds));
+                year, district, filterDeptIds, selectedDeptIds));
     }
 
     @Operation(summary = "我的工作台年度统计")
@@ -181,8 +182,10 @@ public class StatisticsController {
             @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<Long> selectedDeptIds = departmentFilterSupport.parseSelectedDepartmentIds(departmentIds);
         List<KeyPopulationTbSymptomReferralStatisticsVO> data =
-                statisticsService.getKeyPopulationTbSymptomReferralStatistics(year, district, filterDeptIds);
+                statisticsService.getKeyPopulationTbSymptomReferralStatistics(
+                        year, district, filterDeptIds, selectedDeptIds);
         setExcelResponse(response, "重点人群肺结核可疑症状筛查和推介情况报表");
         KeyPopulationTbSymptomReferralExcelExportSupport.write(response.getOutputStream(), year, data);
     }

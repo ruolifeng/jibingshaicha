@@ -1,630 +1,172 @@
 <script lang="ts" setup>
-import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
-import RecommendCreateDialog from "@@/components/RecommendCreateDialog.vue"
-import ScreeningDetailDialog from "@@/components/ScreeningDetailDialog.vue"
-import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
-import TrackingHistoryPanel from "@@/components/TrackingHistoryPanel.vue"
-import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
-import { usePagination } from "@@/composables/usePagination"
-import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
+import { downloadBlob } from "@@/utils/download"
+import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import {
-  CHEST_XRAY_RESULT_OPTIONS,
-  getSuspectedConfirmDiagnosisLabel,
-  isConfirmedPatientDiagnosis,
-  KEY_INFECTION_JUDGE_RESULT_OPTIONS,
-  SCHOOL_DIAGNOSIS_SEARCH_OPTIONS,
-  SCHOOL_INFECTION_JUDGE_OPTIONS,
-  SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS,
-  TRACKING_STATUS_MAP
-} from "@@/constants/disease"
-import { parseTrackingHistory } from "@@/utils/referralTracking"
-import { extractDateRangeParams } from "@@/utils/searchParams"
-import { getScreeningSchoolDetailApi } from "@/pages/school/screening/apis"
-import {
-  getSuspectedListApi,
-  importXrayApi,
-  submitDiagnosisApi,
-  submitXrayOnlyApi,
-  trackSuspectedApi
-} from "./apis"
+  exportStudentReportStatisticsApi,
+  getDistrictOptionsApi,
+  getStudentReportStatisticsApi,
+  STUDENT_REPORT_SCHOOL_CATEGORIES
+} from "@/pages/statistics/apis"
 
-const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
-const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+defineOptions({ name: "SchoolSuspected" })
 
-const genderFilterOptions = [
-  { text: "男", value: "男" },
-  { text: "女", value: "女" }
-]
-const infectionResultFilterOptions = [
-  ...SCHOOL_INFECTION_JUDGE_OPTIONS.map(item => ({ text: item, value: item })),
-  ...KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
-]
-const chestXrayFilterOptions = CHEST_XRAY_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
-const diagnosisFilterOptions = [
-  ...SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value })),
-  ...SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS.map(item => ({ text: item.label, value: item.value }))
-]
-
-const loading = ref(false)
-const tableData = ref<any[]>([])
-const total = ref(0)
-
-const searchForm = reactive({
-  name: "",
-  idNumber: "",
-  phone: "",
-  dateRange: [] as string[],
-  trackingStatus: undefined as number | undefined,
-  archived: undefined as number | undefined,
-  diagnosisFirst: "" as string
+const filterForm = reactive({
+  year: String(getCurrentStatYear()),
+  district: "",
+  departmentIds: [] as string[]
 })
 
+const yearOptions = buildStatYearOptions()
+const districtOptions = ref<string[]>([])
+const showDepartmentFilter = ref(false)
+const loading = ref(false)
+const tableData = ref<any[]>([])
+const schoolCategories = ref<string[]>([...STUDENT_REPORT_SCHOOL_CATEGORIES])
+
+async function loadDistrictOptions() {
+  try {
+    const { data } = await getDistrictOptionsApi(filterForm.departmentIds)
+    districtOptions.value = data || []
+  } catch { /* ignore */ }
+}
+
 async function fetchData() {
+  if (!schoolCategories.value.length) {
+    ElMessage.warning("请至少选择一个学校分类")
+    return
+  }
   loading.value = true
   try {
-    const { dateRange, ...rest } = searchForm
-    const columnFiltersParam = toQueryParam()
-    const params: Parameters<typeof getSuspectedListApi>[0] = {
-      page: paginationData.currentPage ?? 1,
-      size: paginationData.pageSize ?? 10,
-      populationType: "school",
-      name: rest.name || undefined,
-      idNumber: rest.idNumber || undefined,
-      phone: rest.phone || undefined,
-      trackingStatus: rest.trackingStatus,
-      archived: rest.archived,
-      diagnosisFirst: rest.diagnosisFirst || undefined,
-      ...extractDateRangeParams(dateRange),
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
-    }
-    if (searchForm.archived === undefined || searchForm.archived === 0) {
-      params.referralResult = "pending"
-    }
-    const { data } = await getSuspectedListApi(params)
-    tableData.value = data.records
-    total.value = data.total
-  } finally {
+    const { data } = await getStudentReportStatisticsApi({
+      year: filterForm.year,
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds,
+      schoolCategories: schoolCategories.value
+    })
+    tableData.value = data || []
+  } catch { /* handled */ } finally {
     loading.value = false
   }
 }
 
 function handleSearch() {
-  paginationData.currentPage = 1
+  loadDistrictOptions()
   fetchData()
 }
 
 function handleReset() {
-  searchForm.name = ""
-  searchForm.idNumber = ""
-  searchForm.phone = ""
-  searchForm.dateRange = []
-  searchForm.trackingStatus = undefined
-  searchForm.archived = undefined
-  searchForm.diagnosisFirst = ""
-  clearFilters()
+  filterForm.year = String(getCurrentStatYear())
+  filterForm.district = ""
+  filterForm.departmentIds = []
+  schoolCategories.value = [...STUDENT_REPORT_SCHOOL_CATEGORIES]
   handleSearch()
 }
 
-const submitting = ref(false)
-
-// 推介（预填待诊断行 → 推介追踪）
-const tierCareVisible = ref(false)
-const tierCareRow = ref<any>(null)
-function openTierCare(row: any) {
-  tierCareRow.value = row
-  tierCareVisible.value = true
-}
-
-/** 超期预警：追踪到位超过7天仍未录入胸片 */
-function getRowClass({ row }: { row: any }) {
-  if (isConfirmedPatientDiagnosis(row)) return "confirmed-row"
-  if (row.trackingStatus === 1 && !row.chestXrayResult && row.updateTime) {
-    const diffDays = (Date.now() - new Date(row.updateTime).getTime()) / 86400000
-    if (diffDays > 7) return "overdue-row"
+function handleDepartmentChange(departmentIds?: string[]) {
+  if (Array.isArray(departmentIds)) {
+    filterForm.departmentIds = departmentIds
   }
-  return ""
+  filterForm.district = ""
+  handleSearch()
 }
 
-// ==================== 追踪弹窗 ====================
-const trackDialogVisible = ref(false)
-const trackingRow = ref<any>(null)
-const historyViewVisible = ref(false)
-const historyViewRow = ref<any>(null)
-
-function hasTrackingHistory(row: any) {
-  return parseTrackingHistory(row?.trackingHistoryJson).length > 0 || !!row?.trackingRemark?.trim()
-}
-
-function openHistoryView(row: any) {
-  historyViewRow.value = row
-  historyViewVisible.value = true
-}
-
-function openTrackDialog(row: any) {
-  trackingRow.value = row
-  trackDialogVisible.value = true
-}
-
-async function handleTrack(payload: TrackConfirmPayload) {
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await trackSuspectedApi({
-      id: trackingRow.value.id,
-      status: payload.status,
-      remark: payload.remark,
-      actualArrivalDate: payload.actualArrivalDate
-    })
-    ElMessage.success("操作成功")
-    trackDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally {
-    submitting.value = false
-  }
-}
-
-// ==================== 录入胸片结果弹窗（V13 拆分：仅胸片字段） ====================
-const xrayDialogVisible = ref(false)
-const xrayRow = ref<any>(null)
-const xrayForm = reactive({
-  hasChestXray: "是",
-  chestXrayDate: "",
-  chestXrayResult: ""
-})
-const xrayImportLoading = ref(false)
-
-function openXrayDialog(row: any) {
-  xrayRow.value = row
-  // 自动填充第一次导入的筛查数据，用户仅需确认
-  xrayForm.hasChestXray = row.hasChestXray || "是"
-  xrayForm.chestXrayDate = row.chestXrayDate || ""
-  xrayForm.chestXrayResult = row.chestXrayResult || ""
-  xrayDialogVisible.value = true
-}
-
-async function handleSubmitXray() {
-  if (xrayForm.hasChestXray === "是" && !xrayForm.chestXrayResult) {
-    ElMessage.warning("请选择胸片结果")
+async function handleExport() {
+  if (!schoolCategories.value.length) {
+    ElMessage.warning("请至少选择一个学校分类")
     return
   }
-  if (submitting.value) return
-  submitting.value = true
   try {
-    await submitXrayOnlyApi({
-      id: xrayRow.value.id,
-      hasChestXray: xrayForm.hasChestXray,
-      chestXrayDate: xrayForm.chestXrayDate || undefined,
-      chestXrayResult: xrayForm.chestXrayResult || undefined
+    const data = await exportStudentReportStatisticsApi({
+      year: filterForm.year,
+      district: filterForm.district,
+      departmentIds: filterForm.departmentIds,
+      schoolCategories: schoolCategories.value
     })
-    ElMessage.success("胸片结果录入成功")
-    xrayDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally {
-    submitting.value = false
-  }
-}
-
-async function handleImportXray(uploadFile: any) {
-  xrayImportLoading.value = true
-  try {
-    const { data } = await importXrayApi(uploadFile.raw, "school")
-    ElMessage.success(`批量更新 ${data} 条胸片结果数据`)
-    fetchData()
+    downloadBlob(data as unknown as Blob, `学生统计报表_${filterForm.year || "全部"}.xlsx`)
+    ElMessage.success("导出成功")
   } catch {
-    ElMessage.error("批量导入失败")
-  } finally {
-    xrayImportLoading.value = false
+    ElMessage.error("导出失败")
   }
 }
 
-// ==================== 确认诊断弹窗 ====================
-const diagnosisDialogVisible = ref(false)
-const diagnosisRow = ref<any>(null)
-const diagnosisForm = reactive({ diagnosisFirst: "" })
-
-function openDiagnosisDialog(row: any) {
-  diagnosisRow.value = row
-  diagnosisForm.diagnosisFirst = row.diagnosisFirst || row.screeningDiagnosisFirst || ""
-  diagnosisDialogVisible.value = true
-}
-
-async function handleSubmitDiagnosis() {
-  if (!diagnosisForm.diagnosisFirst) {
-    ElMessage.warning("请选择确认诊断")
-    return
-  }
-  if (submitting.value) return
-  submitting.value = true
-  try {
-    await submitDiagnosisApi({
-      id: diagnosisRow.value.id,
-      diagnosisFirst: diagnosisForm.diagnosisFirst
-    })
-    ElMessage.success("确认诊断成功")
-    diagnosisDialogVisible.value = false
-    fetchData()
-  } catch { /* handled by interceptor */ } finally {
-    submitting.value = false
-  }
-}
-
-// ==================== 筛查详情查看 ====================
-const screeningDetailVisible = ref(false)
-const screeningDetailData = ref<any>(null)
-
-async function viewScreeningDetail(row: any) {
-  if (!row.screeningId) {
-    ElMessage.info("暂无筛查原始数据")
-    return
-  }
-  try {
-    const { data } = await getScreeningSchoolDetailApi(row.screeningId)
-    if (data) {
-      screeningDetailData.value = data
-      screeningDetailVisible.value = true
-    } else {
-      ElMessage.info("暂无筛查原始数据")
-    }
-  } catch { /* handled by interceptor */ }
-}
-
-function getTrackingStatusType(status: number) {
-  if (status === 1) return "success"
-  if (status === 2 || status === 4) return "danger"
-  if (status === 3) return "warning"
-  return "info"
-}
-
-watch(
-  () => [paginationData.currentPage, paginationData.pageSize],
-  fetchData,
-  { immediate: true }
-)
+onMounted(() => {
+  loadDistrictOptions()
+  fetchData()
+})
 </script>
 
 <template>
   <div class="app-container">
-    <!-- 搜索栏 -->
     <el-card shadow="never" class="mb-4">
-      <el-form :model="searchForm" inline>
-        <el-form-item label="姓名">
-          <el-input v-model="searchForm.name" placeholder="请输入姓名" clearable />
-        </el-form-item>
-        <el-form-item label="证件号">
-          <el-input v-model="searchForm.idNumber" placeholder="请输入证件号" clearable />
-        </el-form-item>
-        <el-form-item label="联系电话">
-          <el-input v-model="searchForm.phone" placeholder="请输入联系电话" clearable />
-        </el-form-item>
-        <el-form-item label="时间段">
-          <el-date-picker
-            v-model="searchForm.dateRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            style="width: 240px"
+      <el-form :model="filterForm" inline>
+        <el-form-item v-show="showDepartmentFilter" label="部门">
+          <ScopedDepartmentMultiSelect
+            v-model="filterForm.departmentIds"
+            @visibility-change="showDepartmentFilter = $event"
+            @change="handleDepartmentChange"
           />
         </el-form-item>
-        <el-form-item label="追踪状态">
-          <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width: 120px">
-            <el-option v-for="(label, key) in TRACKING_STATUS_MAP" :key="key" :label="label" :value="Number(key)" />
+        <el-form-item label="年份">
+          <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">
+            <el-option v-for="y in yearOptions" :key="y" :label="y" :value="y" />
           </el-select>
         </el-form-item>
-        <el-form-item label="归档状态">
-          <el-select v-model="searchForm.archived" placeholder="全部" clearable style="width: 120px">
-            <el-option label="未归档" :value="0" />
-            <el-option label="已归档" :value="1" />
+        <el-form-item label="区县">
+          <el-select v-model="filterForm.district" placeholder="全部区县" clearable filterable style="width: 160px">
+            <el-option v-for="d in districtOptions" :key="d" :label="d" :value="d" />
           </el-select>
         </el-form-item>
-        <el-form-item label="诊断结果">
-          <el-select v-model="searchForm.diagnosisFirst" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="item in SCHOOL_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+        <el-form-item label="学校分类">
+          <el-select
+            v-model="schoolCategories"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="全部学校分类"
+            style="min-width: 280px"
+          >
+            <el-option
+              v-for="c in STUDENT_REPORT_SCHOOL_CATEGORIES"
+              :key="c"
+              :label="c"
+              :value="c"
+            />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
-            搜索
+            查询
           </el-button>
           <el-button @click="handleReset">
             重置
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button
+            type="success"
+            v-permission="['statistics:export', 'school:suspected']"
+            @click="handleExport"
+          >
+            导出 Excel
+          </el-button>
+        </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- 数据表格 -->
     <el-card shadow="never">
       <template #header>
-        <div class="flex items-center justify-between">
-          <span class="text-lg font-bold">学校人群 — 学生报表统计</span>
-          <el-upload
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".xlsx,.xls"
-            :on-change="handleImportXray"
-          >
-            <el-button v-permission="'latent:xray'" :loading="xrayImportLoading" size="small">
-              批量导入胸片结果
-            </el-button>
-          </el-upload>
-        </div>
+        <span class="text-lg font-bold">学校人群 — 学生报表统计</span>
       </template>
-
-      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" :row-class-name="getRowClass">
-        <el-table-column prop="name" min-width="90" fixed>
-          <template #header>
-            <TableHeaderFilter
-              label="姓名"
-              :model-value="columnFilters.name"
-              @change="(v) => { setFilter('name', v); handleSearch() }"
-            />
-          </template>
+      <el-table v-loading="loading" :data="tableData" border stripe max-height="600" show-summary>
+        <el-table-column prop="schoolCategory" label="学校分类" min-width="160" fixed />
+        <el-table-column prop="enrollmentCount" label="入学新生人数" min-width="120" />
+        <el-table-column label="结核病检查情况" align="center">
+          <el-table-column prop="acceptedExamCount" label="接受检查人数" min-width="120" />
+          <el-table-column prop="standardizedExamCount" label="接受规范检查人数" min-width="140" />
         </el-table-column>
-        <el-table-column prop="gender" min-width="80">
-          <template #header>
-            <TableHeaderFilter
-              label="性别"
-              type="select"
-              :options="genderFilterOptions"
-              :model-value="columnFilters.gender"
-              @change="(v) => { setFilter('gender', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column prop="age" label="年龄" />
-        <el-table-column prop="idNumber" min-width="160" show-overflow-tooltip>
-          <template #header>
-            <TableHeaderFilter
-              label="证件号"
-              :model-value="columnFilters.idNumber"
-              @change="(v) => { setFilter('idNumber', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column prop="phone" min-width="120">
-          <template #header>
-            <TableHeaderFilter
-              label="联系电话"
-              :model-value="columnFilters.phone"
-              @change="(v) => { setFilter('phone', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column prop="infectionResult" min-width="120" show-overflow-tooltip>
-          <template #header>
-            <TableHeaderFilter
-              label="感染筛查结果"
-              type="select"
-              :options="infectionResultFilterOptions"
-              :model-value="columnFilters.infectionResult"
-              @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="追踪状态">
-          <template #default="{ row }">
-            <el-tag :type="getTrackingStatusType(row.trackingStatus)" size="small">
-              {{ TRACKING_STATUS_MAP[row.trackingStatus] }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="notInPlaceCount" label="未到位次数" />
-        <el-table-column prop="trackingRemark" label="追踪备注" />
-        <el-table-column prop="chestXrayResult" min-width="100">
-          <template #header>
-            <TableHeaderFilter
-              label="胸片结果"
-              type="select"
-              :options="chestXrayFilterOptions"
-              :model-value="columnFilters.chestXrayResult"
-              @change="(v) => { setFilter('chestXrayResult', v); handleSearch() }"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column prop="diagnosisFirst" min-width="120" show-overflow-tooltip>
-          <template #header>
-            <TableHeaderFilter
-              label="确认诊断"
-              type="select"
-              :options="diagnosisFilterOptions"
-              :model-value="columnFilters.diagnosisFirst"
-              @change="(v) => { setFilter('diagnosisFirst', v); handleSearch() }"
-            />
-          </template>
-          <template #default="{ row }">
-            {{ getSuspectedConfirmDiagnosisLabel(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="归档">
-          <template #default="{ row }">
-            <el-tag :type="row.archived ? (isConfirmedPatientDiagnosis(row) ? 'danger' : 'info') : 'success'" size="small">
-              {{ row.archived ? (isConfirmedPatientDiagnosis(row) ? "结案" : "已归档") : "进行中" }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" fixed="right">
-          <template #default="{ row }">
-            <el-button type="info" link size="small" @click="viewScreeningDetail(row)">
-              查看详情
-            </el-button>
-            <el-button
-              v-if="hasTrackingHistory(row)"
-              type="info"
-              link
-              size="small"
-              @click="openHistoryView(row)"
-            >
-              追踪记录
-            </el-button>
-            <!-- 追踪 -->
-            <el-button
-              v-if="row.trackingStatus == null || row.trackingStatus === 0 || row.trackingStatus === 2"
-              v-permission="'latent:track'"
-              type="primary"
-              size="small"
-              @click="openTrackDialog(row)"
-            >
-              追踪
-            </el-button>
-            <!-- 录入胸片结果（追踪到位后、胸片结果未录入时可操作） -->
-            <el-button
-              v-if="row.trackingStatus === 1 && !row.chestXrayResult && !row.referralResult"
-              v-permission="'latent:xray'"
-              type="warning"
-              size="small"
-              @click="openXrayDialog(row)"
-            >
-              录入胸片结果
-            </el-button>
-            <!-- 确认诊断（追踪到位后、尚未完成诊断分流时可操作） -->
-            <el-button
-              v-if="row.trackingStatus === 1 && !row.referralResult"
-              v-permission="'latent:diagnosis'"
-              type="warning"
-              size="small"
-              @click="openDiagnosisDialog(row)"
-            >
-              确认诊断
-            </el-button>
-            <el-button v-permission="['referral', 'referralManagement:create']" type="warning" link size="small" @click="openTierCare(row)">
-              推介
-            </el-button>
-          </template>
-        </el-table-column>
+        <el-table-column prop="tbPatientCount" label="发现肺结核患者例数" min-width="150" />
       </el-table>
-
-      <div class="mt-4 flex justify-end">
-        <el-pagination
-          v-model:current-page="paginationData.currentPage"
-          v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handleCurrentChange"
-          @size-change="handleSizeChange"
-        />
-      </div>
     </el-card>
-
-    <!-- 筛查详情弹窗 -->
-    <ScreeningDetailDialog v-model:visible="screeningDetailVisible" type="school" :data="screeningDetailData" />
-
-    <!-- 追踪弹窗 -->
-    <TrackingOperationDialog
-      v-model="trackDialogVisible"
-      :history-json="trackingRow?.trackingHistoryJson"
-      :not-in-place-count="trackingRow?.notInPlaceCount ?? 0"
-      :loading="submitting"
-      @confirm="handleTrack"
-    />
-
-    <!-- 查看追踪记录 -->
-    <el-dialog v-model="historyViewVisible" title="追踪记录" width="520px">
-      <TrackingHistoryPanel
-        v-if="parseTrackingHistory(historyViewRow?.trackingHistoryJson).length"
-        :history-json="historyViewRow?.trackingHistoryJson"
-      />
-      <p v-else-if="historyViewRow?.trackingRemark">
-        {{ historyViewRow.trackingRemark }}
-      </p>
-      <p v-else class="text-secondary">
-        暂无追踪记录
-      </p>
-      <template #footer>
-        <el-button @click="historyViewVisible = false">
-          关闭
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 录入胸片结果弹窗（V13 拆分） -->
-    <el-dialog v-model="xrayDialogVisible" title="录入胸片检查结果" width="520px">
-      <el-alert type="info" :closable="false" class="mb-4" description="以下数据已自动从初始导入记录填充，请确认无误后点击确认。如有需要可修改后再提交。" />
-      <el-form :model="xrayForm" label-width="150px" class="xray-form">
-        <el-form-item label="是否进行胸片检查">
-          <el-radio-group v-model="xrayForm.hasChestXray">
-            <el-radio value="是">
-              是
-            </el-radio>
-            <el-radio value="否">
-              否
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <template v-if="xrayForm.hasChestXray === '是'">
-          <el-form-item label="胸片检查日期">
-            <el-date-picker v-model="xrayForm.chestXrayDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-          </el-form-item>
-          <el-form-item label="胸片结果" required>
-            <el-select v-model="xrayForm.chestXrayResult" placeholder="请选择" style="width: 100%">
-              <el-option v-for="item in CHEST_XRAY_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-        </template>
-      </el-form>
-      <template #footer>
-        <el-button @click="xrayDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitXray">
-          确认录入
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 确认诊断弹窗 -->
-    <el-dialog v-model="diagnosisDialogVisible" title="确认诊断" width="520px">
-      <el-form :model="diagnosisForm" label-width="0">
-        <el-form-item required>
-          <el-select v-model="diagnosisForm.diagnosisFirst" placeholder="请选择诊断结果" style="width: 100%">
-            <el-option v-for="item in SUSPECTED_CONFIRM_DIAGNOSIS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="diagnosisDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitDiagnosis">
-          确定
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 推介弹窗 -->
-    <RecommendCreateDialog
-      v-model="tierCareVisible"
-      :source="tierCareRow"
-      default-crowd-category="学生"
-    />
   </div>
 </template>
-
-<style lang="scss" scoped>
-.mb-4 {
-  margin-bottom: 16px;
-}
-.mt-4 {
-  margin-top: 16px;
-}
-.mt-1 {
-  margin-top: 4px;
-}
-.xray-form {
-  :deep(.el-form-item__label) {
-    white-space: nowrap;
-  }
-}
-</style>
-
-<style lang="scss">
-.el-table .overdue-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
-}
-.el-table .confirmed-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
-}
-</style>

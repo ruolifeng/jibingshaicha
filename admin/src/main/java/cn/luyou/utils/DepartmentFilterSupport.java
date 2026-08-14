@@ -65,6 +65,27 @@ public class DepartmentFilterSupport {
     }
 
     /**
+     * 解析用户勾选的部门 ID（不展开下级）。用于报表分行：区县+下属镇同时勾选时，需按镇单独出一行。
+     */
+    public List<Long> parseSelectedDepartmentIds(String departmentIdsParam) {
+        if (!StringUtils.hasText(departmentIdsParam)) {
+            return List.of();
+        }
+        List<Long> selected = parseIdList(departmentIdsParam);
+        if (selected.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> userScope = new HashSet<>(resolveUserScopeDepartmentIds());
+        List<Long> allowed = new ArrayList<>();
+        for (Long id : selected) {
+            if (isAllowedSelection(id, userScope)) {
+                allowed.add(id);
+            }
+        }
+        return allowed;
+    }
+
+    /**
      * 返回当前用户可用于统计筛选的部门树：
      * 市级 → 区县 + 下属社区；区县 → 本区县社区；社区级 → 空（前端隐藏筛选）。
      */

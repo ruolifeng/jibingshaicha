@@ -6,10 +6,11 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
+import { downloadBlob } from "@@/utils/download"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { canEditSupervisionForm, getSupervisionStatusLabel, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import { useUserStore } from "@/pinia/stores/user"
-import { getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
+import { exportLatentSupervisionFormsApi, getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
 import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
 const userStore = useUserStore()
@@ -80,6 +81,59 @@ function handleReset() {
   searchForm.populationType = ""
   clearFilters()
   handleSearch()
+}
+
+const selectedRows = ref<any[]>([])
+const exporting = ref(false)
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+function buildListQueryParams() {
+  const columnFiltersParam = toQueryParam()
+  return {
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    creatorName: searchForm.creatorName || undefined,
+    populationType: searchForm.populationType || undefined,
+    archived: searchForm.archived,
+    referralResult: "latent",
+    trackingStatus: 1,
+    dateFilterBy: "supervisionFill",
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...extractDateRangeParams(searchForm.dateRange)
+  }
+}
+
+async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: string[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected ? `选中的 ${ids!.length} 条` : "当前筛选条件下的"
+  try {
+    await ElMessageBox.confirm(`确认导出${label}督导表数据吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    exporting.value = true
+    const blob = await exportLatentSupervisionFormsApi(isSelected ? { ids } : buildListQueryParams())
+    downloadBlob(blob as unknown as Blob, "督导表.xlsx")
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport("selected", ids)
 }
 
 onMounted(fetchData)
@@ -214,7 +268,35 @@ async function openPrint(row: Record<string, any>) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <el-table v-loading="loading" :data="tableData" border stripe>
+      <div class="toolbar flex items-center justify-end gap-2 flex-wrap" style="margin-bottom: 12px">
+        <el-button
+          v-permission="'latentManagement:supervision'"
+          type="primary"
+          plain
+          :loading="exporting"
+          @click="handleExport('filtered')"
+        >
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:supervision'"
+          type="warning"
+          :disabled="!selectedRows.length"
+          :loading="exporting"
+          @click="handleExportSelected"
+        >
+          导出勾选
+        </el-button>
+      </div>
+      <el-table
+        v-loading="loading"
+        :data="tableData"
+        border
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column prop="populationType" min-width="110">
           <template #header>

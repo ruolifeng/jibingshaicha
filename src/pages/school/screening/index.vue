@@ -7,7 +7,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_TYPE_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
+import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_TYPE_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
@@ -151,6 +151,7 @@ function openTierCare(row: any) {
 /** Excel 上传 */
 const uploadRef = ref()
 const importResultVisible = ref(false)
+const fillGuideVisible = ref(false)
 const importResult = ref<{ successCount: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
@@ -551,6 +552,9 @@ watch(
             <el-button type="danger" :loading="batchDeleting" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
               删除勾选
             </el-button>
+            <el-button @click="fillGuideVisible = true">
+              填写说明
+            </el-button>
             <el-upload
               ref="uploadRef"
               :auto-upload="false"
@@ -681,13 +685,55 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="ethnicity" label="民族" />
-        <el-table-column prop="participatedScreening" label="是否参加筛查" min-width="110" />
-        <el-table-column prop="tbHistory" label="既往结核病史" min-width="110" />
-        <el-table-column prop="closeContactHistory" label="肺结核接触史" min-width="110" />
+        <el-table-column min-width="110">
+          <template #header>
+            <TableHeaderHint label="是否参加筛查" :hint="SCHOOL_SCREENING_FIELD_HINTS.participatedScreening" />
+          </template>
+          <template #default="{ row }">
+            {{ row.participatedScreening || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column min-width="110">
+          <template #header>
+            <TableHeaderHint label="既往结核病史" :hint="SCHOOL_SCREENING_FIELD_HINTS.tbHistory" />
+          </template>
+          <template #default="{ row }">
+            {{ row.tbHistory || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column min-width="110">
+          <template #header>
+            <TableHeaderHint label="肺结核接触史" :hint="SCHOOL_SCREENING_FIELD_HINTS.closeContactHistory" />
+          </template>
+          <template #default="{ row }">
+            {{ row.closeContactHistory || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="结核病可疑症状">
-          <el-table-column prop="symptomCough" label="咳嗽咳痰≥两周" min-width="120" />
-          <el-table-column prop="symptomHemoptysis" label="咯血或血痰" min-width="100" />
-          <el-table-column prop="symptomOther" label="其他" min-width="80" />
+          <el-table-column min-width="120">
+            <template #header>
+              <TableHeaderHint label="咳嗽咳痰≥两周" :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomCough" />
+            </template>
+            <template #default="{ row }">
+              {{ row.symptomCough || "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column min-width="100">
+            <template #header>
+              <TableHeaderHint label="咯血或血痰" :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomHemoptysis" />
+            </template>
+            <template #default="{ row }">
+              {{ row.symptomHemoptysis || "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column min-width="80">
+            <template #header>
+              <TableHeaderHint label="其他" :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomOther" />
+            </template>
+            <template #default="{ row }">
+              {{ row.symptomOther || "-" }}
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="感染筛查">
           <el-table-column prop="screenDate" label="感染筛查时间" min-width="110" sortable="custom" />
@@ -1159,6 +1205,22 @@ watch(
       default-crowd-category="学生"
     />
 
+    <!-- 填写说明 -->
+    <el-dialog v-model="fillGuideVisible" title="填写说明 — 2026年秋季新生入学结核病筛查记录表" width="720px">
+      <p class="fill-guide-tip">
+        说明与《2026年秋季新生入学结核病筛查记录表新》Excel 第 5 行一致。导入/新增时请按数字码或对应中文填写。点击表头带虚线下划线的列名也可查看该列说明。
+      </p>
+      <el-table :data="SCHOOL_SCREENING_FILL_INSTRUCTIONS" border stripe max-height="480">
+        <el-table-column prop="field" label="字段" width="160" />
+        <el-table-column prop="hint" label="填写说明" min-width="400" />
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="fillGuideVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 导入结果弹窗 -->
     <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
       <el-alert
@@ -1203,6 +1265,13 @@ watch(
   :deep(.el-form-item__label) {
     white-space: nowrap;
   }
+}
+
+.fill-guide-tip {
+  margin: 0 0 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+  font-size: 13px;
 }
 </style>
 

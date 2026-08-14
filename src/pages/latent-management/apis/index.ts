@@ -173,6 +173,24 @@ export function getSupervisionListApi(latentInfectionId: string) {
   return request<ApiResponseData<any[]>>({ url: `supervision/list/${latentInfectionId}`, method: "get" })
 }
 
+/** 导出督导表（ids 勾选；否则按当前筛选） */
+export function exportLatentSupervisionFormsApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
+  return request<Blob>({
+    url: "export/latent-supervision-forms",
+    method: "get",
+    params: {
+      archived: 0,
+      referralResult: "latent",
+      trackingStatus: 1,
+      dateFilterBy: "supervisionFill",
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
+    responseType: "blob"
+  })
+}
+
 /** 按 ID 查询督导表详情 */
 export function getSupervisionByIdApi(id: string) {
   return request<ApiResponseData<any>>({ url: `supervision/${id}`, method: "get" })

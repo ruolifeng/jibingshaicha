@@ -33,5 +33,5 @@ public interface StatisticsService {
      * 重点人群肺结核可疑症状筛查和推介情况报表（按区县汇总）。
      */
     List<KeyPopulationTbSymptomReferralStatisticsVO> getKeyPopulationTbSymptomReferralStatistics(
-            String year, String district, List<Long> filterDeptIds);
+            String year, String district, List<Long> filterDeptIds, List<Long> selectedDeptIds);
 }

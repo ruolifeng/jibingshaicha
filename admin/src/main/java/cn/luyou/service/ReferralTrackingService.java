@@ -60,7 +60,16 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
                      String name, String idNumber, String phone, String township,
                      String dateFrom, String dateTo, String sourceType,
                      String creatorOrEntryUnit, List<Long> ids,
-                     String createTimeFrom, String createTimeTo);
+                     String createTimeFrom, String createTimeTo, Integer trackingStatus);
+
+    default void exportTrack(HttpServletResponse response, String bizMode,
+                             String name, String idNumber, String phone, String township,
+                             String dateFrom, String dateTo, String sourceType,
+                             String creatorOrEntryUnit, List<Long> ids,
+                             String createTimeFrom, String createTimeTo) {
+        exportTrack(response, bizMode, name, idNumber, phone, township,
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, ids, createTimeFrom, createTimeTo, null);
+    }
 
     default void exportTrack(HttpServletResponse response, String bizMode,
                              String name, String idNumber, String phone, String township,
