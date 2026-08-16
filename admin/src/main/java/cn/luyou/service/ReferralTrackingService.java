@@ -50,7 +50,20 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 大疫情表导入（创建 bizMode=track, sourceType=epidemic 记录） */
     Map<String, Object> previewEpidemicImport(MultipartFile file);
 
-    Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords);
+    /**
+     * @param townshipReceiversJson 五级跨镇导入时「乡镇→三级用户ID」JSON，如 {"邓井关街道":"123"}
+     */
+    Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords, String townshipReceiversJson);
+
+    default Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords) {
+        return importEpidemic(file, addDuplicateRecords, null);
+    }
+
+    /** 区县三级确认：大疫情跨镇导入 */
+    void confirmCrossTown(Long id);
+
+    /** 区县三级拒绝：大疫情跨镇导入（归档） */
+    void rejectCrossTown(Long id, String reason);
 
     /** 按业务类型 + 证件号 + 姓名判断是否已有记录 */
     boolean existsByIdNumberAndName(String bizMode, String idNumber, String name);

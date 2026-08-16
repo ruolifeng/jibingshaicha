@@ -11,6 +11,11 @@ public interface SmsService {
     void sendForMessageAsync(Long receiverId, String title, String content, String type);
 
     /**
+     * 随访/督导到期等场景：按用户联系电话直接发送短信（不依赖站内消息）。
+     */
+    void sendReminderSmsAsync(Long receiverId, String content);
+
+    /**
      * 同步发送测试短信（供超管配置页验证）
      *
      * @return 成功说明或抛出业务异常

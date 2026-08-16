@@ -142,7 +142,7 @@ export function checkReferralDuplicateApi(params: { bizMode: string, idNumber: s
   })
 }
 
-/** 大疫情导入：五级跨镇跳过明细 */
+/** 大疫情导入：五级跨镇跳过/待确认明细 */
 export interface EpidemicImportSkippedItem {
   name: string
   idNumber: string
@@ -177,14 +177,23 @@ export function previewEpidemicTrackImportApi(file: File) {
   })
 }
 
-/** 大疫情表导入（追踪模块） */
-export function importEpidemicTrackApi(file: File, addDuplicateRecords = false) {
+/** 大疫情表导入（追踪模块）；townshipReceivers 为乡镇→三级用户ID */
+export function importEpidemicTrackApi(
+  file: File,
+  addDuplicateRecords = false,
+  townshipReceivers?: Record<string, string>
+) {
   const formData = new FormData()
   formData.append("file", file)
+  // 与文件一并放入 multipart，避免中文乡镇名作为 query 参数编码问题
+  if (townshipReceivers && Object.keys(townshipReceivers).length) {
+    formData.append("townshipReceivers", JSON.stringify(townshipReceivers))
+  }
   return request<ApiResponseData<{
     count: number
     updated?: number
     skipped?: number
+    pendingConfirm?: number
     batchNo: string
     skippedItems?: EpidemicImportSkippedItem[]
   }>>({
@@ -192,6 +201,31 @@ export function importEpidemicTrackApi(file: File, addDuplicateRecords = false) 
     method: "post",
     params: { addDuplicateRecords },
     data: formData
+  })
+}
+
+/** 当前用户所属区县下的三级用户（跨镇导入选人） */
+export function getCountyLevel3UsersApi() {
+  return request<ApiResponseData<any[]>>({
+    url: "user/county-level3-users",
+    method: "get"
+  })
+}
+
+/** 区县三级确认大疫情跨镇导入 */
+export function confirmCrossTownImportApi(id: string | number) {
+  return request<ApiResponseData<null>>({
+    url: `referral-tracking/${id}/cross-town/confirm`,
+    method: "post"
+  })
+}
+
+/** 区县三级拒绝大疫情跨镇导入 */
+export function rejectCrossTownImportApi(id: string | number, reason?: string) {
+  return request<ApiResponseData<null>>({
+    url: `referral-tracking/${id}/cross-town/reject`,
+    method: "post",
+    data: reason ? { reason } : {}
   })
 }
 

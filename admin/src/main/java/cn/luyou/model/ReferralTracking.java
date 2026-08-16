@@ -88,6 +88,13 @@ public class ReferralTracking extends BaseEntity {
     private Integer jointTracking;
     /** 开启共同追踪时间 */
     private LocalDateTime jointTrackingTime;
+    /**
+     * 大疫情跨镇导入确认：0无需 1待区县三级确认 2已确认 3已拒绝。
+     * 独立于 recommendStatus，避免确认后被剔出追踪列表。
+     */
+    private Integer crossTownConfirmStatus;
+    /** 跨镇确认/拒绝时间 */
+    private LocalDateTime crossTownConfirmTime;
 
     // ===== 追踪 =====
     /** 追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束 */

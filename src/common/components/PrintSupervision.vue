@@ -98,10 +98,16 @@ function handlePrint() {
             <td>{{ data?.treatmentEndDate || "-" }}</td>
           </tr>
           <tr>
+            <th>下次督导时间</th>
+            <td>{{ data?.nextSupervisionDate || "-" }}</td>
             <th>管理单位</th>
             <td>{{ data?.managingUnit || "-" }}</td>
+          </tr>
+          <tr>
             <th>督导医生</th>
-            <td>{{ data?.supervisingDoctor || "-" }}</td>
+            <td colspan="3">
+              {{ data?.supervisingDoctor || "-" }}
+            </td>
           </tr>
 
           <tr class="section-header">

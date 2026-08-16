@@ -26,8 +26,14 @@ const TYPE_CONFIG: Record<string, { label: string, status: NotifyItem["status"] 
   referral_tracking_confirmed: { label: "推介已接收", status: "success" },
   referral_tracking_rejected: { label: "推介已被拒绝", status: "danger" },
   referral_tracking_joint: { label: "共同追踪已开启", status: "success" },
+  epidemic_cross_town_receive: { label: "待确认跨镇导入", status: "warning" },
+  epidemic_cross_town_confirmed: { label: "跨镇导入已确认", status: "success" },
+  epidemic_cross_town_rejected: { label: "跨镇导入已拒绝", status: "danger" },
   sputum_culture_pending: { label: "痰培养未补充", status: "warning" },
-  sputum_culture_supplemented: { label: "痰培养已补充", status: "success" }
+  sputum_culture_supplemented: { label: "痰培养已补充", status: "success" },
+  culture_resistance_changed: { label: "培养耐药变更", status: "primary" },
+  follow_up_due: { label: "后续随访提醒", status: "warning" },
+  supervision_due: { label: "督导表提醒", status: "warning" }
 }
 
 /** 面板宽度 */

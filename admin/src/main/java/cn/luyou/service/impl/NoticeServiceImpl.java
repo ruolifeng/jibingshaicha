@@ -1,16 +1,26 @@
 package cn.luyou.service.impl;
 
+import cn.hutool.core.util.StrUtil;
 import cn.luyou.common.customError.ServiceException;
 import cn.luyou.common.cuenum.StatusEnum;
+import cn.luyou.model.FirstVisit;
 import cn.luyou.model.Notice;
+import cn.luyou.model.Patient;
+import cn.luyou.model.User;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
+import cn.luyou.model.vo.UserInfoVO;
+import cn.luyou.service.DepartmentService;
+import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.SysMessageService;
+import cn.luyou.service.UserService;
 import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.DataScopeHelper;
+import cn.luyou.utils.FirstVisitSputumCultureSupport;
 import cn.luyou.utils.NoticePartyFillSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -18,32 +28,50 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         implements NoticeService {
 
+    public static final String MSG_TYPE_CULTURE_RESISTANCE_CHANGED = "culture_resistance_changed";
+
     private final SysMessageService sysMessageService;
     private final DataScopeHelper dataScopeHelper;
     private final PatientService patientService;
     private final LatentInfectionService latentInfectionService;
     private final NoticePartyFillSupport noticePartyFillSupport;
+    private final FirstVisitService firstVisitService;
+    private final FirstVisitSputumCultureSupport firstVisitSputumCultureSupport;
+    private final UserService userService;
+    private final DepartmentService departmentService;
 
     public NoticeServiceImpl(
             SysMessageService sysMessageService,
             DataScopeHelper dataScopeHelper,
             PatientService patientService,
             @Lazy LatentInfectionService latentInfectionService,
-            NoticePartyFillSupport noticePartyFillSupport) {
+            NoticePartyFillSupport noticePartyFillSupport,
+            FirstVisitService firstVisitService,
+            FirstVisitSputumCultureSupport firstVisitSputumCultureSupport,
+            UserService userService,
+            DepartmentService departmentService) {
         this.sysMessageService = sysMessageService;
         this.dataScopeHelper = dataScopeHelper;
         this.patientService = patientService;
         this.latentInfectionService = latentInfectionService;
         this.noticePartyFillSupport = noticePartyFillSupport;
+        this.firstVisitService = firstVisitService;
+        this.firstVisitSputumCultureSupport = firstVisitSputumCultureSupport;
+        this.userService = userService;
+        this.departmentService = departmentService;
     }
 
     @Override
@@ -169,6 +197,118 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         }
         noticePartyFillSupport.fillPartyNames(List.of(notice));
         return notice;
+    }
+
+    @Override
+    public List<UserInfoVO> listDistrictLevel3Users(Long noticeId) {
+        Notice notice = requirePatientNotice(noticeId);
+        Long districtId = resolvePatientDistrictId(notice.getBizId());
+        return userService.getLevel3UsersInDistrict(districtId);
+    }
+
+    @Override
+    @Transactional
+    public void updateCultureAndResistance(Long noticeId, UpdateNoticeCultureResistanceDTO dto) {
+        if (dto == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少更新内容");
+        }
+        Notice notice = requirePatientNotice(noticeId);
+        notice.setSputumCulture(StrUtil.trimToNull(dto.getSputumCulture()));
+        notice.setDrugResistance(StrUtil.trimToNull(dto.getDrugResistance()));
+        updateById(notice);
+        syncFirstVisitCultureAndResistance(notice.getBizId(), notice.getSputumCulture(), notice.getDrugResistance());
+        sendCultureResistanceChangedMessages(notice, dto.getReceiverUserIds());
+    }
+
+    private Notice requirePatientNotice(Long noticeId) {
+        Notice notice = getById(noticeId);
+        if (notice == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单不存在");
+        }
+        if (!"patient".equals(notice.getNoticeType())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅患者通知单可修改痰培养和耐药情况");
+        }
+        assertBizAccessible(notice.getBizId(), notice.getNoticeType());
+        return notice;
+    }
+
+    private Long resolvePatientDistrictId(Long patientId) {
+        Patient patient = patientService.getById(patientId);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        Long districtId = departmentService.resolveDistrictId(patient.getDepartmentId());
+        if (districtId == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "无法确定患者所属区县，请检查患者部门归属");
+        }
+        return districtId;
+    }
+
+    private void syncFirstVisitCultureAndResistance(Long patientId, String sputumCulture, String drugResistance) {
+        if (patientId == null) {
+            return;
+        }
+        FirstVisit existing = firstVisitService.lambdaQuery()
+                .eq(FirstVisit::getPatientId, patientId)
+                .one();
+        if (existing == null) {
+            return;
+        }
+        FirstVisit before = new FirstVisit();
+        before.setSputumCulture(existing.getSputumCulture());
+        before.setDrugResistance(existing.getDrugResistance());
+        before.setSputumCultureSupplementStatus(existing.getSputumCultureSupplementStatus());
+        before.setStatus(existing.getStatus());
+        before.setPatientId(existing.getPatientId());
+        before.setFilledBy(existing.getFilledBy());
+        existing.setSputumCulture(sputumCulture);
+        existing.setDrugResistance(drugResistance);
+        firstVisitSputumCultureSupport.prepareSupplementStatus(existing, before);
+        firstVisitService.lambdaUpdate()
+                .eq(FirstVisit::getId, existing.getId())
+                .set(FirstVisit::getSputumCulture, existing.getSputumCulture())
+                .set(FirstVisit::getDrugResistance, existing.getDrugResistance())
+                .set(FirstVisit::getSputumCultureSupplementStatus, existing.getSputumCultureSupplementStatus())
+                .update();
+        firstVisitSputumCultureSupport.syncMessages(existing, before);
+    }
+
+    private void sendCultureResistanceChangedMessages(Notice notice, List<Long> receiverUserIds) {
+        if (receiverUserIds == null || receiverUserIds.isEmpty()) {
+            return;
+        }
+        Long districtId = resolvePatientDistrictId(notice.getBizId());
+        Set<Long> allowedIds = userService.getLevel3UsersInDistrict(districtId).stream()
+                .map(UserInfoVO::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+        List<Long> validIds = new ArrayList<>();
+        for (Long id : receiverUserIds) {
+            if (id != null && allowedIds.contains(id) && !validIds.contains(id)) {
+                validIds.add(id);
+            }
+        }
+        if (validIds.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择本区县对应的三级用户");
+        }
+        String operatorName = resolveCurrentUserDisplayName();
+        String patientName = StrUtil.blankToDefault(notice.getPatientName(), "患者");
+        String title = "培养、耐药信息变更";
+        String content = operatorName + "对" + patientName + "患者培养、耐药信息变更";
+        for (Long receiverId : validIds) {
+            sysMessageService.sendMessage(receiverId, title, content, MSG_TYPE_CULTURE_RESISTANCE_CHANGED, notice.getId());
+        }
+    }
+
+    private String resolveCurrentUserDisplayName() {
+        Long currentId = BaseContext.getCurrentId();
+        if (currentId == null) {
+            return "系统用户";
+        }
+        User user = userService.getById(currentId);
+        if (user == null) {
+            return "系统用户";
+        }
+        return StrUtil.blankToDefault(user.getRealName(), user.getUsername());
     }
 
     @Override

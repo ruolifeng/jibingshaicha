@@ -77,6 +77,7 @@ public class Notice extends BaseEntity {
     /** 痰涂片：未出结果/阴性/阳性/未做/未知 */
     private String sputumSmear;
     /** 痰培养 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String sputumCulture;
     /** 分子检查 */
     private String molecularTest;

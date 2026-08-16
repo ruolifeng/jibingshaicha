@@ -176,6 +176,27 @@ export function getNoticeDetailApi(id: string) {
   return request<ApiResponseData<any>>({ url: `notice/detail/${id}`, method: "get" })
 }
 
+/** 患者所属区县的三级用户（培养/耐药变更通知对象） */
+export function getNoticeDistrictLevel3UsersApi(noticeId: string) {
+  return request<ApiResponseData<any[]>>({
+    url: `notice/${noticeId}/district-level3-users`,
+    method: "get"
+  })
+}
+
+/** 修改患者通知单痰培养、耐药情况并同步首次随访 */
+export function updateNoticeCultureResistanceApi(noticeId: string, data: {
+  sputumCulture?: string
+  drugResistance?: string
+  receiverUserIds?: string[]
+}) {
+  return request<ApiResponseData<null>>({
+    url: `notice/${noticeId}/culture-resistance`,
+    method: "post",
+    data
+  })
+}
+
 /** 保存/更新首次随访 */
 export function saveFirstVisitApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "patient/first-visit/save", method: "post", data })

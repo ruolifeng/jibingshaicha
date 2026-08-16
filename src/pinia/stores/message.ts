@@ -14,7 +14,10 @@ const ALERT_TYPE_PRIORITY: string[] = [
   "supervision_timeout",
   "visit_timeout",
   "sputum_culture_pending",
-  "review_reminder"
+  "review_reminder",
+  "culture_resistance_changed",
+  "follow_up_due",
+  "supervision_due"
 ]
 
 const ALERT_TYPE_TITLE: Record<string, string> = {
@@ -25,7 +28,10 @@ const ALERT_TYPE_TITLE: Record<string, string> = {
   supervision_timeout: "督导表超时",
   visit_timeout: "随访超时",
   sputum_culture_pending: "痰培养未补充",
-  review_reminder: "复查提醒"
+  review_reminder: "复查提醒",
+  culture_resistance_changed: "培养、耐药信息变更",
+  follow_up_due: "后续随访提醒",
+  supervision_due: "督导表提醒"
 }
 
 function loadAlertedIds(): Set<string> {

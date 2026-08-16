@@ -82,6 +82,7 @@ const supervisionForm = reactive({
   hasPreventiveTreatment: "",
   treatmentStartDate: "",
   treatmentEndDate: "",
+  nextSupervisionDate: "",
   treatmentPlan: "",
   customPlanDetail: "",
   managingUnit: "",
@@ -168,6 +169,7 @@ function resetFormFromRow(row: any) {
   supervisionForm.hasPreventiveTreatment = ""
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
+  supervisionForm.nextSupervisionDate = ""
   supervisionForm.treatmentPlan = ""
   supervisionForm.customPlanDetail = ""
   supervisionForm.managingUnit = row.managingUnit || row.preventiveManager || ""
@@ -206,6 +208,7 @@ function applyFormData(data: Record<string, any>, row: any) {
   supervisionForm.hasPreventiveTreatment = data.hasPreventiveTreatment || supervisionForm.hasPreventiveTreatment
   supervisionForm.treatmentStartDate = formatDateValue(data.treatmentStartDate)
   supervisionForm.treatmentEndDate = formatDateValue(data.treatmentEndDate)
+  supervisionForm.nextSupervisionDate = formatDateValue(data.nextSupervisionDate)
   parseTreatmentPlan(data.treatmentPlan)
   supervisionForm.managingUnit = data.managingUnit || supervisionForm.managingUnit
   supervisionForm.supervisingDoctor = data.supervisingDoctor || supervisionForm.supervisingDoctor
@@ -335,6 +338,7 @@ function buildPayload(status: number) {
     hasPreventiveTreatment: supervisionForm.hasPreventiveTreatment || undefined,
     treatmentStartDate: supervisionForm.treatmentStartDate || undefined,
     treatmentEndDate: supervisionForm.treatmentEndDate || undefined,
+    nextSupervisionDate: supervisionForm.nextSupervisionDate || undefined,
     treatmentPlan: resolveTreatmentPlan() || undefined,
     managingUnit: supervisionForm.managingUnit || undefined,
     supervisingDoctor: supervisionForm.supervisingDoctor || undefined,
@@ -558,6 +562,19 @@ async function handleArchive() {
             />
           </el-form-item>
         </el-col>
+        <el-col :span="12">
+          <el-form-item label="下次督导时间">
+            <el-date-picker
+              v-model="supervisionForm.nextSupervisionDate"
+              type="date"
+              placeholder="选择日期"
+              value-format="YYYY-MM-DD"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-row :gutter="12">
         <el-col :span="12">
           <el-form-item label="管理单位">
             <el-select

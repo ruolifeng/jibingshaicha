@@ -18,6 +18,12 @@ public interface DepartmentService extends IService<Department> {
      */
     List<Long> getDescendantIds(Long deptId);
 
+    /**
+     * 解析所属区县部门 ID：沿上级走到 level=2；若本身已是区县则返回自身。
+     * 市级（level=1）或无法解析时返回 null。
+     */
+    Long resolveDistrictId(Long deptId);
+
     /** 按部门名称模糊匹配，返回部门 ID 列表（用于录入单位筛选） */
     List<Long> resolveIdsByNameLike(String name);
 

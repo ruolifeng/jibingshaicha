@@ -32,6 +32,12 @@ public interface UserService extends IService<User> {
     /** 获取一至五级用户（role=2-6，用于推介追踪接收人选择） */
     List<UserInfoVO> getLevel34Users();
 
+    /** 指定区县部门树内的三级用户（role=4） */
+    List<UserInfoVO> getLevel3UsersInDistrict(Long districtId);
+
+    /** 当前登录用户所属区县下的三级用户（跨镇导入选人） */
+    List<UserInfoVO> getCurrentCountyLevel3Users();
+
     /** 权限管理-按用户追加：获取同部门用户（超级管理员返回全部） */
     List<UserInfoVO> listSameDepartmentUsers();
 

@@ -100,6 +100,9 @@ const supervisionRecords = computed(() => {
         <el-descriptions-item label="治疗结束时间">
           {{ d.treatmentEndDate || "-" }}
         </el-descriptions-item>
+        <el-descriptions-item label="下次督导时间">
+          {{ d.nextSupervisionDate || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="管理单位">
           {{ d.managingUnit || "-" }}
         </el-descriptions-item>

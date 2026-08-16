@@ -67,6 +67,12 @@ public class SmsServiceImpl implements SmsService {
     }
 
     @Override
+    @Async
+    public void sendReminderSmsAsync(Long receiverId, String content) {
+        sendForMessageAsync(receiverId, StrUtil.blankToDefault(content, "随访督导提醒"), content, "visit_supervision_due");
+    }
+
+    @Override
     public String sendTestSms(String phone, String message) {
         SysSmsConfig cfg = smsConfigService.getRawConfig();
         if (!Integer.valueOf(1).equals(cfg.getEnabled())) {

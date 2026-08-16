@@ -110,3 +110,20 @@ export function getDashboardMessageStatsApi(departmentIds?: string[]) {
     params: withDepartmentIds({}, departmentIds)
   })
 }
+
+export interface UpcomingVisitSupervisionItem {
+  type: "follow_up" | "supervision"
+  bizId: string
+  name: string
+  dueDate: string
+  leadDays: number
+}
+
+/** 首页：距下次随访/督导 7/3/1 天的提醒 */
+export function getUpcomingVisitSupervisionApi(departmentIds?: string[]) {
+  return request<ApiResponseData<UpcomingVisitSupervisionItem[]>>({
+    url: "reminder/visit-supervision/upcoming",
+    method: "get",
+    params: withDepartmentIds({}, departmentIds)
+  })
+}
