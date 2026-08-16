@@ -5,6 +5,7 @@ import { DASHBOARD_ADMIN_TITLE, DASHBOARD_EDITOR_WELCOME } from "@@/constants/ap
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { Bell, Calendar, FirstAidKit, Refresh, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
+import UpcomingVisitSupervisionPanel from "./UpcomingVisitSupervisionPanel.vue"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
 const selectedDepartmentIds = ref<string[]>([])
@@ -17,6 +18,8 @@ const summary = ref<DashboardSummaryData>({
   upcomingReview: 0
 })
 
+const reminderPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
+
 async function fetchSummary() {
   summaryLoading.value = true
   try {
@@ -25,6 +28,7 @@ async function fetchSummary() {
   } catch { /* handled */ } finally {
     summaryLoading.value = false
   }
+  await reminderPanelRef.value?.refresh()
 }
 
 onMounted(() => {
@@ -138,6 +142,8 @@ const trackingPeriodText = computed(() => {
         </div>
       </el-col>
     </el-row>
+
+    <UpcomingVisitSupervisionPanel ref="reminderPanelRef" :department-ids="selectedDepartmentIds" />
 
     <div v-loading="summaryLoading" class="year-stats-section">
       <div v-if="trackingPeriodText" class="year-stats-period">

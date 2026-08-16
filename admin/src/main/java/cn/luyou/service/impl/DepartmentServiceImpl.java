@@ -253,6 +253,26 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     private record DepartmentImportRow(int rowNum, String name, Integer level, String parentName, String description) {}
 
     @Override
+    public Long resolveDistrictId(Long deptId) {
+        if (deptId == null) {
+            return null;
+        }
+        Department current = getById(deptId);
+        int guard = 0;
+        while (current != null && current.getLevel() != null && current.getLevel() > 2 && guard < 16) {
+            if (current.getParentId() == null) {
+                break;
+            }
+            current = getById(current.getParentId());
+            guard++;
+        }
+        if (current != null && current.getLevel() != null && current.getLevel() == 2) {
+            return current.getId();
+        }
+        return null;
+    }
+
+    @Override
     public List<Long> getDescendantIds(Long deptId) {
         List<Long> result = new ArrayList<>();
         if (deptId == null) {

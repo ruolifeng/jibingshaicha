@@ -155,4 +155,10 @@ public class UserController {
     public ResultResponse<List<UserInfoVO>> getLevel34Users() {
         return ResultRes.success(userService.getLevel34Users());
     }
+
+    @Operation(summary = "当前用户所属区县下的三级用户（大疫情跨镇导入选人）")
+    @GetMapping("/county-level3-users")
+    public ResultResponse<List<UserInfoVO>> getCurrentCountyLevel3Users() {
+        return ResultRes.success(userService.getCurrentCountyLevel3Users());
+    }
 }

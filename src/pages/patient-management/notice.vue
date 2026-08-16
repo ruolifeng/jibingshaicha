@@ -7,7 +7,6 @@ import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTE
 import {
   getPatientTransferStatusLabel,
   isNoticeReceiveOverdue,
-  isNoticeSent,
   isPatientTransferLocked,
   resolveMedicationManagementUnit,
   resolveNoticeConfirmedDisplayTime,
@@ -48,6 +47,7 @@ const {
 const noticeDialogVisible = ref(false)
 const noticeDetailVisible = ref(false)
 const noticeRow = ref<any>(null)
+const noticeStartEdit = ref(false)
 
 function openNotice(row: any) {
   noticeRow.value = row
@@ -56,7 +56,19 @@ function openNotice(row: any) {
 
 function viewNotice(row: any) {
   noticeRow.value = row
+  noticeStartEdit.value = false
   noticeDetailVisible.value = true
+}
+
+function editNoticeCulture(row: any) {
+  noticeRow.value = row
+  noticeStartEdit.value = true
+  noticeDetailVisible.value = true
+}
+
+function handleDetailVisible(v: boolean) {
+  noticeDetailVisible.value = v
+  if (!v) noticeStartEdit.value = false
 }
 
 async function handleDelete(row: any) {
@@ -267,7 +279,19 @@ function getNoticeRowClass({ row }: { row: any }) {
                   填写通知单
                 </el-button>
               </template>
-              <NoticeSentStatusButton v-else-if="isNoticeSent(row)" />
+              <template v-else>
+                <NoticeSentStatusButton />
+                <el-button
+                  v-if="row.noticeStatus === 1 || row.noticeStatus === 2"
+                  v-permission="'patientManagement:notice:fill'"
+                  type="warning"
+                  link
+                  size="small"
+                  @click="editNoticeCulture(row)"
+                >
+                  修改
+                </el-button>
+              </template>
               <el-button v-permission="'patientManagement:delete'" type="danger" link size="small" @click="handleDelete(row)">
                 删除
               </el-button>
@@ -300,7 +324,9 @@ function getNoticeRowClass({ row }: { row: any }) {
     <PatientNoticeDetailDialog
       v-model:visible="noticeDetailVisible"
       :patient-row="noticeRow"
+      :start-edit="noticeStartEdit"
       @success="fetchData"
+      @update:visible="handleDetailVisible"
     />
   </div>
 </template>

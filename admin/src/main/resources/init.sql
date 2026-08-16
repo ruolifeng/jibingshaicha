@@ -557,6 +557,7 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     `actual_doses`           INT          DEFAULT NULL COMMENT '实际用药次数',
     `medication_rate`        VARCHAR(16)  DEFAULT NULL COMMENT '用药率（%）',
     `treatment_end_date`     DATE         DEFAULT NULL COMMENT '预防性治疗完成（结束疗程）时间',
+    `next_supervision_date`  DATE         DEFAULT NULL COMMENT '下次督导时间',
     -- V4 旧字段兼容保留
     `preventive_result`      VARCHAR(64)  DEFAULT NULL COMMENT '预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4旧字段）',
     `preventive_manager`     VARCHAR(256) DEFAULT NULL COMMENT '预防性治疗期间随访管理人员（V4旧字段）',
@@ -574,6 +575,20 @@ CREATE TABLE IF NOT EXISTS `supervision_form` (
     PRIMARY KEY (`id`),
     KEY `idx_latent` (`latent_infection_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性治疗督导表（V5）';
+
+CREATE TABLE IF NOT EXISTS `visit_supervision_reminder_log` (
+    `id`          BIGINT       NOT NULL,
+    `biz_type`    VARCHAR(32)  NOT NULL COMMENT 'follow_up / supervision',
+    `biz_id`      BIGINT       NOT NULL COMMENT '患者ID或潜伏感染ID',
+    `source_id`   BIGINT       DEFAULT NULL COMMENT '首次随访/后续随访/督导表记录ID',
+    `due_date`    DATE         NOT NULL COMMENT '计划下次随访或督导日期',
+    `lead_days`   INT          NOT NULL COMMENT '提前天数：7/3/1',
+    `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`     TINYINT      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_biz_due_lead` (`biz_type`, `biz_id`, `due_date`, `lead_days`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='随访/督导到期提醒发送记录';
 
 -- ==================== 潜伏感染者电话随访表 ====================
 
@@ -1694,6 +1709,8 @@ CREATE TABLE IF NOT EXISTS `referral_tracking` (
     `recommend_confirm_time` DATETIME,
     `joint_tracking`         TINYINT       NOT NULL DEFAULT 0        COMMENT '是否共同追踪：0否 1是',
     `joint_tracking_time`    DATETIME                                  COMMENT '开启共同追踪时间',
+    `cross_town_confirm_status` TINYINT    NOT NULL DEFAULT 0        COMMENT '跨镇确认：0无需 1待确认 2已确认 3已拒绝',
+    `cross_town_confirm_time` DATETIME                               COMMENT '跨镇确认/拒绝时间',
     -- 追踪状态
     `tracking_status`        TINYINT       NOT NULL DEFAULT 0        COMMENT '0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`     INT           NOT NULL DEFAULT 0,
@@ -4155,3 +4172,22 @@ WHERE src.view_code IS NOT NULL
 UPDATE `permission`
 SET `name` = '潜伏感染者总览'
 WHERE `code` = 'latentManagement:overview';
+
+-- ==================== V115：追踪跨镇确认字段 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'cross_town_confirm_status'
+);
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `cross_town_confirm_status` TINYINT NOT NULL DEFAULT 0 COMMENT ''跨镇确认：0无需 1待确认 2已确认 3已拒绝'' AFTER `joint_tracking_time`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'referral_tracking' AND COLUMN_NAME = 'cross_town_confirm_time'
+);
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE `referral_tracking` ADD COLUMN `cross_town_confirm_time` DATETIME DEFAULT NULL COMMENT ''跨镇确认/拒绝时间'' AFTER `cross_town_confirm_status`',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

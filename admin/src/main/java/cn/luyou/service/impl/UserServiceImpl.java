@@ -197,6 +197,48 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    public List<UserInfoVO> getLevel3UsersInDistrict(Long districtId) {
+        if (districtId == null) {
+            return List.of();
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(districtId);
+        if (deptIds == null || deptIds.isEmpty()) {
+            return List.of();
+        }
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .eq(User::getRole, 4)
+                .in(User::getDepartmentId, deptIds)
+                .orderByAsc(User::getDepartmentId)
+                .orderByAsc(User::getUsername);
+        return list(wrapper).stream().map(this::buildUserInfoVO).toList();
+    }
+
+    @Override
+    public List<UserInfoVO> getCurrentCountyLevel3Users() {
+        Long deptId = BaseContext.getCurrentDepartmentId();
+        Long countyId = resolveCountyDepartmentId(deptId);
+        if (countyId == null) {
+            return List.of();
+        }
+        return getLevel3UsersInDistrict(countyId);
+    }
+
+    /** 区县部门 ID：level=2 返回自身，乡镇返回 parentId */
+    private Long resolveCountyDepartmentId(Long deptId) {
+        if (deptId == null) {
+            return null;
+        }
+        cn.luyou.model.Department dept = departmentService.getById(deptId);
+        if (dept == null || dept.getLevel() == null) {
+            return null;
+        }
+        if (Integer.valueOf(2).equals(dept.getLevel())) {
+            return dept.getId();
+        }
+        return dept.getParentId();
+    }
+
+    @Override
     public List<UserInfoVO> listSameDepartmentUsers() {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
                 .orderByAsc(User::getRole)

@@ -2,6 +2,8 @@ package cn.luyou.service;
 
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
+import cn.luyou.model.vo.UserInfoVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -29,4 +31,10 @@ public interface NoticeService extends IService<Notice> {
 
     /** 查询通知单详情（含下发人/接收人名称） */
     Notice getDetailWithUsers(Long id);
+
+    /** 患者所属区县的三级用户（role=4） */
+    List<UserInfoVO> listDistrictLevel3Users(Long noticeId);
+
+    /** 仅更新痰培养/耐药情况，同步首次随访并通知所选三级用户 */
+    void updateCultureAndResistance(Long noticeId, UpdateNoticeCultureResistanceDTO dto);
 }

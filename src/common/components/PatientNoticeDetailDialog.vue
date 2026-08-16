@@ -1,13 +1,20 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
-import { NOTICE_STATUS_MAP } from "@@/constants/disease"
-import { formatNoticeSentTime } from "@@/utils/patient"
-import { confirmNoticeApi, getNoticeDetailApi, getNoticeListByBizApi } from "@/pages/patient-management/apis"
+import { DRUG_RESISTANCE_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import { formatNoticeSentTime, isPatientTransferLocked } from "@@/utils/patient"
+import {
+  confirmNoticeApi,
+  getNoticeDetailApi,
+  getNoticeDistrictLevel3UsersApi,
+  getNoticeListByBizApi,
+  updateNoticeCultureResistanceApi
+} from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
   visible: boolean
   patientRow: Record<string, any> | null
+  startEdit?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +25,33 @@ const emit = defineEmits<{
 const userStore = useUserStore()
 const noticeDetailData = ref<Record<string, any> | null>(null)
 const printVisible = ref(false)
+const editing = ref(false)
+const submitting = ref(false)
+const sputumCulture = ref("")
+const drugResistance = ref("")
+const level3Users = ref<any[]>([])
+const receiverUserIds = ref<string[]>([])
+
+const canEditCulture = computed(() => {
+  if (isPatientTransferLocked(props.patientRow) || props.patientRow?.archived === 1) return false
+  const status = noticeDetailData.value?.status
+  return status === 1 || status === 2
+})
+
+function formatLevel3UserLabel(u: { realName?: string, username?: string, departmentName?: string, orgName?: string }) {
+  const name = u.realName || u.username || ""
+  const extra = u.departmentName || u.orgName
+  return extra ? `${name}（${extra}）` : name
+}
+
+function resetEdit() {
+  editing.value = false
+  submitting.value = false
+  sputumCulture.value = ""
+  drugResistance.value = ""
+  level3Users.value = []
+  receiverUserIds.value = []
+}
 
 async function loadNotice() {
   if (!props.patientRow) return
@@ -40,10 +74,31 @@ async function loadNotice() {
   } catch { /* handled */ }
 }
 
+async function beginEdit() {
+  if (!noticeDetailData.value || !canEditCulture.value) return
+  sputumCulture.value = noticeDetailData.value.sputumCulture || ""
+  drugResistance.value = noticeDetailData.value.drugResistance || ""
+  receiverUserIds.value = []
+  editing.value = true
+  try {
+    const { data } = await getNoticeDistrictLevel3UsersApi(noticeDetailData.value.id)
+    level3Users.value = data ?? []
+  } catch {
+    level3Users.value = []
+  }
+}
+
 watch(
   () => props.visible,
-  (val) => {
-    if (val) loadNotice()
+  async (val) => {
+    if (!val) {
+      resetEdit()
+      return
+    }
+    await loadNotice()
+    if (props.startEdit) {
+      await beginEdit()
+    }
   }
 )
 
@@ -55,6 +110,35 @@ async function handleConfirmNotice(noticeId: string) {
     emit("update:visible", false)
     emit("success")
   } catch { /* cancelled or handled */ }
+}
+
+async function handleSaveCulture() {
+  if (!noticeDetailData.value) return
+  if (level3Users.value.length > 0 && receiverUserIds.value.length === 0) {
+    ElMessage.warning("请选择本区县对应的三级用户发送通知")
+    return
+  }
+  if (level3Users.value.length === 0) {
+    try {
+      await ElMessageBox.confirm("本区县暂无三级用户，将仅保存修改且不同步发送通知，是否继续？", "提示", { type: "warning" })
+    } catch {
+      return
+    }
+  }
+  submitting.value = true
+  try {
+    await updateNoticeCultureResistanceApi(noticeDetailData.value.id, {
+      sputumCulture: sputumCulture.value || "",
+      drugResistance: drugResistance.value || "",
+      receiverUserIds: receiverUserIds.value
+    })
+    ElMessage.success("已保存痰培养和耐药情况")
+    editing.value = false
+    await loadNotice()
+    emit("success")
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -110,13 +194,37 @@ async function handleConfirmNotice(noticeId: string) {
         {{ noticeDetailData.treatmentPlan || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="耐药情况">
-        {{ noticeDetailData.drugResistance || "-" }}
+        <el-select
+          v-if="editing"
+          v-model="drugResistance"
+          clearable
+          placeholder="请选择"
+          style="width: 100%"
+        >
+          <el-option v-for="item in DRUG_RESISTANCE_OPTIONS" :key="item" :label="item" :value="item" />
+        </el-select>
+        <template v-else>
+          {{ noticeDetailData.drugResistance || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="痰涂片">
         {{ noticeDetailData.sputumSmear || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="痰培养">
-        {{ noticeDetailData.sputumCulture || "-" }}
+        <el-select
+          v-if="editing"
+          v-model="sputumCulture"
+          filterable
+          allow-create
+          default-first-option
+          placeholder="请选择或输入"
+          style="width: 100%"
+        >
+          <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+        </el-select>
+        <template v-else>
+          {{ noticeDetailData.sputumCulture || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="分子检查">
         {{ noticeDetailData.molecularTest || "-" }}
@@ -160,13 +268,47 @@ async function handleConfirmNotice(noticeId: string) {
       <el-descriptions-item v-if="noticeDetailData.confirmedTime" label="接收时间">
         {{ formatNoticeSentTime(noticeDetailData.confirmedTime) }}
       </el-descriptions-item>
+      <el-descriptions-item v-if="editing" label="通知三级用户" :span="2">
+        <el-select
+          v-model="receiverUserIds"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="请选择本区县三级用户"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="u in level3Users"
+            :key="u.id"
+            :label="formatLevel3UserLabel(u)"
+            :value="String(u.id)"
+          />
+        </el-select>
+      </el-descriptions-item>
     </el-descriptions>
     <template #footer>
       <el-button v-if="noticeDetailData" @click="printVisible = true">
         打印预览
       </el-button>
+      <template v-if="editing">
+        <el-button @click="resetEdit">
+          取消修改
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveCulture">
+          保存并通知
+        </el-button>
+      </template>
       <el-button
-        v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6"
+        v-else-if="noticeDetailData && canEditCulture"
+        v-permission="'patientManagement:notice:fill'"
+        type="warning"
+        @click="beginEdit"
+      >
+        修改
+      </el-button>
+      <el-button
+        v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6 && !editing"
         v-permission="'patientManagement:notice'"
         type="primary"
         @click="handleConfirmNotice(noticeDetailData.id)"

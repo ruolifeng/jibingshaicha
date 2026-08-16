@@ -5,6 +5,8 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
+import cn.luyou.model.vo.UserInfoVO;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.UserService;
 import cn.luyou.utils.BaseContext;
@@ -94,6 +96,26 @@ public class NoticeController {
     public ResultResponse<Void> remind(@PathVariable Long id) {
         assertPatientNoticeFill(noticeService.getById(id));
         noticeService.remind(id);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "本区县三级用户（患者通知单培养/耐药变更通知对象）")
+    @GetMapping("/{id}/district-level3-users")
+    public ResultResponse<List<UserInfoVO>> districtLevel3Users(@PathVariable Long id) {
+        Notice notice = noticeService.getById(id);
+        assertPatientNoticeFill(notice);
+        return ResultRes.success(noticeService.listDistrictLevel3Users(id));
+    }
+
+    @Operation(summary = "修改患者通知单痰培养和耐药情况，并同步首次随访")
+    @PostMapping("/{id}/culture-resistance")
+    @OperationLog(type = "update", module = "patient", action = "修改通知单痰培养耐药")
+    public ResultResponse<Void> updateCultureResistance(
+            @PathVariable Long id,
+            @RequestBody UpdateNoticeCultureResistanceDTO dto) {
+        Notice notice = noticeService.getById(id);
+        assertPatientNoticeFill(notice);
+        noticeService.updateCultureAndResistance(id, dto);
         return ResultRes.success(null);
     }
 }

@@ -6,8 +6,10 @@ import { displayInfectionJudgeResult, getPopulationTypeLabel, NOTICE_STATUS_MAP 
 import { formatReferralDisplay } from "@@/utils/referralTracking"
 import { useRouter } from "vue-router"
 import {
+  confirmCrossTownImportApi,
   confirmRecommendApi,
   getReferralTrackingDetailApi,
+  rejectCrossTownImportApi,
   rejectRecommendApi
 } from "@/pages/referral-management/apis"
 import { getNoticeDetailApi } from "@/pages/school/latent/apis"
@@ -51,9 +53,15 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   referral_tracking_confirmed: "推介已接收",
   referral_tracking_rejected: "推介已被拒绝",
   referral_tracking_joint: "共同追踪已开启",
+  epidemic_cross_town_receive: "待确认跨镇导入",
+  epidemic_cross_town_confirmed: "跨镇导入已确认",
+  epidemic_cross_town_rejected: "跨镇导入已拒绝",
   review_reminder: "复查提醒",
   sputum_culture_pending: "痰培养未补充",
-  sputum_culture_supplemented: "痰培养已补充"
+  sputum_culture_supplemented: "痰培养已补充",
+  culture_resistance_changed: "培养、耐药信息变更",
+  follow_up_due: "后续随访提醒",
+  supervision_due: "督导表提醒"
 }
 
 function getMessageTypeTagType(type: string) {
@@ -67,8 +75,13 @@ function getMessageTypeTagType(type: string) {
   if (type === "referral_tracking_confirmed") return "success"
   if (type === "referral_tracking_rejected") return "danger"
   if (type === "referral_tracking_joint") return "success"
+  if (type === "epidemic_cross_town_receive") return "warning"
+  if (type === "epidemic_cross_town_confirmed") return "success"
+  if (type === "epidemic_cross_town_rejected") return "danger"
   if (type === "sputum_culture_pending") return "warning"
   if (type === "sputum_culture_supplemented") return "success"
+  if (type === "culture_resistance_changed") return "primary"
+  if (type === "follow_up_due" || type === "supervision_due") return "warning"
   return "info"
 }
 
@@ -191,6 +204,8 @@ async function handleRejectReferral() {
   try {
     if (row.type === "referral_tracking_receive") {
       await rejectRecommendApi(row.bizId, rejectReason.value || undefined)
+    } else if (row.type === "epidemic_cross_town_receive") {
+      await rejectCrossTownImportApi(row.bizId, rejectReason.value || undefined)
     } else {
       await rejectReferralFromMessageApi(row.bizId, rejectReason.value || undefined)
       row.type = "referral_rejected"
@@ -217,15 +232,37 @@ async function handleConfirmReferralTracking(row: any) {
   } catch { /* handled */ }
 }
 
+async function handleConfirmCrossTown(row: any) {
+  if (!row.bizId) {
+    ElMessage.warning("追踪记录编号缺失")
+    return
+  }
+  try {
+    await confirmCrossTownImportApi(row.bizId)
+    await markMessageReadApi(row.id)
+    ElMessage.success("已确认跨镇导入，可前往「追踪」页面管理")
+    await fetchData()
+    await messageStore.fetchUnreadCount()
+    router.push("/referral-management/track")
+  } catch { /* handled */ }
+}
+
 const referralTrackingDetailVisible = ref(false)
 const referralTrackingDetailData = ref<any>(null)
 const referralTrackingDetailLoading = ref(false)
+const referralTrackingDetailMsgType = ref("")
+
+const isCrossTownMessageDetail = computed(() =>
+  String(referralTrackingDetailMsgType.value).startsWith("epidemic_cross_town")
+  || Number(referralTrackingDetailData.value?.crossTownConfirmStatus) > 0
+)
 
 async function viewReferralTrackingDetail(row: any) {
   if (!row.bizId) {
-    ElMessage.warning("推介记录编号缺失")
+    ElMessage.warning("记录编号缺失")
     return
   }
+  referralTrackingDetailMsgType.value = row.type || ""
   referralTrackingDetailLoading.value = true
   referralTrackingDetailVisible.value = true
   referralTrackingDetailData.value = null
@@ -430,7 +467,7 @@ const activeTab = ref("received")
             <el-table-column label="操作" fixed="right">
               <template #default="{ row }">
                 <!-- 通知单查看 & 接收 -->
-                <template v-if="row.type === 'notice_receive' || row.type === 'notice_confirmed'">
+                <template v-if="row.type === 'notice_receive' || row.type === 'notice_confirmed' || row.type === 'culture_resistance_changed'">
                   <el-button type="info" size="small" link @click="viewNoticeDetail(row)">
                     查看通知单
                   </el-button>
@@ -457,6 +494,29 @@ const activeTab = ref("received")
                     </el-button>
                   </template>
                 </template>
+                <!-- 大疫情跨镇导入：查看详情 & 确认/拒绝 -->
+                <template v-if="row.type === 'epidemic_cross_town_receive' || row.type === 'epidemic_cross_town_confirmed' || row.type === 'epidemic_cross_town_rejected'">
+                  <el-button type="info" size="small" link @click="viewReferralTrackingDetail(row)">
+                    查看详情
+                  </el-button>
+                  <template v-if="row.type === 'epidemic_cross_town_receive'">
+                    <el-button type="success" size="small" @click="handleConfirmCrossTown(row)">
+                      确认接收
+                    </el-button>
+                    <el-button type="danger" size="small" @click="openRejectDialog(row)">
+                      拒绝
+                    </el-button>
+                  </template>
+                  <el-button
+                    v-if="row.type === 'epidemic_cross_town_confirmed' || row.type === 'epidemic_cross_town_rejected'"
+                    type="primary"
+                    size="small"
+                    link
+                    @click="router.push('/referral-management/track')"
+                  >
+                    前往追踪
+                  </el-button>
+                </template>
                 <!-- 转出查看详情 & 确认/拒绝 -->
                 <template v-if="row.type === 'referral_receive' || row.type === 'referral_confirmed' || row.type === 'referral_rejected'">
                   <el-button type="info" size="small" link @click="viewReferralDetail(row)">
@@ -475,6 +535,16 @@ const activeTab = ref("received")
                 <template v-if="row.type === 'sputum_culture_pending'">
                   <el-button type="primary" size="small" link @click="router.push('/patient-management/first-visit')">
                     前往补充
+                  </el-button>
+                </template>
+                <template v-if="row.type === 'follow_up_due'">
+                  <el-button type="primary" size="small" link @click="router.push('/patient-management/follow-up')">
+                    前往随访
+                  </el-button>
+                </template>
+                <template v-if="row.type === 'supervision_due'">
+                  <el-button type="primary" size="small" link @click="router.push('/latent-management/supervision')">
+                    前往督导
                   </el-button>
                 </template>
                 <el-button v-if="!row.isRead" type="primary" size="small" link @click="handleMarkRead(row)">
@@ -715,8 +785,13 @@ const activeTab = ref("received")
       </template>
     </el-dialog>
 
-    <!-- 推介追踪详情弹窗 -->
-    <el-dialog v-model="referralTrackingDetailVisible" title="推介详情" width="680px" append-to-body>
+    <!-- 推介/跨镇追踪详情弹窗 -->
+    <el-dialog
+      v-model="referralTrackingDetailVisible"
+      :title="isCrossTownMessageDetail ? '跨镇导入详情' : '推介详情'"
+      width="680px"
+      append-to-body
+    >
       <div v-loading="referralTrackingDetailLoading" style="min-height: 80px">
         <el-descriptions v-if="referralTrackingDetailData" :column="2" border>
           <el-descriptions-item label="姓名">
@@ -734,14 +809,51 @@ const activeTab = ref("received")
           <el-descriptions-item label="人群分类">
             {{ referralTrackingDetailData.crowdCategory || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="推介接收人">
+          <el-descriptions-item :label="isCrossTownMessageDetail ? '确认接收人' : '推介接收人'">
             {{ referralTrackingDetailData.receiverUserName || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="isCrossTownMessageDetail" label="现住址乡镇">
+            {{ referralTrackingDetailData.township || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="isCrossTownMessageDetail" label="跨镇确认">
+            <el-tag
+              v-if="Number(referralTrackingDetailData.crossTownConfirmStatus) === 1"
+              type="warning"
+              size="small"
+            >
+              待确认
+            </el-tag>
+            <el-tag
+              v-else-if="Number(referralTrackingDetailData.crossTownConfirmStatus) === 2"
+              type="success"
+              size="small"
+            >
+              已确认
+            </el-tag>
+            <el-tag
+              v-else-if="Number(referralTrackingDetailData.crossTownConfirmStatus) === 3"
+              type="info"
+              size="small"
+            >
+              已拒绝
+            </el-tag>
+            <span v-else>-</span>
           </el-descriptions-item>
           <el-descriptions-item label="现住址" :span="2">
             {{ referralTrackingDetailData.currentAddress || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="推介原因" :span="2">
+          <el-descriptions-item v-if="!isCrossTownMessageDetail" label="推介原因" :span="2">
             {{ referralTrackingDetailData.recommendReason || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-else label="追踪原因" :span="2">
+            {{ referralTrackingDetailData.trackReason || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-if="isCrossTownMessageDetail && Number(referralTrackingDetailData.crossTownConfirmStatus) === 3"
+            label="拒绝原因"
+            :span="2"
+          >
+            {{ referralTrackingDetailData.rejectedReason || "-" }}
           </el-descriptions-item>
         </el-descriptions>
       </div>

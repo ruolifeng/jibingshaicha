@@ -278,7 +278,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords) {
+    public Map<String, Object> importEpidemic(MultipartFile file, boolean addDuplicateRecords,
+                                              String townshipReceiversJson) {
         String batchNo = IdUtil.fastSimpleUUID();
         List<EpidemicImportRow> rows = parseEpidemicImportRows(file);
         if (rows.isEmpty()) {
@@ -286,6 +287,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             empty.put("count", 0);
             empty.put("updated", 0);
             empty.put("skipped", 0);
+            empty.put("pendingConfirm", 0);
             empty.put("batchNo", batchNo);
             empty.put("skippedItems", List.of());
             return empty;
@@ -295,17 +297,39 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         Long currentDeptId = BaseContext.getCurrentDepartmentId();
         Integer role = BaseContext.getCurrentRole();
         String currentDeptName = resolveDepartmentName(currentDeptId);
+        Map<String, Long> townshipReceivers = parseTownshipReceivers(townshipReceiversJson);
         int count = 0;
         int updated = 0;
+        int pendingConfirm = 0;
         List<Map<String, String>> skippedItems = new ArrayList<>();
 
         for (EpidemicImportRow row : rows) {
-            // 按乡镇字段归属部门，避免全县 Excel 全部挂到导入人部门导致镇级数据串扰
             Long targetDeptId = resolveTrackDepartmentId(row.township(), currentDeptId);
-            if (Integer.valueOf(6).equals(role) && currentDeptId != null
-                    && targetDeptId != null && !currentDeptId.equals(targetDeptId)) {
-                // 五级仅可写入本镇数据，跳过其它乡镇行（不是身份证重复）
-                skippedItems.add(buildCrossTownshipSkipItem(row, currentDeptName));
+            boolean crossTown = Integer.valueOf(6).equals(role) && currentDeptId != null
+                    && targetDeptId != null && !currentDeptId.equals(targetDeptId);
+
+            if (crossTown) {
+                String townshipKey = StrUtil.blankToDefault(row.township(), "").trim();
+                Long receiverUserId = townshipReceivers.get(townshipKey);
+                if (receiverUserId == null) {
+                    skippedItems.add(buildCrossTownshipSkipItem(row, currentDeptName,
+                            "未选择现住址乡镇「" + StrUtil.blankToDefault(townshipKey, "未知") + "」对应的区县三级用户"));
+                    continue;
+                }
+                User receiver = userService.getById(receiverUserId);
+                if (!isValidCountyLevel3Receiver(receiver, currentDeptId)) {
+                    skippedItems.add(buildCrossTownshipSkipItem(row, currentDeptName,
+                            "所选用户不是本区县三级用户，无法发起跨镇确认"));
+                    continue;
+                }
+                Long countyDeptId = resolveCountyDeptIdOfUser(receiver);
+                ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, countyDeptId);
+                entity.setReceiverUserId(receiverUserId);
+                entity.setReceiverDeptId(receiver.getDepartmentId());
+                entity.setCrossTownConfirmStatus(1);
+                entity.setTrackReason("大疫情跨镇导入（待区县三级确认）");
+                save(entity);
+                pendingConfirm++;
                 continue;
             }
 
@@ -314,12 +338,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 if (mergeEpidemicImportFields(existingByCard, row, currentUserId, targetDeptId)) {
                     updateById(existingByCard);
                 }
-                // 无字段变化也计为已处理（与同人更新路径一致）
                 updated++;
                 continue;
             }
 
-            // 本单位同身份证+姓名：默认更新已有追踪（48 小时上报时效），仅在明确要求时另建一条
             ReferralTracking existingByPerson = findLatestTrackByIdNumberAndName(
                     row.idNumber(), row.name(), targetDeptId);
             if (existingByPerson != null) {
@@ -331,31 +353,54 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     updateById(existingByPerson);
                     updated++;
                 } else {
-                    // 无字段可更新也计为已处理，避免误报「跳过重复」
                     updated++;
                 }
                 continue;
             }
 
-            // 其他单位已有同人：不拦截，为本单位新建（列表权限不同会导致「系统里看不到却提示重复」）
             ReferralTracking entity = buildEpidemicEntity(row, batchNo, currentUserId, targetDeptId);
             save(entity);
             count++;
         }
 
-        log.info("大疫情导入追踪记录完成，created={}, updated={}, skipped={}, addDuplicateRecords={}, batchNo={}",
-                count, updated, skippedItems.size(), addDuplicateRecords, batchNo);
+        // 逐条发确认消息（消息中心按 bizId 确认单条）
+        List<ReferralTracking> pendingRows = lambdaQuery()
+                .eq(ReferralTracking::getUploadBatch, batchNo)
+                .eq(ReferralTracking::getCrossTownConfirmStatus, 1)
+                .list();
+        for (ReferralTracking pending : pendingRows) {
+            if (pending.getReceiverUserId() == null) {
+                continue;
+            }
+            String content = String.format(
+                    "五级账号「%s」导入跨镇大疫情追踪「%s」（证件号：%s，现住址乡镇：%s），请确认是否授权其管理。",
+                    StrUtil.blankToDefault(currentDeptName, "未知单位"),
+                    StrUtil.blankToDefault(pending.getName(), "未知"),
+                    StrUtil.blankToDefault(pending.getIdNumber(), "无"),
+                    StrUtil.blankToDefault(pending.getTownship(), "未知"));
+            sysMessageService.sendMessage(pending.getReceiverUserId(), "大疫情跨镇导入待确认",
+                    content, "epidemic_cross_town_receive", pending.getId());
+        }
+
+        log.info("大疫情导入追踪记录完成，created={}, updated={}, pendingConfirm={}, skipped={}, batchNo={}",
+                count, updated, pendingConfirm, skippedItems.size(), batchNo);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("count", count);
         result.put("updated", updated);
         result.put("skipped", skippedItems.size());
+        result.put("pendingConfirm", pendingConfirm);
         result.put("batchNo", batchNo);
         result.put("skippedItems", skippedItems);
         return result;
     }
 
-    /** 五级跨镇跳过明细（便于前端提示，避免误报成「身份证重复」） */
+    /** 五级跨镇明细（预览/未选接收人时的跳过说明） */
     private Map<String, String> buildCrossTownshipSkipItem(EpidemicImportRow row, String currentDeptName) {
+        return buildCrossTownshipSkipItem(row, currentDeptName, null);
+    }
+
+    private Map<String, String> buildCrossTownshipSkipItem(EpidemicImportRow row, String currentDeptName,
+                                                           String extraMessage) {
         Map<String, String> item = new LinkedHashMap<>();
         item.put("name", StrUtil.blankToDefault(row.name(), ""));
         item.put("idNumber", StrUtil.blankToDefault(row.idNumber(), ""));
@@ -363,13 +408,56 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         item.put("township", StrUtil.blankToDefault(row.township(), ""));
         item.put("currentDepartment", StrUtil.blankToDefault(currentDeptName, ""));
         item.put("reason", "cross_township");
-        item.put("message", String.format(
-                "%s（%s）现住址乡镇为「%s」，与当前账号单位「%s」不一致，五级账号仅可导入本镇数据",
+        String base = String.format(
+                "%s（%s）现住址乡镇为「%s」，与当前账号单位「%s」不一致，需选择本区县三级用户确认后导入",
                 StrUtil.blankToDefault(row.name(), "未知姓名"),
                 StrUtil.blankToDefault(row.idNumber(), "无证件号"),
                 StrUtil.blankToDefault(row.township(), "未知乡镇"),
-                StrUtil.blankToDefault(currentDeptName, "当前单位")));
+                StrUtil.blankToDefault(currentDeptName, "当前单位"));
+        item.put("message", StrUtil.isNotBlank(extraMessage) ? base + "。" + extraMessage : base);
         return item;
+    }
+
+    private Map<String, Long> parseTownshipReceivers(String json) {
+        Map<String, Long> result = new HashMap<>();
+        if (StrUtil.isBlank(json)) {
+            return result;
+        }
+        try {
+            Map<?, ?> raw = JSONUtil.parseObj(json);
+            for (Map.Entry<?, ?> e : raw.entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) {
+                    continue;
+                }
+                String township = e.getKey().toString().trim();
+                String idStr = e.getValue().toString().trim();
+                if (StrUtil.isBlank(township) || !idStr.matches("\\d+")) {
+                    continue;
+                }
+                result.put(township, Long.valueOf(idStr));
+            }
+        } catch (Exception ex) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "跨镇接收人参数格式无效");
+        }
+        return result;
+    }
+
+    /** 校验：role=4，且与导入五级同属一个区县 */
+    private boolean isValidCountyLevel3Receiver(User receiver, Long importerDeptId) {
+        if (receiver == null || !Integer.valueOf(4).equals(receiver.getRole())) {
+            return false;
+        }
+        Long importerCounty = resolveCountyId(importerDeptId);
+        Long receiverCounty = resolveCountyId(receiver.getDepartmentId());
+        return importerCounty != null && importerCounty.equals(receiverCounty);
+    }
+
+    private Long resolveCountyDeptIdOfUser(User user) {
+        if (user == null) {
+            return null;
+        }
+        Long countyId = resolveCountyId(user.getDepartmentId());
+        return countyId != null ? countyId : user.getDepartmentId();
     }
 
     private String resolveDepartmentName(Long deptId) {
@@ -464,6 +552,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .trackingStatus(0)
                 .notInPlaceCount(0)
                 .archived(0)
+                .crossTownConfirmStatus(0)
                 .uploadBatch(batchNo)
                 .importRowNo(row.importRowNo())
                 .departmentId(currentDeptId)
@@ -1160,8 +1249,89 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void confirmCrossTown(Long id) {
+        ReferralTracking record = getAndCheckExist(id);
+        if (Integer.valueOf(2).equals(record.getCrossTownConfirmStatus())) {
+            syncReceiverCrossTownMessage(record, true, null);
+            log.info("跨镇导入已确认（幂等），recordId={}", id);
+            return;
+        }
+        if (Integer.valueOf(3).equals(record.getCrossTownConfirmStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该跨镇导入已被拒绝，不可再确认");
+        }
+        if (!Integer.valueOf(1).equals(record.getCrossTownConfirmStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "当前记录无需跨镇确认");
+        }
+        checkCrossTownReceiver(record);
+
+        lambdaUpdate()
+                .eq(ReferralTracking::getId, id)
+                .set(ReferralTracking::getCrossTownConfirmStatus, 2)
+                .set(ReferralTracking::getCrossTownConfirmTime, LocalDateTime.now())
+                .set(ReferralTracking::getTrackReason, "大疫情跨镇导入")
+                .update();
+
+        syncReceiverCrossTownMessage(record, true, null);
+        if (record.getCreatorId() != null) {
+            String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
+            sysMessageService.sendMessage(record.getCreatorId(), "大疫情跨镇导入已确认",
+                    String.format("「%s」的跨镇大疫情追踪已由区县三级确认，您可前往「追踪」继续管理。", name),
+                    "epidemic_cross_town_confirmed", id);
+        }
+        log.info("跨镇导入已确认，recordId={}", id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void rejectCrossTown(Long id, String reason) {
+        ReferralTracking record = getAndCheckExist(id);
+        if (Integer.valueOf(3).equals(record.getCrossTownConfirmStatus())) {
+            syncReceiverCrossTownMessage(record, false, record.getRejectedReason());
+            log.info("跨镇导入已拒绝（幂等），recordId={}", id);
+            return;
+        }
+        if (Integer.valueOf(2).equals(record.getCrossTownConfirmStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该跨镇导入已确认，无法拒绝");
+        }
+        if (!Integer.valueOf(1).equals(record.getCrossTownConfirmStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "当前记录无需跨镇确认");
+        }
+        checkCrossTownReceiver(record);
+
+        lambdaUpdate()
+                .eq(ReferralTracking::getId, id)
+                .set(ReferralTracking::getCrossTownConfirmStatus, 3)
+                .set(ReferralTracking::getCrossTownConfirmTime, LocalDateTime.now())
+                .set(ReferralTracking::getRejectedReason, reason)
+                .set(ReferralTracking::getArchived, 1)
+                .update();
+
+        syncReceiverCrossTownMessage(record, false, reason);
+        if (record.getCreatorId() != null) {
+            String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
+            sysMessageService.sendMessage(record.getCreatorId(), "大疫情跨镇导入已被拒绝",
+                    String.format("「%s」的跨镇大疫情追踪被区县三级拒绝，原因：%s",
+                            name, StrUtil.blankToDefault(reason, "（未填写）")),
+                    "epidemic_cross_town_rejected", id);
+        }
+        log.info("跨镇导入已拒绝，recordId={}, reason={}", id, reason);
+    }
+
+    private void checkCrossTownReceiver(ReferralTracking record) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Long userId = BaseContext.getCurrentId();
+        if (userId == null || !userId.equals(record.getReceiverUserId())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅指定的区县三级用户可确认或拒绝");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void track(Long id, Integer status, String remark, LocalDate actualArrivalDate) {
         ReferralTracking record = getAndCheckExist(id);
+        assertNotPendingCrossTown(record);
         if (record.getRecommendSentTime() != null
                 && !Integer.valueOf(2).equals(record.getRecommendStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "推介通知单尚未被接收方确认，暂不可追踪");
@@ -1450,6 +1620,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 已确认推介：仅接收方可追踪；其余记录按辖区/创建人/接收人规则 */
     private void checkTrackOperatorOrCreator(ReferralTracking record) {
+        assertNotPendingCrossTown(record);
         if (isConfirmedReceivedRecommend(record)) {
             checkConfirmedRecommendReceiverOnly(record);
             return;
@@ -1480,6 +1651,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 编辑：创建人、接收人或辖区一至五级用户 */
     private void assertCanMutateRecord(ReferralTracking record) {
+        assertNotPendingCrossTown(record);
         if (!canOperateRecord(record)) {
             throw new ServiceException(StatusEnum.FORBIDDEN, "无权操作该记录");
         }
@@ -1490,6 +1662,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (BaseContext.isSuperAdmin()) {
             return;
         }
+        assertNotPendingCrossTown(record);
         Long userId = BaseContext.getCurrentId();
         if (userId == null) {
             throw new ServiceException(StatusEnum.FORBIDDEN, "无权删除该记录");
@@ -1608,6 +1781,15 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
     /** 追踪/大疫情：创建人、接收人或辖区一至五级用户可操作 */
     private boolean canOperateRecord(ReferralTracking record) {
+        if (Integer.valueOf(1).equals(record.getCrossTownConfirmStatus())) {
+            // 待区县三级确认：禁止追踪/编辑/诊断等业务操作（确认/拒绝走专用接口）
+            return false;
+        }
+        if (Integer.valueOf(3).equals(record.getCrossTownConfirmStatus())
+                || (record.getArchived() != null && record.getArchived() == 1
+                && Integer.valueOf(3).equals(record.getCrossTownConfirmStatus()))) {
+            return false;
+        }
         if (BaseContext.isSuperAdmin()) {
             return true;
         }
@@ -1630,6 +1812,15 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return deptId != null && deptId.equals(record.getDepartmentId());
         }
         return canAccessViaDepartmentScope(record, userId);
+    }
+
+    private void assertNotPendingCrossTown(ReferralTracking record) {
+        if (Integer.valueOf(1).equals(record.getCrossTownConfirmStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "跨镇导入待区县三级确认，暂不可操作");
+        }
+        if (Integer.valueOf(3).equals(record.getCrossTownConfirmStatus())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "跨镇导入已被拒绝，不可操作");
+        }
     }
 
     private boolean canAccessViaDepartmentScope(ReferralTracking record, Long userId) {
@@ -2353,6 +2544,30 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .isNotNull(ReferralTracking::getRecommendSentTime)
                 .set(ReferralTracking::getBizMode, "recommend")
                 .update();
+    }
+
+    /** 区县三级待确认跨镇导入消息在确认/拒绝后同步更新 */
+    private void syncReceiverCrossTownMessage(ReferralTracking record, boolean confirmed, String rejectReason) {
+        if (record == null) {
+            return;
+        }
+        String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
+        if (confirmed) {
+            sysMessageService.updatePendingMessageByBizId(
+                    record.getId(),
+                    "epidemic_cross_town_receive",
+                    "epidemic_cross_town_confirmed",
+                    "跨镇导入已确认",
+                    String.format("「%s」的跨镇大疫情追踪您已确认，可在「追踪」页面管理。", name));
+        } else {
+            sysMessageService.updatePendingMessageByBizId(
+                    record.getId(),
+                    "epidemic_cross_town_receive",
+                    "epidemic_cross_town_rejected",
+                    "跨镇导入已拒绝",
+                    String.format("「%s」的跨镇大疫情追踪您已拒绝，原因：%s",
+                            name, StrUtil.blankToDefault(rejectReason, "（未填写）")));
+        }
     }
 
     /** 接收方待确认推介消息在确认/拒绝后同步更新 */

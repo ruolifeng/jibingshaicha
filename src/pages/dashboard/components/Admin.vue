@@ -19,8 +19,8 @@ import {
   getDashboardMessageStatsApi,
   getDashboardSummaryApi,
   getDashboardTaskStatsApi
-
 } from "../apis"
+import UpcomingVisitSupervisionPanel from "./UpcomingVisitSupervisionPanel.vue"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
 const selectedDepartmentIds = ref<string[]>([])
@@ -60,6 +60,8 @@ async function fetchYearSummary() {
   }
 }
 
+const reminderPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
+
 async function fetchAll() {
   summaryLoading.value = true
   try {
@@ -72,7 +74,7 @@ async function fetchAll() {
   } catch { /* handled globally */ } finally {
     summaryLoading.value = false
   }
-  await fetchTaskStats()
+  await Promise.all([fetchTaskStats(), reminderPanelRef.value?.refresh()])
 }
 
 async function fetchTaskStats() {
@@ -230,6 +232,8 @@ const noticeMaxSent = computed(() =>
         </div>
       </el-col>
     </el-row>
+
+    <UpcomingVisitSupervisionPanel ref="reminderPanelRef" :department-ids="selectedDepartmentIds" />
 
     <div v-loading="summaryLoading || yearStatsLoading" class="year-stats-section">
       <div v-if="trackingPeriodText" class="year-stats-period">

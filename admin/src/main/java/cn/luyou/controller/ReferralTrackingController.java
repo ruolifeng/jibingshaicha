@@ -76,9 +76,10 @@ public class ReferralTrackingController {
     @PostMapping("/import-epidemic")
     public ResultResponse<Map<String, Object>> importEpidemic(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "addDuplicateRecords", defaultValue = "false") boolean addDuplicateRecords) {
+            @RequestParam(value = "addDuplicateRecords", defaultValue = "false") boolean addDuplicateRecords,
+            @RequestParam(value = "townshipReceivers", required = false) String townshipReceivers) {
         userService.checkPermissionCode("referralManagement:epidemicImport");
-        return ResultRes.success(referralTrackingService.importEpidemic(file, addDuplicateRecords));
+        return ResultRes.success(referralTrackingService.importEpidemic(file, addDuplicateRecords, townshipReceivers));
     }
 
     @Operation(summary = "检查推介/追踪记录是否已存在（证件号+姓名）")
@@ -162,6 +163,24 @@ public class ReferralTrackingController {
                                                  @RequestBody(required = false) Map<String, Object> body) {
         String reason = body != null ? (String) body.get("reason") : null;
         referralTrackingService.rejectRecommend(id, reason);
+        return ResultRes.success(null);
+    }
+
+    @OperationLog(type = "update", module = "referral", action = "确认大疫情跨镇导入")
+    @Operation(summary = "区县三级确认大疫情跨镇导入")
+    @PostMapping("/{id}/cross-town/confirm")
+    public ResultResponse<Void> confirmCrossTown(@PathVariable Long id) {
+        referralTrackingService.confirmCrossTown(id);
+        return ResultRes.success(null);
+    }
+
+    @OperationLog(type = "update", module = "referral", action = "拒绝大疫情跨镇导入")
+    @Operation(summary = "区县三级拒绝大疫情跨镇导入")
+    @PostMapping("/{id}/cross-town/reject")
+    public ResultResponse<Void> rejectCrossTown(@PathVariable Long id,
+                                                @RequestBody(required = false) Map<String, Object> body) {
+        String reason = body != null ? (String) body.get("reason") : null;
+        referralTrackingService.rejectCrossTown(id, reason);
         return ResultRes.success(null);
     }
 

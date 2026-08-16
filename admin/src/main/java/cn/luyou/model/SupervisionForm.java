@@ -84,6 +84,8 @@ public class SupervisionForm extends BaseEntity {
     private String medicationRate;
     /** 预防性治疗完成（结束疗程）时间 */
     private LocalDate treatmentEndDate;
+    /** 下次督导时间 */
+    private LocalDate nextSupervisionDate;
 
     /** 预防性治疗结果：规范完成/失访/自行中断治疗/确诊肺结核（V4旧字段，兼容保留） */
     private String preventiveResult;

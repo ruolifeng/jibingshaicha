@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TrackConfirmPayload } from "@@/components/TrackingOperationDialog.vue"
+import type { EpidemicImportSkippedItem } from "../apis/index"
 import ReferralDiagnosisDialog from "@@/components/ReferralDiagnosisDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
@@ -36,6 +37,7 @@ import {
   deleteReferralTrackingByFilterApi,
   enableJointTrackingApi,
   exportReferralTrackApi,
+  getCountyLevel3UsersApi,
   getReferralTrackingDetailApi,
   getReferralTrackingListApi,
   importEpidemicTrackApi,
@@ -53,8 +55,17 @@ function isJointTrackingEnabled(row: any) {
   return Number(row?.jointTracking) === 1
 }
 
+function isPendingCrossTown(row: any) {
+  return Number(row?.crossTownConfirmStatus) === 1
+}
+
+function isRejectedCrossTown(row: any) {
+  return Number(row?.crossTownConfirmStatus) === 3
+}
+
 /** 有接收人时仅接收人可操作；共同追踪时发起方与接收方均可；无接收人时创建人或辖区一至五级用户可操作 */
 function canOperateTrack(row: any) {
+  if (isPendingCrossTown(row) || isRejectedCrossTown(row)) return false
   if (userStore.userRole === 1) return true
   const uid = String(userStore.userId)
   if (isFromRecommend(row) && row.receiverUserId) {
@@ -63,7 +74,12 @@ function canOperateTrack(row: any) {
     }
     return uid === String(row.receiverUserId)
   }
-  if (row.receiverUserId) {
+  if (row.receiverUserId && Number(row?.crossTownConfirmStatus) === 2) {
+    // 跨镇已确认：创建五级与接收三级均可
+    return uid === String(row.receiverUserId) || uid === String(row.creatorId)
+      || (userStore.userRole >= 2 && userStore.userRole <= 6)
+  }
+  if (row.receiverUserId && !isFromRecommend(row) && Number(row?.crossTownConfirmStatus) !== 2) {
     return uid === String(row.receiverUserId)
   }
   if (uid === String(row.creatorId)) return true
@@ -165,11 +181,45 @@ function handleReset() {
 
 // ===== 大疫情导入 =====
 const importDialogVisible = ref(false)
-const importResult = ref<{ count: number, updated?: number, batchNo: string } | null>(null)
+const importResult = ref<{ count: number, updated?: number, pendingConfirm?: number, batchNo: string } | null>(null)
+const crossTownDialogVisible = ref(false)
+const crossTownGroups = ref<{ township: string, items: EpidemicImportSkippedItem[], receiverUserId: string }[]>([])
+const countyLevel3Users = ref<any[]>([])
+let pendingImportFile: File | null = null
+let pendingAddDuplicateRecords = false
 
 function openImportDialog() {
   importResult.value = null
   importDialogVisible.value = true
+}
+
+function groupCrossTownItems(items: EpidemicImportSkippedItem[]) {
+  const map = new Map<string, EpidemicImportSkippedItem[]>()
+  for (const item of items) {
+    if (item.reason && item.reason !== "cross_township") continue
+    // 与后端 townshipReceivers 键一致：保留原始乡镇名（可为空串）
+    const key = (item.township || "").trim()
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(item)
+  }
+  return Array.from(map.entries()).map(([township, groupItems]) => ({
+    township,
+    items: groupItems,
+    receiverUserId: ""
+  }))
+}
+
+function crossTownGroupLabel(township: string) {
+  return township || "未知乡镇"
+}
+
+async function loadCountyLevel3Users() {
+  try {
+    const { data } = await getCountyLevel3UsersApi()
+    countyLevel3Users.value = data || []
+  } catch {
+    countyLevel3Users.value = []
+  }
 }
 
 async function handleEpidemicFileChange(uploadFile: any) {
@@ -184,81 +234,137 @@ async function handleEpidemicFileChange(uploadFile: any) {
   try {
     const preview = await previewEpidemicTrackImportApi(file)
     const previewSkipped = preview.data?.skippedItems ?? []
+    let townshipReceivers: Record<string, string> | undefined
+
     if (previewSkipped.length > 0) {
-      const previewText = previewSkipped
-        .slice(0, 5)
-        .map(item => item.message || `${item.name}（${item.idNumber}，乡镇：${item.township || "未知"}）`)
-        .join("\n")
-      const more = previewSkipped.length > 5 ? `\n... 等共 ${previewSkipped.length} 条` : ""
-      try {
-        await ElMessageBox.confirm(
-          `以下 ${previewSkipped.length} 条因「现住址乡镇」与当前五级账号单位不一致将被跳过（不是身份证重复）：\n${previewText}${more}\n\n可改用对应乡镇账号或区县及以上账号导入。是否继续导入其余可写入数据？`,
-          "跨镇数据无法写入",
-          { confirmButtonText: "继续导入其余", cancelButtonText: "取消", type: "warning" }
-        )
-      } catch {
-        ElMessage.info("已取消导入")
+      await loadCountyLevel3Users()
+      const groups = groupCrossTownItems(previewSkipped)
+      if (groups.length > 0) {
+        if (countyLevel3Users.value.length === 0) {
+          ElMessage.warning("本区县暂无三级用户可选，跨镇人员无法发起确认导入")
+        }
+        // 先处理重复确认，再弹跨镇选人
+        let addDuplicateRecords = false
+        if ((preview.data?.duplicateCount ?? 0) > 0) {
+          const ok = await confirmDuplicateChoice(preview.data!)
+          if (ok === null) {
+            ElMessage.info("已取消导入")
+            return
+          }
+          addDuplicateRecords = ok
+        }
+        crossTownGroups.value = groups
+        pendingImportFile = file
+        pendingAddDuplicateRecords = addDuplicateRecords
+        crossTownDialogVisible.value = true
         return
       }
     }
+
     let addDuplicateRecords = false
     if ((preview.data?.duplicateCount ?? 0) > 0) {
-      const duplicateNames = (preview.data?.duplicates ?? [])
-        .slice(0, 5)
-        .map((item) => {
-          const loc = [item.township, item.cardId ? `原卡片${item.cardId}` : ""].filter(Boolean).join(" / ")
-          return `${item.name}（${item.idNumber}${loc ? `，${loc}` : ""}）`
-        })
-        .join("、")
-      const more = (preview.data?.duplicateCount ?? 0) > 5 ? ` 等共 ${preview.data?.duplicateCount} 人` : ""
-      try {
-        await ElMessageBox.confirm(
-          `本单位已有同姓名+身份证追踪记录：${duplicateNames}${more}。\n默认将「更新已有记录」写入最新报告卡信息（满足 48 小时上报）；若需另建一条追踪请选「新增」。`,
-          "重复患者确认",
-          { confirmButtonText: "更新已有记录", cancelButtonText: "新增一条追踪", distinguishCancelAndClose: true, type: "warning" }
-        )
-        addDuplicateRecords = false
-      } catch (action) {
-        // Element Plus：cancel = 点取消按钮；close = 点右上角/遮罩
-        if (action === "cancel") {
-          addDuplicateRecords = true
-        } else {
-          ElMessage.info("已取消导入")
-          return
-        }
+      const ok = await confirmDuplicateChoice(preview.data!)
+      if (ok === null) {
+        ElMessage.info("已取消导入")
+        return
       }
+      addDuplicateRecords = ok
     }
-    const res = await importEpidemicTrackApi(file, addDuplicateRecords)
-    importResult.value = res.data
-    const skippedItems = res.data.skippedItems ?? []
-    const skipped = res.data.skipped ?? skippedItems.length
-    const parts = [
-      `新建 ${res.data.count} 条`,
-      `更新 ${res.data.updated ?? 0} 条`
-    ]
-    if (skipped > 0) {
-      parts.push(`跨镇权限跳过 ${skipped} 条`)
-    }
-    ElMessage.success(`导入完成：${parts.join("，")}`)
-    if (skippedItems.length > 0) {
-      const detail = skippedItems
-        .slice(0, 5)
-        .map(item => item.message || `${item.name}（${item.township || "未知乡镇"}）`)
-        .join("\n")
-      const more = skippedItems.length > 5 ? `\n... 等共 ${skippedItems.length} 条` : ""
-      ElMessageBox.alert(
-        `${detail}${more}\n\n请使用对应乡镇账号或区县及以上账号重新导入。`,
-        "跨镇跳过说明",
-        { confirmButtonText: "知道了", type: "warning" }
-      )
-    }
-    importDialogVisible.value = false
-    fetchList()
+    await doEpidemicImport(file, addDuplicateRecords, townshipReceivers)
   } catch {
     ElMessage.error("导入失败，请确认文件格式是否符合大疫情表模板")
   } finally {
     uploading.value = false
   }
+}
+
+/** @returns true=新增重复，false=更新，null=取消 */
+async function confirmDuplicateChoice(data: {
+  duplicateCount: number
+  duplicates: { name: string, idNumber: string, cardId?: string, township?: string }[]
+}): Promise<boolean | null> {
+  const duplicateNames = (data.duplicates ?? [])
+    .slice(0, 5)
+    .map((item) => {
+      const loc = [item.township, item.cardId ? `原卡片${item.cardId}` : ""].filter(Boolean).join(" / ")
+      return `${item.name}（${item.idNumber}${loc ? `，${loc}` : ""}）`
+    })
+    .join("、")
+  const more = (data.duplicateCount ?? 0) > 5 ? ` 等共 ${data.duplicateCount} 人` : ""
+  try {
+    await ElMessageBox.confirm(
+      `本单位已有同姓名+身份证追踪记录：${duplicateNames}${more}。\n默认将「更新已有记录」写入最新报告卡信息（满足 48 小时上报）；若需另建一条追踪请选「新增」。`,
+      "重复患者确认",
+      { confirmButtonText: "更新已有记录", cancelButtonText: "新增一条追踪", distinguishCancelAndClose: true, type: "warning" }
+    )
+    return false
+  } catch (action) {
+    if (action === "cancel") return true
+    return null
+  }
+}
+
+async function submitCrossTownImport() {
+  const missing = crossTownGroups.value.filter(g => !g.receiverUserId)
+  if (missing.length > 0) {
+    ElMessage.warning(`请为乡镇「${missing.map(m => crossTownGroupLabel(m.township)).join("、")}」选择区县三级用户`)
+    return
+  }
+  if (!pendingImportFile) return
+  const townshipReceivers: Record<string, string> = {}
+  for (const g of crossTownGroups.value) {
+    townshipReceivers[g.township] = g.receiverUserId
+  }
+  uploading.value = true
+  try {
+    await doEpidemicImport(pendingImportFile, pendingAddDuplicateRecords, townshipReceivers)
+    crossTownDialogVisible.value = false
+    pendingImportFile = null
+  } catch {
+    ElMessage.error("导入失败，请确认文件格式是否符合大疫情表模板")
+  } finally {
+    uploading.value = false
+  }
+}
+
+function onCrossTownDialogClosed() {
+  pendingImportFile = null
+  crossTownGroups.value = []
+}
+
+async function doEpidemicImport(
+  file: File,
+  addDuplicateRecords: boolean,
+  townshipReceivers?: Record<string, string>
+) {
+  const res = await importEpidemicTrackApi(file, addDuplicateRecords, townshipReceivers)
+  importResult.value = res.data
+  const skippedItems = res.data.skippedItems ?? []
+  const skipped = res.data.skipped ?? skippedItems.length
+  const pending = res.data.pendingConfirm ?? 0
+  const parts = [
+    `新建 ${res.data.count} 条`,
+    `更新 ${res.data.updated ?? 0} 条`
+  ]
+  if (pending > 0) parts.push(`跨镇待确认 ${pending} 条`)
+  if (skipped > 0) parts.push(`未处理 ${skipped} 条`)
+  ElMessage.success(`导入完成：${parts.join("，")}`)
+  if (pending > 0) {
+    ElMessage.info("跨镇记录已提交区县三级确认，确认前不可追踪操作")
+  }
+  if (skippedItems.length > 0) {
+    const detail = skippedItems
+      .slice(0, 5)
+      .map(item => item.message || `${item.name}（${item.township || "未知乡镇"}）`)
+      .join("\n")
+    const more = skippedItems.length > 5 ? `\n... 等共 ${skippedItems.length} 条` : ""
+    ElMessageBox.alert(`${detail}${more}`, "部分跨镇未导入说明", {
+      confirmButtonText: "知道了",
+      type: "warning"
+    })
+  }
+  importDialogVisible.value = false
+  fetchList()
 }
 
 /** 导出：filtered=筛选 / selected=勾选 / all=全部 */
@@ -817,10 +923,16 @@ function getRowClass({ row }: { row: any }) {
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" fixed />
-        <el-table-column label="来源" width="100">
+        <el-table-column label="来源" width="130">
           <template #default="{ row }">
             <el-tag :type="isEpidemicRow(row) ? 'danger' : 'info'" size="small">
               {{ isEpidemicRow(row) ? "大疫情" : "手动" }}
+            </el-tag>
+            <el-tag v-if="isPendingCrossTown(row)" type="warning" size="small" style="margin-left: 4px">
+              待区县三级确认
+            </el-tag>
+            <el-tag v-else-if="isRejectedCrossTown(row)" type="info" size="small" style="margin-left: 4px">
+              跨镇已拒绝
             </el-tag>
           </template>
         </el-table-column>
@@ -984,6 +1096,13 @@ function getRowClass({ row }: { row: any }) {
             <el-button type="primary" link size="small" @click="openViewDialog(row)">
               查看
             </el-button>
+            <el-tooltip
+              v-if="isPendingCrossTown(row)"
+              content="待区县三级确认，确认前不可追踪操作"
+              placement="top"
+            >
+              <span style="color: #909399; font-size: 12px; margin-left: 4px">待确认</span>
+            </el-tooltip>
             <el-button
               v-if="canOperateTrack(row)"
               v-permission="'referralManagement:edit'"
@@ -1069,6 +1188,25 @@ function getRowClass({ row }: { row: any }) {
             <el-descriptions-item label="录入单位" :span="2">
               {{ viewDetail.entryUnitName || "-" }}
             </el-descriptions-item>
+            <template v-if="isPendingCrossTown(viewDetail) || Number(viewDetail.crossTownConfirmStatus) === 2 || isRejectedCrossTown(viewDetail)">
+              <el-descriptions-item label="跨镇确认">
+                <el-tag v-if="isPendingCrossTown(viewDetail)" type="warning" size="small">
+                  待区县三级确认
+                </el-tag>
+                <el-tag v-else-if="Number(viewDetail.crossTownConfirmStatus) === 2" type="success" size="small">
+                  已确认
+                </el-tag>
+                <el-tag v-else type="info" size="small">
+                  已拒绝
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="确认接收人">
+                {{ viewDetail.receiverUserName || "-" }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="viewDetail.crossTownConfirmTime" label="确认时间">
+                {{ formatDateTime(viewDetail.crossTownConfirmTime) }}
+              </el-descriptions-item>
+            </template>
             <template v-if="isFromRecommend(viewDetail)">
               <el-descriptions-item label="推介来源" :span="2">
                 <el-tag type="success" size="small">
@@ -1249,6 +1387,66 @@ function getRowClass({ row }: { row: any }) {
       <template #footer>
         <el-button @click="viewDialogVisible = false">
           关闭
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 跨镇导入：按乡镇选择区县三级确认人 -->
+    <el-dialog
+      v-model="crossTownDialogVisible"
+      title="跨镇人员需区县三级确认"
+      width="720px"
+      :close-on-click-modal="false"
+      @closed="onCrossTownDialogClosed"
+    >
+      <el-alert type="warning" :closable="false" style="margin-bottom: 16px">
+        以下人员现住址乡镇与当前账号单位不一致。请按乡镇选择本区县三级用户发起确认；确认前可在列表查看，但不可追踪操作。
+      </el-alert>
+      <div
+        v-for="(group, gIdx) in crossTownGroups"
+        :key="`${group.township || '_empty'}-${gIdx}`"
+        style="margin-bottom: 20px; padding: 12px; background: #fafafa; border-radius: 6px"
+      >
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap">
+          <strong>{{ crossTownGroupLabel(group.township) }}</strong>
+          <el-tag size="small" type="info">
+            {{ group.items.length }} 人
+          </el-tag>
+          <el-select
+            v-model="group.receiverUserId"
+            placeholder="选择区县三级用户（必选）"
+            filterable
+            style="width: 280px"
+          >
+            <el-option
+              v-for="u in countyLevel3Users"
+              :key="u.id"
+              :label="`${u.realName || u.username}${u.departmentName ? `（${u.departmentName}）` : ''}`"
+              :value="String(u.id)"
+            />
+          </el-select>
+        </div>
+        <div style="font-size: 13px; color: #606266; line-height: 1.7">
+          <div v-for="(item, idx) in group.items.slice(0, 8)" :key="`${item.idNumber}-${idx}`">
+            {{ item.name }}（{{ item.idNumber }}）
+            <span v-if="item.message" style="color: #909399"> — {{ item.message }}</span>
+          </div>
+          <div v-if="group.items.length > 8" style="color: #909399">
+            ... 等共 {{ group.items.length }} 人
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="crossTownDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="uploading"
+          :disabled="countyLevel3Users.length === 0"
+          @click="submitCrossTownImport"
+        >
+          确认并导入
         </el-button>
       </template>
     </el-dialog>
