@@ -12,6 +12,7 @@ import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.PatientAddressRegionParser;
 import cn.luyou.utils.StatYearPeriod;
 import cn.luyou.mapper.LatentInfectionMapper;
 import cn.luyou.mapper.ReferralTrackingMapper;
@@ -2419,30 +2420,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return getFieldCellValue(row, headerIndex, "录入时间");
     }
 
+    /** 从现住详细地址解析乡镇；含「市」的镇名（如狮市镇）不能回退成县名 */
     private String extractTownship(String address) {
-        if (StrUtil.isBlank(address)) return null;
-        String normalized = address.replace('\u00A0', ' ').replaceAll("\\s+", "").trim();
-        String township = extractAdministrativeUnit(normalized, "街道");
-        if (StrUtil.isNotBlank(township)) return township;
-        township = extractAdministrativeUnit(normalized, "乡");
-        if (StrUtil.isNotBlank(township)) return township;
-        township = extractAdministrativeUnit(normalized, "镇");
-        if (StrUtil.isNotBlank(township)) return township;
-        township = extractAdministrativeUnit(normalized, "区");
-        if (StrUtil.isNotBlank(township)) return township;
-        return extractAdministrativeUnit(normalized, "县");
-    }
-
-    private String extractAdministrativeUnit(String address, String suffix) {
-        int idx = address.lastIndexOf(suffix);
-        if (idx <= 0) return null;
-        int start = -1;
-        for (String separator : List.of("省", "市", "州", "县", "区")) {
-            start = Math.max(start, address.lastIndexOf(separator, idx - 1));
-        }
-        String unit = address.substring(start + 1, idx + suffix.length()).trim();
-        if (unit.length() <= suffix.length() || unit.length() > 20) return null;
-        return unit;
+        return PatientAddressRegionParser.extractTownship(address);
     }
 
     private LambdaQueryWrapper<ReferralTracking> buildQueryWrapper(
