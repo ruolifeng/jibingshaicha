@@ -8,18 +8,20 @@ import java.util.regex.Pattern;
 /**
  * 从患者现住址解析县级、乡级行政区划。
  * <p>
- * 县级：市辖区、县、县级市、自治县、旗（以「区/县/旗」等后缀识别）<br>
- * 乡级：镇、乡、民族乡、街道办事处（简写「街道」）
+ * 按「省 → 地级市 → 区县 → 乡镇」从左到右切分，避免把「狮市镇」里的「市」
+ * 误当成地级市前缀，导致只解析到县、解析不到镇。
  */
 public final class PatientAddressRegionParser {
 
-    /** 县级，优先匹配较长后缀 */
-    private static final Pattern COUNTY_PATTERN = Pattern.compile(
-            "^(.+?(?:自治县|县级市|县|区|旗))");
-
-    /** 乡级，优先匹配较长后缀 */
-    private static final Pattern TOWNSHIP_PATTERN = Pattern.compile(
-            "^(.+?(?:街道办事处|民族乡|街道|镇|乡))");
+    /**
+     * group1=县级，group2=乡级（可空）。<br>
+     * 地级市前缀不允许跨越「县/区/旗」，因此「富顺县狮市镇」不会把「狮市」剥掉。
+     */
+    private static final Pattern REGION_PATTERN = Pattern.compile(
+            "^(?:.+?省)?"
+                    + "(?:[^县区旗]+?市)?"
+                    + "(.+?(?:自治县|县级市|县|区|旗))"
+                    + "(?:(.+?(?:街道办事处|民族乡|街道|镇|乡)))?");
 
     private PatientAddressRegionParser() {
     }
@@ -40,35 +42,33 @@ public final class PatientAddressRegionParser {
             return new ParsedRegion(null, null);
         }
 
-        Matcher countyMatcher = COUNTY_PATTERN.matcher(address);
-        if (!countyMatcher.find()) {
+        Matcher matcher = REGION_PATTERN.matcher(address);
+        if (!matcher.find()) {
             return new ParsedRegion(null, null);
         }
-
-        String county = countyMatcher.group(1).trim();
-        String remainder = address.substring(countyMatcher.end()).trim();
-        if (StrUtil.isBlank(remainder)) {
-            return new ParsedRegion(county, null);
-        }
-
-        Matcher townshipMatcher = TOWNSHIP_PATTERN.matcher(remainder);
-        if (!townshipMatcher.find()) {
-            return new ParsedRegion(county, null);
-        }
-
-        return new ParsedRegion(county, townshipMatcher.group(1).trim());
+        String county = blankToNull(matcher.group(1));
+        String township = blankToNull(matcher.group(2));
+        return new ParsedRegion(county, township);
     }
 
-    /** 去掉省、市前缀，便于从「区县+乡镇」起始解析 */
+    /** 仅解析乡级，解析不到时返回 null（不再回退成县名） */
+    public static String extractTownship(String rawAddress) {
+        return parse(rawAddress).township();
+    }
+
+    /** 去掉空白，便于按省市区划切分 */
     public static String normalize(String rawAddress) {
         if (StrUtil.isBlank(rawAddress)) {
             return "";
         }
-        String normalized = rawAddress.trim()
-                .replaceAll("\\s+", "");
-        normalized = normalized.replaceFirst("^[^省\\s]+省", "");
-        normalized = normalized.replaceFirst("^[^市\\s]+市", "");
-        normalized = normalized.replaceFirst("^自贡市", "");
-        return normalized.trim();
+        return rawAddress.replace('\u00A0', ' ').replaceAll("\\s+", "").trim();
+    }
+
+    private static String blankToNull(String value) {
+        if (StrUtil.isBlank(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
