@@ -3,6 +3,7 @@ package cn.luyou.service;
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
+import cn.luyou.model.vo.UpdateNoticeRegistrationNoDTO;
 import cn.luyou.model.vo.UserInfoVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -37,4 +38,7 @@ public interface NoticeService extends IService<Notice> {
 
     /** 仅更新痰培养/耐药情况，同步首次随访并通知所选三级用户 */
     void updateCultureAndResistance(Long noticeId, UpdateNoticeCultureResistanceDTO dto);
+
+    /** 仅更新潜伏感染者通知单登记号，并同步潜伏感染主表（总览/督导/服药/历史共用） */
+    void updateRegistrationNo(Long noticeId, UpdateNoticeRegistrationNoDTO dto);
 }

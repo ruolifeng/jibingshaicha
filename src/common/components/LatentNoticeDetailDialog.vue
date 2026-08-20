@@ -1,7 +1,13 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
 import { displayInfectionJudgeResult, normalizeLatentTreatmentPlan, NOTICE_STATUS_MAP } from "@@/constants/disease"
-import { confirmNoticeApi, getNoticeDetailApi, getNoticeListByBizApi } from "@/pages/latent-management/apis"
+import { isLatentTransferLocked } from "@@/utils/latent"
+import {
+  confirmNoticeApi,
+  getNoticeDetailApi,
+  getNoticeListByBizApi,
+  updateNoticeRegistrationNoApi
+} from "@/pages/latent-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -17,6 +23,24 @@ const emit = defineEmits<{
 const userStore = useUserStore()
 const noticeDetailData = ref<Record<string, any> | null>(null)
 const printVisible = ref(false)
+const editing = ref(false)
+const submitting = ref(false)
+const registrationNo = ref("")
+
+/** 三级(role=4)、四级(role=5)；超管放行 */
+const canEditRegistrationNo = computed(() => {
+  if (!noticeDetailData.value || isLatentTransferLocked(props.latentRow)) return false
+  const role = userStore.userRole
+  if (role !== 1 && role !== 4 && role !== 5) return false
+  const status = noticeDetailData.value.status
+  return status === 1 || status === 2
+})
+
+function resetEdit() {
+  editing.value = false
+  submitting.value = false
+  registrationNo.value = ""
+}
 
 async function loadNotice() {
   if (!props.latentRow) return
@@ -40,10 +64,20 @@ async function loadNotice() {
   } catch { /* handled */ }
 }
 
+function beginEdit() {
+  if (!noticeDetailData.value || !canEditRegistrationNo.value) return
+  registrationNo.value = noticeDetailData.value.registrationNo || ""
+  editing.value = true
+}
+
 watch(
   () => props.visible,
   (val) => {
-    if (val) loadNotice()
+    if (!val) {
+      resetEdit()
+      return
+    }
+    loadNotice()
   }
 )
 
@@ -55,6 +89,20 @@ async function handleConfirmNotice(noticeId: string) {
     emit("update:visible", false)
     emit("success")
   } catch { /* cancelled or handled */ }
+}
+
+async function handleSaveRegistrationNo() {
+  if (!noticeDetailData.value) return
+  submitting.value = true
+  try {
+    await updateNoticeRegistrationNoApi(noticeDetailData.value.id, registrationNo.value.trim())
+    ElMessage.success("登记号已保存并同步")
+    editing.value = false
+    await loadNotice()
+    emit("success")
+  } catch { /* handled */ } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -86,7 +134,16 @@ async function handleConfirmNotice(noticeId: string) {
         {{ noticeDetailData.ethnicity || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="登记号">
-        {{ noticeDetailData.registrationNo || "-" }}
+        <el-input
+          v-if="editing"
+          v-model="registrationNo"
+          maxlength="64"
+          clearable
+          placeholder="请填写登记号"
+        />
+        <template v-else>
+          {{ noticeDetailData.registrationNo || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="人群分类">
         {{ noticeDetailData.crowdCategory || "-" }}
@@ -147,8 +204,24 @@ async function handleConfirmNotice(noticeId: string) {
       <el-button v-if="noticeDetailData" @click="printVisible = true">
         打印预览
       </el-button>
+      <template v-if="editing">
+        <el-button @click="resetEdit">
+          取消修改
+        </el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveRegistrationNo">
+          保存登记号
+        </el-button>
+      </template>
       <el-button
-        v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6"
+        v-else-if="noticeDetailData && canEditRegistrationNo"
+        v-permission="'latentManagement:notice'"
+        type="warning"
+        @click="beginEdit"
+      >
+        修改登记号
+      </el-button>
+      <el-button
+        v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6 && !editing"
         v-permission="'latentManagement:notice'"
         type="primary"
         @click="handleConfirmNotice(noticeDetailData.id)"

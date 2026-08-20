@@ -340,7 +340,7 @@ function treatmentPhaseLabel(phase?: number) {
             >
               解锁
             </el-button>
-            <ArchivedLatentRecordsActions :row="row" />
+            <ArchivedLatentRecordsActions :row="row" @success="fetchData" />
           </template>
         </el-table-column>
       </el-table>

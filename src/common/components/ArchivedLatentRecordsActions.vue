@@ -9,6 +9,10 @@ const props = defineProps<{
   row: Record<string, any>
 }>()
 
+const emit = defineEmits<{
+  (e: "success"): void
+}>()
+
 const detailVisible = ref(false)
 const noticeVisible = ref(false)
 const supervisionListVisible = ref(false)
@@ -61,6 +65,7 @@ async function viewSupervisionDetail(record: Record<string, any>) {
     <LatentNoticeDetailDialog
       v-model:visible="noticeVisible"
       :latent-row="row"
+      @success="emit('success')"
     />
 
     <el-dialog
