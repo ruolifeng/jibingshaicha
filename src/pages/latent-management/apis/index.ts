@@ -153,6 +153,15 @@ export function getNoticeListByBizApi(bizId: string, noticeType: string) {
   })
 }
 
+/** 修改潜伏感染者通知单登记号（同步主表，总览/督导/服药/历史共用） */
+export function updateNoticeRegistrationNoApi(noticeId: string, registrationNo: string) {
+  return request<ApiResponseData<null>>({
+    url: `notice/${noticeId}/registration-no`,
+    method: "post",
+    data: { registrationNo }
+  })
+}
+
 /** 保存督导表草稿 */
 export function saveSupervisionDraftApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "supervision/draft", method: "post", data })

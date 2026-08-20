@@ -2438,8 +2438,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             return;
         }
         String value = StrUtil.trim(registrationNo);
-        entity.setRegistrationNo(StrUtil.isBlank(value) ? null : value);
-        updateById(entity);
+        String normalized = StrUtil.isBlank(value) ? null : value;
+        // 使用 set 显式写入，保证清空登记号时主表也能同步为 null
+        lambdaUpdate()
+                .eq(LatentInfection::getId, latentId)
+                .set(LatentInfection::getRegistrationNo, normalized)
+                .update();
     }
 
     private void assertLatentNotTransferLocked(LatentInfection latent) {

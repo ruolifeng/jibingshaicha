@@ -6,6 +6,7 @@ import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
+import cn.luyou.model.vo.UpdateNoticeRegistrationNoDTO;
 import cn.luyou.model.vo.UserInfoVO;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.UserService;
@@ -116,6 +117,18 @@ public class NoticeController {
         Notice notice = noticeService.getById(id);
         assertPatientNoticeFill(notice);
         noticeService.updateCultureAndResistance(id, dto);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "修改潜伏感染者通知单登记号，并同步潜伏感染主表")
+    @PostMapping("/{id}/registration-no")
+    @OperationLog(type = "update", module = "latent", action = "修改通知单登记号")
+    public ResultResponse<Void> updateRegistrationNo(
+            @PathVariable Long id,
+            @RequestBody UpdateNoticeRegistrationNoDTO dto) {
+        // 先校验模块权限，再由 Service 校验通知单类型与角色
+        userService.checkPermissionCode("latentManagement:notice");
+        noticeService.updateRegistrationNo(id, dto);
         return ResultRes.success(null);
     }
 }

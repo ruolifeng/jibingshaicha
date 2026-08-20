@@ -10,6 +10,7 @@ import cn.luyou.model.User;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
+import cn.luyou.model.vo.UpdateNoticeRegistrationNoDTO;
 import cn.luyou.model.vo.UserInfoVO;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.FirstVisitService;
@@ -220,6 +221,32 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         sendCultureResistanceChangedMessages(notice, dto.getReceiverUserIds());
     }
 
+    @Override
+    @Transactional
+    public void updateRegistrationNo(Long noticeId, UpdateNoticeRegistrationNoDTO dto) {
+        if (dto == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少更新内容");
+        }
+        assertLevel3Or4ForRegistrationNo();
+        Notice notice = requireLatentNotice(noticeId);
+        String registrationNo = StrUtil.trimToNull(dto.getRegistrationNo());
+        // 使用 set 显式写入，避免 updateById 忽略 null 导致无法清空登记号
+        lambdaUpdate()
+                .eq(Notice::getId, notice.getId())
+                .set(Notice::getRegistrationNo, registrationNo)
+                .update();
+        notice.setRegistrationNo(registrationNo);
+        syncLatentRegistrationNo(notice);
+    }
+
+    /** 登记号完善：仅三级(role=4)、四级(role=5)；超管放行 */
+    private void assertLevel3Or4ForRegistrationNo() {
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || (role != 1 && role != 4 && role != 5)) {
+            throw new ServiceException(StatusEnum.FORBIDDEN, "仅三级、四级用户可修改登记号");
+        }
+    }
+
     private Notice requirePatientNotice(Long noticeId) {
         Notice notice = getById(noticeId);
         if (notice == null) {
@@ -227,6 +254,18 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         }
         if (!"patient".equals(notice.getNoticeType())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅患者通知单可修改痰培养和耐药情况");
+        }
+        assertBizAccessible(notice.getBizId(), notice.getNoticeType());
+        return notice;
+    }
+
+    private Notice requireLatentNotice(Long noticeId) {
+        Notice notice = getById(noticeId);
+        if (notice == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单不存在");
+        }
+        if (!"latent".equals(notice.getNoticeType())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅潜伏感染者通知单可修改登记号");
         }
         assertBizAccessible(notice.getBizId(), notice.getNoticeType());
         return notice;
