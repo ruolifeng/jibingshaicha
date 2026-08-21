@@ -11,6 +11,7 @@ import cn.luyou.mapper.MedicationPickupMapper;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.MedicationPickup;
 import cn.luyou.model.Patient;
+import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.MedicationPickupService;
 import cn.luyou.service.PatientService;
 import cn.luyou.utils.BaseContext;
@@ -140,6 +141,33 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
         Integer role = BaseContext.getCurrentRole();
         list.forEach(item -> item.setEditable(isPickupEditable(role, item)));
         return list;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteLatentPickup(Long id) {
+        if (id == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少领药记录ID");
+        }
+        MedicationPickup existing = getById(id);
+        if (existing == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "领药记录不存在");
+        }
+        if (existing.getLatentInfectionId() == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录不是潜伏感染者领药记录");
+        }
+        LatentInfection latent = latentInfectionMapper.selectById(existing.getLatentInfectionId());
+        if (latent == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
+        }
+        if (LatentInfectionService.isTransferLocked(latent)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    LatentInfectionService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(latent.getArchiveRemark())
+                            ? "该记录已转出，不可操作"
+                            : "该记录转出待确认，不可操作");
+        }
+        assertPickupEditable(existing);
+        removeById(id);
     }
 
     public boolean isPickupEditable(Integer role, MedicationPickup pickup) {

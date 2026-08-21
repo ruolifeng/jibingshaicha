@@ -7,10 +7,11 @@ import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
+import { isLatentTransferLocked } from "@@/utils/latent"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { canEditSupervisionForm, getSupervisionStatusLabel, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import { useUserStore } from "@/pinia/stores/user"
-import { exportLatentSupervisionFormsApi, getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
+import { deleteSupervisionApi, exportLatentSupervisionFormsApi, getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
 import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
 const userStore = useUserStore()
@@ -217,6 +218,29 @@ async function openPrint(row: Record<string, any>) {
   printData.value = mergeSupervisionProfileFields(row, profile)
   printPatientName.value = historyPatientName.value
   printVisible.value = true
+}
+
+async function handleDelete(row: Record<string, any>) {
+  if (isLatentTransferLocked(historyRow.value)) {
+    ElMessage.warning("该记录已转出或转出待确认，不可删除")
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除第 ${row.formSeq ?? ""} 次督导表记录吗？删除后不可恢复。`,
+      "删除确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    await deleteSupervisionApi(row.id)
+    ElMessage.success("删除成功")
+    await refreshHistoryList()
+    if (!historyList.value.length) {
+      historyVisible.value = false
+    }
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error(err?.message || "删除失败")
+  }
 }
 </script>
 
@@ -449,7 +473,7 @@ async function openPrint(row: Record<string, any>) {
             {{ getSupervisionStatusLabel(row.status) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="200">
+        <el-table-column label="操作" fixed="right" width="240">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">
               查看详情
@@ -466,6 +490,16 @@ async function openPrint(row: Record<string, any>) {
             </el-button>
             <el-button type="info" link size="small" @click="openPrint(row)">
               打印
+            </el-button>
+            <el-button
+              v-if="!isLatentTransferLocked(historyRow)"
+              v-permission="'latentManagement:supervision:edit'"
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>

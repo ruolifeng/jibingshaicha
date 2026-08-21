@@ -71,6 +71,15 @@ public class SupervisionFormController {
         return ResultRes.success(supervisionFormService.getById(id));
     }
 
+    @Operation(summary = "删除督导表记录")
+    @DeleteMapping("/{id}")
+    @OperationLog(type = "delete", module = "latent", action = "删除督导表")
+    public ResultResponse<Void> delete(@PathVariable Long id) {
+        userService.checkPermissionCode("latentManagement:supervision:edit");
+        supervisionFormService.deleteForm(id);
+        return ResultRes.success(null);
+    }
+
     @Operation(summary = "查询最新督导表详情（兼容旧接口）")
     @GetMapping("/detail/{latentInfectionId}")
     public ResultResponse<SupervisionForm> detail(@PathVariable Long latentInfectionId) {

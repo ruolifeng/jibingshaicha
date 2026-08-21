@@ -389,6 +389,15 @@ public class LatentInfectionController {
         return ResultRes.success(medicationPickupService.listByLatentInfectionId(latentInfectionId));
     }
 
+    @Operation(summary = "删除潜伏感染者领药记录")
+    @DeleteMapping("/medication-pickup/{id}")
+    @OperationLog(type = "delete", module = "latent", action = "删除潜伏感染领药记录")
+    public ResultResponse<Void> deleteMedicationPickup(@PathVariable Long id) {
+        userService.checkAnyPermissionCode(MEDICATION_PICKUP_WRITE_PERMISSIONS);
+        medicationPickupService.deleteLatentPickup(id);
+        return ResultRes.success(null);
+    }
+
     /** 校验归属、补齐人群类型，并确保不会误绑患者记录 */
     private void prepareLatentMedication(MedicationManagement medication) {
         if (medication.getLatentInfectionId() == null) {

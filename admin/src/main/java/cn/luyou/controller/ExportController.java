@@ -33,6 +33,7 @@ import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.LatentScreeningLinkSupport;
+import cn.luyou.utils.NoticePartyFillSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningScopeHelper;
 import cn.luyou.utils.ScreeningMethodSupport;
@@ -88,6 +89,7 @@ public class ExportController {
     private final DataScopeHelper dataScopeHelper;
     private final ScreeningScopeHelper screeningScopeHelper;
     private final DepartmentFilterSupport departmentFilterSupport;
+    private final NoticePartyFillSupport noticePartyFillSupport;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -838,12 +840,12 @@ public class ExportController {
 
     /** 首次/后续随访导出共用的患者基本列 */
     private static final List<String> PATIENT_VISIT_BASIC_HEADERS = List.of(
-            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "服药管理单位"
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "诊断结果", "服药管理单位"
     );
 
     /** 首次入户随访导出列（不含附件） */
     private static final List<String> FIRST_VISIT_EXPORT_HEADERS = List.of(
-            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "服药管理单位",
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "诊断结果", "服药管理单位",
             "编号", "随访时间", "随访方式", "患者类型", "痰菌情况", "痰培养", "痰培养补充", "耐药情况", "症状及体征", "其他症状",
             "化疗方案", "用法", "督导人员", "药品剂型", "单独居室", "通风情况", "吸烟(支/天)", "饮酒(两/天)",
             "取药地点", "取药时间", "健康教育及培训", "下次随访时间", "评估医生签名", "备注", "状态", "填写时间"
@@ -851,7 +853,7 @@ public class ExportController {
 
     /** 后续随访导出列（不含附件；同一患者多条记录各占一行） */
     private static final List<String> FOLLOW_UP_VISIT_EXPORT_HEADERS = List.of(
-            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "服药管理单位",
+            "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "诊断结果", "服药管理单位",
             "第几次", "随访时间", "治疗月序", "督导人员", "随访方式", "症状及体征", "症状-其它",
             "吸烟(支/天)", "饮酒(两/天)", "化疗方案", "用法", "药品剂型", "漏服药次数",
             "药物不良反应", "不良反应详情", "并发症/合并症", "并发症详情",
@@ -867,6 +869,16 @@ public class ExportController {
             "是否开始预防性治疗", "治疗方案", "治疗开始时间", "治疗结束时间",
             "督导记录", "治疗完成情况", "中断用药", "中断次数", "用药率",
             "督导管理人员类型", "督导管理人员姓名", "备注", "状态", "填写时间"
+    );
+
+    /** 患者通知单导出列 */
+    private static final List<String> PATIENT_NOTICE_EXPORT_HEADERS = List.of(
+            "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "民族", "人群分类",
+            "现居住地址", "户籍地址", "病原学结果", "诊断结果",
+            "患者类型", "管理方式", "胸片检查时间", "胸片检查结果", "治疗方案", "耐药情况",
+            "痰涂片", "痰培养", "分子检查", "病理学检查",
+            "治疗机构", "服药管理单位", "下发时间", "备注", "其他注意事项",
+            "下发人", "接收人", "发送时间", "接收时间", "状态"
     );
 
     private static final Map<String, String> FIRST_VISIT_SYMPTOM_LABEL = Map.ofEntries(
@@ -1049,6 +1061,48 @@ public class ExportController {
         writeExcel(response, "后续随访", rows, FOLLOW_UP_VISIT_EXPORT_HEADERS);
     }
 
+    @Operation(summary = "导出患者通知单（ids 勾选；否则按当前筛选）")
+    @GetMapping("/patient-notices")
+    @OperationLog(type = "export", module = "statistics", action = "导出患者通知单")
+    public void exportPatientNotices(
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
+            HttpServletResponse response) throws IOException {
+        List<Patient> patients = loadPatientsForVisitExport(
+                ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                dateFrom, dateTo, StrUtil.blankToDefault(dateFilterBy, "noticeFill"),
+                medicationManagementUnit, crowdCategory, creatorUsername, columnFilters, formatIssue,
+                null, null);
+        if (patients.isEmpty()) {
+            writeExcel(response, "患者通知单", List.of(), PATIENT_NOTICE_EXPORT_HEADERS);
+            return;
+        }
+        List<Long> patientIds = patients.stream().map(Patient::getId).toList();
+        Map<Long, Notice> noticeMap = loadLatestNoticeMap(patientIds, "patient");
+        noticePartyFillSupport.fillPartyNames(new ArrayList<>(noticeMap.values()));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Patient p : patients) {
+            rows.add(buildPatientNoticeExportRow(p, noticeMap.get(p.getId())));
+        }
+        log.info("[导出] 患者通知单 {} 条", rows.size());
+        writeExcel(response, "患者通知单", rows, PATIENT_NOTICE_EXPORT_HEADERS);
+    }
+
     @Operation(summary = "导出潜伏感染者督导表（ids 勾选；否则按当前筛选）")
     @GetMapping("/latent-supervision-forms")
     @OperationLog(type = "export", module = "statistics", action = "导出督导表")
@@ -1227,7 +1281,83 @@ public class ExportController {
         row.put("证件号", nullToEmpty(p.getIdNumber()));
         row.put("联系电话", nullToEmpty(p.getPhone()));
         row.put("病原学结果", resolvePatientPathogenResultForExport(p));
+        row.put("诊断结果", resolvePatientDiagnosisResultForExport(p));
         row.put("服药管理单位", resolvePatientMedicationUnit(p, notice));
+    }
+
+    private Map<String, Object> buildPatientNoticeExportRow(Patient p, Notice notice) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("数据来源", POP_TYPE_LABEL.getOrDefault(p.getPopulationType(), p.getPopulationType()));
+        row.put("姓名", preferNoticeValue(notice != null ? notice.getPatientName() : null, p.getName()));
+        row.put("性别", preferNoticeValue(notice != null ? notice.getGender() : null, p.getGender()));
+        row.put("年龄", notice != null && notice.getAge() != null ? notice.getAge() : (p.getAge() != null ? p.getAge() : ""));
+        row.put("证件号", preferNoticeValue(notice != null ? notice.getIdNumber() : null, p.getIdNumber()));
+        row.put("联系电话", preferNoticeValue(notice != null ? notice.getPhone() : null, p.getPhone()));
+        row.put("民族", preferNoticeValue(notice != null ? notice.getEthnicity() : null, p.getEthnicity()));
+        row.put("人群分类", preferNoticeValue(notice != null ? notice.getCrowdCategory() : null, p.getCrowdCategory()));
+        row.put("现居住地址", preferNoticeValue(notice != null ? notice.getCurrentAddress() : null, p.getCurrentAddress()));
+        row.put("户籍地址", preferNoticeValue(notice != null ? notice.getHouseholdAddress() : null, p.getHouseholdAddress()));
+        row.put("病原学结果", resolvePatientPathogenResultForExport(p));
+        row.put("诊断结果", resolvePatientDiagnosisResultForExport(p));
+        if (notice == null) {
+            PATIENT_NOTICE_EXPORT_HEADERS.stream()
+                    .filter(h -> !List.of(
+                            "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "民族", "人群分类",
+                            "现居住地址", "户籍地址", "病原学结果", "诊断结果", "状态"
+                    ).contains(h))
+                    .forEach(h -> row.put(h, ""));
+            row.put("服药管理单位", resolvePatientMedicationUnit(p, null));
+            row.put("状态", "未发送");
+            return row;
+        }
+        row.put("患者类型", nullToEmpty(notice.getPatientType()));
+        row.put("管理方式", nullToEmpty(notice.getManagementMethod()));
+        row.put("胸片检查时间", formatDate(notice.getChestXrayDate()));
+        row.put("胸片检查结果", nullToEmpty(notice.getChestXrayResult()));
+        row.put("治疗方案", nullToEmpty(notice.getTreatmentPlan()));
+        row.put("耐药情况", nullToEmpty(notice.getDrugResistance()));
+        row.put("痰涂片", nullToEmpty(notice.getSputumSmear()));
+        row.put("痰培养", nullToEmpty(notice.getSputumCulture()));
+        row.put("分子检查", nullToEmpty(notice.getMolecularTest()));
+        row.put("病理学检查", nullToEmpty(notice.getPathologyTest()));
+        row.put("治疗机构", nullToEmpty(notice.getTreatmentInstitution()));
+        row.put("服药管理单位", resolvePatientMedicationUnit(p, notice));
+        row.put("下发时间", formatDate(notice.getIssuedTime()));
+        row.put("备注", nullToEmpty(notice.getRemark()));
+        row.put("其他注意事项", nullToEmpty(notice.getOtherNotes()));
+        row.put("下发人", formatNoticeParty(notice.getSenderName(), notice.getSenderOrgName()));
+        row.put("接收人", formatNoticeParty(notice.getReceiverName(), notice.getReceiverOrgName()));
+        row.put("发送时间", formatDateTime(notice.getSentTime()));
+        row.put("接收时间", formatDateTime(notice.getConfirmedTime()));
+        row.put("状态", patientNoticeStatusLabel(notice.getStatus()));
+        return row;
+    }
+
+    private static String preferNoticeValue(String noticeValue, String fallback) {
+        return StrUtil.isNotBlank(noticeValue) ? noticeValue.trim() : nullToEmpty(fallback);
+    }
+
+    private static String formatNoticeParty(String name, String orgName) {
+        String displayName = nullToEmpty(name);
+        if (StrUtil.isBlank(displayName)) {
+            return "";
+        }
+        if (StrUtil.isNotBlank(orgName)) {
+            return displayName + "（" + orgName.trim() + "）";
+        }
+        return displayName;
+    }
+
+    private String patientNoticeStatusLabel(Integer status) {
+        if (status == null) {
+            return "未发送";
+        }
+        return switch (status) {
+            case 0 -> "草稿";
+            case 1 -> "已发送";
+            case 2 -> "已确认";
+            default -> String.valueOf(status);
+        };
     }
 
     private void putLatentSupervisionBasicColumns(Map<String, Object> row, LatentInfection r) {

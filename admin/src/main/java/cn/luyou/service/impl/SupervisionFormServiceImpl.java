@@ -144,6 +144,22 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
         return list;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteForm(Long id) {
+        if (id == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少督导表ID");
+        }
+        SupervisionForm existing = getById(id);
+        if (existing == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "督导表记录不存在");
+        }
+        if (existing.getLatentInfectionId() != null) {
+            latentInfectionService.assertLatentOperable(existing.getLatentInfectionId());
+        }
+        removeById(id);
+    }
+
     private int nextFormSeq(Long latentInfectionId) {
         long count = lambdaQuery()
                 .eq(SupervisionForm::getLatentInfectionId, latentInfectionId)

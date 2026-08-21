@@ -94,6 +94,22 @@ export function exportPatientFollowUpVisitsApi(params: Record<string, any>) {
   })
 }
 
+/** 导出患者通知单（ids 勾选；否则按当前筛选） */
+export function exportPatientNoticesApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
+  return request<Blob>({
+    url: "export/patient-notices",
+    method: "get",
+    params: {
+      archived: 0,
+      dateFilterBy: "noticeFill",
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
+    responseType: "blob"
+  })
+}
+
 /** 批量导入在管患者（字段与新增一致） */
 export function importPatientApi(file: File, options: ImportConfirmOptions = {}) {
   const confirmSkipInvalid = options.confirmSkipInvalid ?? false

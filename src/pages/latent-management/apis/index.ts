@@ -205,6 +205,11 @@ export function getSupervisionByIdApi(id: string) {
   return request<ApiResponseData<any>>({ url: `supervision/${id}`, method: "get" })
 }
 
+/** 删除督导表记录 */
+export function deleteSupervisionApi(id: string) {
+  return request<ApiResponseData<null>>({ url: `supervision/${id}`, method: "delete" })
+}
+
 /** 查询最新督导表详情（兼容旧接口） */
 export function getSupervisionDetailApi(latentInfectionId: string) {
   return request<ApiResponseData<any>>({ url: `supervision/detail/${latentInfectionId}`, method: "get" })
@@ -273,4 +278,9 @@ export function saveLatentMedicationPickupApi(data: Record<string, any>) {
 /** 潜伏感染者领药记录列表 */
 export function getLatentMedicationPickupListApi(latentInfectionId: string) {
   return request<ApiResponseData<any[]>>({ url: `latent/medication-pickup/list/${latentInfectionId}`, method: "get" })
+}
+
+/** 删除潜伏感染者领药记录 */
+export function deleteLatentMedicationPickupApi(id: string) {
+  return request<ApiResponseData<null>>({ url: `latent/medication-pickup/${id}`, method: "delete" })
 }

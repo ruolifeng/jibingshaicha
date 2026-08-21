@@ -1,7 +1,7 @@
 import type { MedicationRecordsMap } from "@@/utils/medicationRecords"
 import { SPUTUM_RESULT_OPTIONS } from "@@/constants/disease"
 import { getEarliestMedicationMarkedDate } from "@@/utils/medicationRecords"
-import { resolveImportFields, resolvePatientPathogenResult } from "@@/utils/patient"
+import { resolvePatientPathogenResult } from "@@/utils/patient"
 
 /** 治疗记录卡管理方式固定值 */
 export const MEDICATION_LOCKED_MANAGEMENT_METHOD = "全程管理"
@@ -35,15 +35,8 @@ export function resolveMedicationSputumFromPatient(
   patientRow?: Record<string, any> | null
 ): string {
   if (!patientRow) return ""
-  // 列表列直接展示 diagnosisResult；抓取时优先用它，避免 importFields 中的旧值覆盖
-  const listPathogen = String(patientRow.diagnosisResult || "").trim()
-  const pathogen = listPathogen || resolvePatientPathogenResult(patientRow)
+  const pathogen = resolvePatientPathogenResult(patientRow)
   if (!pathogen) return ""
-  if (pathogen.includes("结核性胸膜炎")) {
-    const fields = resolveImportFields(patientRow)
-    const molecular = fields["0月序分子生物学结果"] || fields["0月单分子生物学结果"] || ""
-    return mapPathogenResultToMedicationSputum(molecular)
-  }
   return mapPathogenResultToMedicationSputum(pathogen)
 }
 
