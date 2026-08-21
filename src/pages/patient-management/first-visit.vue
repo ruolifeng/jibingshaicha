@@ -5,7 +5,7 @@ import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { DRUG_RESISTANCE_OPTIONS, getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { WarningFilled } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
@@ -334,6 +334,14 @@ async function openPrintFirstVisit(row: any) {
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ resolvePatientPathogenResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolvePatientDiagnosisResult(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="首次随访">

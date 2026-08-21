@@ -13,7 +13,7 @@ import {
   canEditFollowUpVisit,
   toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
@@ -387,6 +387,14 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ resolvePatientPathogenResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolvePatientDiagnosisResult(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">

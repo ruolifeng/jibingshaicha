@@ -13,7 +13,7 @@ import {
   PATIENT_MEDICATION_PICKUP_PERMISSIONS,
   PATIENT_MEDICATION_PICKUP_VIEW_PERMISSIONS
 } from "@@/utils/medicationPickup"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveRegistrationNo } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { useUserStore } from "@/pinia/stores/user"
 import { getMedicationPickupListApi } from "./apis"
 import { usePatientList } from "./composables/usePatientList"
@@ -264,6 +264,14 @@ function viewDetail(record: Record<string, any>) {
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ resolvePatientPathogenResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ resolvePatientDiagnosisResult(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" :width="canViewPickup ? 100 : 120">

@@ -20,7 +20,7 @@ import {
   LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS
 } from "@@/utils/medicationPickup"
 import { useUserStore } from "@/pinia/stores/user"
-import { getLatentMedicationPickupListApi } from "./apis"
+import { deleteLatentMedicationPickupApi, getLatentMedicationPickupListApi } from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
@@ -132,6 +132,29 @@ async function onPickupSaved() {
 function viewDetail(record: Record<string, any>) {
   detailRecord.value = record
   detailVisible.value = true
+}
+
+async function handleDelete(record: Record<string, any>) {
+  if (isLatentTransferLocked(historyLatent.value)) {
+    ElMessage.warning("该记录已转出或转出待确认，不可删除")
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除第 ${record.pickupSeq ?? ""} 次领药记录吗？删除后不可恢复。`,
+      "删除确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    await deleteLatentMedicationPickupApi(record.id)
+    ElMessage.success("删除成功")
+    await refreshHistoryList()
+    if (!historyList.value.length) {
+      historyVisible.value = false
+    }
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error(err?.message || "删除失败")
+  }
 }
 </script>
 
@@ -380,7 +403,7 @@ function viewDetail(record: Record<string, any>) {
           </template>
         </el-table-column>
         <el-table-column prop="dispensingUnit" label="发药单位" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" fixed="right" width="160">
+        <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">
               查看详情
@@ -394,6 +417,16 @@ function viewDetail(record: Record<string, any>) {
               @click="openEdit(row)"
             >
               修改
+            </el-button>
+            <el-button
+              v-if="canEditMedicationPickup(userStore.userRole, row) && !isLatentTransferLocked(historyLatent)"
+              v-permission="[...LATENT_MEDICATION_PICKUP_PERMISSIONS]"
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>

@@ -16,4 +16,7 @@ public interface MedicationPickupService extends IService<MedicationPickup> {
 
     /** 按潜伏感染者查询领药记录 */
     List<MedicationPickup> listByLatentInfectionId(Long latentInfectionId);
+
+    /** 删除潜伏感染者领药记录（逻辑删除） */
+    void deleteLatentPickup(Long id);
 }

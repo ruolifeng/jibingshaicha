@@ -21,4 +21,7 @@ public interface SupervisionFormService extends IService<SupervisionForm> {
 
     /** 已提交/已归档记录列表 */
     List<SupervisionForm> listCompleted(Long latentInfectionId, Integer role);
+
+    /** 删除督导表记录（逻辑删除） */
+    void deleteForm(Long id);
 }
