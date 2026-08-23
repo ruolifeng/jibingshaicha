@@ -6,7 +6,10 @@ import {
   DRUG_RESISTANCE_OPTIONS,
   EDUCATION_ITEMS,
   FIRST_VISIT_SUPERVISOR_OPTIONS,
+  isPatientOtherSensitivePlan,
   MEDICATION_USAGE_OPTIONS,
+  PATIENT_OTHER_SENSITIVE_PLAN,
+  resolvePatientTreatmentPlanForSave,
   SPUTUM_CULTURE_NOT_DONE,
   SPUTUM_CULTURE_OPTIONS,
   SPUTUM_STATUS_OPTIONS,
@@ -16,7 +19,7 @@ import {
   VISIT_METHOD_OPTIONS,
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
-import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_FORM_NO_RULES, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_FORM_NO_RULES, normalizeFirstVisitChemotherapyFields, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -49,6 +52,7 @@ function createEmptyForm() {
     symptoms: [] as string[],
     otherSymptoms: "",
     chemotherapy: "",
+    chemotherapyDetail: "",
     medicationUsage: "",
     drugForm: [] as string[],
     supervisor: "",
@@ -67,16 +71,6 @@ function createEmptyForm() {
 }
 
 const firstVisitForm = reactive(createEmptyForm())
-
-/** 标准治疗方案 + 当前值（兼容历史自由文本/病案预填） */
-const chemotherapyOptions = computed(() => {
-  const opts = [...TREATMENT_PLAN_OPTIONS]
-  const current = firstVisitForm.chemotherapy?.trim()
-  if (current && !opts.includes(current)) {
-    opts.push(current)
-  }
-  return opts
-})
 
 const formRef = ref<FormInstance>()
 const saving = ref(false)
@@ -108,7 +102,17 @@ const rules: FormRules = {
   sputumStatus: [{ required: true, message: "请选择痰菌情况", trigger: "change" }],
   sputumCulture: [{ required: true, message: "请选择或录入痰培养情况", trigger: "change" }],
   drugResistance: [{ required: true, message: "请选择耐药情况", trigger: "change" }],
-  chemotherapy: [{ required: true, whitespace: true, message: "请选择或录入化疗方案", trigger: "change" }],
+  chemotherapy: [{ required: true, message: "请选择化疗方案", trigger: "change" }],
+  chemotherapyDetail: [{
+    validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+      if (isPatientOtherSensitivePlan(firstVisitForm.chemotherapy) && !value?.trim()) {
+        callback(new Error("请填写方案详情"))
+      } else {
+        callback()
+      }
+    },
+    trigger: "blur"
+  }],
   medicationUsage: [{ required: true, message: "请选择用法", trigger: "change" }],
   supervisor: [{ required: true, message: "请选择督导人员", trigger: "change" }],
   drugForm: [{
@@ -177,6 +181,7 @@ async function loadExisting() {
       visitCreateTime.value = data.createTime ?? null
     }
   } catch { /* 首次填写 */ }
+  normalizeFirstVisitChemotherapyFields(firstVisitForm)
   applyFirstVisitChemotherapyDefault(firstVisitForm, props.patientRow)
   applyFirstVisitSputumStatusDefault(firstVisitForm, props.patientRow)
 }
@@ -209,6 +214,8 @@ function buildPayload() {
     patientId: props.patientRow!.id,
     populationType: props.patientRow!.populationType,
     ...firstVisitForm,
+    chemotherapy: resolvePatientTreatmentPlanForSave(firstVisitForm.chemotherapy, firstVisitForm.chemotherapyDetail),
+    chemotherapyDetail: undefined,
     visitMethodOther: firstVisitForm.visitMethod === VISIT_METHOD_OTHER
       ? firstVisitForm.visitMethodOther.trim()
       : null,
@@ -375,15 +382,14 @@ async function handleSave() {
           <el-form-item label="化疗方案" prop="chemotherapy">
             <el-select
               v-model="firstVisitForm.chemotherapy"
-              placeholder="来自病案首次治疗方案，可选择或输入"
+              placeholder="请选择化疗方案"
               filterable
-              allow-create
-              default-first-option
               clearable
               style="width: 100%"
+              @change="() => { if (!isPatientOtherSensitivePlan(firstVisitForm.chemotherapy)) firstVisitForm.chemotherapyDetail = '' }"
             >
               <el-option
-                v-for="item in chemotherapyOptions"
+                v-for="item in TREATMENT_PLAN_OPTIONS"
                 :key="item"
                 :label="item"
                 :value="item"
@@ -405,6 +411,18 @@ async function handleSave() {
             <el-select v-model="firstVisitForm.supervisor" style="width: 100%">
               <el-option v-for="item in FIRST_VISIT_SUPERVISOR_OPTIONS" :key="item" :label="item" :value="item" />
             </el-select>
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-row v-if="isPatientOtherSensitivePlan(firstVisitForm.chemotherapy)" :gutter="16">
+        <el-col :span="24">
+          <el-form-item label="方案详情" prop="chemotherapyDetail">
+            <el-input
+              v-model="firstVisitForm.chemotherapyDetail"
+              type="textarea"
+              :rows="2"
+              placeholder="请注明详细的抗结核治疗方案"
+            />
           </el-form-item>
         </el-col>
       </el-row>

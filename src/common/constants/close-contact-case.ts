@@ -8,13 +8,59 @@ export interface CloseContactCaseColumn {
   fixed?: "left" | "right"
 }
 
+export const FINAL_SCREENING_OTHER = "其他（需注明）"
+
 export const DIAGNOSIS_RESULT_OPTIONS = [
+  { label: "未发现异常", value: "未发现异常" },
   { label: "活动性肺结核", value: "活动性肺结核" },
+  { label: "疑似肺结核", value: "疑似肺结核" },
   { label: "潜伏感染者", value: "潜伏感染者" },
-  { label: "未做", value: "未做" },
-  { label: "未发现异常", value: "未发现异常" }
+  { label: FINAL_SCREENING_OTHER, value: FINAL_SCREENING_OTHER }
 ] as const
 
+const FINAL_SCREENING_OTHER_PREFIX = `${FINAL_SCREENING_OTHER}：`
+
+/** 回填最终筛查结果（含「其他」备注） */
+export function applyFinalScreeningResult(
+  form: { finalScreeningResult: string, finalScreeningRemark: string },
+  value?: string | null
+) {
+  const raw = (value || "").trim()
+  if (!raw) {
+    form.finalScreeningResult = ""
+    form.finalScreeningRemark = ""
+    return
+  }
+  if (raw.startsWith(FINAL_SCREENING_OTHER_PREFIX)) {
+    form.finalScreeningResult = FINAL_SCREENING_OTHER
+    form.finalScreeningRemark = raw.slice(FINAL_SCREENING_OTHER_PREFIX.length).trim()
+    return
+  }
+  if (raw === FINAL_SCREENING_OTHER || raw === "其他" || raw === "其它") {
+    form.finalScreeningResult = FINAL_SCREENING_OTHER
+    form.finalScreeningRemark = ""
+    return
+  }
+  if (raw.startsWith("其他：") || raw.startsWith("其它：")) {
+    form.finalScreeningResult = FINAL_SCREENING_OTHER
+    form.finalScreeningRemark = raw.slice(3).trim()
+    return
+  }
+  form.finalScreeningResult = raw
+  form.finalScreeningRemark = ""
+}
+
+/** 保存时合并「其他」备注 */
+export function resolveFinalScreeningResultForSave(result: string, remark?: string): string {
+  const selected = (result || "").trim()
+  if (selected !== FINAL_SCREENING_OTHER) return selected
+  const detail = (remark || "").trim()
+  return detail ? `${FINAL_SCREENING_OTHER_PREFIX}${detail}` : FINAL_SCREENING_OTHER
+}
+
+export function isFinalScreeningOther(result?: string | null): boolean {
+  return (result || "").trim() === FINAL_SCREENING_OTHER
+}
 /** 报表填报季度（Q1-Q4） */
 export const REPORT_QUARTER_OPTIONS = [
   { label: "Q1", value: "1" },

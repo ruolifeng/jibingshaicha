@@ -2150,9 +2150,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 }
 
                 String importScreenMethod = getImportField(row, headerIndex, "感染筛查方法");
-                String importInfectionResult = getImportField(row, headerIndex, "结果判定");
+                String importInfectionResult = getImportField(row, headerIndex, "感染筛查结果");
                 if (StrUtil.isBlank(importInfectionResult)) {
-                    importInfectionResult = getImportField(row, headerIndex, "感染筛查结果");
+                    importInfectionResult = getImportField(row, headerIndex, "结果判定");
                 }
                 if (StrUtil.isNotBlank(importScreenMethod) && !InfectionScreenFieldSupport.isValidMethod(importScreenMethod)) {
                     result.addError(rowNum, name,
@@ -2161,7 +2161,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 }
                 if (StrUtil.isNotBlank(importInfectionResult) && !InfectionScreenFieldSupport.isValidResult(importInfectionResult)) {
                     result.addError(rowNum, name,
-                            "结果判定仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                            "感染筛查结果仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
                     continue;
                 }
                 String importInfectionNormalized = InfectionScreenFieldSupport.normalizeResult(importInfectionResult);

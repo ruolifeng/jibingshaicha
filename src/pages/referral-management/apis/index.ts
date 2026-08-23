@@ -244,6 +244,15 @@ export function exportReferralTrackApi(params: Record<string, any> & { ids?: str
   })
 }
 
+/** 搜索栏/表头 Excel 式筛选：权限范围内某列去重值（录入者、录入单位） */
+export function getReferralTrackingColumnDistinctApi(field: string, bizMode?: string) {
+  return request<ApiResponseData<string[]>>({
+    url: "referral-tracking/column-distinct",
+    method: "get",
+    params: { field, ...(bizMode ? { bizMode } : {}) }
+  })
+}
+
 /** 获取一至五级用户列表（推介接收人选择） */
 export function getLevel34UsersApi() {
   return request<ApiResponseData<any[]>>({

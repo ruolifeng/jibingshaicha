@@ -22,11 +22,14 @@ import {
   FOLLOW_UP_VISIT_METHOD_OPTIONS,
   FOLLOW_UP_VISIT_METHOD_OTHER,
   FOLLOW_UP_YES_NO_HAVE_OPTIONS,
+  isPatientOtherSensitivePlan,
+  PATIENT_OTHER_SENSITIVE_PLAN,
+  resolvePatientTreatmentPlanForSave,
   STOP_TREATMENT_REASON_OPTIONS,
   STOP_TREATMENT_YES_NO_OPTIONS,
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
-import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, resolveFollowUpFormDefaultNextVisitDate, resolvePreviousFollowUpChemotherapy, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
+import { applyFollowUpChemotherapyDefault, canEditFollowUpVisit, normalizeFollowUpChemotherapyFields, resolveFollowUpFormDefaultNextVisitDate, resolvePreviousFollowUpChemotherapy, shouldArchiveOnStopTreatment, shouldIncludeCurrentFollowUpInStats, STOP_TREATMENT_REASON_MDR } from "@@/utils/followUpVisit"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitApi, getFollowUpCaseClosureStatsApi, getFollowUpDraftApi, getFollowUpListApi, saveFollowUpApi, saveFollowUpDraftApi } from "@/pages/school/patient/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -99,6 +102,7 @@ interface FollowUpForm {
   smokingAmount: string
   drinkingAmount: string
   chemotherapyPlan: string
+  chemotherapyPlanDetail: string
   medicationUsage: string
   drugForm: string
   missedDoses: number | null
@@ -128,16 +132,6 @@ interface FollowUpForm {
 
 const form = reactive<FollowUpForm>(createEmptyForm())
 
-/** 标准治疗方案 + 当前值（兼容历史自由文本） */
-const chemotherapyPlanOptions = computed(() => {
-  const opts = [...TREATMENT_PLAN_OPTIONS]
-  const current = form.chemotherapyPlan?.trim()
-  if (current && !opts.includes(current)) {
-    opts.push(current)
-  }
-  return opts
-})
-
 function createEmptyForm(): FollowUpForm {
   return {
     visitDate: "",
@@ -151,6 +145,7 @@ function createEmptyForm(): FollowUpForm {
     smokingAmount: "",
     drinkingAmount: "",
     chemotherapyPlan: "",
+    chemotherapyPlanDetail: "",
     medicationUsage: "",
     drugForm: "",
     missedDoses: null,
@@ -190,6 +185,7 @@ function parseDraftData(data: Record<string, any>) {
       : []
   })
   draftId.value = data.id ?? null
+  normalizeFollowUpChemotherapyFields(form)
 }
 
 function clearStopTreatmentFields() {
@@ -315,8 +311,10 @@ function buildPayload() {
     patientId: props.patientId,
     populationType: props.populationType,
     ...form,
+    chemotherapyPlan: resolvePatientTreatmentPlanForSave(form.chemotherapyPlan, form.chemotherapyPlanDetail),
     symptoms: form.symptoms.join(",")
   }
+  delete payload.chemotherapyPlanDetail
   if (form.stopTreatment !== "是") {
     payload.stopTreatmentDate = null
     payload.stopTreatmentReason = null
@@ -364,6 +362,10 @@ async function handleSave() {
   if (!props.patientId) return
   if (!form.visitDate) {
     ElMessage.warning("请填写随访时间")
+    return
+  }
+  if (isPatientOtherSensitivePlan(form.chemotherapyPlan) && !form.chemotherapyPlanDetail?.trim()) {
+    ElMessage.warning("请填写方案详情")
     return
   }
   if (form.visitMethod === FOLLOW_UP_VISIT_METHOD_OTHER && !form.visitMethodOther.trim()) {
@@ -499,20 +501,27 @@ async function handleSave() {
           <el-form-item label="化疗方案">
             <el-select
               v-model="form.chemotherapyPlan"
-              placeholder="同步上一次方案，可重新选择或输入"
+              placeholder="请选择化疗方案"
               filterable
-              allow-create
-              default-first-option
               clearable
               style="width: 100%"
+              @change="() => { if (!isPatientOtherSensitivePlan(form.chemotherapyPlan)) form.chemotherapyPlanDetail = '' }"
             >
               <el-option
-                v-for="item in chemotherapyPlanOptions"
+                v-for="item in TREATMENT_PLAN_OPTIONS"
                 :key="item"
                 :label="item"
                 :value="item"
               />
             </el-select>
+          </el-form-item>
+          <el-form-item v-if="isPatientOtherSensitivePlan(form.chemotherapyPlan)" label="方案详情" required>
+            <el-input
+              v-model="form.chemotherapyPlanDetail"
+              type="textarea"
+              :rows="2"
+              placeholder="请注明详细的抗结核治疗方案"
+            />
           </el-form-item>
         </el-col>
         <el-col :span="8">

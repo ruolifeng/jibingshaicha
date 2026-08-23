@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getLevel5UsersApi } from "@@/apis/users"
-import { CROWD_CATEGORY_OPTIONS, TREATMENT_PLAN_OPTIONS } from "@@/constants/disease"
+import { CROWD_CATEGORY_OPTIONS, isPatientOtherSensitivePlan, PATIENT_OTHER_SENSITIVE_PLAN, resolvePatientTreatmentPlanForSave, TREATMENT_PLAN_OPTIONS } from "@@/constants/disease"
 import { idCardRule } from "@@/utils/validate"
 
 interface Props {
@@ -79,7 +79,14 @@ function handleClose() {
 
 async function handleSubmit() {
   await formRef.value?.validate()
-  emit("submit", { ...form })
+  if (isPatientOtherSensitivePlan(form.treatmentPlan) && !form.customPlanDetail?.trim()) {
+    ElMessage.warning("请填写方案详情")
+    return
+  }
+  emit("submit", {
+    ...form,
+    treatmentPlan: resolvePatientTreatmentPlanForSave(form.treatmentPlan, form.customPlanDetail)
+  })
   handleClose()
 }
 </script>
@@ -156,7 +163,7 @@ async function handleSubmit() {
           />
         </el-select>
       </el-form-item>
-      <el-form-item v-if="form.treatmentPlan === '个体化方案'" label="方案详情">
+      <el-form-item v-if="isPatientOtherSensitivePlan(form.treatmentPlan)" label="方案详情" required>
         <el-input v-model="form.customPlanDetail" type="textarea" :rows="3" placeholder="请注明详细的抗结核治疗方案" />
       </el-form-item>
     </el-form>

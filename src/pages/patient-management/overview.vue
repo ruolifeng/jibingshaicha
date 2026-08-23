@@ -6,7 +6,7 @@ import PatientRecordEditDialog from "@@/components/PatientRecordEditDialog.vue"
 import ReferralDialog from "@@/components/ReferralDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
-import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
+import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_FILTER_OPTIONS, PATIENT_MEDICATION_STATUS_FILTER_OPTIONS, PATIENT_NOTICE_STATUS_FILTER_OPTIONS, PATIENT_VISIT_STATUS_FILTER_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
 import { downloadBlob } from "@@/utils/download"
@@ -52,6 +52,9 @@ const genderFilterOptions = [
   { text: "女", value: "女" }
 ]
 const pathogenFilterOptions = PATHOGEN_RESULT_FILTER_OPTIONS.map(item => ({ text: item, value: item }))
+const noticeStatusFilterOptions = PATIENT_NOTICE_STATUS_FILTER_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+const visitStatusFilterOptions = PATIENT_VISIT_STATUS_FILTER_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+const medicationStatusFilterOptions = PATIENT_MEDICATION_STATUS_FILTER_OPTIONS.map(item => ({ text: item, value: item }))
 const populationTypeFilterOptions = [
   { text: "学生筛查", value: "school" },
   { text: "重点人群", value: "keyPopulation" },
@@ -63,10 +66,10 @@ const populationTypeFilterOptions = [
 ]
 
 /** 表头 Excel 式：服务端实际去重值 */
-const pathogenSourceValues = ref<string[]>([])
 const genderSourceValues = ref<string[]>([])
 const populationTypeSourceValues = ref<string[]>([])
 const medicationUnitSourceValues = ref<string[]>([])
+const clinicalDiagnosisSourceValues = ref<string[]>([])
 
 async function loadColumnDistinct(field: string, target: Ref<string[]>) {
   try {
@@ -78,9 +81,14 @@ async function loadColumnDistinct(field: string, target: Ref<string[]>) {
 }
 
 const loadGenderOptions = () => loadColumnDistinct("gender", genderSourceValues)
-const loadPathogenOptions = () => loadColumnDistinct("diagnosisResult", pathogenSourceValues)
 const loadPopulationTypeOptions = () => loadColumnDistinct("populationType", populationTypeSourceValues)
 const loadMedicationUnitOptions = () => loadColumnDistinct("medicationManagementUnit", medicationUnitSourceValues)
+const loadClinicalDiagnosisOptions = () => loadColumnDistinct("clinicalDiagnosis", clinicalDiagnosisSourceValues)
+
+function onColumnFilterChange(field: string, value: string) {
+  setFilter(field, value)
+  handleSearch()
+}
 
 watch(() => searchForm.populationType, (val) => {
   if (val !== "keyPopulation") {
@@ -358,8 +366,29 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
           <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width: 140px" />
         </el-form-item>
         <el-form-item label="病原学结果">
-          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width: 140px">
+          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width: 180px">
             <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="诊断结果">
+          <el-select
+            :model-value="columnFilters.clinicalDiagnosis"
+            placeholder="全部"
+            clearable
+            filterable
+            allow-create
+            default-first-option
+            style="width: 180px"
+            @visible-change="(visible: boolean) => visible && loadClinicalDiagnosisOptions()"
+            @update:model-value="(v: string) => onColumnFilterChange('clinicalDiagnosis', v || '')"
+          >
+            <el-option
+              v-for="item in clinicalDiagnosisSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+            <el-option label="-" value="-" />
           </el-select>
         </el-form-item>
         <el-form-item label="登记日期">
@@ -382,9 +411,74 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             default-first-option
             style="width: 200px"
             @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
           >
             <el-option
               v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="通知单">
+          <el-select
+            :model-value="columnFilters.noticeStatus"
+            placeholder="全部"
+            clearable
+            style="width: 140px"
+            @update:model-value="(v: string) => onColumnFilterChange('noticeStatus', v || '')"
+          >
+            <el-option
+              v-for="item in PATIENT_NOTICE_STATUS_FILTER_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="首次随访">
+          <el-select
+            :model-value="columnFilters.firstVisitStatus"
+            placeholder="全部"
+            clearable
+            style="width: 140px"
+            @update:model-value="(v: string) => onColumnFilterChange('firstVisitStatus', v || '')"
+          >
+            <el-option
+              v-for="item in PATIENT_VISIT_STATUS_FILTER_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="后续随访">
+          <el-select
+            :model-value="columnFilters.followUpStatus"
+            placeholder="全部"
+            clearable
+            style="width: 140px"
+            @update:model-value="(v: string) => onColumnFilterChange('followUpStatus', v || '')"
+          >
+            <el-option
+              v-for="item in PATIENT_VISIT_STATUS_FILTER_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="服药管理完成情况">
+          <el-select
+            :model-value="columnFilters.medicationManagementStatus"
+            placeholder="全部"
+            clearable
+            style="width: 160px"
+            @update:model-value="(v: string) => onColumnFilterChange('medicationManagementStatus', v || '')"
+          >
+            <el-option
+              v-for="item in PATIENT_MEDICATION_STATUS_FILTER_OPTIONS"
               :key="item"
               :label="item"
               :value="item"
@@ -582,8 +676,6 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               label="病原学结果"
               type="select"
               :options="pathogenFilterOptions"
-              :source-values="pathogenSourceValues"
-              :load-options="loadPathogenOptions"
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
@@ -592,7 +684,18 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             {{ resolvePatientPathogenResult(row) || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
+        <el-table-column label="诊断结果" min-width="130" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="诊断结果"
+              type="select"
+              :options="[{ text: '-', value: '-' }]"
+              :source-values="clinicalDiagnosisSourceValues"
+              :load-options="loadClinicalDiagnosisOptions"
+              :model-value="columnFilters.clinicalDiagnosis"
+              @change="(v) => onColumnFilterChange('clinicalDiagnosis', v)"
+            />
+          </template>
           <template #default="{ row }">
             {{ resolvePatientDiagnosisResult(row) || "-" }}
           </template>
@@ -614,11 +717,33 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
           </template>
         </el-table-column>
         <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                onColumnFilterChange('medicationManagementUnit', v)
+              }"
+            />
+          </template>
           <template #default="{ row }">
             {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="通知单">
+        <el-table-column label="通知单" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="通知单"
+              type="select"
+              :options="noticeStatusFilterOptions"
+              :model-value="columnFilters.noticeStatus"
+              @change="(v) => onColumnFilterChange('noticeStatus', v)"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag v-if="row.noticeStatus === 2" type="success" size="small">
               已确认
@@ -632,14 +757,32 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             <span v-else class="text-gray-400">未发送</span>
           </template>
         </el-table-column>
-        <el-table-column label="首次随访">
+        <el-table-column label="首次随访" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="首次随访"
+              type="select"
+              :options="visitStatusFilterOptions"
+              :model-value="columnFilters.firstVisitStatus"
+              @change="(v) => onColumnFilterChange('firstVisitStatus', v)"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag :type="row.hasFirstVisit ? 'success' : 'warning'" size="small">
               {{ row.hasFirstVisit ? "已完成" : "待填写" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="后续随访" min-width="100">
+        <el-table-column label="后续随访" min-width="110">
+          <template #header>
+            <TableHeaderFilter
+              label="后续随访"
+              type="select"
+              :options="visitStatusFilterOptions"
+              :model-value="columnFilters.followUpStatus"
+              @change="(v) => onColumnFilterChange('followUpStatus', v)"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag v-if="(row.followUpCount ?? 0) > 0" type="success" size="small">
               已完成 {{ row.followUpCount }} 次
@@ -649,7 +792,16 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="服药管理完成情况" min-width="130">
+        <el-table-column label="服药管理完成情况" min-width="150">
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理完成情况"
+              type="select"
+              :options="medicationStatusFilterOptions"
+              :model-value="columnFilters.medicationManagementStatus"
+              @change="(v) => onColumnFilterChange('medicationManagementStatus', v)"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag
               :type="medicationStatusTagType(row.medicationManagementStatus)"
@@ -711,7 +863,7 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               size="small"
               @click="openEdit(row)"
             >
-              修改
+              编辑
             </el-button>
             <el-button
               v-if="!isPatientTransferLocked(row)"

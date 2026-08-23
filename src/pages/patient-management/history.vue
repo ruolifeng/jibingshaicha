@@ -27,10 +27,8 @@ const {
   pathogenFilterOptions,
   populationTypeFilterOptions,
   loadGenderOptions,
-  loadPathogenOptions,
   loadPopulationTypeOptions,
   genderSourceValues,
-  pathogenSourceValues,
   populationTypeSourceValues
 } = usePatientTableHeaderFilters(1)
 
@@ -163,7 +161,7 @@ async function handleUnarchive(row: Record<string, any>) {
           <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
         </el-form-item>
         <el-form-item label="病原学结果">
-          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:140px">
+          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:180px">
             <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
@@ -299,8 +297,6 @@ async function handleUnarchive(row: Record<string, any>) {
               label="病原学结果"
               type="select"
               :options="pathogenFilterOptions"
-              :source-values="pathogenSourceValues"
-              :load-options="loadPathogenOptions"
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />

@@ -121,7 +121,7 @@ public class ReferralTracking extends BaseEntity {
     private String symptomsJson;
 
     // ===== 诊断 =====
-    /** 诊断结果：排除 / 确诊患者 / 潜伏感染者 / 其他 */
+    /** 诊断结果：排除 / 正常 / 疑似结核 / 确诊结核 / 潜伏感染者 / 在治患者（兼容历史：确诊患者 / 其他） */
     private String diagnosisResult;
     /** 诊断结果选择其他时的补充说明 */
     private String diagnosisRemark;
@@ -140,6 +140,9 @@ public class ReferralTracking extends BaseEntity {
     // ===== 非持久化字段（查询时填充）=====
     @TableField(exist = false)
     private String receiverUserName;
+    /** 推介接收单位（接收人所属单位 orgName） */
+    @TableField(exist = false)
+    private String receiverUnitName;
     @TableField(exist = false)
     private String creatorUserName;
     @TableField(exist = false)

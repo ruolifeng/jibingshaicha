@@ -50,11 +50,21 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String sourceType,
             @RequestParam(required = false) String creatorOrEntryUnit,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) String entryUnit,
             @RequestParam(required = false) String columnFilters) {
         return ResultRes.success(referralTrackingService.queryPage(
                 page, size, bizMode, name, idNumber, trackingStatus, archived,
                 phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters,
-                createTimeFrom, createTimeTo));
+                createTimeFrom, createTimeTo, creatorName, entryUnit));
+    }
+
+    @Operation(summary = "表头/搜索栏列去重值（录入者、录入单位等）")
+    @GetMapping("/column-distinct")
+    public ResultResponse<List<String>> columnDistinct(
+            @RequestParam String field,
+            @RequestParam(required = false) String bizMode) {
+        return ResultRes.success(referralTrackingService.listDistinctColumnValues(field, bizMode));
     }
 
     @Operation(summary = "查询推介/追踪记录详情")
@@ -109,6 +119,8 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String sourceType,
             @RequestParam(required = false) String creatorOrEntryUnit,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) String entryUnit,
             @RequestParam(required = false) Integer trackingStatus) {
         userService.checkPermissionCode("referralManagement:export");
         List<Long> idList = null;
@@ -121,7 +133,7 @@ public class ReferralTrackingController {
         }
         referralTrackingService.exportTrack(response, bizMode, name, idNumber, phone, township,
                 dateFrom, dateTo, sourceType, creatorOrEntryUnit, idList, createTimeFrom, createTimeTo,
-                trackingStatus);
+                trackingStatus, creatorName, entryUnit);
     }
 
     @OperationLog(type = "create", module = "referral", action = "新增推介/追踪记录")
@@ -256,12 +268,14 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String sourceType,
             @RequestParam(required = false) String creatorOrEntryUnit,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) String entryUnit,
             @RequestParam(required = false) String columnFilters) {
         userService.checkPermissionCode("referralManagement:delete");
         return ResultRes.success(referralTrackingService.deleteByFilter(
                 bizMode, name, idNumber, trackingStatus, archived, phone, township,
                 dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters,
-                createTimeFrom, createTimeTo));
+                createTimeFrom, createTimeTo, creatorName, entryUnit));
     }
 
     @OperationLog(type = "delete", module = "referral", action = "删除全部推介/追踪记录")

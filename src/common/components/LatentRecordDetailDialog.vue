@@ -78,13 +78,13 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="户籍地址" :span="2">
             {{ detail.householdAddress || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="现住址" :span="2">
+          <el-descriptions-item label="现住地址" :span="2">
             {{ detail.currentAddress || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="人群分类">
             {{ detail.crowdCategory || detail.contactType || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="感染筛查时间">
+          <el-descriptions-item label="感染筛查日期">
             {{ detail.infectionScreenDate || detail.screenDate || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查方法">

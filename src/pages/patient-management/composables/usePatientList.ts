@@ -135,6 +135,16 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
   onMounted(fetchData)
   watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
 
+  /** 从路由 query 预填姓名并搜索（首页到期提醒「前往填写」） */
+  function applyRouteQuery(query: Record<string, unknown>) {
+    const name = typeof query.name === "string" ? query.name.trim() : ""
+    if (!name || searchForm.name === name) return false
+    searchForm.name = name
+    paginationData.currentPage = 1
+    fetchData()
+    return true
+  }
+
   return {
     paginationData,
     handleCurrentChange,
@@ -153,6 +163,7 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
     fetchData,
     handleSearch,
     handleReset,
+    applyRouteQuery,
     overviewSearch: options?.overviewSearch ?? false
   }
 }

@@ -5,9 +5,12 @@ import {
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
   DRUG_RESISTANCE_OPTIONS,
+  isPatientOtherSensitivePlan,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
+  PATIENT_OTHER_SENSITIVE_PLAN,
   PATIENT_TYPE_OPTIONS,
+  resolvePatientTreatmentPlanForSave,
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import {
@@ -139,10 +142,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     receiverOrgId: notice.receiverOrgId || undefined
   })
   const plan = notice.treatmentPlan || resolveFirstTreatmentPlan(row)
-  applyPatientNoticeTreatmentPlan(noticeForm, plan)
-  if (noticeForm.treatmentPlan === "个体化方案" && notice.customPlanDetail) {
-    noticeForm.customPlanDetail = notice.customPlanDetail
-  }
+  applyPatientNoticeTreatmentPlan(noticeForm, plan, notice.customPlanDetail)
 }
 
 async function loadDraftIfNeeded(row: Record<string, any>) {
@@ -186,9 +186,7 @@ function buildPayload() {
     patientName: row.name,
     ...noticeForm,
     drugResistance: noticeForm.drugResistance || "",
-    treatmentPlan: noticeForm.treatmentPlan === "个体化方案"
-      ? noticeForm.customPlanDetail
-      : noticeForm.treatmentPlan,
+    treatmentPlan: resolvePatientTreatmentPlanForSave(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
     senderId: userStore.userId
   }
 }
@@ -202,6 +200,10 @@ async function handleSendNotice() {
   try {
     await noticeFormRef.value?.validate()
   } catch {
+    return
+  }
+  if (isPatientOtherSensitivePlan(noticeForm.treatmentPlan) && !noticeForm.customPlanDetail?.trim()) {
+    ElMessage.warning("请填写方案详情")
     return
   }
   submitting.value = true
@@ -360,8 +362,8 @@ async function handleSaveDraft() {
           </el-form-item>
         </el-col>
       </el-row>
-      <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-        <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" />
+      <el-form-item v-if="isPatientOtherSensitivePlan(noticeForm.treatmentPlan)" label="方案详情" required>
+        <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" placeholder="请注明详细的抗结核治疗方案" />
       </el-form-item>
 
       <el-divider content-position="left">

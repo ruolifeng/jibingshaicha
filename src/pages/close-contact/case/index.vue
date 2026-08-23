@@ -5,16 +5,18 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
+  applyFinalScreeningResult,
   CLOSE_CONTACT_CASE_COLUMNS,
   CLOSE_CONTACT_CASE_DATE_FIELDS,
   CLOSE_CONTACT_CASE_EDIT_GROUPS,
   closeContactCaseFieldLabel,
   DIAGNOSIS_RESULT_OPTIONS,
   HAS_PREVENTIVE_TREATMENT_OPTIONS,
+  isFinalScreeningOther,
   PREVENTIVE_PLAN_OPTIONS,
-  REPORT_QUARTER_OPTIONS
+  REPORT_QUARTER_OPTIONS,
+  resolveFinalScreeningResultForSave
 } from "@@/constants/close-contact-case"
-import { PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import {
   CC_INFECTION_CHECK_METHOD_OPTIONS,
@@ -42,8 +44,6 @@ const { paginationData, handleCurrentChange, handleSizeChange } = usePagination(
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 const batchDeleting = ref(false)
 
-const diagnosisFilterOptions = DIAGNOSIS_RESULT_OPTIONS.map(item => ({ text: item.label, value: item.value }))
-const pathogenFilterOptions = PATHOGEN_RESULT_FILTER_OPTIONS.map(item => ({ text: item, value: item }))
 /** 支持表头筛选的列（与后端 columnFilters 白名单对齐） */
 const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "select", options?: { text: string, value: string }[] }> = {
   creatorUsername: { label: "录入用户" },
@@ -52,8 +52,8 @@ const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "selec
   idNumber: { label: "身份证号" },
   phone: { label: "接触者电话" },
   sourcePatientName: { label: "患者姓名" },
-  sourcePatientBacteriologyResult: { label: "病原学结果", type: "select", options: pathogenFilterOptions },
-  finalScreeningResult: { label: "最终筛查结果", type: "select", options: diagnosisFilterOptions },
+  sourcePatientBacteriologyResult: { label: "病原学结果", type: "select" },
+  finalScreeningResult: { label: "最终筛查结果", type: "select" },
   infectionCheckResult: { label: "感染检测结果", type: "select" },
   imagingResult: { label: "影像结果", type: "select" },
   sputumCheckResult: { label: "痰检结果", type: "select" },
@@ -89,6 +89,8 @@ function loadDistinctField(field: string) {
 }
 
 const loadDistrictSearchOptions = () => loadDistinct("district")
+const loadPathogenSearchOptions = () => loadDistinct("sourcePatientBacteriologyResult")
+const loadFinalScreeningSearchOptions = () => loadDistinct("finalScreeningResult")
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -338,6 +340,7 @@ function getEmptyEditForm() {
       }
     }
   }
+  form.finalScreeningRemark = ""
   return form
 }
 
@@ -348,6 +351,11 @@ function buildEditPayload() {
     if (payload[field] === "" || payload[field] === undefined) payload[field] = null
   }
   if (payload.age === "" || payload.age === undefined) payload.age = null
+  payload.finalScreeningResult = resolveFinalScreeningResultForSave(
+    payload.finalScreeningResult,
+    payload.finalScreeningRemark
+  )
+  delete payload.finalScreeningRemark
   // 系统/自动计算列不由表单改写（列表展示值可能被 DerivedSupport 临时填入）
   delete payload.reportQuarter
   delete payload.registrationIntervalHint
@@ -373,11 +381,20 @@ function handleEdit(row: any) {
   editMode.value = "edit"
   editActiveTab.value = CLOSE_CONTACT_CASE_EDIT_GROUPS[0]?.key || "source"
   // 先铺满空字段再合并行数据，保证未展示过的列清空后能覆盖入库
-  editForm.value = { ...getEmptyEditForm(), ...row }
+  editForm.value = { ...getEmptyEditForm(), ...row, finalScreeningRemark: "" }
+  applyFinalScreeningResult(
+    editForm.value as { finalScreeningResult: string, finalScreeningRemark: string },
+    row.finalScreeningResult
+  )
   editVisible.value = true
 }
 
 async function handleSave() {
+  if (isFinalScreeningOther(editForm.value.finalScreeningResult)
+    && !String(editForm.value.finalScreeningRemark || "").trim()) {
+    ElMessage.warning("选择「其他（需注明）」时请填写说明")
+    return
+  }
   if (editMode.value === "edit") {
     const name = editForm.value.name?.trim() || "该个案"
     const confirmed = await confirmEditChange(`「${name}」信息`)
@@ -495,10 +512,21 @@ type TagType = "primary" | "success" | "info" | "warning" | "danger"
 
 function getDiagnosisTag(result: string): TagType {
   if (result === "活动性肺结核") return "danger"
+  if (result === "疑似肺结核" || result.startsWith("疑似")) return "warning"
   if (result === "潜伏感染者") return "warning"
   if (result === "未发现异常") return "success"
   return "info"
 }
+
+/** 编辑最终筛查结果：兼容历史「未做」等 */
+const finalScreeningSelectOptions = computed(() => {
+  const opts: Array<{ label: string, value: string }> = DIAGNOSIS_RESULT_OPTIONS.map(item => ({ ...item }))
+  const current = String(editForm.value.finalScreeningResult || "").trim()
+  if (current && !opts.some(item => item.value === current)) {
+    opts.push({ label: current, value: current })
+  }
+  return opts
+})
 
 watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { immediate: true })
 </script>
@@ -558,8 +586,14 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             clearable
             filterable
             style="width: 200px"
+            @visible-change="(v: boolean) => v && loadPathogenSearchOptions()"
           >
-            <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option
+              v-for="item in distinctValues('sourcePatientBacteriologyResult').value"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="最终筛查结果">
@@ -570,9 +604,16 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             collapse-tags-tooltip
             placeholder="全部"
             clearable
+            filterable
             style="width: 200px"
+            @visible-change="(v: boolean) => v && loadFinalScreeningSearchOptions()"
           >
-            <el-option v-for="opt in DIAGNOSIS_RESULT_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+            <el-option
+              v-for="item in distinctValues('finalScreeningResult').value"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="报表填报季度">
@@ -727,7 +768,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
           <vxe-column title="操作" width="140" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link size="small" @click="viewDetail(row)">
-                详情
+                查看
               </el-button>
               <el-button v-permission="'closeContact:case:edit'" type="warning" link size="small" @click="handleEdit(row)">
                 编辑
@@ -802,19 +843,29 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                     <el-option label="男" value="男" />
                     <el-option label="女" value="女" />
                   </el-select>
-                  <el-select
-                    v-else-if="field === 'finalScreeningResult'"
-                    v-model="editForm.finalScreeningResult"
-                    clearable
-                    style="width:100%"
-                  >
-                    <el-option
-                      v-for="opt in DIAGNOSIS_RESULT_OPTIONS"
-                      :key="opt.value"
-                      :label="opt.label"
-                      :value="opt.value"
+                  <template v-else-if="field === 'finalScreeningResult'">
+                    <el-select
+                      v-model="editForm.finalScreeningResult"
+                      clearable
+                      style="width:100%"
+                      @change="() => { if (!isFinalScreeningOther(editForm.finalScreeningResult)) editForm.finalScreeningRemark = '' }"
+                    >
+                      <el-option
+                        v-for="opt in finalScreeningSelectOptions"
+                        :key="opt.value"
+                        :label="opt.label"
+                        :value="opt.value"
+                      />
+                    </el-select>
+                    <el-input
+                      v-if="isFinalScreeningOther(editForm.finalScreeningResult)"
+                      v-model="editForm.finalScreeningRemark"
+                      type="textarea"
+                      :rows="2"
+                      placeholder="请注明其他最终筛查结果"
+                      style="margin-top: 8px"
                     />
-                  </el-select>
+                  </template>
                   <el-select
                     v-else-if="field === 'hasPreventiveTreatment'"
                     v-model="editForm.hasPreventiveTreatment"

@@ -4,14 +4,20 @@ import PrintRecommend from "@@/components/PrintRecommend.vue"
 import ReferralDiagnosisDialog from "@@/components/ReferralDiagnosisDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
+import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import {
+  applyReferralChestXrayResult,
+  isReferralChestXrayOther,
+  normalizeReferralInfectionResult,
+  normalizeReferralScreenMethod,
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
   REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
-  referralSelectOptionsWithLegacy
+  referralSelectOptionsWithLegacy,
+  resolveReferralChestXrayResultForSave
 } from "@@/constants/referral-tracking"
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
@@ -39,6 +45,7 @@ import {
   enableJointTrackingApi,
   exportReferralTrackApi,
   getLevel34UsersApi,
+  getReferralTrackingColumnDistinctApi,
   getReferralTrackingDetailApi,
   getReferralTrackingListApi,
   rejectRecommendApi,
@@ -109,12 +116,21 @@ const diagnosisFilterOptions = REFERRAL_TRACKING_DIAGNOSIS_OPTIONS.map(item => (
   text: item.label,
   value: item.value
 }))
+
+const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
+  const { data } = await getReferralTrackingColumnDistinctApi(field, "recommend")
+  return Array.isArray(data) ? data : []
+})
+const loadCreatorOptions = () => loadDistinct("creatorName")
+const loadEntryUnitOptions = () => loadDistinct("entryUnit")
+
 const searchForm = reactive({
   name: "",
   idNumber: "",
   phone: "",
   township: "",
-  creatorOrEntryUnit: "",
+  creatorName: "",
+  entryUnit: "",
   dateRange: [] as string[],
   trackingStatus: undefined as number | undefined
 })
@@ -129,7 +145,8 @@ function buildFilterParams() {
     idNumber: searchForm.idNumber || undefined,
     phone: searchForm.phone || undefined,
     township: searchForm.township || undefined,
-    creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
+    creatorName: searchForm.creatorName || undefined,
+    entryUnit: searchForm.entryUnit || undefined,
     trackingStatus: searchForm.trackingStatus,
     ...extractDateRangeParams(searchForm.dateRange),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
@@ -168,7 +185,8 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.phone = ""
   searchForm.township = ""
-  searchForm.creatorOrEntryUnit = ""
+  searchForm.creatorName = ""
+  searchForm.entryUnit = ""
   searchForm.dateRange = []
   searchForm.trackingStatus = undefined
   clearFilters()
@@ -297,6 +315,8 @@ const createForm = reactive({
   infectionResult: "",
   chestXrayDate: "",
   chestXrayResult: "",
+  chestXrayRemark: "",
+  diagnosisResult: "",
   recommendUnitName: "",
   fillUserName: "",
   recommendReason: "",
@@ -339,6 +359,8 @@ async function openCreateDialog() {
     infectionResult: "",
     chestXrayDate: "",
     chestXrayResult: "",
+    chestXrayRemark: "",
+    diagnosisResult: "",
     recommendUnitName: resolveRecommendUnitName(),
     fillUserName: resolveFillUserName(),
     recommendReason: "",
@@ -392,9 +414,18 @@ async function handleSendRecommend() {
   } catch {
     return
   }
+  if (isReferralChestXrayOther(createForm.chestXrayResult) && !createForm.chestXrayRemark.trim()) {
+    ElMessage.warning("请填写胸片检查结果备注")
+    return
+  }
   sendingRecommend.value = true
   try {
-    await createReferralWithDuplicateConfirm({ ...createForm, bizMode: "recommend" })
+    const { chestXrayRemark, ...rest } = createForm
+    await createReferralWithDuplicateConfirm({
+      ...rest,
+      chestXrayResult: resolveReferralChestXrayResultForSave(createForm.chestXrayResult, chestXrayRemark),
+      bizMode: "recommend"
+    })
     ElMessage.success("推介通知单已发送")
     createDialogVisible.value = false
     fetchList()
@@ -422,8 +453,8 @@ function isReceiver(row: any) {
   return String(row.receiverUserId) === String(userStore.userId)
 }
 
+/** 推介任意状态（未发送/已发送/已接受/已拒绝及追踪各态）均可编辑，归档除外 */
 function canEditRecommend(row: any) {
-  if (row.recommendStatus === 2 || row.recommendStatus === 3) return false
   if (userStore.userRole === 1) return !row.archived
   return isCreator(row) && !row.archived
 }
@@ -534,6 +565,7 @@ const editForm = reactive({
   infectionResult: "",
   chestXrayDate: "",
   chestXrayResult: "",
+  chestXrayRemark: "",
   recommendReason: ""
 })
 
@@ -561,12 +593,14 @@ async function openEditDialog(row: any) {
     currentAddress: row.currentAddress ?? "",
     crowdCategory: row.crowdCategory ?? "",
     screenDate: row.screenDate ?? "",
-    screenMethod: row.screenMethod ?? "",
-    infectionResult: row.infectionResult ?? "",
+    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
+    infectionResult: normalizeReferralInfectionResult(row.infectionResult),
     chestXrayDate: row.chestXrayDate ?? "",
-    chestXrayResult: row.chestXrayResult ?? "",
+    chestXrayResult: "",
+    chestXrayRemark: "",
     recommendReason: row.recommendReason ?? ""
   })
+  applyReferralChestXrayResult(editForm, row.chestXrayResult)
   editDialogVisible.value = true
   nextTick(() => editFormRef.value?.clearValidate())
 }
@@ -577,9 +611,17 @@ async function handleEditSave() {
   } catch {
     return
   }
+  if (isReferralChestXrayOther(editForm.chestXrayResult) && !editForm.chestXrayRemark.trim()) {
+    ElMessage.warning("请填写胸片检查结果备注")
+    return
+  }
   savingEdit.value = true
   try {
-    await updateReferralTrackingApi(editRow.value.id, { ...editForm })
+    const { chestXrayRemark, ...rest } = editForm
+    await updateReferralTrackingApi(editRow.value.id, {
+      ...rest,
+      chestXrayResult: resolveReferralChestXrayResultForSave(editForm.chestXrayResult, chestXrayRemark)
+    })
     ElMessage.success("保存成功")
     editDialogVisible.value = false
     fetchList()
@@ -694,11 +736,11 @@ const screeningForm = reactive({
   hasInfectionScreen: "",
   screenDate: "",
   screenMethod: "",
-  screenResult: "",
   infectionResult: "",
   hasChestXray: "",
   chestXrayDate: "",
-  chestXrayResult: ""
+  chestXrayResult: "",
+  chestXrayRemark: ""
 })
 
 function openScreeningDialog(row: any) {
@@ -706,18 +748,27 @@ function openScreeningDialog(row: any) {
   Object.assign(screeningForm, {
     hasInfectionScreen: row.hasInfectionScreen ?? "",
     screenDate: row.screenDate ?? "",
-    screenMethod: row.screenMethod ?? "",
-    screenResult: row.screenResult ?? "",
-    infectionResult: row.infectionResult ?? "",
+    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
+    infectionResult: normalizeReferralInfectionResult(row.infectionResult),
     hasChestXray: row.hasChestXray ?? "",
     chestXrayDate: row.chestXrayDate ?? "",
-    chestXrayResult: row.chestXrayResult ?? ""
+    chestXrayResult: "",
+    chestXrayRemark: ""
   })
+  applyReferralChestXrayResult(screeningForm, row.chestXrayResult)
   screeningDialogVisible.value = true
 }
 
 async function handleSaveScreening() {
-  await saveScreeningInfoApi(screeningRow.value.id, { ...screeningForm })
+  if (isReferralChestXrayOther(screeningForm.chestXrayResult) && !screeningForm.chestXrayRemark.trim()) {
+    ElMessage.warning("请填写胸片检查结果备注")
+    return
+  }
+  const { chestXrayRemark, ...rest } = screeningForm
+  await saveScreeningInfoApi(screeningRow.value.id, {
+    ...rest,
+    chestXrayResult: resolveReferralChestXrayResultForSave(screeningForm.chestXrayResult, chestXrayRemark)
+  })
   ElMessage.success("筛查信息已保存")
   screeningDialogVisible.value = false
   fetchList()
@@ -777,8 +828,29 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         <el-form-item label="乡镇">
           <el-input v-model="searchForm.township" placeholder="请输入乡镇" clearable />
         </el-form-item>
-        <el-form-item label="录入者/录入单位">
-          <el-input v-model="searchForm.creatorOrEntryUnit" placeholder="请输入" clearable style="width: 160px" />
+        <el-form-item label="录入者">
+          <el-select
+            v-model="searchForm.creatorName"
+            filterable
+            clearable
+            placeholder="请选择录入者"
+            style="width: 160px"
+            @visible-change="(v: boolean) => v && loadCreatorOptions()"
+          >
+            <el-option v-for="item in distinctValues('creatorName').value" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="录入单位">
+          <el-select
+            v-model="searchForm.entryUnit"
+            filterable
+            clearable
+            placeholder="请选择录入单位"
+            style="width: 180px"
+            @visible-change="(v: boolean) => v && loadEntryUnitOptions()"
+          >
+            <el-option v-for="item in distinctValues('entryUnit').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="录入时间">
           <el-date-picker
@@ -936,7 +1008,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         </el-table-column>
         <el-table-column prop="crowdCategory" label="人群分类" />
         <el-table-column prop="recommendReason" label="推介原因" show-overflow-tooltip />
-        <el-table-column prop="receiverUserName" label="推介接收人" />
+        <el-table-column prop="recommendUnitName" label="推介单位" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="receiverUnitName" label="推介接收单位" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="receiverUserName" label="推介接收人" min-width="140" show-overflow-tooltip />
         <el-table-column label="推介状态">
           <template #default="{ row }">
             <el-tag
@@ -1073,7 +1147,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >
-              录入胸片
+              录入感染检测结果及胸片结果
             </el-button>
             <el-button
               v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
@@ -1202,10 +1276,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="感染筛查方法">
+            <el-form-item label="感染检测方法">
               <el-select v-model="createForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, createForm.screenMethod)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1214,10 +1288,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="感染筛查结果">
+            <el-form-item label="感染检测结果">
               <el-select v-model="createForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, createForm.infectionResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1237,15 +1311,39 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片筛查结果">
-              <el-select v-model="createForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+            <el-form-item label="胸片检查结果">
+              <el-select
+                v-model="createForm.chestXrayResult"
+                placeholder="请选择"
+                clearable
+                style="width: 100%"
+                @change="() => { if (!isReferralChestXrayOther(createForm.chestXrayResult)) createForm.chestXrayRemark = '' }"
+              >
                 <el-option
-                  v-for="opt in REFERRAL_CHEST_XRAY_RESULT_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, createForm.chestXrayResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
                 />
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isReferralChestXrayOther(createForm.chestXrayResult)" :span="24">
+            <el-form-item label="胸片结果备注">
+              <el-input v-model="createForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="诊断结果">
+              <el-radio-group v-model="createForm.diagnosisResult">
+                <el-radio
+                  v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
+                  :key="item.value"
+                  :value="item.value"
+                >
+                  {{ item.label }}
+                </el-radio>
+              </el-radio-group>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -1345,6 +1443,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item label="推介原因" :span="2">
               {{ viewDetail.recommendReason || "-" }}
             </el-descriptions-item>
+            <el-descriptions-item label="推介接收单位">
+              {{ viewDetail.receiverUnitName || "-" }}
+            </el-descriptions-item>
             <el-descriptions-item label="推介接收人">
               {{ viewDetail.receiverUserName || "-" }}
             </el-descriptions-item>
@@ -1370,16 +1471,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item label="感染筛查时间">
               {{ viewDetail.screenDate || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="感染筛查方法">
-              {{ viewDetail.screenMethod || "-" }}
+            <el-descriptions-item label="感染检测方法">
+              {{ normalizeReferralScreenMethod(viewDetail.screenMethod) || viewDetail.screenMethod || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="感染筛查结果">
+            <el-descriptions-item label="感染检测结果">
               {{ viewDetail.infectionResult || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="胸片筛查时间">
               {{ viewDetail.chestXrayDate || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="胸片筛查结果" :span="2">
+            <el-descriptions-item label="胸片检查结果" :span="2">
               {{ viewDetail.chestXrayResult || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="追踪状态">
@@ -1575,10 +1676,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="感染筛查方法">
+            <el-form-item label="感染检测方法">
               <el-select v-model="editForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, editForm.screenMethod)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1587,10 +1688,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="感染筛查结果">
+            <el-form-item label="感染检测结果">
               <el-select v-model="editForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, editForm.infectionResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1604,15 +1705,26 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片筛查结果">
-              <el-select v-model="editForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+            <el-form-item label="胸片检查结果">
+              <el-select
+                v-model="editForm.chestXrayResult"
+                placeholder="请选择"
+                clearable
+                style="width: 100%"
+                @change="() => { if (!isReferralChestXrayOther(editForm.chestXrayResult)) editForm.chestXrayRemark = '' }"
+              >
                 <el-option
-                  v-for="opt in REFERRAL_CHEST_XRAY_RESULT_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, editForm.chestXrayResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
                 />
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isReferralChestXrayOther(editForm.chestXrayResult)" :span="24">
+            <el-form-item label="胸片结果备注">
+              <el-input v-model="editForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -1692,7 +1804,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
     />
 
     <!-- 录入筛查信息弹窗 -->
-    <el-dialog v-model="screeningDialogVisible" title="录入筛查信息" width="600px">
+    <el-dialog v-model="screeningDialogVisible" title="录入感染检测结果及胸片结果" width="600px">
       <el-form :model="screeningForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -1709,10 +1821,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="筛查方法">
+            <el-form-item label="感染检测方法">
               <el-select v-model="screeningForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, screeningForm.screenMethod)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1721,15 +1833,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="筛查结果">
-              <el-input v-model="screeningForm.screenResult" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="感染筛查结果">
+            <el-form-item label="感染检测结果">
               <el-select v-model="screeningForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, screeningForm.infectionResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1752,7 +1859,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片检查结果">
-              <el-select v-model="screeningForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+              <el-select
+                v-model="screeningForm.chestXrayResult"
+                placeholder="请选择"
+                clearable
+                style="width: 100%"
+                @change="() => { if (!isReferralChestXrayOther(screeningForm.chestXrayResult)) screeningForm.chestXrayRemark = '' }"
+              >
                 <el-option
                   v-for="opt in chestXrayResultSelectOptions"
                   :key="opt"
@@ -1760,6 +1873,11 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
                   :value="opt"
                 />
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isReferralChestXrayOther(screeningForm.chestXrayResult)" :span="24">
+            <el-form-item label="胸片结果备注">
+              <el-input v-model="screeningForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
             </el-form-item>
           </el-col>
         </el-row>

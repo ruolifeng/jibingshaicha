@@ -16,6 +16,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
+  applyPatientNoticeTreatmentPlan,
   CHEST_XRAY_RESULT_OPTIONS,
   CROWD_CATEGORY_OPTIONS,
   DIAGNOSIS_RESULT_OPTIONS,
@@ -23,11 +24,14 @@ import {
   DRUG_RESISTANCE_OPTIONS,
   EDUCATION_ITEMS,
   FIRST_VISIT_SUPERVISOR_OPTIONS,
+  isPatientOtherSensitivePlan,
   MEDICATION_USAGE_OPTIONS,
   NOTICE_STATUS_MAP,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
+  PATIENT_OTHER_SENSITIVE_PLAN,
   PATIENT_TYPE_OPTIONS,
+  resolvePatientTreatmentPlanForSave,
   SPUTUM_CULTURE_NOT_DONE,
   SPUTUM_CULTURE_OPTIONS,
   SPUTUM_STATUS_OPTIONS,
@@ -241,7 +245,7 @@ function openNoticeDialog(row: any) {
           issuedTime: notice.issuedTime || new Date().toISOString().slice(0, 10),
           patientType: notice.patientType || "",
           managementMethod: notice.managementMethod || "",
-          treatmentPlan: notice.treatmentPlan || "",
+          treatmentPlan: "",
           drugResistance: notice.drugResistance || row.firstVisitDrugResistance || "",
           customPlanDetail: notice.customPlanDetail || "",
           sputumSmear: notice.sputumSmear || resolveNoticeSputumSmearFromPatient(noticeRow.value),
@@ -251,6 +255,7 @@ function openNoticeDialog(row: any) {
           otherNotes: notice.otherNotes || "",
           receiverOrgId: notice.receiverOrgId || undefined
         })
+        applyPatientNoticeTreatmentPlan(noticeForm, notice.treatmentPlan, notice.customPlanDetail)
       }
     }).catch(() => { /* 忽略 */ })
   } else {
@@ -294,6 +299,10 @@ async function handleSendNotice() {
   } catch {
     return
   }
+  if (isPatientOtherSensitivePlan(noticeForm.treatmentPlan) && !noticeForm.customPlanDetail?.trim()) {
+    ElMessage.warning("请填写方案详情")
+    return
+  }
   submitting.value = true
   try {
     await sendNoticeApi({
@@ -303,7 +312,7 @@ async function handleSendNotice() {
       patientName: noticeRow.value.name,
       ...noticeForm,
       drugResistance: noticeForm.drugResistance || "",
-      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+      treatmentPlan: resolvePatientTreatmentPlanForSave(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
       senderId: userStore.userId
     })
     ElMessage.success("患者通知单发送成功")
@@ -325,7 +334,7 @@ async function handleSaveDraft() {
       patientName: noticeRow.value.name,
       ...noticeForm,
       drugResistance: noticeForm.drugResistance || "",
-      treatmentPlan: noticeForm.treatmentPlan === "个体化方案" ? noticeForm.customPlanDetail : noticeForm.treatmentPlan,
+      treatmentPlan: resolvePatientTreatmentPlanForSave(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
       senderId: userStore.userId
     })
     ElMessage.success("通知单草稿已保存")
@@ -1039,8 +1048,8 @@ watch(
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item v-if="noticeForm.treatmentPlan === '个体化方案'" label="方案详情">
-          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" />
+        <el-form-item v-if="isPatientOtherSensitivePlan(noticeForm.treatmentPlan)" label="方案详情" required>
+          <el-input v-model="noticeForm.customPlanDetail" type="textarea" :rows="2" placeholder="请注明详细的抗结核治疗方案" />
         </el-form-item>
         <el-divider content-position="left">
           病原学检查

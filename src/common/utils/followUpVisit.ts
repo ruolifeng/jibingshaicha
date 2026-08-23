@@ -1,3 +1,4 @@
+import { parsePatientTreatmentPlan } from "@@/constants/disease"
 import { formatFirstVisitMethod } from "@@/utils/firstVisit"
 import { followUpFormatters } from "@@/utils/followUpVisitFormat"
 import { resolveFirstTreatmentPlan } from "@@/utils/patient"
@@ -22,7 +23,7 @@ export function shouldIncludeCurrentFollowUpInStats(
  * 3. 再次回退病案「首次治疗方案」
  */
 export function applyFollowUpChemotherapyDefault(
-  form: { chemotherapyPlan?: string },
+  form: { chemotherapyPlan?: string, chemotherapyPlanDetail?: string },
   options?: {
     previousFollowUpChemotherapy?: string | null
     firstVisitChemotherapy?: string | null
@@ -30,18 +31,23 @@ export function applyFollowUpChemotherapyDefault(
   }
 ) {
   if (form.chemotherapyPlan?.trim()) return
-  const fromPrevious = options?.previousFollowUpChemotherapy?.trim()
-  if (fromPrevious) {
-    form.chemotherapyPlan = fromPrevious
-    return
-  }
-  const fromFirstVisit = options?.firstVisitChemotherapy?.trim()
-  if (fromFirstVisit) {
-    form.chemotherapyPlan = fromFirstVisit
-    return
-  }
-  const plan = resolveFirstTreatmentPlan(options?.patientRow)
-  if (plan) form.chemotherapyPlan = plan
+  const raw = options?.previousFollowUpChemotherapy?.trim()
+    || options?.firstVisitChemotherapy?.trim()
+    || resolveFirstTreatmentPlan(options?.patientRow)
+    || ""
+  if (!raw) return
+  const parsed = parsePatientTreatmentPlan(raw)
+  form.chemotherapyPlan = parsed.treatmentPlan
+  form.chemotherapyPlanDetail = parsed.customPlanDetail
+}
+
+/** 将已存化疗方案字符串规范为下拉选项 + 详情（其它敏感方案） */
+export function normalizeFollowUpChemotherapyFields(
+  form: { chemotherapyPlan?: string, chemotherapyPlanDetail?: string }
+) {
+  const parsed = parsePatientTreatmentPlan(form.chemotherapyPlan, form.chemotherapyPlanDetail)
+  form.chemotherapyPlan = parsed.treatmentPlan
+  form.chemotherapyPlanDetail = parsed.customPlanDetail
 }
 
 /** 取最近一次已完成后续随访的化疗方案；编辑时可限定为当前记录之前的随访 */

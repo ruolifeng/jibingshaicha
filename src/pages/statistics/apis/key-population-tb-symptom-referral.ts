@@ -40,16 +40,18 @@ export function getKeyPopulationTbSymptomReferralRegionOptionsApi(departmentIds?
   return request<ApiResponseData<string[]>>({
     url: "statistics/key-population-tb-symptom-referral/region-options",
     method: "get",
-    params: withDepartmentIds({}, departmentIds)
+    params: withDepartmentIds({}, departmentIds),
+    timeout: 120000
   })
 }
 
-/** 重点人群肺结核可疑症状筛查和推介情况报表 */
+/** 重点人群肺结核可疑症状筛查和推介情况报表（全量聚合，耗时可能超过默认 10s） */
 export function getKeyPopulationTbSymptomReferralStatisticsApi(params: StatParams) {
   return request<ApiResponseData<KeyPopulationTbSymptomReferralStatisticsVO[]>>({
     url: "statistics/key-population-tb-symptom-referral",
     method: "get",
-    params: withDepartmentIds(params, params.departmentIds)
+    params: withDepartmentIds(params, params.departmentIds),
+    timeout: 120000
   })
 }
 
@@ -63,6 +65,7 @@ export function exportKeyPopulationTbSymptomReferralStatisticsApi(
     method: "post",
     params: { year },
     data: rows,
-    responseType: "blob"
+    responseType: "blob",
+    timeout: 120000
   })
 }

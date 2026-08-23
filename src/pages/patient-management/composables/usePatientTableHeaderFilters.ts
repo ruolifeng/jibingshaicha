@@ -31,11 +31,9 @@ export function usePatientTableHeaderFilters(archived?: number) {
     pathogenFilterOptions,
     populationTypeFilterOptions,
     loadGenderOptions: () => load("gender"),
-    loadPathogenOptions: () => load("diagnosisResult"),
     loadPopulationTypeOptions: () => load("populationType"),
     loadMedicationUnitOptions: () => load("medicationManagementUnit"),
     genderSourceValues: sourceValues("gender"),
-    pathogenSourceValues: sourceValues("diagnosisResult"),
     populationTypeSourceValues: sourceValues("populationType"),
     medicationUnitSourceValues: sourceValues("medicationManagementUnit"),
     clearDistinctCache: clearCache

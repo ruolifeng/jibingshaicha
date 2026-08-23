@@ -79,6 +79,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -164,8 +165,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
-            "diagnosisResult", "populationType", "ethnicity", "idType", "creatorUsername", "source",
-            "registrationNo"
+            "diagnosisResult", "clinicalDiagnosis", "populationType", "ethnicity", "idType", "creatorUsername", "source",
+            "registrationNo", "medicationManagementUnit", "noticeStatus", "firstVisitStatus",
+            "followUpStatus", "medicationManagementStatus"
     );
 
     public PatientServiceImpl(
@@ -288,6 +290,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 case "currentAddress" -> ColumnFilterSupport.like(wrapper, Patient::getCurrentAddress, value);
                 case "householdAddress" -> ColumnFilterSupport.like(wrapper, Patient::getHouseholdAddress, value);
                 case "diagnosisResult" -> applyDiagnosisResultColumnFilter(wrapper, value);
+                case "clinicalDiagnosis" -> applyClinicalDiagnosisFilter(wrapper, value);
+                case "medicationManagementUnit" -> applyMedicationManagementUnitFilter(wrapper, null, value);
+                case "noticeStatus" -> applyNoticeStatusFilter(wrapper, value);
+                case "firstVisitStatus" -> applyFirstVisitStatusFilter(wrapper, value);
+                case "followUpStatus" -> applyFollowUpStatusFilter(wrapper, value);
+                case "medicationManagementStatus" -> applyMedicationManagementStatusFilter(wrapper, value);
                 case "populationType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getPopulationType, value);
                 case "ethnicity" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getEthnicity, value);
                 case "idType" -> ColumnFilterSupport.eqOrIn(wrapper, Patient::getIdType, value);
@@ -985,6 +993,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (StrUtil.isBlank(diagnosisResult)) {
             return;
         }
+        if ("-".equals(diagnosisResult) || "未填写".equals(diagnosisResult)) {
+            applyBlankPathogenFilter(wrapper);
+            return;
+        }
         if ("阳性".equals(diagnosisResult)) {
             applyPathogenPositiveFilter(wrapper);
             return;
@@ -994,7 +1006,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             return;
         }
         if ("阴性".equals(diagnosisResult)) {
-            applyPathogenValueFilter(wrapper, "阴性", "病原学阴性");
+            applyPathogenValueFilter(wrapper, "阴性", "病原学阴性", "病原学结果阴性");
             return;
         }
         applyPathogenValueFilter(wrapper, diagnosisResult);
@@ -1005,21 +1017,243 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
      */
     private void applyDiagnosisResultColumnFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
         java.util.LinkedHashSet<String> expanded = new java.util.LinkedHashSet<>();
+        boolean includeBlank = false;
         for (String raw : ColumnFilterSupport.splitValues(value)) {
-            if ("阳性".equals(raw)) {
+            if ("-".equals(raw) || "未填写".equals(raw)) {
+                includeBlank = true;
+            } else if ("阳性".equals(raw)) {
                 expanded.add("阳性");
                 expanded.add("病原学阳性");
             } else if ("阴性".equals(raw)) {
                 expanded.add("阴性");
                 expanded.add("病原学阴性");
+                expanded.add("病原学结果阴性");
             } else if ("病原学结果阳性".equals(raw)) {
                 expanded.addAll(Arrays.asList(PATHOGEN_RESULT_POSITIVE_VALUES));
             } else {
                 expanded.add(raw);
             }
         }
-        if (!expanded.isEmpty()) {
+        if (!expanded.isEmpty() && includeBlank) {
+            wrapper.and(w -> {
+                applyPathogenValueFilter(w, expanded.toArray(String[]::new));
+                w.or(blank -> applyBlankPathogenCondition(blank));
+            });
+        } else if (!expanded.isEmpty()) {
             applyPathogenValueFilter(wrapper, expanded.toArray(String[]::new));
+        } else if (includeBlank) {
+            applyBlankPathogenFilter(wrapper);
+        }
+    }
+
+    /** 列表展示为「-」：主表与 epidemic_data 均无有效病原学结果 */
+    private void applyBlankPathogenFilter(LambdaQueryWrapper<Patient> wrapper) {
+        wrapper.and(this::applyBlankPathogenCondition);
+    }
+
+    private void applyBlankPathogenCondition(LambdaQueryWrapper<Patient> w) {
+        w.and(inner -> inner.isNull(Patient::getDiagnosisResult).or().eq(Patient::getDiagnosisResult, ""))
+                .and(inner -> inner.isNull(Patient::getEpidemicData)
+                        .or()
+                        .apply("NULLIF(TRIM(JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                                + EPIDEMIC_JSON_PATHOGEN_RESULT + "'))), '') IS NULL"));
+    }
+
+    /**
+     * 诊断结果筛选（与列表 resolvePatientDiagnosisResult 口径一致）：
+     * epidemic_data「诊断结果」；专病网还可匹配主表 diagnosisResult。
+     */
+    private void applyClinicalDiagnosisFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
+        java.util.LinkedHashSet<String> values = new java.util.LinkedHashSet<>();
+        boolean includeBlank = false;
+        for (String raw : ColumnFilterSupport.splitValues(value)) {
+            if ("-".equals(raw) || "未填写".equals(raw)) {
+                includeBlank = true;
+            } else if (StrUtil.isNotBlank(raw)) {
+                values.add(raw.trim());
+            }
+        }
+        if (values.isEmpty() && !includeBlank) {
+            return;
+        }
+        final boolean includeBlankFinal = includeBlank;
+        wrapper.and(w -> {
+            if (!values.isEmpty()) {
+                String inClause = values.stream()
+                        .map(v -> "'" + v.replace("'", "''") + "'")
+                        .collect(Collectors.joining(", "));
+                w.apply("NULLIF(TRIM(JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                                + EPIDEMIC_JSON_DIAGNOSIS_RESULT + "'))), '') IN (" + inClause + ")")
+                        .or(sw -> sw.and(s -> s.eq(Patient::getPopulationType, "specialDisease")
+                                        .or().eq(Patient::getSource, "specialDisease"))
+                                .in(Patient::getDiagnosisResult, values));
+                if (includeBlankFinal) {
+                    w.or();
+                    applyBlankClinicalDiagnosisCondition(w);
+                }
+            } else if (includeBlankFinal) {
+                applyBlankClinicalDiagnosisCondition(w);
+            }
+        });
+    }
+
+    private void applyBlankClinicalDiagnosisCondition(LambdaQueryWrapper<Patient> w) {
+        w.and(inner -> inner.isNull(Patient::getEpidemicData)
+                        .or()
+                        .apply("NULLIF(TRIM(JSON_UNQUOTE(JSON_EXTRACT(epidemic_data, '"
+                                + EPIDEMIC_JSON_DIAGNOSIS_RESULT + "'))), '') IS NULL"))
+                .and(inner -> inner
+                        .apply("(IFNULL(population_type,'') <> 'specialDisease' AND IFNULL(source,'') <> 'specialDisease')")
+                        .or()
+                        .apply("((population_type = 'specialDisease' OR source = 'specialDisease') AND (diagnosis_result IS NULL OR diagnosis_result = ''))"));
+    }
+
+    /** 通知单状态：none=未发送；0草稿/1已发送/2已确认（按最新一条通知单） */
+    private void applyNoticeStatusFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
+        Set<String> statuses = new LinkedHashSet<>(ColumnFilterSupport.splitValues(value));
+        if (statuses.isEmpty()) {
+            return;
+        }
+        List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getNoticeType, "patient")
+                .select(Notice::getId, Notice::getBizId, Notice::getStatus));
+        Map<Long, Notice> latest = new HashMap<>();
+        for (Notice n : notices) {
+            if (n.getBizId() == null) continue;
+            Notice prev = latest.get(n.getBizId());
+            if (prev == null || (n.getId() != null && prev.getId() != null && n.getId() > prev.getId())) {
+                latest.put(n.getBizId(), n);
+            }
+        }
+        Set<Long> matched = new HashSet<>();
+        boolean includeNone = statuses.contains("none") || statuses.contains("未发送");
+        for (Map.Entry<Long, Notice> e : latest.entrySet()) {
+            Integer st = e.getValue().getStatus();
+            String key = st == null ? "" : String.valueOf(st);
+            if (statuses.contains(key)
+                    || (st != null && st == 0 && statuses.contains("草稿"))
+                    || (st != null && st == 1 && statuses.contains("已发送"))
+                    || (st != null && st == 2 && statuses.contains("已确认"))) {
+                matched.add(e.getKey());
+            }
+        }
+        Set<Long> hasNotice = latest.keySet();
+        if (includeNone) {
+            // 未发送 ∪ 其它已选状态
+            wrapper.and(w -> {
+                boolean started = false;
+                if (!matched.isEmpty()) {
+                    w.in(Patient::getId, matched);
+                    started = true;
+                }
+                if (started) {
+                    w.or();
+                }
+                if (!hasNotice.isEmpty()) {
+                    w.notIn(Patient::getId, hasNotice);
+                } else {
+                    w.apply("1=1");
+                }
+            });
+            return;
+        }
+        if (matched.isEmpty()) {
+            wrapper.apply("1=0");
+        } else {
+            wrapper.in(Patient::getId, matched);
+        }
+    }
+
+    private void applyFirstVisitStatusFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
+        Set<String> statuses = new LinkedHashSet<>(ColumnFilterSupport.splitValues(value));
+        if (statuses.isEmpty()) return;
+        boolean wantDone = statuses.contains("done") || statuses.contains("已完成");
+        boolean wantPending = statuses.contains("pending") || statuses.contains("待填写");
+        if (wantDone && wantPending) return;
+        List<Long> doneIds = firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
+                        .eq(FirstVisit::getStatus, 1)
+                        .select(FirstVisit::getPatientId))
+                .stream().map(FirstVisit::getPatientId).filter(Objects::nonNull).distinct().toList();
+        if (wantDone) {
+            if (doneIds.isEmpty()) {
+                wrapper.apply("1=0");
+            } else {
+                wrapper.in(Patient::getId, doneIds);
+            }
+        } else if (wantPending) {
+            if (!doneIds.isEmpty()) {
+                wrapper.notIn(Patient::getId, doneIds);
+            }
+        }
+    }
+
+    private void applyFollowUpStatusFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
+        Set<String> statuses = new LinkedHashSet<>(ColumnFilterSupport.splitValues(value));
+        if (statuses.isEmpty()) return;
+        boolean wantDone = statuses.contains("done") || statuses.contains("已完成");
+        boolean wantPending = statuses.contains("pending") || statuses.contains("待填写");
+        if (wantDone && wantPending) return;
+        List<Long> doneIds = followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
+                        .eq(FollowUpVisit::getStatus, 1)
+                        .select(FollowUpVisit::getPatientId))
+                .stream().map(FollowUpVisit::getPatientId).filter(Objects::nonNull).distinct().toList();
+        if (wantDone) {
+            if (doneIds.isEmpty()) {
+                wrapper.apply("1=0");
+            } else {
+                wrapper.in(Patient::getId, doneIds);
+            }
+        } else if (wantPending) {
+            if (!doneIds.isEmpty()) {
+                wrapper.notIn(Patient::getId, doneIds);
+            }
+        }
+    }
+
+    private void applyMedicationManagementStatusFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
+        Set<String> statuses = new LinkedHashSet<>(ColumnFilterSupport.splitValues(value));
+        if (statuses.isEmpty()) return;
+        List<MedicationManagement> all = medicationManagementMapper.selectList(new LambdaQueryWrapper<MedicationManagement>()
+                .orderByDesc(MedicationManagement::getId)
+                .select(MedicationManagement::getId, MedicationManagement::getPatientId, MedicationManagement::getStopDate));
+        Map<Long, MedicationManagement> latest = new HashMap<>();
+        for (MedicationManagement m : all) {
+            if (m.getPatientId() == null) continue;
+            latest.putIfAbsent(m.getPatientId(), m);
+        }
+        Set<Long> matched = new HashSet<>();
+        boolean includePending = statuses.contains("待填写");
+        boolean includeDoing = statuses.contains("进行中");
+        boolean includeDone = statuses.contains("已完成");
+        for (Map.Entry<Long, MedicationManagement> e : latest.entrySet()) {
+            boolean done = e.getValue().getStopDate() != null;
+            if (done && includeDone) matched.add(e.getKey());
+            if (!done && includeDoing) matched.add(e.getKey());
+        }
+        Set<Long> hasMed = latest.keySet();
+        if (includePending && !includeDoing && !includeDone) {
+            if (!hasMed.isEmpty()) {
+                wrapper.notIn(Patient::getId, hasMed);
+            }
+            return;
+        }
+        if (includePending) {
+            wrapper.and(w -> {
+                if (!matched.isEmpty()) {
+                    w.in(Patient::getId, matched).or();
+                }
+                if (!hasMed.isEmpty()) {
+                    w.notIn(Patient::getId, hasMed);
+                } else {
+                    w.apply("1=1");
+                }
+            });
+            return;
+        }
+        if (matched.isEmpty()) {
+            wrapper.apply("1=0");
+        } else {
+            wrapper.in(Patient::getId, matched);
         }
     }
 
@@ -1027,6 +1261,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
     public List<String> listDistinctColumnValues(String field, Integer archived) {
         if ("medicationManagementUnit".equals(field)) {
             return listDistinctMedicationManagementUnits(archived);
+        }
+        if ("clinicalDiagnosis".equals(field)) {
+            return listDistinctClinicalDiagnosis(archived);
         }
         if (StrUtil.isBlank(field) || !COLUMN_FILTER_WHITELIST.contains(field)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
@@ -1075,6 +1312,32 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .distinct()
                 .sorted()
                 .collect(Collectors.toList());
+    }
+
+    /** 诊断结果去重：病案 JSON「诊断结果」+ 专病网主表 diagnosisResult */
+    private List<String> listDistinctClinicalDiagnosis(Integer archived) {
+        Set<String> values = new TreeSet<>();
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(archived != null, Patient::getArchived, archived);
+        if (archived == null || Integer.valueOf(0).equals(archived)) {
+            wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
+                    .or()
+                    .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        }
+        applyPatientScopeFilter(wrapper);
+        wrapper.select(Patient::getDiagnosisResult, Patient::getEpidemicData,
+                Patient::getPopulationType, Patient::getSource);
+        for (Patient p : list(wrapper)) {
+            String fromJson = parseImportFields(p).get("诊断结果");
+            if (StrUtil.isNotBlank(fromJson)) {
+                values.add(fromJson.trim());
+            }
+            boolean special = "specialDisease".equals(p.getPopulationType()) || "specialDisease".equals(p.getSource());
+            if (special && StrUtil.isNotBlank(p.getDiagnosisResult())) {
+                values.add(p.getDiagnosisResult().trim());
+            }
+        }
+        return new ArrayList<>(values);
     }
 
     /** 服药管理单位去重：病案 JSON + 患者通知单 */

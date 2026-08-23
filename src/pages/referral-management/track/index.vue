@@ -4,15 +4,21 @@ import type { EpidemicImportSkippedItem } from "../apis/index"
 import ReferralDiagnosisDialog from "@@/components/ReferralDiagnosisDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
+import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import {
+  applyReferralChestXrayResult,
+  isReferralChestXrayOther,
+  normalizeReferralInfectionResult,
+  normalizeReferralScreenMethod,
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
   REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
-  referralSelectOptionsWithLegacy
+  referralSelectOptionsWithLegacy,
+  resolveReferralChestXrayResultForSave
 } from "@@/constants/referral-tracking"
 import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
@@ -38,6 +44,7 @@ import {
   enableJointTrackingApi,
   exportReferralTrackApi,
   getCountyLevel3UsersApi,
+  getReferralTrackingColumnDistinctApi,
   getReferralTrackingDetailApi,
   getReferralTrackingListApi,
   importEpidemicTrackApi,
@@ -110,12 +117,21 @@ const diagnosisFilterOptions = REFERRAL_TRACKING_DIAGNOSIS_OPTIONS.map(item => (
   text: item.label,
   value: item.value
 }))
+
+const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
+  const { data } = await getReferralTrackingColumnDistinctApi(field, "track")
+  return Array.isArray(data) ? data : []
+})
+const loadCreatorOptions = () => loadDistinct("creatorName")
+const loadEntryUnitOptions = () => loadDistinct("entryUnit")
+
 const searchForm = reactive({
   name: "",
   idNumber: "",
   phone: "",
   township: "",
-  creatorOrEntryUnit: "",
+  creatorName: "",
+  entryUnit: "",
   dateRange: [] as string[],
   createTimeRange: [] as string[],
   trackingStatus: undefined as number | undefined
@@ -131,7 +147,8 @@ function buildFilterParams() {
     idNumber: searchForm.idNumber || undefined,
     phone: searchForm.phone || undefined,
     township: searchForm.township || undefined,
-    creatorOrEntryUnit: searchForm.creatorOrEntryUnit || undefined,
+    creatorName: searchForm.creatorName || undefined,
+    entryUnit: searchForm.entryUnit || undefined,
     trackingStatus: searchForm.trackingStatus,
     ...extractDateRangeParams(searchForm.dateRange),
     ...extractCreateTimeRangeParams(searchForm.createTimeRange),
@@ -171,7 +188,8 @@ function handleReset() {
   searchForm.idNumber = ""
   searchForm.phone = ""
   searchForm.township = ""
-  searchForm.creatorOrEntryUnit = ""
+  searchForm.creatorName = ""
+  searchForm.entryUnit = ""
   searchForm.dateRange = []
   searchForm.createTimeRange = []
   searchForm.trackingStatus = undefined
@@ -499,6 +517,16 @@ const editForm = reactive({
 const canEditDiagnosis = computed(() => Boolean(editRow.value?.diagnosisResult))
 const canEditTrackingHistory = computed(() => editTrackingHistory.value.length > 0)
 
+/** 编辑诊断：兼容历史「确诊患者 / 其他」 */
+const editDiagnosisOptions = computed(() => {
+  const current = editForm.diagnosisResult
+  const opts: Array<{ label: string, value: string }> = REFERRAL_TRACKING_DIAGNOSIS_OPTIONS.map(item => ({ ...item }))
+  if (current && !opts.some(item => item.value === current)) {
+    opts.push({ label: current, value: current })
+  }
+  return opts
+})
+
 async function openEditDialog(row: any) {
   editRow.value = row
   Object.assign(editForm, {
@@ -646,6 +674,11 @@ const createForm = reactive({
   householdAddress: "",
   currentAddress: "",
   crowdCategory: "",
+  screenMethod: "",
+  infectionResult: "",
+  chestXrayResult: "",
+  chestXrayRemark: "",
+  diagnosisResult: "",
   trackReason: ""
 })
 const createFormRef = ref()
@@ -672,6 +705,11 @@ function openCreateDialog() {
     householdAddress: "",
     currentAddress: "",
     crowdCategory: "",
+    screenMethod: "",
+    infectionResult: "",
+    chestXrayResult: "",
+    chestXrayRemark: "",
+    diagnosisResult: "",
     trackReason: ""
   })
   createDialogVisible.value = true
@@ -684,8 +722,17 @@ async function handleCreate() {
   } catch {
     return
   }
+  if (isReferralChestXrayOther(createForm.chestXrayResult) && !createForm.chestXrayRemark.trim()) {
+    ElMessage.warning("请填写胸片检查结果备注")
+    return
+  }
   try {
-    await createReferralWithDuplicateConfirm({ ...createForm, bizMode: "track" })
+    const { chestXrayRemark, ...rest } = createForm
+    await createReferralWithDuplicateConfirm({
+      ...rest,
+      chestXrayResult: resolveReferralChestXrayResultForSave(createForm.chestXrayResult, chestXrayRemark),
+      bizMode: "track"
+    })
     ElMessage.success("追踪记录创建成功")
     createDialogVisible.value = false
     fetchList()
@@ -744,11 +791,11 @@ const screeningForm = reactive({
   hasInfectionScreen: "",
   screenDate: "",
   screenMethod: "",
-  screenResult: "",
   infectionResult: "",
   hasChestXray: "",
   chestXrayDate: "",
-  chestXrayResult: ""
+  chestXrayResult: "",
+  chestXrayRemark: ""
 })
 
 const chestXrayResultSelectOptions = computed(() =>
@@ -759,18 +806,27 @@ function openScreeningDialog(row: any) {
   Object.assign(screeningForm, {
     hasInfectionScreen: row.hasInfectionScreen ?? "",
     screenDate: row.screenDate ?? "",
-    screenMethod: row.screenMethod ?? "",
-    screenResult: row.screenResult ?? "",
-    infectionResult: row.infectionResult ?? "",
+    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
+    infectionResult: normalizeReferralInfectionResult(row.infectionResult),
     hasChestXray: row.hasChestXray ?? "",
     chestXrayDate: row.chestXrayDate ?? "",
-    chestXrayResult: row.chestXrayResult ?? ""
+    chestXrayResult: "",
+    chestXrayRemark: ""
   })
+  applyReferralChestXrayResult(screeningForm, row.chestXrayResult)
   screeningDialogVisible.value = true
 }
 
 async function handleSaveScreening() {
-  await saveScreeningInfoApi(screeningRow.value.id, { ...screeningForm })
+  if (isReferralChestXrayOther(screeningForm.chestXrayResult) && !screeningForm.chestXrayRemark.trim()) {
+    ElMessage.warning("请填写胸片检查结果备注")
+    return
+  }
+  const { chestXrayRemark, ...rest } = screeningForm
+  await saveScreeningInfoApi(screeningRow.value.id, {
+    ...rest,
+    chestXrayResult: resolveReferralChestXrayResultForSave(screeningForm.chestXrayResult, chestXrayRemark)
+  })
   ElMessage.success("筛查信息已保存")
   screeningDialogVisible.value = false
   fetchList()
@@ -817,8 +873,29 @@ function getRowClass({ row }: { row: any }) {
         <el-form-item label="乡镇">
           <el-input v-model="searchForm.township" placeholder="请输入乡镇" clearable />
         </el-form-item>
-        <el-form-item label="录入者/录入单位">
-          <el-input v-model="searchForm.creatorOrEntryUnit" placeholder="请输入" clearable style="width: 160px" />
+        <el-form-item label="录入者">
+          <el-select
+            v-model="searchForm.creatorName"
+            filterable
+            clearable
+            placeholder="请选择录入者"
+            style="width: 160px"
+            @visible-change="(v: boolean) => v && loadCreatorOptions()"
+          >
+            <el-option v-for="item in distinctValues('creatorName').value" :key="item" :label="item" :value="item" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="录入单位">
+          <el-select
+            v-model="searchForm.entryUnit"
+            filterable
+            clearable
+            placeholder="请选择录入单位"
+            style="width: 180px"
+            @visible-change="(v: boolean) => v && loadEntryUnitOptions()"
+          >
+            <el-option v-for="item in distinctValues('entryUnit').value" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="报告卡录入时间">
           <el-date-picker
@@ -1136,7 +1213,7 @@ function getRowClass({ row }: { row: any }) {
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >
-              录入胸片
+              录入感染检测结果及胸片结果
             </el-button>
             <!-- 诊断：已到位 -->
             <el-button
@@ -1345,13 +1422,10 @@ function getRowClass({ row }: { row: any }) {
             <el-descriptions-item label="筛查日期">
               {{ viewDetail.screenDate || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="筛查方法">
-              {{ viewDetail.screenMethod || "-" }}
+            <el-descriptions-item label="感染检测方法">
+              {{ normalizeReferralScreenMethod(viewDetail.screenMethod) || viewDetail.screenMethod || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="筛查结果">
-              {{ viewDetail.screenResult || "-" }}
-            </el-descriptions-item>
-            <el-descriptions-item label="感染筛查结果">
+            <el-descriptions-item label="感染检测结果">
               {{ viewDetail.infectionResult || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="是否胸片检查">
@@ -1604,7 +1678,7 @@ function getRowClass({ row }: { row: any }) {
               <el-form-item label="诊断结果" required>
                 <el-radio-group v-model="editForm.diagnosisResult">
                   <el-radio
-                    v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
+                    v-for="item in editDiagnosisOptions"
                     :key="item.value"
                     :value="item.value"
                   >
@@ -1751,6 +1825,71 @@ function getRowClass({ row }: { row: any }) {
             </el-form-item>
           </el-col>
           <el-col :span="24">
+            <el-divider content-position="left">
+              筛查与诊断（选填）
+            </el-divider>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染检测方法">
+              <el-select v-model="createForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="感染检测结果">
+              <el-select v-model="createForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+                <el-option
+                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片检查结果">
+              <el-select
+                v-model="createForm.chestXrayResult"
+                placeholder="请选择"
+                clearable
+                style="width: 100%"
+                @change="() => { if (!isReferralChestXrayOther(createForm.chestXrayResult)) createForm.chestXrayRemark = '' }"
+              >
+                <el-option
+                  v-for="opt in REFERRAL_CHEST_XRAY_RESULT_OPTIONS"
+                  :key="opt"
+                  :label="opt"
+                  :value="opt"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isReferralChestXrayOther(createForm.chestXrayResult)" :span="24">
+            <el-form-item label="胸片结果备注">
+              <el-input v-model="createForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="诊断结果">
+              <el-radio-group v-model="createForm.diagnosisResult">
+                <el-radio
+                  v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
+                  :key="item.value"
+                  :value="item.value"
+                >
+                  {{ item.label }}
+                </el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
             <el-form-item label="追踪原因" prop="trackReason">
               <el-input
                 v-model="createForm.trackReason"
@@ -1782,7 +1921,7 @@ function getRowClass({ row }: { row: any }) {
     />
 
     <!-- 录入筛查信息弹窗 -->
-    <el-dialog v-model="screeningDialogVisible" title="录入筛查信息" width="600px">
+    <el-dialog v-model="screeningDialogVisible" title="录入感染检测结果及胸片结果" width="600px">
       <el-form :model="screeningForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -1799,10 +1938,10 @@ function getRowClass({ row }: { row: any }) {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="筛查方法">
+            <el-form-item label="感染检测方法">
               <el-select v-model="screeningForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, screeningForm.screenMethod)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1811,15 +1950,10 @@ function getRowClass({ row }: { row: any }) {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="筛查结果">
-              <el-input v-model="screeningForm.screenResult" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="感染筛查结果">
+            <el-form-item label="感染检测结果">
               <el-select v-model="screeningForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, screeningForm.infectionResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1842,7 +1976,13 @@ function getRowClass({ row }: { row: any }) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片检查结果">
-              <el-select v-model="screeningForm.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+              <el-select
+                v-model="screeningForm.chestXrayResult"
+                placeholder="请选择"
+                clearable
+                style="width: 100%"
+                @change="() => { if (!isReferralChestXrayOther(screeningForm.chestXrayResult)) screeningForm.chestXrayRemark = '' }"
+              >
                 <el-option
                   v-for="opt in chestXrayResultSelectOptions"
                   :key="opt"
@@ -1850,6 +1990,11 @@ function getRowClass({ row }: { row: any }) {
                   :value="opt"
                 />
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isReferralChestXrayOther(screeningForm.chestXrayResult)" :span="24">
+            <el-form-item label="胸片结果备注">
+              <el-input v-model="screeningForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
             </el-form-item>
           </el-col>
         </el-row>

@@ -11,7 +11,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import {
   displayInfectionJudgeResult,
   displayInfectionScreenMethod,
-  getLatentPopulationDisplayLabel,
+  getPopulationTypeLabel,
   getPopulationTypeTagType,
   KEY_INFECTION_JUDGE_RESULT_OPTIONS,
   KEY_INFECTION_SCREEN_METHOD_OPTIONS,
@@ -70,6 +70,7 @@ const { load: loadDistinct, sourceValues: distinctValues, clearCache } = useColu
 })
 const loadGenderOptions = () => loadDistinct("gender")
 const loadPopulationTypeOptions = () => loadDistinct("populationType")
+const loadCrowdCategoryOptions = () => loadDistinct("crowdCategory")
 const loadCreatorOptions = () => loadDistinct("creatorUsername")
 const screenMethodFilterOptions = KEY_INFECTION_SCREEN_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
 const infectionResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
@@ -623,8 +624,23 @@ async function handleImport(uploadFile: any) {
           </template>
           <template #default="{ row }">
             <el-tag :type="getPopulationTypeTagType(row.populationType)" size="small">
-              {{ getLatentPopulationDisplayLabel(row.populationType, row.crowdCategory) }}
+              {{ getPopulationTypeLabel(row.populationType) }}
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="crowdCategory" min-width="120" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="人群分类"
+              type="select"
+              :source-values="distinctValues('crowdCategory').value"
+              :load-options="loadCrowdCategoryOptions"
+              :model-value="columnFilters.crowdCategory"
+              @change="(v) => { setFilter('crowdCategory', v); handleSearch() }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ row.crowdCategory || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="转出状态" width="110">
@@ -671,7 +687,7 @@ async function handleImport(uploadFile: any) {
                 size="small"
                 @click="openEdit(row)"
               >
-                修改
+                编辑
               </el-button>
               <el-button
                 v-permission="'latentManagement:referral'"

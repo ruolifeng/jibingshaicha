@@ -17,6 +17,8 @@ public class UpcomingVisitSupervisionVO {
     private Long bizId;
     private String name;
     private LocalDate dueDate;
-    /** 距计划日剩余天数：7 / 3 / 1 */
+    /** 距计划日剩余天数：0~7 */
     private Integer leadDays;
+    /** 管理人对应机构（通知单接收人/填写人所属机构，或管理单位） */
+    private String managerOrgName;
 }
