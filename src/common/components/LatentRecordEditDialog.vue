@@ -8,11 +8,8 @@ import {
   LATENT_CLOSE_CONTACT_TYPE_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
-  SCHOOL_DIAGNOSIS_EDIT_OPTIONS,
-  SCHOOL_SCREEN_METHOD_OPTIONS,
-  SCREENING_DIAGNOSIS_EDIT_OPTIONS
+  SCHOOL_SCREEN_METHOD_OPTIONS
 } from "@@/constants/disease"
-import { CONTACT_TYPE_OPTIONS } from "@@/constants/screening-close-contact"
 import { formatDateTime } from "@@/utils/datetime"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { parseTrackingHistory, TRACK_STATUS_LABEL } from "@@/utils/referralTracking"
@@ -43,12 +40,12 @@ const screenMethodOptions = computed(() =>
   isSchoolSource.value ? SCHOOL_SCREEN_METHOD_OPTIONS : [...KEY_INFECTION_SCREEN_METHOD_OPTIONS]
 )
 const infectionResultOptions = computed(() => infectionJudgeSelectOptions(form.infectionResult))
-const diagnosisOptions = computed(() =>
-  isSchoolSource.value ? SCHOOL_DIAGNOSIS_EDIT_OPTIONS : SCREENING_DIAGNOSIS_EDIT_OPTIONS
-)
+const FIXED_DIAGNOSIS_FIRST = "潜伏感染者"
 
 const formRef = ref()
 const submitting = ref(false)
+/** 详情回填中：跳过 populationType 变更时的清空逻辑 */
+const loadingDetail = ref(false)
 const editTrackingHistory = ref<{ attempt: number, status: number, trackTime: string, reason: string }[]>([])
 const canEditTrackingHistory = computed(() => !isCreate.value && editTrackingHistory.value.length > 0)
 const trackStatusOptions = [
@@ -72,7 +69,7 @@ const form = reactive({
   infectionScreenDate: "",
   screenMethod: "",
   infectionResult: "",
-  diagnosisFirst: "潜伏感染者",
+  diagnosisFirst: FIXED_DIAGNOSIS_FIRST,
   hasChestXray: "",
   chestXrayDate: "",
   chestXrayResult: "",
@@ -90,13 +87,13 @@ const rules = computed(() => ({
           type: "array" as const,
           required: true,
           min: 1,
-          message: "请选择重点人群分类",
+          message: "请选择人群分类",
           trigger: "change"
         }]
       }
     : {}),
   ...(showCloseContactType.value
-    ? { closeContactType: [{ required: true, message: "请选择密接类型", trigger: "change" }] }
+    ? { closeContactType: [{ required: true, message: "请选择人群分类", trigger: "change" }] }
     : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   idNumber: [idCardRule(false)],
@@ -121,7 +118,7 @@ function resetForm() {
     infectionScreenDate: "",
     screenMethod: "",
     infectionResult: "",
-    diagnosisFirst: "潜伏感染者",
+    diagnosisFirst: FIXED_DIAGNOSIS_FIRST,
     hasChestXray: "",
     chestXrayDate: "",
     chestXrayResult: "",
@@ -130,18 +127,28 @@ function resetForm() {
   })
 }
 
-function parseCrowdCategory(data: { populationType?: string, crowdCategory?: string }) {
+/** 兼容「重点人群-老年人」「密接-家庭内」等展示格式 */
+function normalizeCrowdCategoryRaw(raw?: string | null) {
+  const text = (raw || "").trim()
+  if (!text) return ""
+  if (text.startsWith("重点人群-")) return text.slice("重点人群-".length).trim()
+  if (text.startsWith("密接-")) return text.slice("密接-".length).trim()
+  return text
+}
+
+function parseCrowdCategory(data: { populationType?: string, crowdCategory?: string, contactType?: string }) {
   form.keyPopulationSubCategories = []
   form.closeContactType = ""
-  if (!data.crowdCategory) return
+  const crowdCategory = normalizeCrowdCategoryRaw(data.crowdCategory || data.contactType)
+  if (!crowdCategory) return
   if (data.populationType === "keyPopulation") {
-    form.keyPopulationSubCategories = data.crowdCategory
+    form.keyPopulationSubCategories = crowdCategory
       .split(/[、,，/]/)
       .map(item => item.trim())
       .filter(Boolean)
       .filter(item => LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS.includes(item as typeof LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS[number]))
   } else if (data.populationType === "closeContact") {
-    const type = data.crowdCategory.trim()
+    const type = crowdCategory.trim()
     if (LATENT_CLOSE_CONTACT_TYPE_OPTIONS.includes(type as typeof LATENT_CLOSE_CONTACT_TYPE_OPTIONS[number])) {
       form.closeContactType = type
     }
@@ -163,33 +170,41 @@ async function loadDetail() {
   const { data } = await getLatentDetailApi(props.latentId)
   if (!data) return
   screeningId.value = data.screeningId ?? null
-  Object.assign(form, {
-    populationType: data.populationType || "",
-    name: data.name || "",
-    gender: data.gender || "",
-    age: data.age ?? null,
-    idNumber: data.idNumber || "",
-    phone: data.phone || "",
-    phoneContactRelation: data.phoneContactRelation || "",
-    householdAddress: data.householdAddress || "",
-    currentAddress: data.currentAddress || "",
-    infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
-    screenMethod: normalizeMethodForForm(data.screenMethod, data.infectionResult, data.populationType),
-    infectionResult: normalizeResultForForm(data.infectionResult),
-    diagnosisFirst: data.diagnosisFirst || "",
-    hasChestXray: data.hasChestXray || "",
-    chestXrayDate: data.chestXrayDate || "",
-    chestXrayResult: data.chestXrayResult || "",
-    trackingRemark: data.trackingRemark || "",
-    remark: data.remark || ""
-  })
-  editTrackingHistory.value = parseTrackingHistory(data.trackingHistoryJson).map(item => ({
-    attempt: item.attempt,
-    status: item.status,
-    trackTime: item.trackTime,
-    reason: item.reason ?? ""
-  }))
-  parseCrowdCategory(data)
+  // 加载期间跳过 populationType watch，避免清空已回填的密接类型/重点人群分类
+  loadingDetail.value = true
+  try {
+    Object.assign(form, {
+      populationType: data.populationType || "",
+      name: data.name || "",
+      gender: data.gender || "",
+      age: data.age ?? null,
+      idNumber: data.idNumber || "",
+      phone: data.phone || "",
+      phoneContactRelation: data.phoneContactRelation || "",
+      householdAddress: data.householdAddress || "",
+      currentAddress: data.currentAddress || "",
+      infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
+      screenMethod: normalizeMethodForForm(data.screenMethod, data.infectionResult, data.populationType),
+      infectionResult: normalizeResultForForm(data.infectionResult),
+      diagnosisFirst: FIXED_DIAGNOSIS_FIRST,
+      hasChestXray: data.hasChestXray || "",
+      chestXrayDate: data.chestXrayDate || "",
+      chestXrayResult: data.chestXrayResult || "",
+      trackingRemark: data.trackingRemark || "",
+      remark: data.remark || ""
+    })
+    editTrackingHistory.value = parseTrackingHistory(data.trackingHistoryJson).map(item => ({
+      attempt: item.attempt,
+      status: item.status,
+      trackTime: item.trackTime,
+      reason: item.reason ?? ""
+    }))
+    parseCrowdCategory(data)
+    // 等 populationType 的异步 watch 排空后再结束 loading，防止回填被清空
+    await nextTick()
+  } finally {
+    loadingDetail.value = false
+  }
 }
 
 function normalizeMethodForForm(screenMethod?: string, infectionResult?: string, populationType?: string) {
@@ -214,7 +229,7 @@ function normalizeResultForForm(infectionResult?: string) {
 }
 
 watch(() => form.populationType, (val, oldVal) => {
-  if (val === oldVal) return
+  if (loadingDetail.value || val === oldVal) return
   form.keyPopulationSubCategories = []
   form.closeContactType = ""
   // 切换数据来源时清空口径不同的感染字段，避免提交非法值
@@ -258,16 +273,18 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
+    form.diagnosisFirst = FIXED_DIAGNOSIS_FIRST
     const crowdCategory = buildCrowdCategory()
     const idNumber = normalizeIdNumber(form.idNumber)
     if (isCreate.value) {
-      await createLatentApi({ ...form, idNumber, crowdCategory })
+      await createLatentApi({ ...form, idNumber, crowdCategory, diagnosisFirst: FIXED_DIAGNOSIS_FIRST })
       ElMessage.success("新增成功")
     } else {
       const { populationType, keyPopulationSubCategories, closeContactType, trackingRemark, ...payload } = form
       const updateBody: Record<string, any> = {
         ...payload,
         idNumber,
+        diagnosisFirst: FIXED_DIAGNOSIS_FIRST,
         ...(showCrowdCategoryFields.value ? { crowdCategory } : {})
       }
       if (canEditTrackingHistory.value) {
@@ -293,7 +310,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     :model-value="visible"
-    :title="isCreate ? '新增潜伏感染者' : '修改潜伏感染者信息'"
+    :title="isCreate ? '新增潜伏感染者' : '编辑潜伏感染者信息'"
     width="720px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
@@ -313,13 +330,13 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col v-if="showKeyPopulationSubCategories" :span="12">
-          <el-form-item label="重点人群分类" prop="keyPopulationSubCategories">
+          <el-form-item label="人群分类" prop="keyPopulationSubCategories">
             <el-select
               v-model="form.keyPopulationSubCategories"
               multiple
               collapse-tags
               collapse-tags-tooltip
-              placeholder="请选择（可多选）"
+              placeholder="请选择（可多选：老年人/糖尿病/双感）"
               style="width: 100%"
             >
               <el-option
@@ -332,10 +349,10 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col v-if="showCloseContactType" :span="12">
-          <el-form-item label="密接类型" prop="closeContactType">
-            <el-select v-model="form.closeContactType" placeholder="请选择" style="width: 100%">
+          <el-form-item label="人群分类" prop="closeContactType">
+            <el-select v-model="form.closeContactType" placeholder="请选择（家庭内/家庭外）" style="width: 100%">
               <el-option
-                v-for="item in CONTACT_TYPE_OPTIONS"
+                v-for="item in LATENT_CLOSE_CONTACT_TYPE_OPTIONS"
                 :key="item"
                 :label="item"
                 :value="item"
@@ -382,12 +399,12 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="居住地址">
+          <el-form-item label="现住地址">
             <el-input v-model="form.currentAddress" />
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="感染筛查时间">
+          <el-form-item label="感染筛查日期">
             <el-date-picker
               v-model="form.infectionScreenDate"
               type="date"
@@ -445,14 +462,7 @@ async function handleSubmit() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="首次诊断">
-            <el-select v-model="form.diagnosisFirst" placeholder="请选择" clearable style="width: 100%">
-              <el-option
-                v-for="item in diagnosisOptions"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </el-select>
+            <el-input :model-value="FIXED_DIAGNOSIS_FIRST" readonly />
           </el-form-item>
         </el-col>
         <template v-if="canEditTrackingHistory">

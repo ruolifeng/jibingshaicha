@@ -208,38 +208,44 @@ public class StatisticsServiceImpl implements StatisticsService {
     public List<KeyPopulationTbSymptomReferralStatisticsVO> getKeyPopulationTbSymptomReferralStatistics(
             String year, String region, List<Long> filterDeptIds, List<Long> selectedDeptIds) {
         List<ScreeningKeyPopulation> records = queryKeyPopulationRecords(year, region, filterDeptIds);
-        Map<String, Long> elderArrivedByDistrict = countReferralArrivedByDistrict(year, filterDeptIds, true);
-        Map<String, Long> diabetesArrivedByDistrict = countReferralArrivedByDistrict(year, filterDeptIds, false);
+        // 推介到位只查一次，避免老年人/糖尿病各扫一遍全表
+        ReferralArrivedByDistrict arrived = countReferralArrivedByDistrict(year, filterDeptIds);
+        Map<String, Long> elderArrivedByDistrict = arrived.elder();
+        Map<String, Long> diabetesArrivedByDistrict = arrived.diabetes();
         List<Long> groupingDeptIds = (selectedDeptIds != null && !selectedDeptIds.isEmpty())
                 ? selectedDeptIds : filterDeptIds;
         KeyPopulationGroupMode groupMode = resolveKeyPopulationGroupMode(filterDeptIds, groupingDeptIds, region);
         Set<String> selectedTownshipNames = resolveSelectedTownshipNames(groupingDeptIds, groupMode);
 
-        Map<String, List<ScreeningKeyPopulation>> grouped = new LinkedHashMap<>();
+        // 按地区单次累加指标，避免先按区堆列表再多次 stream 过滤
+        Map<String, KeyPopulationStatAccumulator> grouped = new LinkedHashMap<>();
         if (StrUtil.isNotBlank(region)) {
-            grouped.put(canonicalGeoDisplayName(region), new ArrayList<>(records));
+            String regionKey = canonicalGeoDisplayName(region);
+            KeyPopulationStatAccumulator acc = grouped.computeIfAbsent(regionKey, k -> new KeyPopulationStatAccumulator());
+            for (ScreeningKeyPopulation r : records) {
+                acc.accept(r);
+            }
         } else {
             for (ScreeningKeyPopulation r : records) {
                 String key = resolveKeyPopulationGroupKey(r, groupMode, selectedTownshipNames);
-                grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+                grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator()).accept(r);
             }
             if (!departmentFilterSupport.hasActiveFilter(filterDeptIds)
                     && groupMode == KeyPopulationGroupMode.DISTRICT) {
                 for (String key : elderArrivedByDistrict.keySet()) {
-                    grouped.computeIfAbsent(key, k -> new ArrayList<>());
+                    grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator());
                 }
                 for (String key : diabetesArrivedByDistrict.keySet()) {
-                    grouped.computeIfAbsent(key, k -> new ArrayList<>());
+                    grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator());
                 }
             }
         }
 
-        List<KeyPopulationTbSymptomReferralStatisticsVO> result = new ArrayList<>();
-        for (Map.Entry<String, List<ScreeningKeyPopulation>> entry : grouped.entrySet()) {
+        List<KeyPopulationTbSymptomReferralStatisticsVO> result = new ArrayList<>(grouped.size());
+        for (Map.Entry<String, KeyPopulationStatAccumulator> entry : grouped.entrySet()) {
             String districtName = entry.getKey();
-            result.add(buildKeyPopulationTbSymptomReferralVO(
+            result.add(entry.getValue().toVo(
                     districtName,
-                    entry.getValue(),
                     elderArrivedByDistrict.getOrDefault(districtName, 0L),
                     diabetesArrivedByDistrict.getOrDefault(districtName, 0L)));
         }
@@ -568,11 +574,9 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     /**
      * 推介模块追踪到位人数，按部门归属区县汇总。
-     *
-     * @param elderGroup true=老年人/老年人+糖尿病；false=单一糖尿病
+     * 一次查询同时累计老年人/老年人+糖尿病与单一糖尿病。
      */
-    private Map<String, Long> countReferralArrivedByDistrict(String year, List<Long> filterDeptIds,
-                                                            boolean elderGroup) {
+    private ReferralArrivedByDistrict countReferralArrivedByDistrict(String year, List<Long> filterDeptIds) {
         // 仅查统计所需字段，避免实体新增列（如 recommend_unit_name）尚未迁移到库时全字段查询报错
         LambdaQueryWrapper<ReferralTracking> wrapper = Wrappers.<ReferralTracking>lambdaQuery()
                 .select(
@@ -590,9 +594,12 @@ public class StatisticsServiceImpl implements StatisticsService {
         List<ReferralTracking> list = referralTrackingMapper.selectList(wrapper);
         Map<Long, String> deptDistrictMap = buildDepartmentDistrictMap();
 
-        Map<String, Long> result = new HashMap<>();
+        Map<String, Long> elder = new HashMap<>();
+        Map<String, Long> diabetes = new HashMap<>();
         for (ReferralTracking row : list) {
-            if (!matchReferralCrowdCategory(row.getCrowdCategory(), elderGroup)) {
+            boolean isElder = matchReferralCrowdCategory(row.getCrowdCategory(), true);
+            boolean isDiabetes = !isElder && matchReferralCrowdCategory(row.getCrowdCategory(), false);
+            if (!isElder && !isDiabetes) {
                 continue;
             }
             String districtName = resolveReferralDistrict(row, deptDistrictMap);
@@ -601,9 +608,16 @@ public class StatisticsServiceImpl implements StatisticsService {
             } else {
                 districtName = canonicalGeoDisplayName(districtName);
             }
-            result.merge(districtName, 1L, Long::sum);
+            if (isElder) {
+                elder.merge(districtName, 1L, Long::sum);
+            } else {
+                diabetes.merge(districtName, 1L, Long::sum);
+            }
         }
-        return result;
+        return new ReferralArrivedByDistrict(elder, diabetes);
+    }
+
+    private record ReferralArrivedByDistrict(Map<String, Long> elder, Map<String, Long> diabetes) {
     }
 
     /**
@@ -691,45 +705,111 @@ public class StatisticsServiceImpl implements StatisticsService {
         return result;
     }
 
-    private KeyPopulationTbSymptomReferralStatisticsVO buildKeyPopulationTbSymptomReferralVO(
-            String district,
-            List<ScreeningKeyPopulation> list,
-            long elderArrived,
-            long diabetesArrived) {
-        List<ScreeningKeyPopulation> elders = list.stream().filter(this::isElderGroup).toList();
-        List<ScreeningKeyPopulation> diabetesOnly = list.stream().filter(this::isDiabetesOnly).toList();
+    /**
+     * 按地区累加重点人群报表指标（单次遍历记录）。
+     */
+    private final class KeyPopulationStatAccumulator {
+        private long elderCount;
+        private long elderChestXrayCount;
+        private long elderInfectionScreenCount;
+        private long elderSuspiciousSymptomCount;
+        private long elderChestXrayAbnormalCount;
+        private long elderInfectionAbnormalCount;
+        private long elderReferralFormCount;
+        private long elderConfirmedTbCount;
+        private long diabetesCount;
+        private long diabetesChestXrayCount;
+        private long diabetesInfectionScreenCount;
+        private long diabetesSuspiciousSymptomCount;
+        private long diabetesChestXrayAbnormalCount;
+        private long diabetesInfectionAbnormalCount;
+        private long diabetesReferralFormCount;
+        private long diabetesConfirmedTbCount;
 
-        long elderCount = elders.size();
-        long diabetesCount = diabetesOnly.size();
+        void accept(ScreeningKeyPopulation r) {
+            if (isElderGroup(r)) {
+                elderCount++;
+                // 与原 countKeyEquals 一致：精确等于「是」，不 trim
+                if ("是".equals(r.getHasChestXray())) {
+                    elderChestXrayCount++;
+                }
+                if ("是".equals(r.getHasInfectionScreen())) {
+                    elderInfectionScreenCount++;
+                }
+                if (hasSuspiciousSymptom(r)) {
+                    elderSuspiciousSymptomCount++;
+                }
+                if (isChestXrayAbnormal(r)) {
+                    elderChestXrayAbnormalCount++;
+                }
+                if (isInfectionAbnormal(r.getInfectionResult())) {
+                    elderInfectionAbnormalCount++;
+                }
+                if (ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(r.getDiagnosisFirst())) {
+                    elderReferralFormCount++;
+                }
+                if (isConfirmedTb(r)) {
+                    elderConfirmedTbCount++;
+                }
+                return;
+            }
+            if (!isDiabetesOnly(r)) {
+                return;
+            }
+            diabetesCount++;
+            if ("是".equals(r.getHasChestXray())) {
+                diabetesChestXrayCount++;
+            }
+            if ("是".equals(r.getHasInfectionScreen())) {
+                diabetesInfectionScreenCount++;
+            }
+            if (hasSuspiciousSymptom(r)) {
+                diabetesSuspiciousSymptomCount++;
+            }
+            if (isChestXrayAbnormal(r)) {
+                diabetesChestXrayAbnormalCount++;
+            }
+            if (isInfectionAbnormal(r.getInfectionResult())) {
+                diabetesInfectionAbnormalCount++;
+            }
+            if (ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(r.getDiagnosisFirst())) {
+                diabetesReferralFormCount++;
+            }
+            if (isConfirmedTb(r)) {
+                diabetesConfirmedTbCount++;
+            }
+        }
 
-        return KeyPopulationTbSymptomReferralStatisticsVO.builder()
-                .district(district)
-                // 老年人数：季度报表模板无系统数据来源，留空由页面手工填写
-                .elderCount(null)
-                // 参加年度体检人数 / 进行症状筛查人数：老年人及老年人+糖尿病总人数
-                .elderAnnualExamCount(elderCount)
-                .elderSymptomScreenCount(elderCount)
-                .elderChestXrayCount(countKeyEquals(elders, ScreeningKeyPopulation::getHasChestXray, "是"))
-                .elderInfectionScreenCount(countKeyEquals(elders, ScreeningKeyPopulation::getHasInfectionScreen, "是"))
-                .elderSuspiciousSymptomCount(countSuspiciousSymptom(elders))
-                .elderChestXrayAbnormalCount(countChestXrayAbnormal(elders))
-                .elderInfectionAbnormalCount(countInfectionAbnormal(elders))
-                .elderReferralFormCount(countSuspectedTb(elders))
-                .elderArrivedCount(elderArrived)
-                .elderConfirmedTbCount(countConfirmedTb(elders))
-                // 糖尿病：管理数 / 季度随访 / 症状筛查 口径同模板均为单选糖尿病人群总数
-                .diabetesManagedCount(diabetesCount)
-                .diabetesQuarterFollowCount(diabetesCount)
-                .diabetesSymptomScreenCount(diabetesCount)
-                .diabetesChestXrayCount(countKeyEquals(diabetesOnly, ScreeningKeyPopulation::getHasChestXray, "是"))
-                .diabetesInfectionScreenCount(countKeyEquals(diabetesOnly, ScreeningKeyPopulation::getHasInfectionScreen, "是"))
-                .diabetesSuspiciousSymptomCount(countSuspiciousSymptom(diabetesOnly))
-                .diabetesChestXrayAbnormalCount(countChestXrayAbnormal(diabetesOnly))
-                .diabetesInfectionAbnormalCount(countInfectionAbnormal(diabetesOnly))
-                .diabetesReferralFormCount(countSuspectedTb(diabetesOnly))
-                .diabetesArrivedCount(diabetesArrived)
-                .diabetesConfirmedTbCount(countConfirmedTb(diabetesOnly))
-                .build();
+        KeyPopulationTbSymptomReferralStatisticsVO toVo(String district, long elderArrived, long diabetesArrived) {
+            return KeyPopulationTbSymptomReferralStatisticsVO.builder()
+                    .district(district)
+                    // 老年人数：季度报表模板无系统数据来源，留空由页面手工填写
+                    .elderCount(null)
+                    // 参加年度体检人数 / 进行症状筛查人数：老年人及老年人+糖尿病总人数
+                    .elderAnnualExamCount(elderCount)
+                    .elderSymptomScreenCount(elderCount)
+                    .elderChestXrayCount(elderChestXrayCount)
+                    .elderInfectionScreenCount(elderInfectionScreenCount)
+                    .elderSuspiciousSymptomCount(elderSuspiciousSymptomCount)
+                    .elderChestXrayAbnormalCount(elderChestXrayAbnormalCount)
+                    .elderInfectionAbnormalCount(elderInfectionAbnormalCount)
+                    .elderReferralFormCount(elderReferralFormCount)
+                    .elderArrivedCount(elderArrived)
+                    .elderConfirmedTbCount(elderConfirmedTbCount)
+                    // 糖尿病：管理数 / 季度随访 / 症状筛查 口径同模板均为单选糖尿病人群总数
+                    .diabetesManagedCount(diabetesCount)
+                    .diabetesQuarterFollowCount(diabetesCount)
+                    .diabetesSymptomScreenCount(diabetesCount)
+                    .diabetesChestXrayCount(diabetesChestXrayCount)
+                    .diabetesInfectionScreenCount(diabetesInfectionScreenCount)
+                    .diabetesSuspiciousSymptomCount(diabetesSuspiciousSymptomCount)
+                    .diabetesChestXrayAbnormalCount(diabetesChestXrayAbnormalCount)
+                    .diabetesInfectionAbnormalCount(diabetesInfectionAbnormalCount)
+                    .diabetesReferralFormCount(diabetesReferralFormCount)
+                    .diabetesArrivedCount(diabetesArrived)
+                    .diabetesConfirmedTbCount(diabetesConfirmedTbCount)
+                    .build();
+        }
     }
 
     /**
@@ -763,27 +843,19 @@ public class StatisticsServiceImpl implements StatisticsService {
                 && !ScreeningCrowdCategoryFilterSupport.isYes(r.getCrowdCategoryNormal());
     }
 
-    private long countSuspiciousSymptom(List<ScreeningKeyPopulation> list) {
-        return list.stream().filter(r -> {
-            String val = StrUtil.trim(r.getHasSuspiciousSymptoms());
-            return "有".equals(val) || "是".equals(val);
-        }).count();
+    private boolean hasSuspiciousSymptom(ScreeningKeyPopulation r) {
+        String val = StrUtil.trim(r.getHasSuspiciousSymptoms());
+        return "有".equals(val) || "是".equals(val);
     }
 
-    private long countChestXrayAbnormal(List<ScreeningKeyPopulation> list) {
-        return list.stream().filter(r -> {
-            String val = r.getChestXrayResult();
-            return StrUtil.isNotBlank(val) && val.contains("异常");
-        }).count();
+    private boolean isChestXrayAbnormal(ScreeningKeyPopulation r) {
+        String val = r.getChestXrayResult();
+        return StrUtil.isNotBlank(val) && val.contains("异常");
     }
 
     /**
      * 感染筛查异常：官方结果判定阳性档及历史文案（PPD++/+++、EC/IGRA阳性等）。
      */
-    private long countInfectionAbnormal(List<ScreeningKeyPopulation> list) {
-        return list.stream().filter(r -> isInfectionAbnormal(r.getInfectionResult())).count();
-    }
-
     private boolean isInfectionAbnormal(String infectionResult) {
         if (StrUtil.isBlank(infectionResult)) {
             return false;
@@ -792,23 +864,15 @@ public class StatisticsServiceImpl implements StatisticsService {
         return ScreeningDiagnosisSupport.isPositiveInfection(infectionResult);
     }
 
-    private long countSuspectedTb(List<ScreeningKeyPopulation> list) {
-        return list.stream()
-                .filter(r -> ScreeningDiagnosisSupport.isSuspectedTbDiagnosis(r.getDiagnosisFirst()))
-                .count();
-    }
-
-    private long countConfirmedTb(List<ScreeningKeyPopulation> list) {
-        return list.stream().filter(r -> {
-            String diag = StrUtil.trim(r.getDiagnosisFirst());
-            if (StrUtil.isBlank(diag)) {
-                return false;
-            }
-            return "确诊患者".equals(diag)
-                    || "确诊结核".equals(diag)
-                    || "确诊肺结核".equals(diag)
-                    || "在治患者".equals(diag);
-        }).count();
+    private boolean isConfirmedTb(ScreeningKeyPopulation r) {
+        String diag = StrUtil.trim(r.getDiagnosisFirst());
+        if (StrUtil.isBlank(diag)) {
+            return false;
+        }
+        return "确诊患者".equals(diag)
+                || "确诊结核".equals(diag)
+                || "确诊肺结核".equals(diag)
+                || "在治患者".equals(diag);
     }
 
     private List<LatentInfection> queryLatentRecords(String populationType, Set<Long> screeningIds) {
@@ -933,14 +997,6 @@ public class StatisticsServiceImpl implements StatisticsService {
                     String val = getter.apply(r);
                     return StrUtil.isNotBlank(val) && val.contains(keyword);
                 })
-                .count();
-    }
-
-    private long countKeyEquals(List<ScreeningKeyPopulation> list,
-                                java.util.function.Function<ScreeningKeyPopulation, String> getter,
-                                String value) {
-        return list.stream()
-                .filter(r -> value.equals(getter.apply(r)))
                 .count();
     }
 

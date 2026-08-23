@@ -18,14 +18,27 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 查询单条记录详情 */
     ReferralTracking getDetail(Long id);
 
-    /** 分页查询 */
+    /** 分页查询（creatorName/entryUnit 拆分筛选；creatorOrEntryUnit 保留兼容） */
     IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                       String name, String idNumber,
                                       Integer trackingStatus, Integer archived,
                                       String phone, String township,
                                       String dateFrom, String dateTo, String sourceType,
                                       String creatorOrEntryUnit, String columnFilters,
-                                      String createTimeFrom, String createTimeTo);
+                                      String createTimeFrom, String createTimeTo,
+                                      String creatorName, String entryUnit);
+
+    default IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
+                                              String name, String idNumber,
+                                              Integer trackingStatus, Integer archived,
+                                              String phone, String township,
+                                              String dateFrom, String dateTo, String sourceType,
+                                              String creatorOrEntryUnit, String columnFilters,
+                                              String createTimeFrom, String createTimeTo) {
+        return queryPage(page, size, bizMode, name, idNumber, trackingStatus, archived,
+                phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters,
+                createTimeFrom, createTimeTo, null, null);
+    }
 
     default IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                               String name, String idNumber,
@@ -46,6 +59,9 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
         return queryPage(page, size, bizMode, name, idNumber, trackingStatus, archived,
                 phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, null, null, null);
     }
+
+    /** 表头/搜索栏 Excel 式筛选：权限范围内某列去重值 */
+    List<String> listDistinctColumnValues(String field, String bizMode);
 
     /** 大疫情表导入（创建 bizMode=track, sourceType=epidemic 记录） */
     Map<String, Object> previewEpidemicImport(MultipartFile file);
@@ -73,7 +89,18 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
                      String name, String idNumber, String phone, String township,
                      String dateFrom, String dateTo, String sourceType,
                      String creatorOrEntryUnit, List<Long> ids,
-                     String createTimeFrom, String createTimeTo, Integer trackingStatus);
+                     String createTimeFrom, String createTimeTo, Integer trackingStatus,
+                     String creatorName, String entryUnit);
+
+    default void exportTrack(HttpServletResponse response, String bizMode,
+                             String name, String idNumber, String phone, String township,
+                             String dateFrom, String dateTo, String sourceType,
+                             String creatorOrEntryUnit, List<Long> ids,
+                             String createTimeFrom, String createTimeTo, Integer trackingStatus) {
+        exportTrack(response, bizMode, name, idNumber, phone, township,
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, ids, createTimeFrom, createTimeTo,
+                trackingStatus, null, null);
+    }
 
     default void exportTrack(HttpServletResponse response, String bizMode,
                              String name, String idNumber, String phone, String township,
@@ -134,7 +161,17 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     int deleteByFilter(String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
                        String phone, String township, String dateFrom, String dateTo, String sourceType,
                        String creatorOrEntryUnit, String columnFilters,
-                       String createTimeFrom, String createTimeTo);
+                       String createTimeFrom, String createTimeTo,
+                       String creatorName, String entryUnit);
+
+    default int deleteByFilter(String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
+                               String phone, String township, String dateFrom, String dateTo, String sourceType,
+                               String creatorOrEntryUnit, String columnFilters,
+                               String createTimeFrom, String createTimeTo) {
+        return deleteByFilter(bizMode, name, idNumber, trackingStatus, archived, phone, township,
+                dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters,
+                createTimeFrom, createTimeTo, null, null);
+    }
 
     default int deleteByFilter(String bizMode, String name, String idNumber, Integer trackingStatus, Integer archived,
                                String phone, String township, String dateFrom, String dateTo, String sourceType,

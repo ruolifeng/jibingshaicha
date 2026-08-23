@@ -3,12 +3,17 @@
  * 筛查管理 → 推介：抓取行基本信息预填后发送推介通知单
  */
 import PrintRecommend from "@@/components/PrintRecommend.vue"
-import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
+import { REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import {
+  applyReferralChestXrayResult,
+  isReferralChestXrayOther,
+  normalizeReferralInfectionResult,
+  normalizeReferralScreenMethod,
   REFERRAL_CHEST_XRAY_RESULT_OPTIONS,
   REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS,
   REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS,
-  referralSelectOptionsWithLegacy
+  referralSelectOptionsWithLegacy,
+  resolveReferralChestXrayResultForSave
 } from "@@/constants/referral-tracking"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { ElMessage } from "element-plus"
@@ -70,6 +75,8 @@ function createEmptyForm() {
     infectionResult: "",
     chestXrayDate: "",
     chestXrayResult: "",
+    chestXrayRemark: "",
+    diagnosisResult: "",
     recommendUnitName: "",
     fillUserName: "",
     recommendReason: "",
@@ -110,20 +117,23 @@ function resolveCrowdCategoryFromFlags(source: Record<string, any>): string {
 }
 
 function inferScreenMethod(infectionResult: string, screenMethod?: string): string {
-  if (screenMethod) return screenMethod
+  const normalized = normalizeReferralScreenMethod(screenMethod)
+  if (normalized) return normalized
   if (!infectionResult) return ""
-  if (infectionResult.startsWith("PPD")) return "PPD"
-  if (infectionResult.startsWith("EC")) return "EC"
-  if (infectionResult.startsWith("IGRA")) return "IGRA"
+  if (infectionResult.startsWith("PPD")) return "结核菌素皮肤试验_PPD"
+  if (infectionResult.startsWith("EC")) return "结核抗原皮肤试验_EC"
+  if (infectionResult.startsWith("IGRA")) return "Y干扰素释放试验_IGRA"
   return ""
 }
 
 function mapSourceToForm(source: Record<string, any>, defaultCrowdCategory?: string) {
-  const infectionResult = source.infectionResult || source.tbScreenResult || source.screenResult || ""
+  const infectionResult = normalizeReferralInfectionResult(
+    source.infectionResult || source.tbScreenResult || source.screenResult || ""
+  )
   const crowdFromSource
     = normalizeCrowdCategory(source.crowdCategory) || resolveCrowdCategoryFromFlags(source)
 
-  return {
+  const mapped = {
     name: source.name || "",
     gender: source.gender || "",
     birthDate: toDateStr(source.birthDate),
@@ -139,12 +149,16 @@ function mapSourceToForm(source: Record<string, any>, defaultCrowdCategory?: str
     screenMethod: inferScreenMethod(infectionResult, source.screenMethod),
     infectionResult,
     chestXrayDate: toDateStr(source.chestXrayDate),
-    chestXrayResult: source.chestXrayResult || "",
+    chestXrayResult: "",
+    chestXrayRemark: "",
+    diagnosisResult: source.diagnosisResult || "",
     recommendUnitName: userStore.orgName || "",
     fillUserName: userStore.realName || userStore.username || "",
     recommendReason: "",
     receiverUserId: undefined as string | undefined
   }
+  applyReferralChestXrayResult(mapped, source.chestXrayResult)
+  return mapped
 }
 
 function formatLevel34UserLabel(u: any) {
@@ -192,9 +206,18 @@ async function handleSubmit() {
   } catch {
     return
   }
+  if (isReferralChestXrayOther(form.chestXrayResult) && !form.chestXrayRemark.trim()) {
+    ElMessage.warning("请填写胸片检查结果备注")
+    return
+  }
   submitting.value = true
   try {
-    await createReferralWithDuplicateConfirm({ ...form, bizMode: "recommend" })
+    const { chestXrayRemark, ...rest } = form
+    await createReferralWithDuplicateConfirm({
+      ...rest,
+      chestXrayResult: resolveReferralChestXrayResultForSave(form.chestXrayResult, chestXrayRemark),
+      bizMode: "recommend"
+    })
     ElMessage.success("推介通知单已发送")
     close()
     emit("success")
@@ -316,7 +339,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="感染筛查方法">
+          <el-form-item label="感染检测方法">
             <el-select v-model="form.screenMethod" placeholder="请选择" clearable style="width: 100%">
               <el-option
                 v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, form.screenMethod)"
@@ -328,7 +351,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="感染筛查结果">
+          <el-form-item label="感染检测结果">
             <el-select v-model="form.infectionResult" placeholder="请选择" clearable style="width: 100%">
               <el-option
                 v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, form.infectionResult)"
@@ -351,8 +374,14 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="胸片筛查结果">
-            <el-select v-model="form.chestXrayResult" placeholder="请选择" clearable style="width: 100%">
+          <el-form-item label="胸片检查结果">
+            <el-select
+              v-model="form.chestXrayResult"
+              placeholder="请选择"
+              clearable
+              style="width: 100%"
+              @change="() => { if (!isReferralChestXrayOther(form.chestXrayResult)) form.chestXrayRemark = '' }"
+            >
               <el-option
                 v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, form.chestXrayResult)"
                 :key="opt"
@@ -360,6 +389,24 @@ async function handleSubmit() {
                 :value="opt"
               />
             </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col v-if="isReferralChestXrayOther(form.chestXrayResult)" :span="24">
+          <el-form-item label="胸片结果备注">
+            <el-input v-model="form.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="诊断结果">
+            <el-radio-group v-model="form.diagnosisResult">
+              <el-radio
+                v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
+                :key="item.value"
+                :value="item.value"
+              >
+                {{ item.label }}
+              </el-radio>
+            </el-radio-group>
           </el-form-item>
         </el-col>
         <el-col :span="12">

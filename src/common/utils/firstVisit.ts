@@ -1,4 +1,4 @@
-import { SPUTUM_STATUS_OPTIONS } from "@@/constants/disease"
+import { parsePatientTreatmentPlan, SPUTUM_STATUS_OPTIONS } from "@@/constants/disease"
 import { resolveFirstTreatmentPlan, resolveImportFields } from "@@/utils/patient"
 
 /** 首次随访编号：8位数字 */
@@ -21,12 +21,24 @@ export function isValidFirstVisitFormNo(value?: string | null): boolean {
 
 /** 首次随访化疗方案：关联病案「首次治疗方案」预填，已有值则不覆盖 */
 export function applyFirstVisitChemotherapyDefault(
-  form: { chemotherapy?: string },
+  form: { chemotherapy?: string, chemotherapyDetail?: string },
   patientRow: Record<string, any> | null | undefined
 ) {
   if (form.chemotherapy?.trim()) return
   const plan = resolveFirstTreatmentPlan(patientRow)
-  if (plan) form.chemotherapy = plan
+  if (!plan) return
+  const parsed = parsePatientTreatmentPlan(plan)
+  form.chemotherapy = parsed.treatmentPlan
+  form.chemotherapyDetail = parsed.customPlanDetail
+}
+
+/** 将已存化疗方案字符串规范为下拉选项 + 详情（其它敏感方案） */
+export function normalizeFirstVisitChemotherapyFields(
+  form: { chemotherapy?: string, chemotherapyDetail?: string }
+) {
+  const parsed = parsePatientTreatmentPlan(form.chemotherapy, form.chemotherapyDetail)
+  form.chemotherapy = parsed.treatmentPlan
+  form.chemotherapyDetail = parsed.customPlanDetail
 }
 
 /**

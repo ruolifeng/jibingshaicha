@@ -7,6 +7,7 @@ import cn.luyou.model.LatentInfection;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.SupervisionForm;
+import cn.luyou.model.User;
 import cn.luyou.model.VisitSupervisionReminderLog;
 import cn.luyou.model.vo.UpcomingVisitSupervisionVO;
 import cn.luyou.model.vo.VisitSupervisionDispatchResultVO;
@@ -18,6 +19,7 @@ import cn.luyou.service.PatientService;
 import cn.luyou.service.SmsService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.service.SysMessageService;
+import cn.luyou.service.UserService;
 import cn.luyou.service.VisitSupervisionReminderLogService;
 import cn.luyou.service.VisitSupervisionReminderService;
 import cn.luyou.utils.DataScopeHelper;
@@ -60,6 +62,7 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
     private final SysMessageService sysMessageService;
     private final SmsService smsService;
     private final VisitSupervisionReminderLogService reminderLogService;
+    private final UserService userService;
     private final DataScopeHelper dataScopeHelper;
     private final DepartmentFilterSupport departmentFilterSupport;
 
@@ -70,25 +73,111 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
             LocalDate dueDate,
             int leadDays,
             Long sourceId,
-            Long filledBy
+            Long filledBy,
+            /** 督导表管理单位 / 备用展示 */
+            String unitHint
     ) {}
 
     private record LatestVisit(LocalDate visitDate, LocalDate nextDate, Long sourceId, Long filledBy) {}
 
     @Override
     public List<UpcomingVisitSupervisionVO> listUpcoming(List<Long> filterDeptIds) {
-        return collectDue(LocalDate.now(), filterDeptIds, true, false).stream()
+        List<Candidate> candidates = collectDue(LocalDate.now(), filterDeptIds, true, false).stream()
                 .sorted(Comparator.comparingInt(Candidate::leadDays)
                         .thenComparing(Candidate::dueDate)
                         .thenComparing(Candidate::name, Comparator.nullsLast(String::compareTo)))
+                .toList();
+        Map<String, String> orgByCandidateKey = resolveManagerOrgNames(candidates);
+        return candidates.stream()
                 .map(c -> UpcomingVisitSupervisionVO.builder()
                         .type(c.type())
                         .bizId(c.bizId())
                         .name(c.name())
                         .dueDate(c.dueDate())
                         .leadDays(c.leadDays())
+                        .managerOrgName(orgByCandidateKey.get(candidateKey(c)))
                         .build())
                 .toList();
+    }
+
+    private static String candidateKey(Candidate c) {
+        return c.type() + ":" + c.bizId();
+    }
+
+    /**
+     * 管理人对应机构：优先通知单接收人所属机构，其次填写人所属机构，再回退管理单位/服药管理单位。
+     */
+    private Map<String, String> resolveManagerOrgNames(List<Candidate> candidates) {
+        if (candidates.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Notice> noticeByKey = loadLatestNotices(candidates);
+        Set<Long> userIds = new HashSet<>();
+        for (Candidate c : candidates) {
+            Notice notice = noticeByKey.get(candidateKey(c));
+            if (notice != null && notice.getReceiverOrgId() != null) {
+                userIds.add(notice.getReceiverOrgId());
+            }
+            if (c.filledBy() != null) {
+                userIds.add(c.filledBy());
+            }
+        }
+        Map<Long, String> orgByUserId = loadUserOrgNames(userIds);
+        Map<String, String> result = new HashMap<>();
+        for (Candidate c : candidates) {
+            Notice notice = noticeByKey.get(candidateKey(c));
+            String org = null;
+            if (notice != null && notice.getReceiverOrgId() != null) {
+                org = orgByUserId.get(notice.getReceiverOrgId());
+            }
+            if (StrUtil.isBlank(org) && c.filledBy() != null) {
+                org = orgByUserId.get(c.filledBy());
+            }
+            if (StrUtil.isBlank(org) && notice != null) {
+                org = StrUtil.trim(notice.getMedicationManagementUnit());
+            }
+            if (StrUtil.isBlank(org)) {
+                org = StrUtil.trim(c.unitHint());
+            }
+            if (StrUtil.isNotBlank(org)) {
+                result.put(candidateKey(c), org);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Notice> loadLatestNotices(List<Candidate> candidates) {
+        Map<String, Notice> map = new HashMap<>();
+        Map<String, List<Long>> bizIdsByType = candidates.stream()
+                .collect(Collectors.groupingBy(Candidate::type,
+                        Collectors.mapping(Candidate::bizId, Collectors.toList())));
+        for (Map.Entry<String, List<Long>> entry : bizIdsByType.entrySet()) {
+            String noticeType = TYPE_FOLLOW_UP.equals(entry.getKey()) ? "patient" : "latent";
+            List<Long> ids = entry.getValue().stream().distinct().toList();
+            for (Notice notice : listInChunks(ids, chunk -> noticeService.lambdaQuery()
+                    .eq(Notice::getNoticeType, noticeType)
+                    .in(Notice::getBizId, chunk)
+                    .ge(Notice::getStatus, 1)
+                    .orderByDesc(Notice::getId)
+                    .list())) {
+                String key = entry.getKey() + ":" + notice.getBizId();
+                map.putIfAbsent(key, notice);
+            }
+        }
+        return map;
+    }
+
+    private Map<Long, String> loadUserOrgNames(Set<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> map = new HashMap<>();
+        for (User user : userService.listByIds(userIds)) {
+            if (user != null && user.getId() != null && StrUtil.isNotBlank(user.getOrgName())) {
+                map.put(user.getId(), user.getOrgName().trim());
+            }
+        }
+        return map;
     }
 
     @Override
@@ -276,7 +365,7 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
                 continue;
             }
             result.add(new Candidate(TYPE_FOLLOW_UP, patient.getId(), patient.getName(),
-                    entry.getValue().nextDate(), lead, entry.getValue().sourceId(), entry.getValue().filledBy()));
+                    entry.getValue().nextDate(), lead, entry.getValue().sourceId(), entry.getValue().filledBy(), null));
         }
         return result;
     }
@@ -322,8 +411,10 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
             if (latent == null) {
                 continue;
             }
+            String unitHint = StrUtil.blankToDefault(form.getManagingUnit(), form.getPreventiveManager());
             result.add(new Candidate(TYPE_SUPERVISION, latent.getId(), latent.getName(),
-                    form.getNextSupervisionDate(), lead, form.getId(), form.getFilledBy()));
+                    form.getNextSupervisionDate(), lead, form.getId(), form.getFilledBy(),
+                    StrUtil.trim(unitHint)));
         }
         return result;
     }

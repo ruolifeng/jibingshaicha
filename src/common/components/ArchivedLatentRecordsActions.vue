@@ -1,9 +1,14 @@
 <script lang="ts" setup>
-/** 历史潜伏感染者 — 查看关联记录（基本信息、通知单、督导表） */
+/** 历史潜伏感染者 — 查看关联记录（基本信息、通知单、督导表、服药管理） */
+import LatentMedicationDialog from "@@/components/LatentMedicationDialog.vue"
 import LatentNoticeDetailDialog from "@@/components/LatentNoticeDetailDialog.vue"
 import LatentRecordDetailDialog from "@@/components/LatentRecordDetailDialog.vue"
 import SupervisionFormDetailDialog from "@@/components/SupervisionFormDetailDialog.vue"
-import { getSupervisionByIdApi, getSupervisionListApi } from "@/pages/latent-management/apis"
+import {
+  getLatentMedicationApi,
+  getSupervisionByIdApi,
+  getSupervisionListApi
+} from "@/pages/latent-management/apis"
 
 const props = defineProps<{
   row: Record<string, any>
@@ -19,6 +24,7 @@ const supervisionListVisible = ref(false)
 const supervisionListData = ref<any[]>([])
 const supervisionDetailVisible = ref(false)
 const supervisionDetailData = ref<Record<string, any> | null>(null)
+const medicationVisible = ref(false)
 
 function openDetail() {
   detailVisible.value = true
@@ -43,6 +49,17 @@ async function viewSupervisionDetail(record: Record<string, any>) {
     supervisionDetailVisible.value = true
   } catch { /* handled */ }
 }
+
+async function viewMedication() {
+  try {
+    const { data } = await getLatentMedicationApi(props.row.id)
+    if (!data) {
+      ElMessage.info("暂无服药管理记录")
+      return
+    }
+    medicationVisible.value = true
+  } catch { /* handled */ }
+}
 </script>
 
 <template>
@@ -56,6 +73,9 @@ async function viewSupervisionDetail(record: Record<string, any>) {
     <el-button type="info" link size="small" @click="viewSupervisionList">
       督导表
     </el-button>
+    <el-button type="info" link size="small" @click="viewMedication">
+      服药管理记录
+    </el-button>
 
     <LatentRecordDetailDialog
       v-model:visible="detailVisible"
@@ -66,6 +86,12 @@ async function viewSupervisionDetail(record: Record<string, any>) {
       v-model:visible="noticeVisible"
       :latent-row="row"
       @success="emit('success')"
+    />
+
+    <LatentMedicationDialog
+      v-model:visible="medicationVisible"
+      :latent-row="row"
+      read-only
     />
 
     <el-dialog

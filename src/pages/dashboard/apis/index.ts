@@ -117,6 +117,8 @@ export interface UpcomingVisitSupervisionItem {
   name: string
   dueDate: string
   leadDays: number
+  /** 管理人对应机构 */
+  managerOrgName?: string
 }
 
 /** 首页：距下次随访/督导 7/3/1 天的提醒 */

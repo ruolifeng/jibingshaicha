@@ -151,7 +151,7 @@ public class CloseContactCase extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String sputumCheckResult;
 
-    /** 诊断结果（AE列）：活动性肺结核/潜伏感染者/未做/未发现异常 */
+    /** 诊断结果（AE列）：未发现异常/活动性肺结核/疑似肺结核/潜伏感染者/其他（需注明） */
     @ExcelProperty(index = 29)
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String finalScreeningResult;

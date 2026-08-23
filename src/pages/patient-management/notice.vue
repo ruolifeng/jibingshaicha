@@ -3,7 +3,7 @@ import NoticeSentStatusButton from "@@/components/NoticeSentStatusButton.vue"
 import PatientNoticeDetailDialog from "@@/components/PatientNoticeDetailDialog.vue"
 import PatientNoticeFormDialog from "@@/components/PatientNoticeFormDialog.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
-import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS } from "@@/constants/disease"
+import { getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, PATIENT_NOTICE_STATUS_FILTER_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import {
   getPatientTransferStatusLabel,
@@ -42,12 +42,20 @@ const {
   pathogenFilterOptions,
   populationTypeFilterOptions,
   loadGenderOptions,
-  loadPathogenOptions,
   loadPopulationTypeOptions,
   genderSourceValues,
-  pathogenSourceValues,
   populationTypeSourceValues
 } = usePatientTableHeaderFilters(0)
+
+const noticeStatusFilterOptions = PATIENT_NOTICE_STATUS_FILTER_OPTIONS.map(item => ({
+  text: item.label,
+  value: item.value
+}))
+
+function onNoticeStatusFilterChange(value: string) {
+  setFilter("noticeStatus", value)
+  handleSearch()
+}
 
 const noticeDialogVisible = ref(false)
 const noticeDetailVisible = ref(false)
@@ -153,7 +161,7 @@ function getNoticeRowClass({ row }: { row: any }) {
           <el-input v-model="searchForm.phone" placeholder="请输入" clearable style="width:140px" />
         </el-form-item>
         <el-form-item label="病原学结果">
-          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:140px">
+          <el-select v-model="searchForm.diagnosisResult" placeholder="全部" clearable filterable style="width:180px">
             <el-option v-for="item in PATHOGEN_RESULT_FILTER_OPTIONS" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
@@ -184,6 +192,22 @@ function getNoticeRowClass({ row }: { row: any }) {
             <el-option label="推介" value="referral" />
             <el-option label="密接" value="closeContact" />
             <el-option label="专病网" value="specialDisease" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="患者通知单">
+          <el-select
+            :model-value="columnFilters.noticeStatus"
+            placeholder="全部"
+            clearable
+            style="width:140px"
+            @update:model-value="(v: string) => onNoticeStatusFilterChange(v || '')"
+          >
+            <el-option
+              v-for="item in PATIENT_NOTICE_STATUS_FILTER_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -294,8 +318,6 @@ function getNoticeRowClass({ row }: { row: any }) {
               label="病原学结果"
               type="select"
               :options="pathogenFilterOptions"
-              :source-values="pathogenSourceValues"
-              :load-options="loadPathogenOptions"
               :model-value="columnFilters.diagnosisResult"
               @change="(v) => { setFilter('diagnosisResult', v); handleSearch() }"
             />
@@ -341,7 +363,16 @@ function getNoticeRowClass({ row }: { row: any }) {
             {{ row.noticeRemark || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="患者通知单">
+        <el-table-column label="患者通知单" min-width="160">
+          <template #header>
+            <TableHeaderFilter
+              label="患者通知单"
+              type="select"
+              :options="noticeStatusFilterOptions"
+              :model-value="columnFilters.noticeStatus"
+              @change="(v) => onNoticeStatusFilterChange(v)"
+            />
+          </template>
           <template #default="{ row }">
             <template v-if="row.noticeStatus === 1 || row.noticeStatus === 2">
               <el-button type="primary" link size="small" @click="viewNotice(row)">

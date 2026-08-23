@@ -360,9 +360,13 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             }
             String finalResult = getCellString(row, finalResultCol);
             if (StrUtil.isNotBlank(finalResult)
-                    && !isInOptions(finalResult, "活动性肺结核", "潜伏感染者", "未做", "未发现异常")) {
+                    && !isInOptions(finalResult, "未发现异常", "活动性肺结核", "疑似肺结核", "潜伏感染者",
+                    "其他（需注明）", "其他", "其它", "未做")
+                    && !finalResult.startsWith("其他（需注明）")
+                    && !finalResult.startsWith("其他：")
+                    && !finalResult.startsWith("其它：")) {
                 result.add(err(excelRowIndex, name, finalResultCol,
-                        "最终筛查结果仅支持：活动性肺结核/潜伏感染者/未做/未发现异常"));
+                        "最终筛查结果仅支持：未发现异常/活动性肺结核/疑似肺结核/潜伏感染者/其他（需注明）"));
             }
         }
         return result;

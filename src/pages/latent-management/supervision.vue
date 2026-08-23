@@ -15,6 +15,7 @@ import { deleteSupervisionApi, exportLatentSupervisionFormsApi, getLatentAggrega
 import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
 const userStore = useUserStore()
+const route = useRoute()
 const { paginationData, handleCurrentChange, handleSizeChange, getTableIndex } = usePagination()
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
 
@@ -84,6 +85,26 @@ function handleReset() {
   handleSearch()
 }
 
+/** 首页到期提醒「前往填写」带入姓名，返回是否发生变更 */
+function syncNameFromRoute() {
+  const name = typeof route.query.name === "string" ? route.query.name.trim() : ""
+  if (!name || searchForm.name === name) return false
+  searchForm.name = name
+  paginationData.currentPage = 1
+  return true
+}
+
+onMounted(() => {
+  syncNameFromRoute()
+  fetchData()
+})
+onActivated(() => {
+  if (syncNameFromRoute()) fetchData()
+})
+watch(() => route.query.name, () => {
+  if (syncNameFromRoute()) fetchData()
+})
+
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
 
@@ -137,7 +158,6 @@ function handleExportSelected() {
   handleExport("selected", ids)
 }
 
-onMounted(fetchData)
 watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
 
 function getSupervisionStatusType(status?: number): "success" | "warning" | "info" {
@@ -419,7 +439,7 @@ async function handleDelete(row: Record<string, any>) {
               填写督导表
             </el-button>
             <el-button type="info" link size="small" @click="viewHistory(row)">
-              查看记录
+              查看督导表记录
             </el-button>
           </template>
         </el-table-column>

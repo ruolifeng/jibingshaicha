@@ -34,17 +34,22 @@ export const REFERRAL_CROWD_CATEGORY_OPTIONS = [
   "非重点人群"
 ]
 
-/** 治疗方案选项（8种，V5新增"不服药"） */
+/** 患者管理：其它敏感方案（需手动录入详情） */
+export const PATIENT_OTHER_SENSITIVE_PLAN = "其它敏感方案"
+
+/** 患者管理治疗方案选项（通知单 / 首次随访 / 后续随访） */
 export const TREATMENT_PLAN_OPTIONS = [
-  "FDC-2HRZE/4HR",
   "2HRZE/4HR",
-  "FDC-2HRZES/6HRE",
-  "2HRZES/6HRE",
-  "FDC-2HRZE/10HRE",
+  "2HRZE/7-10HRE",
   "2HRZE/10HRE",
-  "个体化方案",
-  "不服药"
+  "6-9RZELfx",
+  PATIENT_OTHER_SENSITIVE_PLAN
 ]
+
+/** 是否为患者「其它敏感方案」（含历史「个体化方案」） */
+export function isPatientOtherSensitivePlan(plan?: string | null): boolean {
+  return plan === PATIENT_OTHER_SENSITIVE_PLAN || plan === "个体化方案"
+}
 
 /** 追踪状态 */
 export const TRACKING_STATUS_MAP: Record<number, string> = {
@@ -79,11 +84,18 @@ export const DIAGNOSIS_RESULT_OPTIONS = [
 /** 推介追踪 — 录入诊断结果选项（追踪到位后） */
 export const REFERRAL_TRACKING_DIAGNOSIS_OPTIONS = [
   { label: "排除", value: "排除" },
-  { label: "确诊患者", value: "确诊患者" },
+  { label: "正常", value: "正常" },
+  { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
+  { label: "确诊结核", value: "确诊结核" },
   { label: "潜伏感染者", value: "潜伏感染者" },
-  { label: "其他", value: "其他" }
+  { label: "在治患者", value: "在治患者" }
 ] as const
 
+/** 推介追踪诊断结果：是否为标红结案类（不进患者管理） */
+export function isReferralConfirmedDiagnosis(result?: string | null): boolean {
+  const text = (result || "").trim()
+  return text === "确诊结核" || text === "确诊患者" || text === "在治患者"
+}
 /**
  * 转诊结果选项（前端驱动转诊弹窗，基于 diagnosisFirst 自动映射）
  * V4 新增 suspected（疑似结核）
@@ -346,17 +358,20 @@ export const NOTICE_STATUS_MAP: Record<number, string> = {
 /** 潜伏感染者个体方案选项值 */
 export const LATENT_INDIVIDUAL_PLAN = "个体方案（需手动录入）"
 
-/** 历史错误选项「3HP」→ 正确为「3HR」 */
+/** 历史治疗方案文案 → 现行标准选项 */
 const LATENT_TREATMENT_PLAN_LEGACY: Record<string, string> = {
-  "3HP": "3HR"
+  "3HR/4R": "4R",
+  "母牛分枝杆菌": "注射用母牛分枝杆菌(微卡）"
 }
 
-/** 潜伏感染者治疗方案选项（与患者管理治疗方案不同） */
+/** 潜伏感染者治疗方案选项（督导表 / 通知单 / 密接个案预防性治疗方案共用） */
 export const LATENT_TREATMENT_PLAN_OPTIONS = [
   "6H/9H",
   "3HR",
-  "3HR/4R",
-  "母牛分枝杆菌",
+  "4R",
+  "3HP",
+  "6Lfx",
+  "注射用母牛分枝杆菌(微卡）",
   LATENT_INDIVIDUAL_PLAN,
   "不服药"
 ]
@@ -448,24 +463,76 @@ export function formatLatentSupervisionTreatmentPlan(treatmentPlan: string, cust
 /** 患者类型（患者通知单） */
 export const PATIENT_TYPE_OPTIONS = ["初治", "复治"]
 
-/** 患者通知单：将治疗方案字符串回填到表单（含个体化方案） */
-export function applyPatientNoticeTreatmentPlan(
-  form: { treatmentPlan: string, customPlanDetail: string },
-  plan?: string
-) {
+/**
+ * 解析患者治疗方案（表单回填）
+ * - 标准选项原样回填
+ * - 「其它敏感方案：xxx」/「个体化方案：xxx」前缀解析为选项 + 详情
+ * - 旧选项（FDC-*、不服药、个体化方案等）及自由文本 → 其它敏感方案 + 详情
+ */
+export function parsePatientTreatmentPlan(
+  plan?: string | null,
+  customPlanDetail?: string | null
+): { treatmentPlan: string, customPlanDetail: string } {
   const tp = (plan || "").trim()
+  const detail = (customPlanDetail || "").trim()
   if (!tp) {
-    form.treatmentPlan = ""
-    form.customPlanDetail = ""
-    return
+    return { treatmentPlan: "", customPlanDetail: detail }
+  }
+
+  const legacyPrefix = "个体化方案："
+  const otherPrefix = `${PATIENT_OTHER_SENSITIVE_PLAN}：`
+  if (tp.startsWith(legacyPrefix)) {
+    return {
+      treatmentPlan: PATIENT_OTHER_SENSITIVE_PLAN,
+      customPlanDetail: detail || tp.slice(legacyPrefix.length)
+    }
+  }
+  if (tp.startsWith(otherPrefix)) {
+    return {
+      treatmentPlan: PATIENT_OTHER_SENSITIVE_PLAN,
+      customPlanDetail: detail || tp.slice(otherPrefix.length)
+    }
+  }
+  if (isPatientOtherSensitivePlan(tp)) {
+    return {
+      treatmentPlan: PATIENT_OTHER_SENSITIVE_PLAN,
+      customPlanDetail: detail
+    }
   }
   if (!TREATMENT_PLAN_OPTIONS.includes(tp)) {
-    form.treatmentPlan = "个体化方案"
-    form.customPlanDetail = tp
-  } else {
-    form.treatmentPlan = tp
-    form.customPlanDetail = ""
+    return {
+      treatmentPlan: PATIENT_OTHER_SENSITIVE_PLAN,
+      customPlanDetail: detail || tp
+    }
   }
+  return {
+    treatmentPlan: tp,
+    customPlanDetail: detail
+  }
+}
+
+/** 患者通知单 / 随访：将治疗方案字符串回填到表单（含其它敏感方案） */
+export function applyPatientNoticeTreatmentPlan(
+  form: { treatmentPlan: string, customPlanDetail: string },
+  plan?: string | null,
+  customPlanDetail?: string | null
+) {
+  const parsed = parsePatientTreatmentPlan(plan, customPlanDetail)
+  form.treatmentPlan = parsed.treatmentPlan
+  form.customPlanDetail = parsed.customPlanDetail
+}
+
+/**
+ * 患者治疗方案保存：选「其它敏感方案」时提交详情文本（与历史个体化逻辑一致）
+ */
+export function resolvePatientTreatmentPlanForSave(
+  plan?: string | null,
+  detail?: string | null
+): string {
+  if (isPatientOtherSensitivePlan(plan)) {
+    return (detail || "").trim() || PATIENT_OTHER_SENSITIVE_PLAN
+  }
+  return (plan || "").trim()
 }
 
 /** 患者通知单管理方式 */
@@ -475,15 +542,32 @@ export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导"
 export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "病原学结果阳性", "未做", "未知"]
 
 /**
- * 患者列表「病原学结果」筛选项。
- * 含表单标准项 + 专病网等导入常见值（结核性胸膜炎、病原学阳/阴性）。
+ * 患者列表「病原学结果」筛选项（上方搜索与表头筛选共用）。
+ * 不含「病原学阳性/阴性」等别名——选「阳性/阴性」时后端会自动匹配别名。
+ * 「-」表示列表展示为空（无病原学结果）。
  */
 export const PATHOGEN_RESULT_FILTER_OPTIONS = [
   ...PATHOGEN_RESULT_OPTIONS,
   "结核性胸膜炎",
-  "病原学阳性",
-  "病原学阴性"
+  "-"
 ] as const
+
+/** 在管总览 — 通知单状态筛选 */
+export const PATIENT_NOTICE_STATUS_FILTER_OPTIONS = [
+  { label: "未发送", value: "none" },
+  { label: "草稿", value: "0" },
+  { label: "已发送", value: "1" },
+  { label: "已确认", value: "2" }
+] as const
+
+/** 在管总览 — 首次随访 / 后续随访完成情况筛选 */
+export const PATIENT_VISIT_STATUS_FILTER_OPTIONS = [
+  { label: "待填写", value: "pending" },
+  { label: "已完成", value: "done" }
+] as const
+
+/** 在管总览 — 服药管理完成情况筛选 */
+export const PATIENT_MEDICATION_STATUS_FILTER_OPTIONS = ["待填写", "进行中", "已完成"] as const
 
 /** 感染检查方法（通知单等短码） */
 export const INFECTION_METHOD_OPTIONS = ["PPD", "EC", "IGRA"]

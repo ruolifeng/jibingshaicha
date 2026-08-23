@@ -208,7 +208,7 @@ async function handleSubmit() {
 <template>
   <el-dialog
     :model-value="visible"
-    :title="isCreate ? '新增患者' : '修改患者信息'"
+    :title="isCreate ? '新增患者' : '编辑患者信息'"
     width="720px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"

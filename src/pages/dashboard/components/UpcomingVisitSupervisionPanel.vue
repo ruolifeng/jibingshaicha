@@ -36,12 +36,17 @@ function leadLabel(days: number) {
   return `${days} 天`
 }
 
+/** 跳转对应填写页，并带上姓名便于列表预筛 */
 function goFill(row: UpcomingVisitSupervisionItem) {
+  const query = {
+    name: row.name || undefined,
+    id: row.bizId || undefined
+  }
   if (row.type === "follow_up") {
-    router.push("/patient-management/follow-up")
+    router.push({ path: "/patient-management/follow-up", query })
     return
   }
-  router.push("/latent-management/supervision")
+  router.push({ path: "/latent-management/supervision", query })
 }
 
 watch(() => props.departmentIds, () => fetchData(), { deep: true })
@@ -60,10 +65,10 @@ defineExpose({ refresh: fetchData })
       <span class="section-hint">展示未来 7 天内到期项；系统在提前 7/3/1 天发送站内提醒</span>
     </div>
     <div class="summary-row">
-      <el-tag type="warning" effect="plain">
+      <el-tag type="warning" effect="dark" class="summary-tag">
         后续随访 {{ followUpCount }} 人
       </el-tag>
-      <el-tag type="success" effect="plain">
+      <el-tag type="success" effect="plain" class="summary-tag">
         后续督导 {{ supervisionCount }} 人
       </el-tag>
     </div>
@@ -75,7 +80,12 @@ defineExpose({ refresh: fetchData })
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="姓名" min-width="120" />
+      <el-table-column prop="name" label="姓名" min-width="110" show-overflow-tooltip />
+      <el-table-column prop="managerOrgName" label="管理人对应机构" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ row.managerOrgName || "—" }}
+        </template>
+      </el-table-column>
       <el-table-column prop="dueDate" label="计划日期" width="130" />
       <el-table-column label="剩余天数" width="110">
         <template #default="{ row }">
@@ -92,7 +102,7 @@ defineExpose({ refresh: fetchData })
         </template>
       </el-table-column>
       <template #empty>
-        <el-empty description="近 7/3/1 天内暂无到期随访或督导" :image-size="64" />
+        <el-empty description="近 7 天内暂无到期随访或督导" :image-size="64" />
       </template>
     </el-table>
   </div>
@@ -130,5 +140,12 @@ defineExpose({ refresh: fetchData })
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.summary-tag {
+  font-size: 13px;
+  padding: 0 14px;
+  height: 28px;
+  line-height: 26px;
 }
 </style>

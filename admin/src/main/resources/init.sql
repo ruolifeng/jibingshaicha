@@ -1786,7 +1786,7 @@ INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sor
 (440, 'referralManagement:epidemicImport','大疫情导入',          2, 439, 1),
 (435, 'referralManagement:trackOperate', '操作追踪状态',         2, 439, 2),
 (442, 'referralManagement:edit',           '编辑追踪记录',         2, 439, 3),
-(436, 'referralManagement:xray',         '录入胸片',             2, 439, 4),
+(436, 'referralManagement:xray',         '录入感染检测结果及胸片结果', 2, 439, 4),
 (437, 'referralManagement:diagnosis',    '录入诊断',             2, 439, 5),
 (441, 'referralManagement:export',       '导出推介/追踪记录',    2, 430, 3);
 
@@ -4065,7 +4065,7 @@ UPDATE `permission` child
          INNER JOIN `permission` parent ON parent.`code` = 'referralManagement:track'
 SET child.`parent_id` = parent.id,
     child.`sort` = 4,
-    child.`name` = '录入胸片'
+    child.`name` = '录入感染检测结果及胸片结果'
 WHERE child.`code` = 'referralManagement:xray';
 
 UPDATE `permission` child

@@ -79,17 +79,17 @@ function val(key: string) {
           <tr>
             <th>感染筛查时间</th>
             <td>{{ val("screenDate") }}</td>
-            <th>感染筛查方法</th>
+            <th>感染检测方法</th>
             <td>{{ val("screenMethod") }}</td>
           </tr>
           <tr>
-            <th>感染筛查结果</th>
+            <th>感染检测结果</th>
             <td>{{ val("infectionResult") }}</td>
             <th>胸片筛查时间</th>
             <td>{{ val("chestXrayDate") }}</td>
           </tr>
           <tr>
-            <th>胸片筛查结果</th>
+            <th>胸片检查结果</th>
             <td colspan="3">
               {{ val("chestXrayResult") }}
             </td>

@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-import type { InputInstance } from "element-plus"
-import { REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
+import {
+  isReferralConfirmedDiagnosis,
+  REFERRAL_TRACKING_DIAGNOSIS_OPTIONS
+} from "@@/constants/disease"
 import { saveDiagnosisApi } from "@/pages/referral-management/apis"
 
 const props = defineProps<{
@@ -14,23 +16,11 @@ const emit = defineEmits<{
 }>()
 
 const diagnosisResult = ref("")
-const diagnosisRemark = ref("")
-const remarkInputRef = ref<InputInstance>()
 const saving = ref(false)
 
 watch(() => props.visible, (val) => {
   if (!val) return
   diagnosisResult.value = ""
-  diagnosisRemark.value = ""
-})
-
-watch(diagnosisResult, async (val) => {
-  if (val !== "其他") {
-    diagnosisRemark.value = ""
-    return
-  }
-  await nextTick()
-  remarkInputRef.value?.focus()
 })
 
 function close() {
@@ -43,20 +33,12 @@ async function handleSave() {
     ElMessage.warning("请选择诊断结果")
     return
   }
-  if (diagnosisResult.value === "其他" && !diagnosisRemark.value.trim()) {
-    ElMessage.warning("选择其他时请填写备注")
-    return
-  }
 
   saving.value = true
   try {
-    await saveDiagnosisApi(
-      props.recordId,
-      diagnosisResult.value,
-      diagnosisRemark.value.trim() || undefined
-    )
+    await saveDiagnosisApi(props.recordId, diagnosisResult.value)
     ElMessage.success(
-      diagnosisResult.value === "确诊患者"
+      isReferralConfirmedDiagnosis(diagnosisResult.value)
         ? "诊断结果已保存，该记录已标红结案"
         : "诊断结果已保存"
     )
@@ -72,7 +54,7 @@ async function handleSave() {
   <el-dialog
     :model-value="visible"
     title="录入诊断结果"
-    width="480px"
+    width="560px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
@@ -88,20 +70,9 @@ async function handleSave() {
           </el-radio>
         </el-radio-group>
       </el-form-item>
-      <el-form-item v-if="diagnosisResult === '其他'" label="备注" required>
-        <el-input
-          ref="remarkInputRef"
-          v-model="diagnosisRemark"
-          type="textarea"
-          :rows="3"
-          maxlength="500"
-          show-word-limit
-          placeholder="请输入其他诊断结果说明"
-        />
-      </el-form-item>
       <el-alert
-        v-if="diagnosisResult === '确诊患者'"
-        title="确诊患者将标红结案，不进入【患者管理】模块"
+        v-if="isReferralConfirmedDiagnosis(diagnosisResult)"
+        title="确诊结核 / 在治患者将标红结案，不进入【患者管理】模块"
         type="warning"
         :closable="false"
         style="margin-top: 8px"
