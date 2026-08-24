@@ -328,7 +328,7 @@ async function handleSubmit() {
           </el-divider>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="感染筛查时间">
+          <el-form-item label="感染检测时间">
             <el-date-picker
               v-model="form.screenDate"
               type="date"
@@ -363,7 +363,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="胸片筛查时间">
+          <el-form-item label="胸片检查日期">
             <el-date-picker
               v-model="form.chestXrayDate"
               type="date"
@@ -374,7 +374,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="胸片检查结果">
+          <el-form-item label="胸片结果">
             <el-select
               v-model="form.chestXrayResult"
               placeholder="请选择"

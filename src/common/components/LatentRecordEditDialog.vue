@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import {
   CHEST_XRAY_RESULT_OPTIONS,
+  CROWD_CATEGORY_OPTIONS,
   displayInfectionJudgeResult,
   displayInfectionScreenMethod,
   infectionJudgeSelectOptions,
@@ -35,6 +36,10 @@ const showKeyPopulationSubCategories = computed(() =>
 const showCloseContactType = computed(() =>
   showCrowdCategoryFields.value && form.populationType === "closeContact"
 )
+/** 非重点人群/密接时，使用通用人群分类下拉 */
+const showGeneralCrowdCategory = computed(() =>
+  showCrowdCategoryFields.value && !showKeyPopulationSubCategories.value && !showCloseContactType.value
+)
 const isSchoolSource = computed(() => form.populationType === "school")
 const screenMethodOptions = computed(() =>
   isSchoolSource.value ? SCHOOL_SCREEN_METHOD_OPTIONS : [...KEY_INFECTION_SCREEN_METHOD_OPTIONS]
@@ -58,6 +63,7 @@ const form = reactive({
   populationType: "",
   keyPopulationSubCategories: [] as string[],
   closeContactType: "",
+  crowdCategory: "",
   name: "",
   gender: "",
   age: null as number | null,
@@ -95,6 +101,9 @@ const rules = computed(() => ({
   ...(showCloseContactType.value
     ? { closeContactType: [{ required: true, message: "请选择人群分类", trigger: "change" }] }
     : {}),
+  ...(showGeneralCrowdCategory.value && isCreate.value
+    ? { crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }] }
+    : {}),
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
   idNumber: [idCardRule(false)],
   phone: [phoneRule(!isCreate.value)]
@@ -107,6 +116,7 @@ function resetForm() {
     populationType: "",
     keyPopulationSubCategories: [],
     closeContactType: "",
+    crowdCategory: "",
     name: "",
     gender: "",
     age: null,
@@ -139,6 +149,7 @@ function normalizeCrowdCategoryRaw(raw?: string | null) {
 function parseCrowdCategory(data: { populationType?: string, crowdCategory?: string, contactType?: string }) {
   form.keyPopulationSubCategories = []
   form.closeContactType = ""
+  form.crowdCategory = ""
   const crowdCategory = normalizeCrowdCategoryRaw(data.crowdCategory || data.contactType)
   if (!crowdCategory) return
   if (data.populationType === "keyPopulation") {
@@ -152,6 +163,8 @@ function parseCrowdCategory(data: { populationType?: string, crowdCategory?: str
     if (LATENT_CLOSE_CONTACT_TYPE_OPTIONS.includes(type as typeof LATENT_CLOSE_CONTACT_TYPE_OPTIONS[number])) {
       form.closeContactType = type
     }
+  } else {
+    form.crowdCategory = crowdCategory
   }
 }
 
@@ -162,7 +175,7 @@ function buildCrowdCategory() {
   if (form.populationType === "closeContact") {
     return form.closeContactType
   }
-  return ""
+  return form.crowdCategory.trim()
 }
 
 async function loadDetail() {
@@ -232,6 +245,7 @@ watch(() => form.populationType, (val, oldVal) => {
   if (loadingDetail.value || val === oldVal) return
   form.keyPopulationSubCategories = []
   form.closeContactType = ""
+  form.crowdCategory = ""
   // 切换数据来源时清空口径不同的感染字段，避免提交非法值
   if (oldVal) {
     form.screenMethod = ""
@@ -329,37 +343,6 @@ async function handleSubmit() {
             </el-select>
           </el-form-item>
         </el-col>
-        <el-col v-if="showKeyPopulationSubCategories" :span="12">
-          <el-form-item label="人群分类" prop="keyPopulationSubCategories">
-            <el-select
-              v-model="form.keyPopulationSubCategories"
-              multiple
-              collapse-tags
-              collapse-tags-tooltip
-              placeholder="请选择（可多选：老年人/糖尿病/双感）"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="item in LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS"
-                :key="item"
-                :label="item"
-                :value="item"
-              />
-            </el-select>
-          </el-form-item>
-        </el-col>
-        <el-col v-if="showCloseContactType" :span="12">
-          <el-form-item label="人群分类" prop="closeContactType">
-            <el-select v-model="form.closeContactType" placeholder="请选择（家庭内/家庭外）" style="width: 100%">
-              <el-option
-                v-for="item in LATENT_CLOSE_CONTACT_TYPE_OPTIONS"
-                :key="item"
-                :label="item"
-                :value="item"
-              />
-            </el-select>
-          </el-form-item>
-        </el-col>
         <el-col :span="12">
           <el-form-item label="姓名" prop="name">
             <el-input v-model="form.name" />
@@ -393,6 +376,65 @@ async function handleSubmit() {
             <el-input v-model="form.phoneContactRelation" placeholder="如：本人、母亲" />
           </el-form-item>
         </el-col>
+        <el-col v-if="showCrowdCategoryFields" :span="12">
+          <el-form-item
+            v-if="showKeyPopulationSubCategories"
+            label="人群分类"
+            prop="keyPopulationSubCategories"
+          >
+            <el-select
+              v-model="form.keyPopulationSubCategories"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="请选择（可多选：老年人/糖尿病/双感）"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item
+            v-else-if="showCloseContactType"
+            label="人群分类"
+            prop="closeContactType"
+          >
+            <el-select v-model="form.closeContactType" placeholder="请选择（家庭内/家庭外）" style="width: 100%">
+              <el-option
+                v-for="item in LATENT_CLOSE_CONTACT_TYPE_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item
+            v-else
+            label="人群分类"
+            prop="crowdCategory"
+          >
+            <el-select
+              v-model="form.crowdCategory"
+              placeholder="请选择"
+              clearable
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in CROWD_CATEGORY_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
         <el-col :span="24">
           <el-form-item label="户籍地址">
             <el-input v-model="form.householdAddress" />
@@ -415,7 +457,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="感染筛查方法">
+          <el-form-item label="感染检测方法">
             <el-select
               v-model="form.screenMethod"
               placeholder="请选择"

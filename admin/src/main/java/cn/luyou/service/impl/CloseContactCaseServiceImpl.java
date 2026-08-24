@@ -64,13 +64,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "year", "city", "district", "gender", "idNumber", "phone",
             "sourcePatientName", "sourcePatientBacteriologyResult", "finalScreeningResult",
-            "infectionCheckResult", "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
+            "infectionCheckMethod", "infectionCheckResult", "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
             "remark", "creatorUsername"
     );
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
             "district", "city", "year", "gender", "sourcePatientBacteriologyResult",
-            "finalScreeningResult", "infectionCheckResult", "imagingResult",
+            "finalScreeningResult", "infectionCheckMethod", "infectionCheckResult", "imagingResult",
             "sputumCheckResult", "hasPreventiveTreatment"
     );
 
@@ -268,7 +268,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         Map<String, String> filters = ColumnFilterSupport.parse(columnFilters);
         ColumnFilterSupport.applyLambda(filters, COLUMN_FILTER_WHITELIST, (field, value) -> {
             switch (field) {
-                case "name" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getName, value);
+                case "name" -> applyNameFilter(wrapper, value);
                 case "year" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getYear, value);
                 case "city" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getCity, value);
                 case "district" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getDistrict, value);
@@ -276,8 +276,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 case "idNumber" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getIdNumber, value);
                 case "phone" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getPhone, value);
                 case "sourcePatientName" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getSourcePatientName, value);
-                case "sourcePatientBacteriologyResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSourcePatientBacteriologyResult, value);
-                case "finalScreeningResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getFinalScreeningResult, value);
+                case "sourcePatientBacteriologyResult" -> applyBacteriologyResultFilter(wrapper, value);
+                case "finalScreeningResult" -> applyFinalScreeningResultFilter(wrapper, value);
+                case "infectionCheckMethod" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getInfectionCheckMethod, value);
                 case "infectionCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getInfectionCheckResult, value);
                 case "imagingResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getImagingResult, value);
                 case "sputumCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSputumCheckResult, value);
@@ -426,19 +427,143 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(createTimeFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(createTimeTo);
         LambdaQueryWrapper<CloseContactCase> wrapper = new LambdaQueryWrapper<>();
-        wrapper.like(StrUtil.isNotBlank(name), CloseContactCase::getName, name)
-                .eq(StrUtil.isNotBlank(idNumber), CloseContactCase::getIdNumber, idNumber)
+        applyNameFilter(wrapper, name);
+        wrapper.eq(StrUtil.isNotBlank(idNumber), CloseContactCase::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), CloseContactCase::getPhone, phone)
                 .like(StrUtil.isNotBlank(creatorUsername), CloseContactCase::getCreatorUsername, creatorUsername)
                 .ge(createFrom != null, CloseContactCase::getCreateTime, createFrom)
                 .le(createTo != null, CloseContactCase::getCreateTime, createTo);
         ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getDistrict, district);
-        ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getFinalScreeningResult, diagnosisResult);
-        ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSourcePatientBacteriologyResult,
-                sourcePatientBacteriologyResult);
+        applyFinalScreeningResultFilter(wrapper, diagnosisResult);
+        applyBacteriologyResultFilter(wrapper, sourcePatientBacteriologyResult);
         applyReportQuarterFilter(wrapper, reportQuarter);
         IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         return wrapper;
+    }
+
+    /** 姓名：同时匹配接触者姓名、原患者姓名 */
+    private void applyNameFilter(LambdaQueryWrapper<CloseContactCase> wrapper, String name) {
+        if (StrUtil.isBlank(name)) {
+            return;
+        }
+        String keyword = name.trim();
+        wrapper.and(w -> w.like(CloseContactCase::getName, keyword)
+                .or()
+                .like(CloseContactCase::getSourcePatientName, keyword));
+    }
+
+    /**
+     * 最终筛查结果筛选：兼容括号全半角、「其他：备注」前缀、历史别名（疑似结核/活动性肺结核等）。
+     */
+    private void applyFinalScreeningResultFilter(LambdaQueryWrapper<CloseContactCase> wrapper, String rawFilter) {
+        if (StrUtil.isBlank(rawFilter)) {
+            return;
+        }
+        java.util.LinkedHashSet<String> exactValues = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> likePrefixes = new java.util.LinkedHashSet<>();
+        for (String raw : ColumnFilterSupport.splitValues(rawFilter)) {
+            String item = StrUtil.trim(raw);
+            if (StrUtil.isBlank(item)) {
+                continue;
+            }
+            exactValues.addAll(cn.luyou.utils.ScreeningDiagnosisSupport.resolveCloseContactDiagnosisFilterValues(item));
+            exactValues.add(item);
+            exactValues.add(item.replace('(', '（').replace(')', '）'));
+            exactValues.add(item.replace('（', '(').replace('）', ')'));
+            if (isOtherFinalScreeningLabel(item)) {
+                exactValues.add("其他（需注明）");
+                exactValues.add("其他(需注明)");
+                exactValues.add("其它（需注明）");
+                exactValues.add("其它(需注明)");
+                exactValues.add("其他");
+                exactValues.add("其它");
+                likePrefixes.add("其他（需注明）");
+                likePrefixes.add("其他(需注明)");
+                likePrefixes.add("其它（需注明）");
+                likePrefixes.add("其它(需注明)");
+                likePrefixes.add("其他：");
+                likePrefixes.add("其它：");
+                likePrefixes.add("其他:");
+                likePrefixes.add("其它:");
+            } else if (item.contains("疑似")) {
+                exactValues.add("疑似肺结核");
+                exactValues.add("疑似结核");
+            } else if (item.contains("活动性") || "确诊患者".equals(item) || "确诊结核".equals(item) || "在治患者".equals(item)) {
+                exactValues.add("活动性肺结核");
+                exactValues.add("确诊患者");
+                exactValues.add("确诊结核");
+                exactValues.add("在治患者");
+            } else if ("未发现异常".equals(item) || "排除".equals(item) || "正常".equals(item)) {
+                exactValues.add("未发现异常");
+                exactValues.add("排除");
+                exactValues.add("正常");
+            }
+        }
+        exactValues.removeIf(StrUtil::isBlank);
+        if (exactValues.isEmpty() && likePrefixes.isEmpty()) {
+            return;
+        }
+        wrapper.and(w -> {
+            boolean first = true;
+            if (!exactValues.isEmpty()) {
+                w.in(CloseContactCase::getFinalScreeningResult, exactValues);
+                first = false;
+            }
+            for (String prefix : likePrefixes) {
+                if (!first) {
+                    w.or();
+                }
+                w.likeRight(CloseContactCase::getFinalScreeningResult, prefix);
+                first = false;
+            }
+        });
+    }
+
+    private static boolean isOtherFinalScreeningLabel(String value) {
+        if (StrUtil.isBlank(value)) {
+            return false;
+        }
+        String normalized = value.replace('(', '（').replace(')', '）').trim();
+        return "其他（需注明）".equals(normalized)
+                || "其它（需注明）".equals(normalized)
+                || "其他".equals(normalized)
+                || "其它".equals(normalized)
+                || normalized.startsWith("其他（需注明）")
+                || normalized.startsWith("其它（需注明）");
+    }
+
+    /**
+     * 病原学结果筛选：兼容阳性/阴性与「病原学阳性/阴性」等别名，以及首尾空白。
+     */
+    private void applyBacteriologyResultFilter(LambdaQueryWrapper<CloseContactCase> wrapper, String rawFilter) {
+        if (StrUtil.isBlank(rawFilter)) {
+            return;
+        }
+        java.util.LinkedHashSet<String> exactValues = new java.util.LinkedHashSet<>();
+        for (String raw : ColumnFilterSupport.splitValues(rawFilter)) {
+            String item = StrUtil.trim(raw);
+            if (StrUtil.isBlank(item)) {
+                continue;
+            }
+            exactValues.add(item);
+            if ("阳性".equals(item) || "病原学阳性".equals(item) || "病原学结果阳性".equals(item)) {
+                exactValues.add("阳性");
+                exactValues.add("病原学阳性");
+                exactValues.add("病原学结果阳性");
+            } else if ("阴性".equals(item) || "病原学阴性".equals(item) || "病原学结果阴性".equals(item)) {
+                exactValues.add("阴性");
+                exactValues.add("病原学阴性");
+                exactValues.add("病原学结果阴性");
+            } else if ("无结果".equals(item) || "未出结果".equals(item) || "未知".equals(item)) {
+                exactValues.add("无结果");
+                exactValues.add("未出结果");
+                exactValues.add("未知");
+            }
+        }
+        if (exactValues.isEmpty()) {
+            return;
+        }
+        wrapper.in(CloseContactCase::getSourcePatientBacteriologyResult, exactValues);
     }
 
     /** 报表填报季度按密切接触者登记日期所在季度筛选（衍生列不落库；支持多季度逗号分隔）。 */
@@ -575,6 +700,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             case "finalScreeningResult" -> wrapper.select(CloseContactCase::getFinalScreeningResult)
                     .isNotNull(CloseContactCase::getFinalScreeningResult).ne(CloseContactCase::getFinalScreeningResult, "")
                     .groupBy(CloseContactCase::getFinalScreeningResult);
+            case "infectionCheckMethod" -> wrapper.select(CloseContactCase::getInfectionCheckMethod)
+                    .isNotNull(CloseContactCase::getInfectionCheckMethod).ne(CloseContactCase::getInfectionCheckMethod, "")
+                    .groupBy(CloseContactCase::getInfectionCheckMethod);
             case "infectionCheckResult" -> wrapper.select(CloseContactCase::getInfectionCheckResult)
                     .isNotNull(CloseContactCase::getInfectionCheckResult).ne(CloseContactCase::getInfectionCheckResult, "")
                     .groupBy(CloseContactCase::getInfectionCheckResult);
@@ -599,6 +727,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             case "gender" -> row.getGender();
             case "sourcePatientBacteriologyResult" -> row.getSourcePatientBacteriologyResult();
             case "finalScreeningResult" -> row.getFinalScreeningResult();
+            case "infectionCheckMethod" -> row.getInfectionCheckMethod();
             case "infectionCheckResult" -> row.getInfectionCheckResult();
             case "imagingResult" -> row.getImagingResult();
             case "sputumCheckResult" -> row.getSputumCheckResult();

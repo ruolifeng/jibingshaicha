@@ -135,15 +135,20 @@ export const SUSPECTED_REFERRAL_RESULT_OPTIONS = [
   { label: "潜伏感染者", value: "latent" }
 ]
 
-/** 待诊断-诊断中文 → 转诊码 */
+/** 待诊断-诊断中文 → 转诊码（含学生筛查新口径与历史值） */
 export const SUSPECTED_DIAGNOSIS_TO_REFERRAL: Record<string, string> = {
-  排除: "excluded",
-  正常: "excluded",
-  确诊患者: "confirmed",
-  确诊结核: "confirmed",
-  在治患者: "confirmed",
+  "未发现异常": "excluded",
+  "排除": "excluded",
+  "正常": "excluded",
+  "活动性肺结核": "confirmed",
+  "确诊患者": "confirmed",
+  "确诊结核": "confirmed",
+  "在治患者": "confirmed",
+  "疑似肺结核": "suspected",
   [SUSPECTED_TB_DIAGNOSIS]: "suspected",
-  潜伏感染者: "latent"
+  "潜伏感染者": "latent",
+  "其他（需注明）": "other",
+  "其他": "other"
 }
 
 /** 筛查管理列表 — 重点人群/疫情筛查诊断结果（统一口径） */
@@ -159,19 +164,63 @@ export const SCREENING_DIAGNOSIS_SEARCH_OPTIONS = [
 /** 筛查管理编辑 — 重点人群/疫情筛查诊断结果 */
 export const SCREENING_DIAGNOSIS_EDIT_OPTIONS = [...SCREENING_DIAGNOSIS_SEARCH_OPTIONS]
 
-/** 学生筛查 — 筛查结果/诊断（与秋季新生表口径一致，含历史「确诊患者」） */
+/** 学生筛查 — 筛查结果（与填写说明一致：0/1/2/3/4） */
 export const SCHOOL_DIAGNOSIS_SEARCH_OPTIONS = [
-  { label: "排除", value: "排除" },
-  { label: "正常", value: "正常" },
-  { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
-  { label: "确诊患者", value: "确诊患者" },
+  { label: "未发现异常", value: "未发现异常" },
+  { label: "活动性肺结核", value: "活动性肺结核" },
+  { label: "疑似肺结核", value: "疑似肺结核" },
   { label: "潜伏感染者", value: "潜伏感染者" },
-  { label: "其他", value: "其他" }
+  { label: "其他（需注明）", value: "其他（需注明）" }
 ]
 
 export const SCHOOL_DIAGNOSIS_EDIT_OPTIONS = [...SCHOOL_DIAGNOSIS_SEARCH_OPTIONS]
-/** 终态正常类诊断值列表（供后端筛选等使用） */
-export const NORMAL_TERMINAL_DIAGNOSIS_VALUES = ["排除", "正常", "其它", "其他"]
+
+/** 学生筛查入库文案（排除/确诊患者等）→ 填写说明选项 */
+const SCHOOL_DIAGNOSIS_STORED_TO_OFFICIAL: Record<string, string> = {
+  "未发现异常": "未发现异常",
+  "排除": "未发现异常",
+  "正常": "未发现异常",
+  "活动性肺结核": "活动性肺结核",
+  "确诊患者": "活动性肺结核",
+  "确诊结核": "活动性肺结核",
+  "在治患者": "活动性肺结核",
+  "疑似肺结核": "疑似肺结核",
+  "疑似结核": "疑似肺结核",
+  "潜伏感染者": "潜伏感染者",
+  "其他（需注明）": "其他（需注明）",
+  "其它（需注明）": "其他（需注明）",
+  "其他(需注明)": "其他（需注明）",
+  "其它(需注明)": "其他（需注明）",
+  "其他": "其他（需注明）",
+  "其它": "其他（需注明）"
+}
+
+/** 编辑/筛选下拉：历史入库值映射为填写说明选项 */
+export function toSchoolDiagnosisOfficial(value?: string | null): string {
+  const raw = (value || "").trim()
+  if (!raw) return ""
+  if (SCHOOL_DIAGNOSIS_STORED_TO_OFFICIAL[raw]) return SCHOOL_DIAGNOSIS_STORED_TO_OFFICIAL[raw]
+  const normalized = raw.replace("(", "（").replace(")", "）")
+  if (normalized.startsWith("其他（需注明）") || normalized.startsWith("其它（需注明）")) {
+    return "其他（需注明）"
+  }
+  return raw
+}
+
+/** 列表/详情展示：标准类显示填写说明文案，带备注的「其他」保留原文 */
+export function displaySchoolDiagnosis(value?: string | null): string {
+  const raw = (value || "").trim()
+  if (!raw) return ""
+  const official = toSchoolDiagnosisOfficial(raw)
+  if (official === "其他（需注明）" && raw !== official && raw !== "其他" && raw !== "其它"
+    && raw !== "其它（需注明）" && raw !== "其他(需注明)" && raw !== "其它(需注明)") {
+    return raw
+  }
+  return official
+}
+
+/** 终态正常类诊断值列表（供后端筛选等使用；含历史「排除/正常/其他」） */
+export const NORMAL_TERMINAL_DIAGNOSIS_VALUES = ["未发现异常", "排除", "正常", "其它", "其他", "其他（需注明）"]
 
 /** 终态正常类诊断（排除/正常/其它），展示为「正常」 */
 export const NORMAL_TERMINAL_DIAGNOSIS = new Set(NORMAL_TERMINAL_DIAGNOSIS_VALUES)
@@ -182,8 +231,8 @@ export function getScreeningLatentStatusLabel(row: {
   diagnosisFirst?: string
 }): string {
   const diagnosis = row.diagnosisFirst?.trim()
-  // 筛查结果码优先：确诊结核/确诊患者标红保留；3=已进潜伏感染管理
-  if (diagnosis === "确诊结核" || diagnosis === "确诊患者" || diagnosis === "在治患者") return "已确诊患者"
+  // 筛查结果码优先：活动性肺结核/确诊类标红保留；3=已进潜伏感染管理
+  if (isConfirmedTbDiagnosisText(diagnosis)) return "已确诊患者"
   if (diagnosis === "潜伏感染者") return "已确诊潜伏感染者"
   if (row.isLatent !== 1) return "正常"
   if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "正常"
@@ -197,7 +246,7 @@ export function getScreeningLatentStatusTagType(row: {
   diagnosisFirst?: string
 }): "success" | "warning" | "danger" {
   const diagnosis = row.diagnosisFirst?.trim()
-  if (diagnosis === "确诊结核" || diagnosis === "确诊患者" || diagnosis === "在治患者") return "danger"
+  if (isConfirmedTbDiagnosisText(diagnosis)) return "danger"
   if (diagnosis === "潜伏感染者") return "warning"
   if (row.isLatent !== 1) return "success"
   if (diagnosis && NORMAL_TERMINAL_DIAGNOSIS.has(diagnosis)) return "success"
@@ -220,7 +269,10 @@ export function isConfirmedPatientDiagnosis(row: {
 
 function isConfirmedTbDiagnosisText(value?: string | null): boolean {
   const text = value?.trim()
-  return text === "确诊结核" || text === "确诊患者" || text === "在治患者"
+  return text === "活动性肺结核"
+    || text === "确诊结核"
+    || text === "确诊患者"
+    || text === "在治患者"
 }
 
 /** 确认诊断列若误存日期，统一为 yyyy-MM-dd，避免窄列换行裁切 */

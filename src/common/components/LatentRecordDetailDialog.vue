@@ -87,7 +87,7 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="感染筛查日期">
             {{ detail.infectionScreenDate || detail.screenDate || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="感染筛查方法">
+          <el-descriptions-item label="感染检测方法">
             {{ displayInfectionScreenMethod(detail.screenMethod, detail.infectionResult) }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">

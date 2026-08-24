@@ -543,7 +543,7 @@ async function handleImport(uploadFile: any) {
         <el-table-column prop="screenMethod" min-width="180" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
-              label="感染筛查方法"
+              label="感染检测方法"
               type="select"
               :options="screenMethodFilterOptions"
               :model-value="columnFilters.screenMethod"

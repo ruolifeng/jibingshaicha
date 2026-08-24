@@ -675,6 +675,7 @@ const createForm = reactive({
   crowdCategory: "",
   screenMethod: "",
   infectionResult: "",
+  chestXrayDate: "",
   chestXrayResult: "",
   chestXrayRemark: "",
   diagnosisResult: "",
@@ -706,6 +707,7 @@ function openCreateDialog() {
     crowdCategory: "",
     screenMethod: "",
     infectionResult: "",
+    chestXrayDate: "",
     chestXrayResult: "",
     chestXrayRemark: "",
     diagnosisResult: "",
@@ -1414,10 +1416,10 @@ function getRowClass({ row }: { row: any }) {
             <el-descriptions-item label="诊断时间">
               {{ viewDetail.diagnosisTime ? formatDateTime(viewDetail.diagnosisTime) : "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="是否感染筛查">
+            <el-descriptions-item label="是否感染检测">
               {{ viewDetail.hasInfectionScreen || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="筛查日期">
+            <el-descriptions-item label="感染检测日期">
               {{ viewDetail.screenDate || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="感染检测方法">
@@ -1432,7 +1434,7 @@ function getRowClass({ row }: { row: any }) {
             <el-descriptions-item label="胸片检查日期">
               {{ viewDetail.chestXrayDate || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="胸片检查结果" :span="2">
+            <el-descriptions-item label="胸片结果" :span="2">
               {{ viewDetail.chestXrayResult || "-" }}
             </el-descriptions-item>
           </el-descriptions>
@@ -1852,7 +1854,18 @@ function getRowClass({ row }: { row: any }) {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片检查结果">
+            <el-form-item label="胸片检查日期">
+              <el-date-picker
+                v-model="createForm.chestXrayDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="请选择"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="胸片结果">
               <el-select
                 v-model="createForm.chestXrayResult"
                 placeholder="请选择"
@@ -1923,7 +1936,7 @@ function getRowClass({ row }: { row: any }) {
       <el-form :model="screeningForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="是否感染筛查">
+            <el-form-item label="是否感染检测">
               <el-select v-model="screeningForm.hasInfectionScreen" style="width: 100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
@@ -1931,7 +1944,7 @@ function getRowClass({ row }: { row: any }) {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="筛查日期">
+            <el-form-item label="感染检测日期">
               <el-date-picker v-model="screeningForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -1973,7 +1986,7 @@ function getRowClass({ row }: { row: any }) {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片检查结果">
+            <el-form-item label="胸片结果">
               <el-select
                 v-model="screeningForm.chestXrayResult"
                 placeholder="请选择"

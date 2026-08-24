@@ -1,6 +1,14 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
-import { DRUG_RESISTANCE_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_OPTIONS } from "@@/constants/disease"
+import {
+  applyPatientNoticeTreatmentPlan,
+  DRUG_RESISTANCE_OPTIONS,
+  isPatientOtherSensitivePlan,
+  NOTICE_STATUS_MAP,
+  PATHOGEN_RESULT_OPTIONS,
+  resolvePatientTreatmentPlanForSave,
+  TREATMENT_PLAN_OPTIONS
+} from "@@/constants/disease"
 import { formatNoticeSentTime, isPatientTransferLocked } from "@@/utils/patient"
 import {
   confirmNoticeApi,
@@ -29,6 +37,8 @@ const editing = ref(false)
 const submitting = ref(false)
 const sputumCulture = ref("")
 const drugResistance = ref("")
+const treatmentPlan = ref("")
+const customPlanDetail = ref("")
 const level3Users = ref<any[]>([])
 const receiverUserIds = ref<string[]>([])
 
@@ -49,6 +59,8 @@ function resetEdit() {
   submitting.value = false
   sputumCulture.value = ""
   drugResistance.value = ""
+  treatmentPlan.value = ""
+  customPlanDetail.value = ""
   level3Users.value = []
   receiverUserIds.value = []
 }
@@ -78,6 +90,10 @@ async function beginEdit() {
   if (!noticeDetailData.value || !canEditCulture.value) return
   sputumCulture.value = noticeDetailData.value.sputumCulture || ""
   drugResistance.value = noticeDetailData.value.drugResistance || ""
+  const planForm = { treatmentPlan: "", customPlanDetail: "" }
+  applyPatientNoticeTreatmentPlan(planForm, noticeDetailData.value.treatmentPlan, noticeDetailData.value.customPlanDetail)
+  treatmentPlan.value = planForm.treatmentPlan
+  customPlanDetail.value = planForm.customPlanDetail
   receiverUserIds.value = []
   editing.value = true
   try {
@@ -114,6 +130,10 @@ async function handleConfirmNotice(noticeId: string) {
 
 async function handleSaveCulture() {
   if (!noticeDetailData.value) return
+  if (isPatientOtherSensitivePlan(treatmentPlan.value) && !customPlanDetail.value?.trim()) {
+    ElMessage.warning("请填写其它敏感方案的具体方案")
+    return
+  }
   if (level3Users.value.length > 0 && receiverUserIds.value.length === 0) {
     ElMessage.warning("请选择本区县对应的三级用户发送通知")
     return
@@ -130,9 +150,10 @@ async function handleSaveCulture() {
     await updateNoticeCultureResistanceApi(noticeDetailData.value.id, {
       sputumCulture: sputumCulture.value || "",
       drugResistance: drugResistance.value || "",
+      treatmentPlan: resolvePatientTreatmentPlanForSave(treatmentPlan.value, customPlanDetail.value),
       receiverUserIds: receiverUserIds.value
     })
-    ElMessage.success("已保存痰培养和耐药情况")
+    ElMessage.success("已保存修改")
     editing.value = false
     await loadNotice()
     emit("success")
@@ -191,7 +212,22 @@ async function handleSaveCulture() {
         {{ noticeDetailData.chestXrayResult || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="治疗方案">
-        {{ noticeDetailData.treatmentPlan || "-" }}
+        <template v-if="editing">
+          <el-select v-model="treatmentPlan" placeholder="请选择" style="width: 100%">
+            <el-option v-for="item in TREATMENT_PLAN_OPTIONS" :key="item" :label="item" :value="item" />
+          </el-select>
+          <el-input
+            v-if="isPatientOtherSensitivePlan(treatmentPlan)"
+            v-model="customPlanDetail"
+            class="mt-2"
+            type="textarea"
+            :rows="2"
+            placeholder="请注明详细的抗结核治疗方案"
+          />
+        </template>
+        <template v-else>
+          {{ noticeDetailData.treatmentPlan || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="耐药情况">
         <el-select

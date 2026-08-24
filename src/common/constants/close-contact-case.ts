@@ -18,6 +18,31 @@ export const DIAGNOSIS_RESULT_OPTIONS = [
   { label: FINAL_SCREENING_OTHER, value: FINAL_SCREENING_OTHER }
 ] as const
 
+/** 个案编辑 — 影像方法 */
+export const CASE_IMAGING_METHOD_OPTIONS = [
+  "胸部X光片",
+  "胸部CT",
+  "其他（需注明）",
+  "未查"
+] as const
+
+/** 个案编辑 — 影像结果 */
+export const CASE_IMAGING_RESULT_OPTIONS = [
+  "未见异常",
+  "疑似活动性结核病变",
+  "非活动性结核病变",
+  "其他（含未查需注明）"
+] as const
+
+/** 个案编辑 — 痰检方法 */
+export const CASE_SPUTUM_METHOD_OPTIONS = [
+  "涂片",
+  "培养",
+  "分子生物学",
+  "其它（未注明）",
+  "未查"
+] as const
+
 const FINAL_SCREENING_OTHER_PREFIX = `${FINAL_SCREENING_OTHER}：`
 
 /** 回填最终筛查结果（含「其他」备注） */
@@ -36,7 +61,14 @@ export function applyFinalScreeningResult(
     form.finalScreeningRemark = raw.slice(FINAL_SCREENING_OTHER_PREFIX.length).trim()
     return
   }
-  if (raw === FINAL_SCREENING_OTHER || raw === "其他" || raw === "其它") {
+  const halfWidthOtherPrefix = "其他(需注明)："
+  if (raw.startsWith(halfWidthOtherPrefix)) {
+    form.finalScreeningResult = FINAL_SCREENING_OTHER
+    form.finalScreeningRemark = raw.slice(halfWidthOtherPrefix.length).trim()
+    return
+  }
+  if (raw === FINAL_SCREENING_OTHER || raw === "其他(需注明)" || raw === "其它（需注明）" || raw === "其它(需注明)"
+    || raw === "其他" || raw === "其它") {
     form.finalScreeningResult = FINAL_SCREENING_OTHER
     form.finalScreeningRemark = ""
     return
@@ -59,7 +91,8 @@ export function resolveFinalScreeningResultForSave(result: string, remark?: stri
 }
 
 export function isFinalScreeningOther(result?: string | null): boolean {
-  return (result || "").trim() === FINAL_SCREENING_OTHER
+  const text = (result || "").trim().replace("(", "（").replace(")", "）")
+  return text === FINAL_SCREENING_OTHER || text === "其它（需注明）"
 }
 /** 报表填报季度（Q1-Q4） */
 export const REPORT_QUARTER_OPTIONS = [
@@ -264,7 +297,7 @@ export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
   { field: "symptom1", title: "结核症状1", width: 160 },
   { field: "symptom2", title: "结核症状2（自行补充）", width: 160 },
   { field: "infectionCheckDate", title: "感染检测日期", width: 120 },
-  { field: "infectionCheckMethod", title: "感染筛查方法", width: 180 },
+  { field: "infectionCheckMethod", title: "感染检测方法", width: 180 },
   { field: "infectionCheckResult", title: "结果判定", width: 150 },
   { field: "imagingDate", title: "影像检查日期（填写yyyy/mm/dd格式）", width: 220 },
   { field: "imagingMethod", title: "影像方法", width: 150 },
