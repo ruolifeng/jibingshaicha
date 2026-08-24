@@ -216,7 +216,19 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         Notice notice = requirePatientNotice(noticeId);
         notice.setSputumCulture(StrUtil.trimToNull(dto.getSputumCulture()));
         notice.setDrugResistance(StrUtil.trimToNull(dto.getDrugResistance()));
+        if (dto.getTreatmentPlan() != null) {
+            String plan = StrUtil.trimToNull(dto.getTreatmentPlan());
+            notice.setTreatmentPlan(plan);
+            // 方案详情已写入 treatmentPlan；清空旧 customPlanDetail，避免回填时盖住新方案
+            notice.setCustomPlanDetail(null);
+        }
         updateById(notice);
+        if (dto.getTreatmentPlan() != null) {
+            lambdaUpdate()
+                    .eq(Notice::getId, notice.getId())
+                    .set(Notice::getCustomPlanDetail, null)
+                    .update();
+        }
         syncFirstVisitCultureAndResistance(notice.getBizId(), notice.getSputumCulture(), notice.getDrugResistance());
         sendCultureResistanceChangedMessages(notice, dto.getReceiverUserIds());
     }
@@ -253,7 +265,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单不存在");
         }
         if (!"patient".equals(notice.getNoticeType())) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅患者通知单可修改痰培养和耐药情况");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅患者通知单可修改痰培养、耐药情况和治疗方案");
         }
         assertBizAccessible(notice.getBizId(), notice.getNoticeType());
         return notice;

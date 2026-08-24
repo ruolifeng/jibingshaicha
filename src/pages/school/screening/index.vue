@@ -7,7 +7,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_TYPE_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
+import { displaySchoolDiagnosis, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_TYPE_OPTIONS, toSchoolDiagnosisOfficial, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
@@ -34,7 +34,6 @@ const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(a
 const loadDistrictOptions = () => loadDistinct("district")
 const loadGenderOptions = () => loadDistinct("gender")
 const loadInfectionResultOptions = () => loadDistinct("infectionResult")
-const loadDiagnosisFirstOptions = () => loadDistinct("diagnosisFirst")
 
 const loading = ref(false)
 const batchDeleting = ref(false)
@@ -337,7 +336,7 @@ function handleCreate() {
 
 function handleEdit(row: any) {
   editMode.value = "edit"
-  editForm.value = { ...row }
+  editForm.value = { ...row, diagnosisFirst: toSchoolDiagnosisOfficial(row.diagnosisFirst) }
   editVisible.value = true
 }
 
@@ -794,11 +793,12 @@ watch(
               type="select"
               :hint="SCHOOL_SCREENING_FIELD_HINTS.diagnosisFirst"
               :options="diagnosisFilterOptions"
-              :source-values="distinctValues('diagnosisFirst').value"
-              :load-options="loadDiagnosisFirstOptions"
               :model-value="columnFilters.diagnosisFirst"
               @change="(v) => { setFilter('diagnosisFirst', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ displaySchoolDiagnosis(row.diagnosisFirst) || "—" }}
           </template>
         </el-table-column>
         <!-- 预防性治疗情况（结案进入历史患者后同步） -->
@@ -1182,7 +1182,7 @@ watch(
           {{ detailRow.sputumCultureResult || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="筛查结果（诊断）">
-          {{ detailRow.diagnosisFirst }}
+          {{ displaySchoolDiagnosis(detailRow.diagnosisFirst) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="户籍所在地" :span="3">
           {{ detailRow.householdAddress }}

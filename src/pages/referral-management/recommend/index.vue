@@ -1265,7 +1265,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-divider>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="感染筛查时间">
+            <el-form-item label="感染检测时间">
               <el-date-picker
                 v-model="createForm.screenDate"
                 type="date"
@@ -1300,7 +1300,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片筛查时间">
+            <el-form-item label="胸片检查日期">
               <el-date-picker
                 v-model="createForm.chestXrayDate"
                 type="date"
@@ -1311,7 +1311,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片检查结果">
+            <el-form-item label="胸片结果">
               <el-select
                 v-model="createForm.chestXrayResult"
                 placeholder="请选择"
@@ -1468,7 +1468,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item v-if="viewDetail.rejectedReason" label="拒绝原因" :span="2">
               {{ viewDetail.rejectedReason }}
             </el-descriptions-item>
-            <el-descriptions-item label="感染筛查时间">
+            <el-descriptions-item label="感染检测时间">
               {{ viewDetail.screenDate || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="感染检测方法">
@@ -1477,10 +1477,10 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item label="感染检测结果">
               {{ viewDetail.infectionResult || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="胸片筛查时间">
+            <el-descriptions-item label="胸片检查日期">
               {{ viewDetail.chestXrayDate || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="胸片检查结果" :span="2">
+            <el-descriptions-item label="胸片结果" :span="2">
               {{ viewDetail.chestXrayResult || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="追踪状态">
@@ -1671,7 +1671,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-divider>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="感染筛查时间">
+            <el-form-item label="感染检测时间">
               <el-date-picker v-model="editForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -1700,12 +1700,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片筛查时间">
+            <el-form-item label="胸片检查日期">
               <el-date-picker v-model="editForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片检查结果">
+            <el-form-item label="胸片结果">
               <el-select
                 v-model="editForm.chestXrayResult"
                 placeholder="请选择"
@@ -1808,7 +1808,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
       <el-form :model="screeningForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="是否感染筛查">
+            <el-form-item label="是否感染检测">
               <el-select v-model="screeningForm.hasInfectionScreen" style="width: 100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
@@ -1816,7 +1816,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="筛查日期">
+            <el-form-item label="感染检测日期">
               <el-date-picker v-model="screeningForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -1858,7 +1858,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="胸片检查结果">
+            <el-form-item label="胸片结果">
               <el-select
                 v-model="screeningForm.chestXrayResult"
                 placeholder="请选择"

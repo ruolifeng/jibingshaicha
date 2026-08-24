@@ -31,7 +31,7 @@ export const CC_SYMPTOM1_OPTIONS = [
   "盗汗"
 ] as const
 
-/** 感染筛查方法（与重点人群/疫情筛查官方下拉一致） */
+/** 感染检测方法（与重点人群/疫情筛查官方下拉一致） */
 export { KEY_INFECTION_SCREEN_METHOD_OPTIONS as CC_INFECTION_CHECK_METHOD_OPTIONS } from "./disease"
 
 /** 结果判定 / 感染检测结果 */

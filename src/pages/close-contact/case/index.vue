@@ -6,6 +6,9 @@ import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import {
   applyFinalScreeningResult,
+  CASE_IMAGING_METHOD_OPTIONS,
+  CASE_IMAGING_RESULT_OPTIONS,
+  CASE_SPUTUM_METHOD_OPTIONS,
   CLOSE_CONTACT_CASE_COLUMNS,
   CLOSE_CONTACT_CASE_DATE_FIELDS,
   CLOSE_CONTACT_CASE_EDIT_GROUPS,
@@ -20,7 +23,8 @@ import {
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import {
   CC_INFECTION_CHECK_METHOD_OPTIONS,
-  CC_INFECTION_CHECK_RESULT_OPTIONS
+  CC_INFECTION_CHECK_RESULT_OPTIONS,
+  selectOptionsWithLegacy
 } from "@@/constants/screening-close-contact"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete, confirmEditChange } from "@@/utils/listToolbar"
@@ -52,9 +56,30 @@ const HEADER_FILTER_META: Record<string, { label: string, type?: "text" | "selec
   idNumber: { label: "身份证号" },
   phone: { label: "接触者电话" },
   sourcePatientName: { label: "患者姓名" },
-  sourcePatientBacteriologyResult: { label: "病原学结果", type: "select" },
-  finalScreeningResult: { label: "最终筛查结果", type: "select" },
-  infectionCheckResult: { label: "感染检测结果", type: "select" },
+  sourcePatientBacteriologyResult: {
+    label: "病原学结果",
+    type: "select",
+    options: [
+      { text: "病原学阳性", value: "病原学阳性" },
+      { text: "病原学阴性", value: "病原学阴性" },
+      { text: "利福平耐药", value: "利福平耐药" },
+      { text: "无结果", value: "无结果" }
+    ]
+  },
+  finalScreeningResult: {
+    label: "最终筛查结果",
+    type: "select",
+    options: [
+      ...DIAGNOSIS_RESULT_OPTIONS.map(item => ({ text: item.label, value: item.value as string })),
+      { text: "未查", value: "未查" }
+    ]
+  },
+  infectionCheckMethod: {
+    label: "感染检测方法",
+    type: "select",
+    options: CC_INFECTION_CHECK_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+  },
+  infectionCheckResult: { label: "结果判定", type: "select" },
   imagingResult: { label: "影像结果", type: "select" },
   sputumCheckResult: { label: "痰检结果", type: "select" },
   hasPreventiveTreatment: { label: "是否预防性治疗", type: "select", options: HAS_PREVENTIVE_TREATMENT_OPTIONS.map(item => ({ text: item.label, value: item.value })) }
@@ -67,6 +92,7 @@ const DISTINCT_SELECT_FIELDS = new Set([
   "gender",
   "sourcePatientBacteriologyResult",
   "finalScreeningResult",
+  "infectionCheckMethod",
   "infectionCheckResult",
   "imagingResult",
   "sputumCheckResult",
@@ -91,6 +117,30 @@ function loadDistinctField(field: string) {
 const loadDistrictSearchOptions = () => loadDistinct("district")
 const loadPathogenSearchOptions = () => loadDistinct("sourcePatientBacteriologyResult")
 const loadFinalScreeningSearchOptions = () => loadDistinct("finalScreeningResult")
+
+/** 顶部筛选项：预设枚举 ∪ 库中实际值，打开即可选全量口径 */
+const BACTERIOLOGY_PRESET_OPTIONS = ["病原学阳性", "病原学阴性", "利福平耐药", "无结果"]
+const FINAL_SCREENING_PRESET_OPTIONS = [
+  ...DIAGNOSIS_RESULT_OPTIONS.map(item => item.value),
+  "未查"
+]
+
+function mergeSelectOptions(presets: string[], actual: string[]) {
+  const seen = new Set<string>()
+  const list: string[] = []
+  for (const item of [...presets, ...actual]) {
+    const text = String(item || "").trim()
+    if (!text || seen.has(text)) continue
+    seen.add(text)
+    list.push(text)
+  }
+  return list
+}
+
+const pathogenSearchOptions = computed(() =>
+  mergeSelectOptions(BACTERIOLOGY_PRESET_OPTIONS, distinctValues("sourcePatientBacteriologyResult").value))
+const finalScreeningSearchOptions = computed(() =>
+  mergeSelectOptions(FINAL_SCREENING_PRESET_OPTIONS, distinctValues("finalScreeningResult").value))
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -327,6 +377,13 @@ const EDIT_WIDE_FIELDS = new Set([
   "currentAddress"
 ])
 
+const imagingMethodSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CASE_IMAGING_METHOD_OPTIONS, editForm.value.imagingMethod))
+const imagingResultSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CASE_IMAGING_RESULT_OPTIONS, editForm.value.imagingResult))
+const sputumMethodSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CASE_SPUTUM_METHOD_OPTIONS, editForm.value.sputumCheckMethod))
+
 function getEmptyEditForm() {
   const form: Record<string, any> = {}
   for (const group of CLOSE_CONTACT_CASE_EDIT_GROUPS) {
@@ -518,9 +575,12 @@ function getDiagnosisTag(result: string): TagType {
   return "info"
 }
 
-/** 编辑最终筛查结果：兼容历史「未做」等 */
+/** 编辑最终筛查结果：兼容历史「未做/未查」等 */
 const finalScreeningSelectOptions = computed(() => {
-  const opts: Array<{ label: string, value: string }> = DIAGNOSIS_RESULT_OPTIONS.map(item => ({ ...item }))
+  const opts: Array<{ label: string, value: string }> = [
+    ...DIAGNOSIS_RESULT_OPTIONS.map(item => ({ ...item })),
+    { label: "未查", value: "未查" }
+  ]
   const current = String(editForm.value.finalScreeningResult || "").trim()
   if (current && !opts.some(item => item.value === current)) {
     opts.push({ label: current, value: current })
@@ -529,6 +589,12 @@ const finalScreeningSelectOptions = computed(() => {
 })
 
 watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { immediate: true })
+
+onMounted(() => {
+  loadPathogenSearchOptions()
+  loadFinalScreeningSearchOptions()
+  loadDistrictSearchOptions()
+})
 </script>
 
 <template>
@@ -537,7 +603,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
     <el-card shadow="never" class="mb-4">
       <el-form :model="searchForm" inline>
         <el-form-item label="姓名">
-          <el-input v-model="searchForm.name" placeholder="接触者姓名" clearable />
+          <el-input v-model="searchForm.name" placeholder="接触者/患者姓名" clearable />
         </el-form-item>
         <el-form-item label="身份证号">
           <el-input v-model="searchForm.idNumber" placeholder="身份证号" clearable />
@@ -589,7 +655,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             @visible-change="(v: boolean) => v && loadPathogenSearchOptions()"
           >
             <el-option
-              v-for="item in distinctValues('sourcePatientBacteriologyResult').value"
+              v-for="item in pathogenSearchOptions"
               :key="item"
               :label="item"
               :value="item"
@@ -609,7 +675,7 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
             @visible-change="(v: boolean) => v && loadFinalScreeningSearchOptions()"
           >
             <el-option
-              v-for="item in distinctValues('finalScreeningResult').value"
+              v-for="item in finalScreeningSearchOptions"
               :key="item"
               :label="item"
               :value="item"
@@ -918,6 +984,51 @@ watch(() => [paginationData.currentPage, paginationData.pageSize], fetchData, { 
                   >
                     <el-option
                       v-for="opt in CC_INFECTION_CHECK_RESULT_OPTIONS"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
+                    />
+                  </el-select>
+                  <el-select
+                    v-else-if="field === 'imagingMethod'"
+                    v-model="editForm.imagingMethod"
+                    clearable
+                    filterable
+                    placeholder="请选择"
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in imagingMethodSelectOptions"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
+                    />
+                  </el-select>
+                  <el-select
+                    v-else-if="field === 'imagingResult'"
+                    v-model="editForm.imagingResult"
+                    clearable
+                    filterable
+                    placeholder="请选择"
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in imagingResultSelectOptions"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
+                    />
+                  </el-select>
+                  <el-select
+                    v-else-if="field === 'sputumCheckMethod'"
+                    v-model="editForm.sputumCheckMethod"
+                    clearable
+                    filterable
+                    placeholder="请选择"
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in sputumMethodSelectOptions"
                       :key="opt"
                       :label="opt"
                       :value="opt"

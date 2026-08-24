@@ -26,7 +26,7 @@ public final class ScreeningDiagnosisSupport {
 
     /** 终态「正常」类诊断：不进入待诊断，导入后直接结束流程 */
     private static final Set<String> NORMAL_TERMINAL_DIAGNOSIS = Set.of(
-            "正常", "排除", "其他", "其它"
+            "正常", "排除", "未发现异常", "其他", "其它", "其他（需注明）", "其它（需注明）"
     );
 
     /** 需进入后续流程的诊断 */
@@ -82,7 +82,12 @@ public final class ScreeningDiagnosisSupport {
         if (StrUtil.isBlank(diagnosis)) {
             return false;
         }
-        return NORMAL_TERMINAL_DIAGNOSIS.contains(diagnosis.trim());
+        String trimmed = diagnosis.trim();
+        if (NORMAL_TERMINAL_DIAGNOSIS.contains(trimmed)) {
+            return true;
+        }
+        String normalized = trimmed.replace('(', '（').replace(')', '）');
+        return normalized.startsWith("其他（需注明）") || normalized.startsWith("其它（需注明）");
     }
 
     public static boolean isActionableDiagnosis(String diagnosis) {
@@ -287,7 +292,7 @@ public final class ScreeningDiagnosisSupport {
             case "1", "活动性肺结核" -> "确诊患者";
             case "2", "疑似肺结核", SUSPECTED_TB_DIAGNOSIS -> SUSPECTED_TB_DIAGNOSIS;
             case "3", "潜伏感染者" -> "潜伏感染者";
-            case "4", "其它", "其他" -> "其他";
+            case "4", "其它", "其他", "其他（需注明）", "其它（需注明）", "其他(需注明)", "其它(需注明)" -> "其他";
             default -> isSuspectedTbDiagnosis(trimmed) ? SUSPECTED_TB_DIAGNOSIS : trimmed;
         };
     }
@@ -302,11 +307,36 @@ public final class ScreeningDiagnosisSupport {
         if (StrUtil.isBlank(diagnosisFirst)) {
             return;
         }
-        if ("正常".equals(diagnosisFirst)) {
+        String trimmed = diagnosisFirst.trim();
+        String normalizedParen = trimmed.replace('(', '（').replace(')', '）');
+        if ("正常".equals(trimmed)) {
             // 与「排除」并列的独立选项：精确匹配「正常」；兼容旧筛选项「未进待诊断」口径
             wrapper.and(w -> w.eq(isLatentColumn, 0)
                     .or()
                     .eq(diagnosisColumn, "正常"));
+            return;
+        }
+        // 学生筛查官方文案：入库仍是排除/确诊患者/疑似结核/其他，筛选按填写说明对齐
+        if ("未发现异常".equals(trimmed)) {
+            wrapper.in(diagnosisColumn, "未发现异常", "排除", "正常");
+            return;
+        }
+        if ("活动性肺结核".equals(trimmed)) {
+            wrapper.in(diagnosisColumn, "活动性肺结核", "确诊患者", "确诊结核", "在治患者");
+            return;
+        }
+        if ("其他（需注明）".equals(normalizedParen) || "其它（需注明）".equals(normalizedParen)
+                || "其他".equals(trimmed) || "其它".equals(trimmed)) {
+            wrapper.and(w -> w.in(diagnosisColumn,
+                            "其他（需注明）", "其他(需注明)", "其它（需注明）", "其它(需注明)", "其他", "其它")
+                    .or()
+                    .likeRight(diagnosisColumn, "其他（需注明）")
+                    .or()
+                    .likeRight(diagnosisColumn, "其他(需注明)")
+                    .or()
+                    .likeRight(diagnosisColumn, "其它（需注明）")
+                    .or()
+                    .likeRight(diagnosisColumn, "其它(需注明)"));
             return;
         }
         if (isSuspectedTbDiagnosis(diagnosisFirst)) {
@@ -379,12 +409,18 @@ public final class ScreeningDiagnosisSupport {
         if (StrUtil.isBlank(diagnosisResult)) {
             return List.of();
         }
-        return switch (diagnosisResult) {
-            case "排除", "正常" -> List.of("未发现异常");
+        String trimmed = diagnosisResult.trim();
+        String normalizedParen = trimmed.replace('(', '（').replace(')', '）');
+        return switch (normalizedParen) {
+            case "排除", "正常", "未发现异常" -> List.of("未发现异常", "排除", "正常");
             case "疑似结核", "疑似肺结核" -> List.of(SUSPECTED_TB_DIAGNOSIS, LEGACY_SUSPECTED_TB_DIAGNOSIS);
-            case "确诊患者", "确诊结核", "在治患者" -> List.of("活动性肺结核", "确诊结核", "确诊患者", "在治患者");
+            case "确诊患者", "确诊结核", "在治患者", "活动性肺结核" ->
+                    List.of("活动性肺结核", "确诊结核", "确诊患者", "在治患者");
             case "潜伏感染者" -> List.of("潜伏感染者");
-            default -> List.of(diagnosisResult);
+            case "其他（需注明）", "其它（需注明）", "其他", "其它" ->
+                    List.of("其他（需注明）", "其他(需注明)", "其它（需注明）", "其它(需注明)", "其他", "其它");
+            case "未查", "未做" -> List.of("未查", "未做");
+            default -> List.of(trimmed, normalizedParen, trimmed.replace('（', '(').replace('）', ')'));
         };
     }
 }
