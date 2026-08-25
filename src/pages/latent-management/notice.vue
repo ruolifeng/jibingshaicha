@@ -28,7 +28,6 @@ const searchForm = reactive({
   dateRange: [] as string[],
   creatorName: "",
   trackingStatus: undefined as number | undefined,
-  archived: undefined as number | undefined,
   populationType: ""
 })
 
@@ -52,6 +51,7 @@ async function fetchData() {
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
+      archived: 0,
       referralResult: "latent",
       dateFilterBy: "noticeFill",
       ...rest,
@@ -80,7 +80,6 @@ function handleReset() {
   searchForm.dateRange = []
   searchForm.creatorName = ""
   searchForm.trackingStatus = undefined
-  searchForm.archived = undefined
   searchForm.populationType = ""
   clearFilters()
   handleSearch()

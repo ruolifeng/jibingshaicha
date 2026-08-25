@@ -168,16 +168,16 @@ defineExpose({
     <div v-loading="panelLoading.pathogen" class="pathogen-panel">
       <div class="panel-header">
         <div class="panel-title">
-          {{ panelYear(panelSummaries.pathogen, panelYears.pathogen) }}年度发病率 / 耐药筛查率
+          {{ panelYear(panelSummaries.pathogen, panelYears.pathogen) }}年度病原学阳性率 / 耐药筛查率
         </div>
         <el-select v-model="panelYears.pathogen" class="panel-year-select" size="small">
           <el-option v-for="y in yearOptions" :key="`pathogen-${y}`" :label="`${y}年度`" :value="y" />
         </el-select>
       </div>
       <div class="panel-content">
-        <span>发病率分子人数：<strong>{{ panelSummaries.pathogen.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+        <span>病原学阳性人数：<strong>{{ panelSummaries.pathogen.pathogenPositiveCount ?? 0 }}</strong> 例</span>
         <span class="divider">|</span>
-        <span>发病率：<strong>{{ rateText(panelSummaries.pathogen.pathogenPositiveRate) }}</strong></span>
+        <span>病原学阳性率：<strong>{{ rateText(panelSummaries.pathogen.pathogenPositiveRate) }}</strong></span>
         <span class="divider">|</span>
         <span>耐药筛查人数：<strong>{{ panelSummaries.pathogen.drugResistanceScreenedCount ?? 0 }}</strong> 例</span>
         <span class="divider">|</span>

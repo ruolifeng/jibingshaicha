@@ -29,7 +29,6 @@ const searchForm = reactive({
   phone: "",
   dateRange: [] as string[],
   creatorName: "",
-  archived: undefined as number | undefined,
   populationType: ""
 })
 
@@ -50,6 +49,7 @@ async function fetchData() {
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
+      archived: 0,
       referralResult: "latent",
       trackingStatus: 1,
       dateFilterBy: "supervisionFill",
@@ -79,7 +79,6 @@ function handleReset() {
   searchForm.phone = ""
   searchForm.dateRange = []
   searchForm.creatorName = ""
-  searchForm.archived = undefined
   searchForm.populationType = ""
   clearFilters()
   handleSearch()
@@ -120,7 +119,7 @@ function buildListQueryParams() {
     phone: searchForm.phone || undefined,
     creatorName: searchForm.creatorName || undefined,
     populationType: searchForm.populationType || undefined,
-    archived: searchForm.archived,
+    archived: 0,
     referralResult: "latent",
     trackingStatus: 1,
     dateFilterBy: "supervisionFill",

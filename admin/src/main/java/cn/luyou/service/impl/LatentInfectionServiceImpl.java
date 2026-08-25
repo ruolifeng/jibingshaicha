@@ -123,7 +123,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "registrationNo", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
             "infectionResult", "screenMethod", "diagnosisFirst", "diagnosisResult", "populationType",
-            "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark"
+            "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark",
+            "noticeConfirmStatus"
     );
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
@@ -400,9 +401,75 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                         wrapper.in(LatentInfection::getCreatorId, ids);
                     }
                 }
+                case "noticeConfirmStatus" -> applyNoticeConfirmStatusFilter(wrapper, value);
                 default -> { }
             }
         });
+    }
+
+    /**
+     * 通知单确认状态筛选（与前端「通知单确认状态」列一致）：
+     * 2/已确认、1/待确认、none/未确认（无通知单或草稿）。
+     */
+    private void applyNoticeConfirmStatusFilter(LambdaQueryWrapper<LatentInfection> wrapper, String value) {
+        Set<String> statuses = new LinkedHashSet<>(ColumnFilterSupport.splitValues(value));
+        if (statuses.isEmpty()) {
+            return;
+        }
+        List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getNoticeType, "latent")
+                .select(Notice::getId, Notice::getBizId, Notice::getStatus));
+        Map<Long, Notice> latest = new HashMap<>();
+        for (Notice n : notices) {
+            if (n.getBizId() == null) continue;
+            Notice prev = latest.get(n.getBizId());
+            if (prev == null || (n.getId() != null && prev.getId() != null && n.getId() > prev.getId())) {
+                latest.put(n.getBizId(), n);
+            }
+        }
+        Set<Long> matched = new HashSet<>();
+        boolean includeNone = statuses.contains("none")
+                || statuses.contains("未确认")
+                || statuses.contains("—")
+                || statuses.contains("-");
+        boolean wantConfirmed = statuses.contains("2") || statuses.contains("已确认");
+        boolean wantPending = statuses.contains("1") || statuses.contains("待确认");
+        for (Map.Entry<Long, Notice> e : latest.entrySet()) {
+            Integer st = e.getValue().getStatus();
+            if (wantConfirmed && st != null && st == 2) {
+                matched.add(e.getKey());
+            } else if (wantPending && st != null && st == 1) {
+                matched.add(e.getKey());
+            }
+        }
+        Set<Long> confirmedOrPending = latest.entrySet().stream()
+                .filter(e -> e.getValue().getStatus() != null
+                        && (e.getValue().getStatus() == 1 || e.getValue().getStatus() == 2))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+        if (includeNone) {
+            wrapper.and(w -> {
+                boolean started = false;
+                if (!matched.isEmpty()) {
+                    w.in(LatentInfection::getId, matched);
+                    started = true;
+                }
+                if (started) {
+                    w.or();
+                }
+                if (!confirmedOrPending.isEmpty()) {
+                    w.notIn(LatentInfection::getId, confirmedOrPending);
+                } else {
+                    w.apply("1=1");
+                }
+            });
+            return;
+        }
+        if (matched.isEmpty()) {
+            wrapper.apply("1=0");
+        } else {
+            wrapper.in(LatentInfection::getId, matched);
+        }
     }
 
     /** 感染筛查结果筛选：官方下拉同时匹配学校历史文案 */

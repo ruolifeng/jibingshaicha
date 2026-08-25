@@ -20,6 +20,7 @@ import {
   getDashboardSummaryApi,
   getDashboardTaskStatsApi
 } from "../apis"
+import PendingTrackingPanel from "./PendingTrackingPanel.vue"
 import UpcomingVisitSupervisionPanel from "./UpcomingVisitSupervisionPanel.vue"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
@@ -50,6 +51,9 @@ const messageStats = ref<MessageStatsData>({
   referralRejected: 0
 })
 
+/** 待追踪卡片是否展开下方明细 */
+const pendingTrackingExpanded = ref(false)
+
 async function fetchYearSummary() {
   yearStatsLoading.value = true
   try {
@@ -61,6 +65,7 @@ async function fetchYearSummary() {
 }
 
 const reminderPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
+const pendingTrackingPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
 async function fetchAll() {
   summaryLoading.value = true
@@ -74,7 +79,11 @@ async function fetchAll() {
   } catch { /* handled globally */ } finally {
     summaryLoading.value = false
   }
-  await Promise.all([fetchTaskStats(), reminderPanelRef.value?.refresh()])
+  await Promise.all([
+    fetchTaskStats(),
+    reminderPanelRef.value?.refresh(),
+    pendingTrackingPanelRef.value?.refresh()
+  ])
 }
 
 async function fetchTaskStats() {
@@ -115,6 +124,11 @@ function getStatCardLabel(key: string, label: string) {
     return `${managementYear.value}年度管理患者数`
   }
   return label
+}
+
+function onStatCardClick(key: string) {
+  if (key !== "pendingTracking") return
+  pendingTrackingExpanded.value = !pendingTrackingExpanded.value
 }
 
 const pathogenPositiveRateText = computed(() => {
@@ -214,7 +228,15 @@ const noticeMaxSent = computed(() =>
     </div>
     <el-row :gutter="20" v-loading="summaryLoading" class="stat-row">
       <el-col v-for="card in statCards" :key="card.key" :xs="12" :sm="12" :md="6">
-        <div class="stat-card" :style="{ '--card-color': card.color, 'backgroundColor': card.bg }">
+        <div
+          class="stat-card"
+          :class="{
+            clickable: card.key === 'pendingTracking',
+            active: card.key === 'pendingTracking' && pendingTrackingExpanded,
+          }"
+          :style="{ '--card-color': card.color, 'backgroundColor': card.bg }"
+          @click="onStatCardClick(card.key)"
+        >
           <div class="stat-icon-wrap">
             <el-icon :size="24" :style="{ color: card.color }">
               <component :is="card.icon" />
@@ -233,6 +255,12 @@ const noticeMaxSent = computed(() =>
       </el-col>
     </el-row>
 
+    <PendingTrackingPanel
+      ref="pendingTrackingPanelRef"
+      :expanded="pendingTrackingExpanded"
+      :department-ids="selectedDepartmentIds"
+    />
+
     <UpcomingVisitSupervisionPanel ref="reminderPanelRef" :department-ids="selectedDepartmentIds" />
 
     <div v-loading="summaryLoading || yearStatsLoading" class="year-stats-section">
@@ -242,12 +270,12 @@ const noticeMaxSent = computed(() =>
 
       <div class="pathogen-panel">
         <div class="pathogen-title">
-          {{ managementYear }}年度发病率 / 耐药筛查率
+          {{ managementYear }}年度病原学阳性率 / 耐药筛查率
         </div>
         <div class="pathogen-content">
-          <span>发病率分子人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+          <span>病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
           <span class="pathogen-divider">|</span>
-          <span>发病率：<strong>{{ pathogenPositiveRateText }}</strong></span>
+          <span>病原学阳性率：<strong>{{ pathogenPositiveRateText }}</strong></span>
           <span class="pathogen-divider">|</span>
           <span>耐药筛查人数：<strong>{{ summary.drugResistanceScreenedCount ?? 0 }}</strong> 例</span>
           <span class="pathogen-divider">|</span>
@@ -706,14 +734,25 @@ const noticeMaxSent = computed(() =>
   margin-bottom: 20px;
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border: 2px solid transparent;
   transition:
     transform 0.2s,
-    box-shadow 0.2s;
+    box-shadow 0.2s,
+    border-color 0.2s;
 
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  &.clickable {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  &.active {
+    border-color: var(--card-color);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
   }
 
   .stat-icon-wrap {
