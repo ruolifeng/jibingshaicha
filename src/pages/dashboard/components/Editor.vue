@@ -4,6 +4,7 @@ import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSele
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { Bell, Calendar, FirstAidKit, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
+import PendingTrackingPanel from "./PendingTrackingPanel.vue"
 import UpcomingVisitSupervisionPanel from "./UpcomingVisitSupervisionPanel.vue"
 
 const selectedStatYear = ref(String(getCurrentStatYear()))
@@ -17,7 +18,11 @@ const summary = ref<DashboardSummaryData>({
   upcomingReview: 0
 })
 
+/** 待追踪卡片是否展开下方明细 */
+const pendingTrackingExpanded = ref(false)
+
 const reminderPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
+const pendingTrackingPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
 async function fetchSummary() {
   summaryLoading.value = true
@@ -27,7 +32,15 @@ async function fetchSummary() {
   } catch { /* handled */ } finally {
     summaryLoading.value = false
   }
-  await reminderPanelRef.value?.refresh()
+  await Promise.all([
+    reminderPanelRef.value?.refresh(),
+    pendingTrackingPanelRef.value?.refresh()
+  ])
+}
+
+function onStatCardClick(key: string) {
+  if (key !== "pendingTracking") return
+  pendingTrackingExpanded.value = !pendingTrackingExpanded.value
 }
 
 onMounted(() => {
@@ -130,7 +143,15 @@ function alphaColor(hex: string, alpha = "20") {
 
       <el-row :gutter="24">
         <el-col v-for="card in cards" :key="card.key" :xs="12" :sm="12" :md="6">
-          <div class="stat-card" :style="{ borderTopColor: card.color }">
+          <div
+            class="stat-card"
+            :class="{
+              clickable: card.key === 'pendingTracking',
+              active: card.key === 'pendingTracking' && pendingTrackingExpanded,
+            }"
+            :style="{ 'borderTopColor': card.color, '--card-color': card.color }"
+            @click="onStatCardClick(card.key)"
+          >
             <div class="stat-icon-wrap" :style="{ backgroundColor: alphaColor(card.color) }">
               <el-icon :size="22" :style="{ color: card.color }">
                 <component :is="card.icon" />
@@ -148,14 +169,20 @@ function alphaColor(hex: string, alpha = "20") {
         </el-col>
       </el-row>
 
+      <PendingTrackingPanel
+        ref="pendingTrackingPanelRef"
+        :expanded="pendingTrackingExpanded"
+        :department-ids="selectedDepartmentIds"
+      />
+
       <div class="pathogen-panel">
         <div class="pathogen-title">
-          {{ managementYear }}年度发病率 / 耐药筛查率
+          {{ managementYear }}年度病原学阳性率 / 耐药筛查率
         </div>
         <div class="pathogen-content">
-          <span>发病率分子人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
+          <span>病原学阳性人数：<strong>{{ summary.pathogenPositiveCount ?? 0 }}</strong> 例</span>
           <span class="pathogen-divider">|</span>
-          <span>发病率：<strong>{{ pathogenPositiveRateText }}</strong></span>
+          <span>病原学阳性率：<strong>{{ pathogenPositiveRateText }}</strong></span>
           <span class="pathogen-divider">|</span>
           <span>耐药筛查人数：<strong>{{ summary.drugResistanceScreenedCount ?? 0 }}</strong> 例</span>
           <span class="pathogen-divider">|</span>
@@ -272,6 +299,17 @@ function alphaColor(hex: string, alpha = "20") {
 
   &:hover {
     box-shadow: var(--el-box-shadow);
+  }
+
+  &.clickable {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  &.active {
+    box-shadow:
+      0 0 0 2px var(--card-color),
+      var(--el-box-shadow);
   }
 
   .stat-icon-wrap {

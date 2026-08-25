@@ -612,6 +612,13 @@ export const PATIENT_NOTICE_STATUS_FILTER_OPTIONS = [
   { label: "已确认", value: "2" }
 ] as const
 
+/** 潜伏感染者总览 — 通知单确认状态筛选（与列表列「通知单确认状态」一致） */
+export const LATENT_NOTICE_CONFIRM_STATUS_FILTER_OPTIONS = [
+  { label: "已确认", value: "2" },
+  { label: "待确认", value: "1" },
+  { label: "未确认", value: "none" }
+] as const
+
 /** 在管总览 — 首次随访 / 后续随访完成情况筛选 */
 export const PATIENT_VISIT_STATUS_FILTER_OPTIONS = [
   { label: "待填写", value: "pending" },

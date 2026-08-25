@@ -17,6 +17,7 @@ import {
   KEY_INFECTION_SCREEN_METHOD_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
+  LATENT_NOTICE_CONFIRM_STATUS_FILTER_OPTIONS,
   TRACKING_STATUS_MAP
 } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
@@ -63,6 +64,15 @@ const populationTypeFilterOptions = LATENT_MANUAL_POPULATION_TYPE_OPTIONS.map(it
   text: item.label,
   value: item.value
 }))
+const noticeConfirmStatusFilterOptions = LATENT_NOTICE_CONFIRM_STATUS_FILTER_OPTIONS.map(item => ({
+  text: item.label,
+  value: item.value
+}))
+
+function onNoticeConfirmStatusFilterChange(value: string) {
+  setFilter("noticeConfirmStatus", value)
+  handleSearch()
+}
 
 const { load: loadDistinct, sourceValues: distinctValues, clearCache } = useColumnDistinct(async (field) => {
   const { data } = await getLatentColumnDistinctApi(field, searchForm.populationType || undefined)
@@ -411,6 +421,22 @@ async function handleImport(uploadFile: any) {
             <el-option v-for="(label, val) in TRACKING_STATUS_MAP" :key="val" :label="label" :value="Number(val)" />
           </el-select>
         </el-form-item>
+        <el-form-item label="通知确认状态">
+          <el-select
+            :model-value="columnFilters.noticeConfirmStatus"
+            placeholder="全部"
+            clearable
+            style="width: 130px"
+            @update:model-value="(v: string) => onNoticeConfirmStatusFilterChange(v || '')"
+          >
+            <el-option
+              v-for="item in LATENT_NOTICE_CONFIRM_STATUS_FILTER_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             搜索
@@ -598,7 +624,16 @@ async function handleImport(uploadFile: any) {
             <span v-else class="text-gray-400">未发送</span>
           </template>
         </el-table-column>
-        <el-table-column label="通知单确认状态" min-width="120">
+        <el-table-column label="通知单确认状态" min-width="140">
+          <template #header>
+            <TableHeaderFilter
+              label="通知单确认状态"
+              type="select"
+              :options="noticeConfirmStatusFilterOptions"
+              :model-value="columnFilters.noticeConfirmStatus"
+              @change="(v) => onNoticeConfirmStatusFilterChange(v)"
+            />
+          </template>
           <template #default="{ row }">
             <el-tag
               v-if="row.noticeStatus === 1 || row.noticeStatus === 2"
