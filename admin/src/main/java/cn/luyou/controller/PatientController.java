@@ -418,6 +418,7 @@ public class PatientController {
     @Operation(summary = "查询首次随访")
     @GetMapping("/first-visit/{patientId}")
     public ResultResponse<FirstVisit> getFirstVisit(@PathVariable Long patientId) {
+        patientService.assertPatientAccessible(patientId);
         LambdaQueryWrapper<FirstVisit> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(FirstVisit::getPatientId, patientId).last("LIMIT 1");
         return ResultRes.success(firstVisitService.getOne(wrapper));
@@ -439,6 +440,7 @@ public class PatientController {
     @GetMapping("/medication-pickup/list/{patientId}")
     public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long patientId) {
         userService.checkAnyPermissionCode(MEDICATION_PICKUP_READ_PERMISSIONS);
+        patientService.assertPatientAccessible(patientId);
         return ResultRes.success(medicationPickupService.listByPatientId(patientId));
     }
 
@@ -464,7 +466,7 @@ public class PatientController {
     public ResultResponse<Map<String, Integer>> getFollowUpCaseClosureStats(
             @PathVariable Long patientId,
             @RequestParam(defaultValue = "true") boolean includeCurrentFollowUp) {
-        patientService.assertPatientOperable(patientId);
+        patientService.assertPatientAccessible(patientId);
         Map<String, Integer> stats = new HashMap<>();
         stats.put("actualVisitCount", FollowUpCaseClosureSupport.computeActualVisitCount(
                 firstVisitService, followUpVisitService, patientId, includeCurrentFollowUp));
@@ -476,6 +478,7 @@ public class PatientController {
     @Operation(summary = "查询后续随访草稿")
     @GetMapping("/follow-up/draft/{patientId}")
     public ResultResponse<FollowUpVisit> getFollowUpDraft(@PathVariable Long patientId) {
+        patientService.assertPatientAccessible(patientId);
         FollowUpVisit draft = followUpVisitService.lambdaQuery()
                 .eq(FollowUpVisit::getPatientId, patientId)
                 .eq(FollowUpVisit::getStatus, 0)
@@ -648,6 +651,7 @@ public class PatientController {
     @Operation(summary = "后续随访列表")
     @GetMapping("/follow-up/list/{patientId}")
     public ResultResponse<List<FollowUpVisit>> listFollowUp(@PathVariable Long patientId) {
+        patientService.assertPatientAccessible(patientId);
         LambdaQueryWrapper<FollowUpVisit> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(FollowUpVisit::getPatientId, patientId)
                 .eq(FollowUpVisit::getStatus, 1)
@@ -730,6 +734,7 @@ public class PatientController {
     @Operation(summary = "查询服药管理")
     @GetMapping("/medication/{patientId}")
     public ResultResponse<MedicationManagement> getMedication(@PathVariable Long patientId) {
+        patientService.assertPatientAccessible(patientId);
         LambdaQueryWrapper<MedicationManagement> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(MedicationManagement::getPatientId, patientId)
                 .orderByDesc(MedicationManagement::getCreateTime)

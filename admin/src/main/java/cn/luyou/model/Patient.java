@@ -169,6 +169,14 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private String medicationDrugForm;
 
+    /** 最近领药-录入单位（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private String medicationEntryUnit;
+
+    /** 最近领药-录入人员（非数据库字段，列表查询时填充） */
+    @TableField(exist = false)
+    private String medicationEntryPerson;
+
     /** 已完成后续随访次数（非数据库字段，列表查询时填充） */
     @TableField(exist = false)
     private Integer followUpCount;

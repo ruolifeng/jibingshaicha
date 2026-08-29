@@ -695,7 +695,7 @@ async function handleSave() {
         :closable="false"
         show-icon
         class="mb-3"
-        title="实际访视次数 = 首次随访 + 后续随访；实际服药次数 = 服药管理中已标记天数，系统自动统计"
+        title="实际访视次数 = 首次随访 + 后续随访；实际服药次数 = 服药管理中圈 ×（Ⓧ）天数，系统自动统计"
       />
       <el-row :gutter="16">
         <el-col :span="12">

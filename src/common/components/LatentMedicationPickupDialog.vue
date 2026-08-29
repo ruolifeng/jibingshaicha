@@ -47,13 +47,17 @@ const dialogTitle = computed(() => {
 const pickupForm = reactive({
   pickupTime: "",
   dispensingUnit: "",
+  entryUnit: "",
+  entryPerson: "",
   remarks: "",
   drugRows: [] as DrugRow[]
 })
 
 const rules: FormRules = {
   pickupTime: [{ required: true, message: "请选择领取时间", trigger: "change" }],
-  dispensingUnit: [{ required: true, message: "请填写发药单位", trigger: "blur" }]
+  dispensingUnit: [{ required: true, message: "请填写发药单位", trigger: "blur" }],
+  entryUnit: [{ required: true, message: "请填写录入单位", trigger: "blur" }],
+  entryPerson: [{ required: true, message: "请填写录入人员", trigger: "blur" }]
 }
 
 function createEmptyDrugRow(): DrugRow {
@@ -63,6 +67,8 @@ function createEmptyDrugRow(): DrugRow {
 function resetForm() {
   pickupForm.pickupTime = ""
   pickupForm.dispensingUnit = userStore.orgName || ""
+  pickupForm.entryUnit = userStore.orgName || ""
+  pickupForm.entryPerson = userStore.realName || userStore.username || ""
   pickupForm.remarks = ""
   pickupForm.drugRows = [createEmptyDrugRow()]
 }
@@ -117,6 +123,8 @@ function fillFromInitial(data: Record<string, any>) {
   resetForm()
   pickupForm.pickupTime = data.pickupTime || ""
   pickupForm.dispensingUnit = data.dispensingUnit || userStore.orgName || ""
+  pickupForm.entryUnit = data.entryUnit || userStore.orgName || ""
+  pickupForm.entryPerson = data.entryPerson || userStore.realName || userStore.username || ""
   pickupForm.remarks = data.remarks || ""
   const legacyQuantity = data.quantity != null ? Number(data.quantity) : null
   const legacyQuantityUnit = data.quantityUnit || ""
@@ -172,6 +180,8 @@ async function handleSave() {
       quantity: firstDrug?.quantity ?? null,
       quantityUnit: firstDrug?.quantityUnit ?? "",
       dispensingUnit: pickupForm.dispensingUnit.trim(),
+      entryUnit: pickupForm.entryUnit.trim(),
+      entryPerson: pickupForm.entryPerson.trim(),
       remarks: pickupForm.remarks.trim(),
       drugs: JSON.stringify(drugs)
     })
@@ -323,6 +333,12 @@ function removeDrugRow(index: number) {
       </el-divider>
       <el-form-item label="发药单位" prop="dispensingUnit">
         <el-input v-model="pickupForm.dispensingUnit" placeholder="默认当前录入单位" />
+      </el-form-item>
+      <el-form-item label="录入单位" prop="entryUnit">
+        <el-input v-model="pickupForm.entryUnit" placeholder="默认当前单位" />
+      </el-form-item>
+      <el-form-item label="录入人员" prop="entryPerson">
+        <el-input v-model="pickupForm.entryPerson" placeholder="默认当前登录人员" />
       </el-form-item>
 
       <el-divider content-position="left">

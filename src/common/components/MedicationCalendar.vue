@@ -1,20 +1,26 @@
 <script lang="ts" setup>
 /**
- * 服药日历：点击循环标记 空白 → × → Ⓧ → 空白
+ * 服药日历：点击循环标记 空白 → × → Ⓧ → 空白；医嘱停药区间显示「停药」
  */
+import type { MedicationOrderStopPeriod } from "@@/utils/medicationManagement"
+import type { MedicationRecordsMap } from "@@/utils/medicationRecords"
+import { isDateInOrderStopPeriods } from "@@/utils/medicationManagement"
 import {
   countMedicationMarkedDays,
   formatMedicationDayMark,
   getMedicationDayMark,
-  type MedicationRecordsMap,
+
   toggleMedicationDayMark
 } from "@@/utils/medicationRecords"
 
 const props = withDefaults(defineProps<{
   modelValue: MedicationRecordsMap
   disabled?: boolean
+  /** 医嘱停药多段：落在区间内的日期显示「停药」 */
+  orderStopPeriods?: MedicationOrderStopPeriod[]
 }>(), {
-  disabled: false
+  disabled: false,
+  orderStopPeriods: () => []
 })
 
 const emit = defineEmits<{
@@ -57,8 +63,14 @@ function nextMonth() {
   calendarMonth.value = d
 }
 
+function isOrderStop(dateStr: string) {
+  return isDateInOrderStopPeriods(dateStr, props.orderStopPeriods)
+}
+
 function handleToggle(dateStr: string) {
   if (props.disabled) return
+  // 医嘱停药日不允许手动改服药标记，避免与停药冲突
+  if (isOrderStop(dateStr)) return
   emit("update:modelValue", toggleMedicationDayMark(props.modelValue, dateStr))
 }
 
@@ -87,16 +99,20 @@ function cellMark(dateStr: string) {
         :key="idx"
         class="med-calendar-cell"
         :class="{
-          blank: cell.blank,
-          readonly: disabled,
-          'mark-x': !cell.blank && cellMark(cell.date) === 'x',
-          'mark-circled': !cell.blank && cellMark(cell.date) === 'circled'
+          'blank': cell.blank,
+          'readonly': disabled || (!cell.blank && isOrderStop(cell.date)),
+          'mark-x': !cell.blank && !isOrderStop(cell.date) && cellMark(cell.date) === 'x',
+          'mark-circled': !cell.blank && !isOrderStop(cell.date) && cellMark(cell.date) === 'circled',
+          'mark-stop': !cell.blank && isOrderStop(cell.date),
         }"
         @click="!cell.blank && handleToggle(cell.date)"
       >
         <template v-if="!cell.blank">
           <span class="day-num">{{ cell.day }}</span>
-          <span v-if="cellMark(cell.date)" class="mark-symbol">
+          <span v-if="isOrderStop(cell.date)" class="mark-stop-text">
+            停药
+          </span>
+          <span v-else-if="cellMark(cell.date)" class="mark-symbol">
             {{ formatMedicationDayMark(cellMark(cell.date)) }}
           </span>
         </template>
@@ -104,7 +120,7 @@ function cellMark(dateStr: string) {
     </div>
     <div class="med-calendar-summary">
       已服药 <strong>{{ markedDays }}</strong> 天
-      <span v-if="!disabled" class="med-calendar-hint">（点击循环：× → Ⓧ → 空白）</span>
+      <span v-if="!disabled" class="med-calendar-hint">（点击循环：× → Ⓧ → 空白；仅 Ⓧ 计入已服药）</span>
     </div>
   </div>
 </template>
@@ -187,6 +203,18 @@ function cellMark(dateStr: string) {
 
     &.mark-circled .mark-symbol {
       font-size: 20px;
+    }
+
+    &.mark-stop {
+      background: #fdf6ec;
+      border-color: #f5dab1;
+    }
+
+    .mark-stop-text {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: #e6a23c;
     }
   }
 

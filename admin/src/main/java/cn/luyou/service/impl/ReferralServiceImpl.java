@@ -125,6 +125,8 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         referral.setConfirmedTime(LocalDateTime.now());
         referral.setActualReferralDate(actualReferralDate);
         updateById(referral);
+        // 再次兜底：确保源记录已标记「已转出」并退出转出单位在管/随访列表
+        ensureSourceMarkedTransferred(referral);
 
         syncReceiverTransferMessage(referral, true);
 
@@ -400,16 +402,19 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
 
     /** 已确认但尚未同步数据的转出记录补同步（兼容历史数据） */
     private void repairTransferIfNeeded(Referral referral) {
-        if (referral.getBizId() == null || referral.getTargetBizId() != null
-                || referral.getReceiverOrgId() == null) {
+        if (referral.getBizId() == null) {
             return;
         }
-        if ("patient".equals(referral.getModuleType())) {
-            repairPatientTransferIfNeeded(referral);
-        } else if ("latent".equals(referral.getModuleType())) {
-            repairLatentTransferIfNeeded(referral);
+        if (referral.getTargetBizId() == null && referral.getReceiverOrgId() != null) {
+            if ("patient".equals(referral.getModuleType())) {
+                repairPatientTransferIfNeeded(referral);
+            } else if ("latent".equals(referral.getModuleType())) {
+                repairLatentTransferIfNeeded(referral);
+            }
         }
+        ensureSourceMarkedTransferred(referral);
     }
+
     private void repairPatientTransferIfNeeded(Referral referral) {
         if (!"patient".equals(referral.getModuleType()) || referral.getBizId() == null) {
             return;
@@ -421,11 +426,6 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
                 referral.getBizId(), referral.getReceiverOrgId());
         referral.setTargetBizId(newPatientId);
         updateById(referral);
-        Patient source = patientService.getById(referral.getBizId());
-        if (source != null
-                && !PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(source.getArchiveRemark())) {
-            patientService.markTransferredOut(referral.getBizId());
-        }
     }
 
     private void repairLatentTransferIfNeeded(Referral referral) {
@@ -439,11 +439,29 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
                 referral.getBizId(), referral.getReceiverOrgId());
         referral.setTargetBizId(newLatentId);
         updateById(referral);
-        LatentInfection source = latentInfectionService.getById(referral.getBizId());
-        if (source != null
-                && !LatentInfectionService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(source.getArchiveRemark())) {
-            latentInfectionService.markTransferredOut(referral.getBizId());
+    }
+
+    /** 确认接收后源记录必须标记已转出，转出单位在管总览/随访不再可见 */
+    private void ensureSourceMarkedTransferred(Referral referral) {
+        if (referral == null || referral.getBizId() == null) {
+            return;
         }
+        if ("patient".equals(referral.getModuleType())) {
+            Patient source = patientService.getById(referral.getBizId());
+            if (source != null && needsTransferArchive(source.getArchiveRemark(), source.getArchived())) {
+                patientService.markTransferredOut(referral.getBizId());
+            }
+        } else if ("latent".equals(referral.getModuleType())) {
+            LatentInfection source = latentInfectionService.getById(referral.getBizId());
+            if (source != null && needsTransferArchive(source.getArchiveRemark(), source.getArchived())) {
+                latentInfectionService.markTransferredOut(referral.getBizId());
+            }
+        }
+    }
+
+    private static boolean needsTransferArchive(String archiveRemark, Integer archived) {
+        return !PatientService.ARCHIVE_REMARK_TRANSFERRED_OUT.equals(archiveRemark)
+                || !Integer.valueOf(1).equals(archived);
     }
 
     private void syncReceiverTransferMessage(Referral referral, boolean confirmed) {

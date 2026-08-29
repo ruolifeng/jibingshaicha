@@ -186,8 +186,11 @@ public interface PatientService extends IService<Patient> {
     /** 更新患者基本信息 */
     void updateBasicInfo(Long id, Map<String, Object> body);
 
-    /** 校验患者可编辑（非转出锁定） */
+    /** 校验当前用户可操作该患者（数据权限 + 非转出锁定） */
     void assertPatientOperable(Long id);
+
+    /** 校验当前用户可查阅该患者（数据权限；已转出源记录对转出单位不可见） */
+    void assertPatientAccessible(Long id);
 
     /**
      * 首页统计：年度管理患者数（阳性率分母）。

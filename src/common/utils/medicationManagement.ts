@@ -6,6 +6,86 @@ import { resolvePatientPathogenResult } from "@@/utils/patient"
 /** 治疗记录卡管理方式固定值 */
 export const MEDICATION_LOCKED_MANAGEMENT_METHOD = "全程管理"
 
+/** 医嘱停药一段：起止日期 + 原因 */
+export interface MedicationOrderStopPeriod {
+  startDate: string
+  endDate: string
+  reason: string
+}
+
+/** 解析医嘱停药多段 JSON */
+export function parseOrderStopPeriods(raw: unknown): MedicationOrderStopPeriod[] {
+  if (!raw) return []
+  let parsed: unknown = raw
+  if (typeof raw === "string") {
+    const trimmed = raw.trim()
+    if (!trimmed) return []
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .map((item) => {
+      if (!item || typeof item !== "object") return null
+      const row = item as Record<string, unknown>
+      const startDate = typeof row.startDate === "string" ? row.startDate.trim() : ""
+      const endDate = typeof row.endDate === "string" ? row.endDate.trim() : ""
+      const reason = typeof row.reason === "string" ? row.reason.trim() : ""
+      if (!startDate && !endDate && !reason) return null
+      return { startDate, endDate, reason }
+    })
+    .filter((item): item is MedicationOrderStopPeriod => !!item)
+}
+
+/** 序列化医嘱停药多段（空段丢弃） */
+export function serializeOrderStopPeriods(periods: MedicationOrderStopPeriod[]): string {
+  const cleaned = periods
+    .map(p => ({
+      startDate: (p.startDate || "").trim(),
+      endDate: (p.endDate || "").trim(),
+      reason: (p.reason || "").trim()
+    }))
+    .filter(p => p.startDate || p.endDate || p.reason)
+  if (!cleaned.length) return ""
+  return JSON.stringify(cleaned)
+}
+
+/** 校验医嘱停药段：有内容则起止日期必填且开始≤结束 */
+export function validateOrderStopPeriods(periods: MedicationOrderStopPeriod[]): string | null {
+  for (let i = 0; i < periods.length; i++) {
+    const p = periods[i]
+    const hasAny = !!(p.startDate || p.endDate || (p.reason || "").trim())
+    if (!hasAny) continue
+    if (!p.startDate || !p.endDate) {
+      return `请完善第 ${i + 1} 条医嘱停药的起止时间`
+    }
+    if (p.startDate > p.endDate) {
+      return `第 ${i + 1} 条医嘱停药的开始日期不能晚于结束日期`
+    }
+  }
+  return null
+}
+
+/** 判断某日是否落在任一医嘱停药区间内（含首尾） */
+export function isDateInOrderStopPeriods(
+  date: string,
+  periods: MedicationOrderStopPeriod[] | null | undefined
+): boolean {
+  if (!date || !periods?.length) return false
+  return periods.some((p) => {
+    if (!p.startDate || !p.endDate) return false
+    return date >= p.startDate && date <= p.endDate
+  })
+}
+
+/** 创建一条空白医嘱停药 */
+export function createEmptyOrderStopPeriod(): MedicationOrderStopPeriod {
+  return { startDate: "", endDate: "", reason: "" }
+}
+
 /** 首次随访「痰菌情况」→ 治疗记录卡「治疗前痰菌检查」 */
 export function mapFirstVisitSputumToMedication(sputumStatus?: string | null): string {
   if (!sputumStatus) return ""
@@ -72,6 +152,7 @@ export interface MedicationFormFields {
   startTreatmentDate: string
   stopDate: string
   dayMarks: MedicationRecordsMap
+  orderStopPeriods: MedicationOrderStopPeriod[]
 }
 
 /** 根据服药日历最早标记日解析开始治疗日期 */
@@ -103,6 +184,7 @@ export function applyMedicationFormDefaults(
     form.supervisor = saved.supervisor || form.supervisor
     form.stopDate = saved.stopDate || ""
     form.startTreatmentDate = resolveStartTreatmentDate(saved.startTreatmentDate, form.dayMarks)
+    form.orderStopPeriods = parseOrderStopPeriods(saved.orderStopPeriods)
   }
 
   // 治疗前痰菌检查：优先抓取服药管理列表「病原学结果」，再回退已保存值 / 首次随访
@@ -147,6 +229,7 @@ export function applyLatentMedicationFormDefaults(
     form.sputumResult = saved.sputumResult || form.sputumResult
     form.stopDate = saved.stopDate || ""
     form.startTreatmentDate = resolveStartTreatmentDate(saved.startTreatmentDate, form.dayMarks)
+    form.orderStopPeriods = parseOrderStopPeriods(saved.orderStopPeriods)
   }
 
   const supervision = options.supervision

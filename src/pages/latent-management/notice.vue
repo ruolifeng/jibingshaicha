@@ -6,10 +6,12 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { displayInfectionJudgeResult, getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
+import { downloadBlob } from "@@/utils/download"
 import { isNoticeSent } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import {
   closeCaseApi,
+  exportLatentNoticesApi,
   getLatentAggregateListApi
 } from "./apis"
 import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
@@ -43,24 +45,70 @@ const {
   infectionResultSourceValues
 } = useLatentTableHeaderFilters(() => searchForm.populationType)
 
+const selectedRows = ref<any[]>([])
+const exporting = ref(false)
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+function buildListQueryParams() {
+  const { dateRange, ...rest } = searchForm
+  const columnFiltersParam = toQueryParam()
+  const params: Record<string, any> = {
+    ...rest,
+    dateFilterBy: "noticeFill",
+    ...extractDateRangeParams(dateRange),
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+  }
+  if (!params.populationType) delete params.populationType
+  if (!params.phone) delete params.phone
+  if (!params.creatorName) delete params.creatorName
+  if (params.trackingStatus === undefined || params.trackingStatus === null || params.trackingStatus === "") {
+    delete params.trackingStatus
+  }
+  return params
+}
+
+async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: string[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected ? `选中的 ${ids!.length} 位潜伏感染者` : "当前筛选条件下的"
+  try {
+    await ElMessageBox.confirm(`确认导出${label}通知单数据吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    exporting.value = true
+    const blob = await exportLatentNoticesApi(isSelected ? { ids } : buildListQueryParams())
+    downloadBlob(blob as unknown as Blob, "潜伏感染者通知单.xlsx")
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的记录")
+    return
+  }
+  handleExport("selected", ids)
+}
+
 async function fetchData() {
   loading.value = true
   try {
-    const { dateRange, ...rest } = searchForm
-    const columnFiltersParam = toQueryParam()
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
       archived: 0,
       referralResult: "latent",
-      dateFilterBy: "noticeFill",
-      ...rest,
-      ...extractDateRangeParams(dateRange),
-      ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {})
+      ...buildListQueryParams()
     }
-    if (!params.populationType) delete params.populationType
-    if (!params.phone) delete params.phone
-    if (!params.creatorName) delete params.creatorName
     const { data } = await getLatentAggregateListApi(params)
     tableData.value = data.records ?? []
     total.value = data.total ?? 0
@@ -167,7 +215,35 @@ async function handleCloseCase(row: any) {
 
     <!-- 数据表格 -->
     <el-card shadow="never" style="margin-top:10px">
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <div class="toolbar flex items-center justify-end gap-2 flex-wrap" style="margin-bottom: 12px">
+        <el-button
+          v-permission="'latentManagement:notice'"
+          type="primary"
+          plain
+          :loading="exporting"
+          @click="handleExport('filtered')"
+        >
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:notice'"
+          type="warning"
+          :disabled="!selectedRows.length"
+          :loading="exporting"
+          @click="handleExportSelected"
+        >
+          导出勾选
+        </el-button>
+      </div>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column prop="populationType" min-width="110">
           <template #header>

@@ -368,10 +368,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
                 .eq(archived != null, Patient::getArchived, archived);
         // 在管列表排除「已转出」（兼容历史误留在 archived=0 的数据）
+        // 同时排除 referral 已确认接收的源记录，避免转出单位在管总览/随访仍可见
         if (archived == null || Integer.valueOf(0).equals(archived)) {
             wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
                     .or()
                     .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+            wrapper.notInSql(Patient::getId,
+                    "SELECT r.biz_id FROM referral r WHERE r.module_type = 'patient'"
+                            + " AND r.status = 2 AND r.deleted = 0"
+                            + " AND r.biz_id IS NOT NULL AND r.target_biz_id IS NOT NULL");
         }
         applyDiagnosisResultFilter(wrapper, diagnosisResult);
         if (hasFirstVisitFillDateRange) {
@@ -1515,6 +1520,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 p.setMedicationPickTime(null);
                 p.setMedicationChemotherapy(null);
                 p.setMedicationDrugForm(null);
+                p.setMedicationEntryUnit(null);
+                p.setMedicationEntryPerson(null);
                 return;
             }
             p.setMedicationPickupCount(list.size());
@@ -1522,6 +1529,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             p.setMedicationPickTime(latest.getPickupTime() != null ? latest.getPickupTime().toString() : null);
             p.setMedicationChemotherapy(formatDrugNames(latest.getDrugs()));
             p.setMedicationDrugForm(formatDrugQuantities(latest.getDrugs(), latest.getQuantity(), latest.getQuantityUnit()));
+            p.setMedicationEntryUnit(latest.getEntryUnit());
+            p.setMedicationEntryPerson(latest.getEntryPerson());
         });
     }
 
@@ -1985,11 +1994,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
 
     @Override
     public void assertPatientOperable(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
         Patient patient = getById(id);
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
         assertPatientNotTransferLocked(patient);
+    }
+
+    @Override
+    public void assertPatientAccessible(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
     }
 
     private void assertPatientNotTransferLocked(Patient patient) {

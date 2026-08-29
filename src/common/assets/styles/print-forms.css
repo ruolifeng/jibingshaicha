@@ -270,6 +270,12 @@
   font-size: 15px;
 }
 
+.print-area .med-table .td-mark-stop {
+  color: #e6a23c;
+  font-weight: 600;
+  font-size: 11px;
+}
+
 @media print {
   body {
     -webkit-print-color-adjust: exact;
