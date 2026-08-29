@@ -284,7 +284,7 @@ function normalizeConfirmDiagnosisDisplay(value: string): string {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
 }
 
-/** 获取待诊断列表「确认诊断」列展示文本 */
+/** 获取待诊断列表「诊断结果」列展示文本 */
 export function getSuspectedConfirmDiagnosisLabel(row: {
   diagnosisFirst?: string
   screeningDiagnosisFirst?: string
@@ -592,6 +592,9 @@ export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导"
 
 /** 病原学/病理学检查结果（通知单痰涂片、痰培养等表单选项） */
 export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "病原学结果阳性", "未做", "未知"]
+
+/** 通知单分子检查 / 病理学检查修改选项 */
+export const MOLECULAR_PATHOLOGY_RESULT_OPTIONS = ["阴性", "阳性", "无结果"]
 
 /**
  * 患者列表「病原学结果」筛选项（上方搜索与表头筛选共用）。

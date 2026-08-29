@@ -292,6 +292,28 @@ async function handleDelete(record: Record<string, any>) {
             {{ displayInfectionJudgeResult(row.infectionResult) }}
           </template>
         </el-table-column>
+        <el-table-column
+          v-if="canViewPickup"
+          prop="medicationEntryUnit"
+          label="录入单位"
+          min-width="120"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ row.medicationEntryUnit || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="canViewPickup"
+          prop="medicationEntryPerson"
+          label="录入人员"
+          min-width="100"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ row.medicationEntryPerson || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right" :width="canViewPickup ? 100 : 120">
           <template #default="{ row }">
             <template v-if="!isLatentTransferLocked(row)">
@@ -386,23 +408,33 @@ async function handleDelete(record: Record<string, any>) {
     <el-dialog
       v-model="historyVisible"
       :title="historyDialogTitle"
-      width="920px"
+      width="1100px"
       append-to-body
     >
       <el-table :data="historyList" border stripe>
         <el-table-column prop="pickupSeq" label="第几次" width="80" />
         <el-table-column prop="pickupTime" label="领取时间" width="120" />
-        <el-table-column label="药品及用量" min-width="220" show-overflow-tooltip>
+        <el-table-column label="药品及用量" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatMedicationPickupDrugs(row.drugs) }}
           </template>
         </el-table-column>
-        <el-table-column label="领取数量" min-width="160" show-overflow-tooltip>
+        <el-table-column label="领取数量" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatMedicationPickupQuantities(row.drugs, row.quantity, row.quantityUnit) || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="dispensingUnit" label="发药单位" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="entryUnit" label="录入单位" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.entryUnit || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="entryPerson" label="录入人员" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.entryPerson || "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right" width="200">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewDetail(row)">

@@ -200,11 +200,13 @@ export function getNoticeDistrictLevel3UsersApi(noticeId: string) {
   })
 }
 
-/** 修改患者通知单痰培养、耐药情况、治疗方案并同步首次随访 */
+/** 修改患者通知单痰培养、耐药情况、治疗方案、分子/病理检查并同步首次随访 */
 export function updateNoticeCultureResistanceApi(noticeId: string, data: {
   sputumCulture?: string
   drugResistance?: string
   treatmentPlan?: string
+  molecularTest?: string
+  pathologyTest?: string
   receiverUserIds?: string[]
 }) {
   return request<ApiResponseData<null>>({

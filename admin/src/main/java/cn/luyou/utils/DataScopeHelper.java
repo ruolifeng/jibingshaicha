@@ -24,6 +24,9 @@ import java.util.stream.Collectors;
  * <p>
  * 转出副本（source_patient_id / source_latent_id 非空）不通过「旧通知单」扩权可见，
  * 避免跨区转出后原辖区三级/五级仍能在在管列表中看到该患者。
+ * <p>
+ * 接收方确认转出后，原记录（已转出 / referral.status=2 的 biz_id）对非超管一律不可见，
+ * 转出单位在管总览与随访记录不再展示该患者，也无法再通过详情接口查阅。
  */
 @Component
 @RequiredArgsConstructor
@@ -201,12 +204,17 @@ public class DataScopeHelper {
         if (BaseContext.isSuperAdmin()) {
             return;
         }
+        // 接收方确认后：转出单位不可再查阅原记录（在管总览、随访记录、详情等）
+        excludeTransferredOutSources(wrapper, idColumn, noticeType);
+
         Integer role = BaseContext.getCurrentRole();
         if (role != null && role == 6) {
             Long userId = BaseContext.getCurrentId();
             List<Long> deptIds = departmentService.getDescendantIds(BaseContext.getCurrentDepartmentId());
             String noticeBizSql = buildNoticeBizSql(noticeType, userId, null);
             String transferBizSql = buildTransferBizSql(noticeType, userId, null);
+            // 五级转出方即使与接收方同部门，也不可再看到接收方副本
+            excludeSenderTransferCopies(wrapper, idColumn, noticeType, userId);
             wrapper.and(w -> {
                 w.eq(creatorColumn, userId);
                 // 通知单扩权仅针对「非转出副本」：转出确认后副本归属接收方，原接收人不应再凭旧通知单看见
@@ -244,6 +252,47 @@ public class DataScopeHelper {
                 w.or().inSql(idColumn, transferBizSql);
             }
         });
+    }
+
+    /**
+     * 已确认转出且已生成接收方副本的原业务，对非超管不可见（接收方只看 target_biz_id）。
+     * 同时按 archive_remark=已转出排除。
+     * <p>
+     * 仅排除 target_biz_id 非空的确认记录，避免「未复制的历史确认」导致接收方也看不到唯一在管记录。
+     */
+    private <T> void excludeTransferredOutSources(LambdaQueryWrapper<T> wrapper,
+                                                  SFunction<T, Long> idColumn,
+                                                  String noticeType) {
+        String moduleType = "patient".equals(noticeType) ? "patient"
+                : "latent".equals(noticeType) ? "latent" : null;
+        if (moduleType == null) {
+            return;
+        }
+        wrapper.notInSql(idColumn,
+                "SELECT r.biz_id FROM referral r WHERE r.module_type = '" + moduleType
+                        + "' AND r.status = 2 AND r.deleted = 0"
+                        + " AND r.biz_id IS NOT NULL AND r.target_biz_id IS NOT NULL");
+        wrapper.apply("(archive_remark IS NULL OR archive_remark <> {0})", "已转出");
+    }
+
+    /**
+     * 五级发送方不可再看到自己已确认转出后的接收方副本（含同部门互转场景）。
+     * 上级（三级等）仍可按辖区看见副本，便于本区内监管。
+     */
+    private <T> void excludeSenderTransferCopies(LambdaQueryWrapper<T> wrapper,
+                                                 SFunction<T, Long> idColumn,
+                                                 String noticeType,
+                                                 Long senderUserId) {
+        String moduleType = "patient".equals(noticeType) ? "patient"
+                : "latent".equals(noticeType) ? "latent" : null;
+        if (moduleType == null || senderUserId == null) {
+            return;
+        }
+        wrapper.notInSql(idColumn,
+                "SELECT r.target_biz_id FROM referral r WHERE r.module_type = '" + moduleType
+                        + "' AND r.status = 2 AND r.deleted = 0"
+                        + " AND r.sender_id = " + senderUserId
+                        + " AND r.target_biz_id IS NOT NULL");
     }
 
     /**

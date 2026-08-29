@@ -881,6 +881,16 @@ public class ExportController {
             "下发人", "接收人", "发送时间", "接收时间", "状态"
     );
 
+    /** 潜伏感染者通知单导出列 */
+    private static final List<String> LATENT_NOTICE_EXPORT_HEADERS = List.of(
+            "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "民族", "人群分类",
+            "现居住地址", "户籍地址", "登记号", "感染筛查结果", "追踪状态", "确认诊断",
+            "感染检测时间", "感染检查方法", "感染检查结果",
+            "胸片检查时间", "胸片检查结果", "治疗方案",
+            "治疗机构", "下发时间",
+            "下发人", "接收人", "发送时间", "接收时间", "状态"
+    );
+
     private static final Map<String, String> FIRST_VISIT_SYMPTOM_LABEL = Map.ofEntries(
             Map.entry("0", "没有症状"), Map.entry("1", "咳嗽咳痰"), Map.entry("2", "低热盗汗"),
             Map.entry("3", "咯血或血痰"), Map.entry("4", "胸痛消瘦"), Map.entry("5", "恶心纳差"),
@@ -1101,6 +1111,49 @@ public class ExportController {
         }
         log.info("[导出] 患者通知单 {} 条", rows.size());
         writeExcel(response, "患者通知单", rows, PATIENT_NOTICE_EXPORT_HEADERS);
+    }
+
+    @Operation(summary = "导出潜伏感染者通知单（ids 勾选；否则按当前筛选）")
+    @GetMapping("/latent-notices")
+    @OperationLog(type = "export", module = "statistics", action = "导出潜伏感染者通知单")
+    public void exportLatentNotices(
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) String referralResult,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String departmentIds,
+            HttpServletResponse response) throws IOException {
+        List<LatentInfection> latents = loadLatentsForSupervisionExport(
+                ids, populationType, name, idNumber, phone, dateFrom, dateTo,
+                StrUtil.blankToDefault(dateFilterBy, "noticeFill"),
+                creatorName, archived != null ? archived : 0, trackingStatus,
+                StrUtil.blankToDefault(referralResult, "latent"),
+                crowdCategory, columnFilters, formatIssue, departmentIds);
+        if (latents.isEmpty()) {
+            writeExcel(response, "潜伏感染者通知单", List.of(), LATENT_NOTICE_EXPORT_HEADERS);
+            return;
+        }
+        List<Long> latentIds = latents.stream().map(LatentInfection::getId).toList();
+        Map<Long, Notice> noticeMap = loadLatestNoticeMap(latentIds, "latent");
+        noticePartyFillSupport.fillPartyNames(new ArrayList<>(noticeMap.values()));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (LatentInfection r : latents) {
+            rows.add(buildLatentNoticeExportRow(r, noticeMap.get(r.getId())));
+        }
+        log.info("[导出] 潜伏感染者通知单 {} 条", rows.size());
+        writeExcel(response, "潜伏感染者通知单", rows, LATENT_NOTICE_EXPORT_HEADERS);
     }
 
     @Operation(summary = "导出潜伏感染者督导表（ids 勾选；否则按当前筛选）")
@@ -1358,6 +1411,58 @@ public class ExportController {
             case 2 -> "已确认";
             default -> String.valueOf(status);
         };
+    }
+
+    private Map<String, Object> buildLatentNoticeExportRow(LatentInfection r, Notice notice) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("数据来源", formatLatentPopulationLabel(r.getPopulationType(), r.getCrowdCategory()));
+        row.put("姓名", preferNoticeValue(notice != null ? notice.getPatientName() : null, r.getName()));
+        row.put("性别", preferNoticeValue(notice != null ? notice.getGender() : null, r.getGender()));
+        row.put("年龄", notice != null && notice.getAge() != null ? notice.getAge() : (r.getAge() != null ? r.getAge() : ""));
+        row.put("证件号", preferNoticeValue(notice != null ? notice.getIdNumber() : null, r.getIdNumber()));
+        row.put("联系电话", preferNoticeValue(notice != null ? notice.getPhone() : null, r.getPhone()));
+        row.put("民族", preferNoticeValue(notice != null ? notice.getEthnicity() : null, r.getEthnicity()));
+        row.put("人群分类", preferNoticeValue(notice != null ? notice.getCrowdCategory() : null, r.getCrowdCategory()));
+        row.put("现居住地址", preferNoticeValue(notice != null ? notice.getCurrentAddress() : null, r.getCurrentAddress()));
+        row.put("户籍地址", preferNoticeValue(notice != null ? notice.getHouseholdAddress() : null, r.getHouseholdAddress()));
+        String registrationNo = notice != null && StrUtil.isNotBlank(notice.getRegistrationNo())
+                ? notice.getRegistrationNo().trim()
+                : nullToEmpty(r.getRegistrationNo());
+        row.put("登记号", registrationNo);
+        row.put("感染筛查结果", nullToEmpty(r.getInfectionResult()));
+        row.put("追踪状态", switch (r.getTrackingStatus() != null ? r.getTrackingStatus() : 0) {
+            case 1 -> "到位";
+            case 2 -> "未到位";
+            case 3 -> "其他";
+            case 4 -> "强制结束";
+            default -> "待追踪";
+        });
+        row.put("确认诊断", StrUtil.blankToDefault(r.getDiagnosisFirst(),
+                StrUtil.blankToDefault(r.getScreeningDiagnosisFirst(), "")));
+        if (notice == null) {
+            LATENT_NOTICE_EXPORT_HEADERS.stream()
+                    .filter(h -> !List.of(
+                            "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "民族", "人群分类",
+                            "现居住地址", "户籍地址", "登记号", "感染筛查结果", "追踪状态", "确认诊断", "状态"
+                    ).contains(h))
+                    .forEach(h -> row.put(h, ""));
+            row.put("状态", "未发送");
+            return row;
+        }
+        row.put("感染检测时间", formatDate(notice.getInfectionDate()));
+        row.put("感染检查方法", nullToEmpty(notice.getInfectionMethod()));
+        row.put("感染检查结果", nullToEmpty(notice.getInfectionResultValue()));
+        row.put("胸片检查时间", formatDate(notice.getChestXrayDate()));
+        row.put("胸片检查结果", nullToEmpty(notice.getChestXrayResult()));
+        row.put("治疗方案", nullToEmpty(notice.getTreatmentPlan()));
+        row.put("治疗机构", nullToEmpty(notice.getTreatmentInstitution()));
+        row.put("下发时间", formatDate(notice.getIssuedTime()));
+        row.put("下发人", formatNoticeParty(notice.getSenderName(), notice.getSenderOrgName()));
+        row.put("接收人", formatNoticeParty(notice.getReceiverName(), notice.getReceiverOrgName()));
+        row.put("发送时间", formatDateTime(notice.getSentTime()));
+        row.put("接收时间", formatDateTime(notice.getConfirmedTime()));
+        row.put("状态", patientNoticeStatusLabel(notice.getStatus()));
+        return row;
     }
 
     private void putLatentSupervisionBasicColumns(Map<String, Object> row, LatentInfection r) {

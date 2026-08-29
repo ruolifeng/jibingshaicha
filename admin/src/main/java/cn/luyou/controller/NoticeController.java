@@ -108,9 +108,9 @@ public class NoticeController {
         return ResultRes.success(noticeService.listDistrictLevel3Users(id));
     }
 
-    @Operation(summary = "修改患者通知单痰培养、耐药情况和治疗方案，并同步首次随访")
+    @Operation(summary = "修改患者通知单痰培养、耐药情况、治疗方案、分子/病理检查，并同步首次随访")
     @PostMapping("/{id}/culture-resistance")
-    @OperationLog(type = "update", module = "patient", action = "修改通知单痰培养耐药及治疗方案")
+    @OperationLog(type = "update", module = "patient", action = "修改通知单痰培养耐药治疗方案及分子病理")
     public ResultResponse<Void> updateCultureResistance(
             @PathVariable Long id,
             @RequestBody UpdateNoticeCultureResistanceDTO dto) {

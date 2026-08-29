@@ -157,6 +157,12 @@ public class LatentInfection extends BaseEntity {
     private String medicationChemotherapy;
     @TableField(exist = false)
     private String medicationDrugForm;
+    /** 最近领药-录入单位（非持久化） */
+    @TableField(exist = false)
+    private String medicationEntryUnit;
+    /** 最近领药-录入人员（非持久化） */
+    @TableField(exist = false)
+    private String medicationEntryPerson;
 
     // ===== 密接个案表回填（非持久化，详情展示）=====
     @TableField(exist = false)

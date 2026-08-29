@@ -1,7 +1,9 @@
 <script lang="ts" setup>
+import type { MedicationOrderStopPeriod } from "@@/utils/medicationManagement"
 import type { MedicationRecordsMap } from "@@/utils/medicationRecords"
 /** 服药管理弹窗（含每日服药日历 + 治疗记录卡打印） */
 import MedicationCalendar from "@@/components/MedicationCalendar.vue"
+import MedicationOrderStopPeriods from "@@/components/MedicationOrderStopPeriods.vue"
 import PrintMedication from "@@/components/PrintMedication.vue"
 import {
   MANAGEMENT_METHOD_OPTIONS,
@@ -13,7 +15,9 @@ import {
   applyMedicationFormDefaults,
   MEDICATION_LOCKED_MANAGEMENT_METHOD,
   medicationSelectOptions,
-  syncStartTreatmentDateFromMarks
+  serializeOrderStopPeriods,
+  syncStartTreatmentDateFromMarks,
+  validateOrderStopPeriods
 } from "@@/utils/medicationManagement"
 import {
   getEarliestMedicationMarkedDate,
@@ -46,7 +50,8 @@ const medicationForm = reactive({
   sputumResult: "",
   startTreatmentDate: "",
   stopDate: "",
-  dayMarks: {} as MedicationRecordsMap
+  dayMarks: {} as MedicationRecordsMap,
+  orderStopPeriods: [] as MedicationOrderStopPeriod[]
 })
 
 const saving = ref(false)
@@ -71,6 +76,7 @@ function resetForm() {
   medicationForm.startTreatmentDate = ""
   medicationForm.stopDate = ""
   medicationForm.dayMarks = {}
+  medicationForm.orderStopPeriods = []
 }
 
 async function loadMedication() {
@@ -133,13 +139,24 @@ function buildSaveData() {
     sputumResult: medicationForm.sputumResult,
     startTreatmentDate: medicationForm.startTreatmentDate || null,
     stopDate: medicationForm.stopDate,
-    medicationRecords: serializeMedicationRecords(medicationForm.dayMarks)
+    medicationRecords: serializeMedicationRecords(medicationForm.dayMarks),
+    orderStopPeriods: serializeOrderStopPeriods(medicationForm.orderStopPeriods) || "[]"
   }
+}
+
+function assertOrderStopValid(): boolean {
+  const err = validateOrderStopPeriods(medicationForm.orderStopPeriods)
+  if (err) {
+    ElMessage.warning(err)
+    return false
+  }
+  return true
 }
 
 /** 保存草稿：仅保存数据，不归档患者 */
 async function handleSaveDraft() {
   if (!props.patientRow || draftSaving.value) return
+  if (!assertOrderStopValid()) return
   draftSaving.value = true
   try {
     await saveMedicationApi(buildSaveData())
@@ -153,6 +170,7 @@ async function handleSaveDraft() {
 
 async function handleSave() {
   if (!props.patientRow || saving.value) return
+  if (!assertOrderStopValid()) return
   if (formId.value) {
     const name = props.patientRow.name?.trim() || "该患者"
     const confirmed = await confirmEditChange(`「${name}」的服药管理`)
@@ -184,14 +202,21 @@ function handleStartTreatmentDateChange() {
   <el-dialog
     :model-value="visible"
     :title="`${readOnly ? '查看服药管理' : '服药管理'}${patientRow?.name ? ` — ${patientRow.name}` : ''}`"
-    width="700px"
+    width="780px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form :model="medicationForm" label-width="130px">
+      <el-form-item label="医嘱停药">
+        <MedicationOrderStopPeriods
+          v-model="medicationForm.orderStopPeriods"
+          :disabled="readOnly"
+        />
+      </el-form-item>
       <el-form-item label="每日服药记录">
         <MedicationCalendar
           v-model="medicationForm.dayMarks"
+          :order-stop-periods="medicationForm.orderStopPeriods"
           :disabled="readOnly"
         />
       </el-form-item>

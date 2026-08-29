@@ -21,7 +21,7 @@ public final class FollowUpCaseClosureSupport {
     private FollowUpCaseClosureSupport() {
     }
 
-    /** 统计服药日历中有标记的天数（× 与 Ⓧ 均计入） */
+    /** 统计服药日历中已服药天数（仅 circled / 圈 × 计入；光划 x 不计） */
     public static int countMedicationMarkedDays(String medicationRecordsJson) {
         if (StrUtil.isBlank(medicationRecordsJson)) {
             return 0;
@@ -29,6 +29,7 @@ public final class FollowUpCaseClosureSupport {
         try {
             Object parsed = JSONUtil.parse(medicationRecordsJson);
             if (parsed instanceof JSONArray arr) {
+                // 旧版仅存日期列表，历史语义为已服药
                 int count = 0;
                 for (Object item : arr) {
                     if (item instanceof String s && s.matches("\\d{4}-\\d{2}-\\d{2}")) {
@@ -41,7 +42,7 @@ public final class FollowUpCaseClosureSupport {
                 int count = 0;
                 for (Map.Entry<String, Object> entry : obj.entrySet()) {
                     String mark = entry.getValue() == null ? "" : entry.getValue().toString();
-                    if ("x".equals(mark) || "circled".equals(mark)) {
+                    if ("circled".equals(mark)) {
                         count++;
                     }
                 }

@@ -36,6 +36,10 @@ public class MedicationPickup extends BaseEntity {
     private LocalDate pickupTime;
     /** 发药单位 */
     private String dispensingUnit;
+    /** 录入单位 */
+    private String entryUnit;
+    /** 录入人员 */
+    private String entryPerson;
     /** 备注 */
     private String remarks;
     private Long filledBy;

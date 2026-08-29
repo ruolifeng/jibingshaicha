@@ -4,6 +4,7 @@ import {
   applyPatientNoticeTreatmentPlan,
   DRUG_RESISTANCE_OPTIONS,
   isPatientOtherSensitivePlan,
+  MOLECULAR_PATHOLOGY_RESULT_OPTIONS,
   NOTICE_STATUS_MAP,
   PATHOGEN_RESULT_OPTIONS,
   resolvePatientTreatmentPlanForSave,
@@ -39,6 +40,8 @@ const sputumCulture = ref("")
 const drugResistance = ref("")
 const treatmentPlan = ref("")
 const customPlanDetail = ref("")
+const molecularTest = ref("")
+const pathologyTest = ref("")
 const level3Users = ref<any[]>([])
 const receiverUserIds = ref<string[]>([])
 
@@ -47,6 +50,13 @@ const canEditCulture = computed(() => {
   const status = noticeDetailData.value?.status
   return status === 1 || status === 2
 })
+
+/** 编辑下拉：标准三项 + 当前历史值（若不在标准内） */
+function molecularPathologySelectOptions(current: string) {
+  const opts = [...MOLECULAR_PATHOLOGY_RESULT_OPTIONS]
+  if (current && !opts.includes(current)) opts.push(current)
+  return opts
+}
 
 function formatLevel3UserLabel(u: { realName?: string, username?: string, departmentName?: string, orgName?: string }) {
   const name = u.realName || u.username || ""
@@ -61,8 +71,18 @@ function resetEdit() {
   drugResistance.value = ""
   treatmentPlan.value = ""
   customPlanDetail.value = ""
+  molecularTest.value = ""
+  pathologyTest.value = ""
   level3Users.value = []
   receiverUserIds.value = []
+}
+
+/** 分子/病理历史值兼容：未出结果、未知 → 无结果 */
+function normalizeMolecularPathologyResult(value?: string | null) {
+  const v = (value || "").trim()
+  if (!v) return ""
+  if (v === "未出结果" || v === "未知") return "无结果"
+  return v
 }
 
 async function loadNotice() {
@@ -90,6 +110,8 @@ async function beginEdit() {
   if (!noticeDetailData.value || !canEditCulture.value) return
   sputumCulture.value = noticeDetailData.value.sputumCulture || ""
   drugResistance.value = noticeDetailData.value.drugResistance || ""
+  molecularTest.value = normalizeMolecularPathologyResult(noticeDetailData.value.molecularTest)
+  pathologyTest.value = normalizeMolecularPathologyResult(noticeDetailData.value.pathologyTest)
   const planForm = { treatmentPlan: "", customPlanDetail: "" }
   applyPatientNoticeTreatmentPlan(planForm, noticeDetailData.value.treatmentPlan, noticeDetailData.value.customPlanDetail)
   treatmentPlan.value = planForm.treatmentPlan
@@ -140,7 +162,7 @@ async function handleSaveCulture() {
   }
   if (level3Users.value.length === 0) {
     try {
-      await ElMessageBox.confirm("本区县暂无三级用户，将仅保存修改且不同步发送通知，是否继续？", "提示", { type: "warning" })
+      await ElMessageBox.confirm("本区县暂无三级用户，将保存修改并通知原接收方，是否继续？", "提示", { type: "warning" })
     } catch {
       return
     }
@@ -151,6 +173,8 @@ async function handleSaveCulture() {
       sputumCulture: sputumCulture.value || "",
       drugResistance: drugResistance.value || "",
       treatmentPlan: resolvePatientTreatmentPlanForSave(treatmentPlan.value, customPlanDetail.value),
+      molecularTest: molecularTest.value || "",
+      pathologyTest: pathologyTest.value || "",
       receiverUserIds: receiverUserIds.value
     })
     ElMessage.success("已保存修改")
@@ -263,10 +287,42 @@ async function handleSaveCulture() {
         </template>
       </el-descriptions-item>
       <el-descriptions-item label="分子检查">
-        {{ noticeDetailData.molecularTest || "-" }}
+        <el-select
+          v-if="editing"
+          v-model="molecularTest"
+          clearable
+          placeholder="请选择"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="item in molecularPathologySelectOptions(molecularTest)"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+        <template v-else>
+          {{ noticeDetailData.molecularTest || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="病理学检查">
-        {{ noticeDetailData.pathologyTest || "-" }}
+        <el-select
+          v-if="editing"
+          v-model="pathologyTest"
+          clearable
+          placeholder="请选择"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="item in molecularPathologySelectOptions(pathologyTest)"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+        <template v-else>
+          {{ noticeDetailData.pathologyTest || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="治疗机构">
         {{ noticeDetailData.treatmentInstitution || "-" }}

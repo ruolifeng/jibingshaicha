@@ -180,6 +180,9 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     void assertLatentOperable(Long id);
 
+    /** 校验当前用户可查阅该潜伏感染记录（数据权限；已转出源记录对转出单位不可见） */
+    void assertLatentAccessible(Long id);
+
     /** 将通知单中的登记号同步到潜伏感染主表 */
     void syncRegistrationNoFromNotice(Long latentId, String registrationNo);
 }

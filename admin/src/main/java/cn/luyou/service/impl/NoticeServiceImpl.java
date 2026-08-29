@@ -196,6 +196,12 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         if (notice == null) {
             return null;
         }
+        // 仅校验查阅权限：已转出源记录对转出单位不可见；转出待确认仍可查看
+        if ("patient".equals(notice.getNoticeType())) {
+            dataScopeHelper.assertPatientAccessible(notice.getBizId());
+        } else if ("latent".equals(notice.getNoticeType())) {
+            dataScopeHelper.assertLatentAccessible(notice.getBizId());
+        }
         noticePartyFillSupport.fillPartyNames(List.of(notice));
         return notice;
     }
@@ -214,21 +220,29 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少更新内容");
         }
         Notice notice = requirePatientNotice(noticeId);
-        notice.setSputumCulture(StrUtil.trimToNull(dto.getSputumCulture()));
-        notice.setDrugResistance(StrUtil.trimToNull(dto.getDrugResistance()));
+        String sputumCulture = StrUtil.trimToNull(dto.getSputumCulture());
+        String drugResistance = StrUtil.trimToNull(dto.getDrugResistance());
+        String molecularTest = StrUtil.trimToNull(dto.getMolecularTest());
+        String pathologyTest = StrUtil.trimToNull(dto.getPathologyTest());
+        // 显式 set 写入，避免 updateById 忽略 null / 部分字段未回写导致接收方看到旧值
+        var updater = lambdaUpdate()
+                .eq(Notice::getId, notice.getId())
+                .set(Notice::getSputumCulture, sputumCulture)
+                .set(Notice::getDrugResistance, drugResistance)
+                .set(Notice::getMolecularTest, molecularTest)
+                .set(Notice::getPathologyTest, pathologyTest);
         if (dto.getTreatmentPlan() != null) {
             String plan = StrUtil.trimToNull(dto.getTreatmentPlan());
+            updater.set(Notice::getTreatmentPlan, plan)
+                    .set(Notice::getCustomPlanDetail, null);
             notice.setTreatmentPlan(plan);
-            // 方案详情已写入 treatmentPlan；清空旧 customPlanDetail，避免回填时盖住新方案
             notice.setCustomPlanDetail(null);
         }
-        updateById(notice);
-        if (dto.getTreatmentPlan() != null) {
-            lambdaUpdate()
-                    .eq(Notice::getId, notice.getId())
-                    .set(Notice::getCustomPlanDetail, null)
-                    .update();
-        }
+        updater.update();
+        notice.setSputumCulture(sputumCulture);
+        notice.setDrugResistance(drugResistance);
+        notice.setMolecularTest(molecularTest);
+        notice.setPathologyTest(pathologyTest);
         syncFirstVisitCultureAndResistance(notice.getBizId(), notice.getSputumCulture(), notice.getDrugResistance());
         sendCultureResistanceChangedMessages(notice, dto.getReceiverUserIds());
     }
@@ -325,26 +339,42 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     }
 
     private void sendCultureResistanceChangedMessages(Notice notice, List<Long> receiverUserIds) {
-        if (receiverUserIds == null || receiverUserIds.isEmpty()) {
-            return;
-        }
         Long districtId = resolvePatientDistrictId(notice.getBizId());
         Set<Long> allowedIds = userService.getLevel3UsersInDistrict(districtId).stream()
                 .map(UserInfoVO::getId)
                 .collect(Collectors.toCollection(HashSet::new));
         List<Long> validIds = new ArrayList<>();
-        for (Long id : receiverUserIds) {
-            if (id != null && allowedIds.contains(id) && !validIds.contains(id)) {
-                validIds.add(id);
+        boolean hadLevel3Selection = receiverUserIds != null && !receiverUserIds.isEmpty();
+        if (hadLevel3Selection) {
+            for (Long id : receiverUserIds) {
+                if (id != null && allowedIds.contains(id) && !validIds.contains(id)) {
+                    validIds.add(id);
+                }
+            }
+            if (validIds.isEmpty()) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择本区县对应的三级用户");
             }
         }
+        // 同步通知原接收方（五级），保证其打开通知单即为最新内容
+        Long originalReceiverId = notice.getReceiverOrgId();
+        if (originalReceiverId != null && !validIds.contains(originalReceiverId)) {
+            validIds.add(originalReceiverId);
+        }
+        Long currentId = BaseContext.getCurrentId();
+        if (currentId != null) {
+            validIds.remove(currentId);
+        }
         if (validIds.isEmpty()) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择本区县对应的三级用户");
+            return;
         }
         String operatorName = resolveCurrentUserDisplayName();
         String patientName = StrUtil.blankToDefault(notice.getPatientName(), "患者");
-        String title = "培养、耐药信息变更";
-        String content = operatorName + "对" + patientName + "患者培养、耐药信息变更";
+        String drugResistance = StrUtil.trim(notice.getDrugResistance());
+        // 标题/正文按耐药结果提示，例如「修改为非耐药」
+        String title = StrUtil.isNotBlank(drugResistance)
+                ? "修改为" + drugResistance
+                : "耐药情况变更";
+        String content = operatorName + "对" + patientName + "患者" + title;
         for (Long receiverId : validIds) {
             sysMessageService.sendMessage(receiverId, title, content, MSG_TYPE_CULTURE_RESISTANCE_CHANGED, notice.getId());
         }

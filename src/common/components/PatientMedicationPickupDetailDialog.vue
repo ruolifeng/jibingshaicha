@@ -36,6 +36,12 @@ const emit = defineEmits<{
       <el-descriptions-item label="发药单位">
         {{ record.dispensingUnit || "-" }}
       </el-descriptions-item>
+      <el-descriptions-item label="录入单位">
+        {{ record.entryUnit || "-" }}
+      </el-descriptions-item>
+      <el-descriptions-item label="录入人员">
+        {{ record.entryPerson || "-" }}
+      </el-descriptions-item>
       <el-descriptions-item label="备注">
         {{ record.remarks || "-" }}
       </el-descriptions-item>

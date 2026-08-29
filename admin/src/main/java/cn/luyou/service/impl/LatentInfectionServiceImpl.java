@@ -218,10 +218,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(trackingStatus != null, LatentInfection::getTrackingStatus, trackingStatus)
                 .eq(archived != null, LatentInfection::getArchived, archived);
         // 在管列表排除「已转出」（兼容历史误留在 archived=0 的数据）
+        // 同时排除 referral 已确认接收的源记录，避免转出单位在管总览仍可见
         if (archived == null || Integer.valueOf(0).equals(archived)) {
             wrapper.and(w -> w.isNull(LatentInfection::getArchiveRemark)
                     .or()
                     .ne(LatentInfection::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+            wrapper.notInSql(LatentInfection::getId,
+                    "SELECT r.biz_id FROM referral r WHERE r.module_type = 'latent'"
+                            + " AND r.status = 2 AND r.deleted = 0"
+                            + " AND r.biz_id IS NOT NULL AND r.target_biz_id IS NOT NULL");
         }
         ScreeningDiagnosisSupport.applyDiagnosisFirstFilter(
                 wrapper, LatentInfection::getDiagnosisFirst, diagnosisFirst);
@@ -310,6 +315,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setMedicationPickTime(null);
                 r.setMedicationChemotherapy(null);
                 r.setMedicationDrugForm(null);
+                r.setMedicationEntryUnit(null);
+                r.setMedicationEntryPerson(null);
                 return;
             }
             r.setMedicationPickupCount(list.size());
@@ -318,6 +325,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             r.setMedicationChemotherapy(formatLatentDrugNames(latest.getDrugs()));
             r.setMedicationDrugForm(formatLatentDrugQuantities(
                     latest.getDrugs(), latest.getQuantity(), latest.getQuantityUnit()));
+            r.setMedicationEntryUnit(latest.getEntryUnit());
+            r.setMedicationEntryPerson(latest.getEntryPerson());
         });
     }
 
@@ -2488,11 +2497,17 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     public void assertLatentOperable(Long id) {
+        dataScopeHelper.assertLatentAccessible(id);
         LatentInfection latent = getById(id);
         if (latent == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "潜伏感染记录不存在");
         }
         assertLatentNotTransferLocked(latent);
+    }
+
+    @Override
+    public void assertLatentAccessible(Long id) {
+        dataScopeHelper.assertLatentAccessible(id);
     }
 
     @Override

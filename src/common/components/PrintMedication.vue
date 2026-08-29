@@ -1,5 +1,7 @@
 <script lang="ts" setup>
+import type { MedicationOrderStopPeriod } from "@@/utils/medicationManagement"
 import type { MedicationDayMark, MedicationRecordsMap } from "@@/utils/medicationRecords"
+import { isDateInOrderStopPeriods } from "@@/utils/medicationManagement"
 import {
   countMedicationMarkedDays,
   formatMedicationDayMark,
@@ -22,6 +24,7 @@ const props = defineProps<{
     startTreatmentDate: string
     stopDate: string
     dayMarks: MedicationRecordsMap
+    orderStopPeriods?: MedicationOrderStopPeriod[]
   }
 }>()
 
@@ -29,7 +32,18 @@ const emit = defineEmits<{
   (e: "update:visible", v: boolean): void
 }>()
 
-const availableYears = computed(() => getMedicationRecordYears(props.medicationData.dayMarks))
+const orderStopPeriods = computed(() => props.medicationData.orderStopPeriods || [])
+
+const availableYears = computed(() => {
+  const years = new Set(getMedicationRecordYears(props.medicationData.dayMarks))
+  for (const p of orderStopPeriods.value) {
+    for (const d of [p.startDate, p.endDate]) {
+      if (d && /^\d{4}/.test(d)) years.add(Number(d.slice(0, 4)))
+    }
+  }
+  if (!years.size) years.add(new Date().getFullYear())
+  return Array.from(years).sort((a, b) => a - b)
+})
 
 const selectedYear = ref<number>(new Date().getFullYear())
 
@@ -47,13 +61,15 @@ const monthGrid = computed(() => {
     const days = Array.from({ length: 31 }, (_, j) => {
       const day = j + 1
       if (day > daysInMonth) {
-        return { day, valid: false, mark: "" as MedicationDayMark | "" }
+        return { day, valid: false, mark: "" as MedicationDayMark | "", stopped: false }
       }
       const dateStr = `${selectedYear.value}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      const stopped = isDateInOrderStopPeriods(dateStr, orderStopPeriods.value)
       return {
         day,
         valid: true,
-        mark: getMedicationDayMark(props.medicationData.dayMarks, dateStr)
+        stopped,
+        mark: stopped ? ("" as MedicationDayMark | "") : getMedicationDayMark(props.medicationData.dayMarks, dateStr)
       }
     })
     return { month, days }
@@ -181,11 +197,15 @@ function handlePrint() {
               class="td-day"
               :class="{
                 'td-invalid': !cell.valid,
-                'td-mark-x': cell.valid && cell.mark === 'x',
-                'td-mark-circled': cell.valid && cell.mark === 'circled',
+                'td-mark-x': cell.valid && !cell.stopped && cell.mark === 'x',
+                'td-mark-circled': cell.valid && !cell.stopped && cell.mark === 'circled',
+                'td-mark-stop': cell.valid && cell.stopped,
               }"
             >
-              <template v-if="cell.valid && cell.mark">
+              <template v-if="cell.valid && cell.stopped">
+                停药
+              </template>
+              <template v-else-if="cell.valid && cell.mark">
                 {{ formatMedicationDayMark(cell.mark) }}
               </template>
             </td>

@@ -1,4 +1,4 @@
-/** 每日服药标记：x=标 X，circled=圈 X，空白=未标记 */
+/** 每日服药标记：x=仅划 ×（未计入服药），circled=圈 ×（计入已服药），空白=未标记 */
 export type MedicationDayMark = "x" | "circled"
 
 export type MedicationRecordsMap = Record<string, MedicationDayMark>
@@ -25,7 +25,8 @@ export function parseMedicationRecords(raw: unknown): MedicationRecordsMap {
     const map: MedicationRecordsMap = {}
     for (const item of parsed) {
       if (typeof item === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item)) {
-        map[item] = "x"
+        // 旧版仅存日期，历史语义为已服药 → 记为圈 ×
+        map[item] = "circled"
       }
     }
     return map
@@ -53,7 +54,7 @@ export function serializeMedicationRecords(marks: MedicationRecordsMap): string 
   return JSON.stringify(Object.fromEntries(entries))
 }
 
-/** 三态循环：空白 → X → Ⓧ → 空白 */
+/** 三态循环：空白 → × → Ⓧ → 空白 */
 export function toggleMedicationDayMark(marks: MedicationRecordsMap, date: string): MedicationRecordsMap {
   const next = { ...marks }
   const current = next[date]
@@ -77,16 +78,21 @@ export function formatMedicationDayMark(mark: MedicationDayMark | ""): string {
   return ""
 }
 
-/** 统计有标记的天数（x 与 Ⓧ 均计入） */
+/** 是否计入已服药（仅圈 ×） */
+export function isMedicationTakenMark(mark: MedicationDayMark | "" | null | undefined): boolean {
+  return mark === "circled"
+}
+
+/** 统计已服药天数（仅 Ⓧ 计入；光划 × 不计） */
 export function countMedicationMarkedDays(marks: MedicationRecordsMap, year?: number): number {
   return Object.entries(marks).filter(([date, mark]) => {
-    if (mark !== "x" && mark !== "circled") return false
+    if (!isMedicationTakenMark(mark)) return false
     if (year && !date.startsWith(String(year))) return false
     return true
   }).length
 }
 
-/** 获取最早有标记的服药日期（YYYY-MM-DD） */
+/** 获取最早有标记的服药日期（含 × / Ⓧ，用于开始治疗日期） */
 export function getEarliestMedicationMarkedDate(marks: MedicationRecordsMap): string {
   return Object.entries(marks)
     .filter(([, mark]) => mark === "x" || mark === "circled")

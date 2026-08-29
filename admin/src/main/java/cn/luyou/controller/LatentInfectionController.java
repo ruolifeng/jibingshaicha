@@ -310,6 +310,7 @@ public class LatentInfectionController {
     @Operation(summary = "查询电话随访记录")
     @GetMapping("/follow-up/list/{latentId}")
     public ResultResponse<List<LatentFollowUp>> followUpList(@PathVariable Long latentId) {
+        latentInfectionService.assertLatentAccessible(latentId);
         return ResultRes.success(latentFollowUpService.listByLatentId(latentId));
     }
 
@@ -317,6 +318,9 @@ public class LatentInfectionController {
     @PostMapping("/follow-up/save")
     @OperationLog(type = "update", module = "latent", action = "新增潜伏感染电话随访")
     public ResultResponse<Void> saveFollowUp(@RequestBody LatentFollowUp followUp) {
+        if (followUp.getLatentInfectionId() != null) {
+            latentInfectionService.assertLatentOperable(followUp.getLatentInfectionId());
+        }
         latentFollowUpService.save(followUp);
         return ResultRes.success(null);
     }
@@ -326,6 +330,7 @@ public class LatentInfectionController {
     @Operation(summary = "查询按期检查记录")
     @GetMapping("/check/list/{latentId}")
     public ResultResponse<List<LatentCheck>> checkList(@PathVariable Long latentId) {
+        latentInfectionService.assertLatentAccessible(latentId);
         return ResultRes.success(latentCheckService.listByLatentId(latentId));
     }
 
@@ -333,6 +338,9 @@ public class LatentInfectionController {
     @PostMapping("/check/save")
     @OperationLog(type = "update", module = "latent", action = "新增潜伏感染按期检查")
     public ResultResponse<Void> saveCheck(@RequestBody LatentCheck check) {
+        if (check.getLatentInfectionId() != null) {
+            latentInfectionService.assertLatentOperable(check.getLatentInfectionId());
+        }
         latentCheckService.save(check);
         return ResultRes.success(null);
     }
@@ -351,6 +359,7 @@ public class LatentInfectionController {
     @Operation(summary = "查询潜伏感染者服药管理")
     @GetMapping("/medication/{latentInfectionId}")
     public ResultResponse<MedicationManagement> getMedication(@PathVariable Long latentInfectionId) {
+        latentInfectionService.assertLatentAccessible(latentInfectionId);
         LambdaQueryWrapper<MedicationManagement> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(MedicationManagement::getLatentInfectionId, latentInfectionId)
                 .orderByDesc(MedicationManagement::getCreateTime)
@@ -386,6 +395,7 @@ public class LatentInfectionController {
     @GetMapping("/medication-pickup/list/{latentInfectionId}")
     public ResultResponse<List<MedicationPickup>> listMedicationPickup(@PathVariable Long latentInfectionId) {
         userService.checkAnyPermissionCode(MEDICATION_PICKUP_READ_PERMISSIONS);
+        latentInfectionService.assertLatentAccessible(latentInfectionId);
         return ResultRes.success(medicationPickupService.listByLatentInfectionId(latentInfectionId));
     }
 

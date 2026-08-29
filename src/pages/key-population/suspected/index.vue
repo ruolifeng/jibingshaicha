@@ -479,7 +479,7 @@ watch(
         <el-table-column prop="diagnosisFirst" min-width="120" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
-              label="确认诊断"
+              label="诊断结果"
               type="select"
               :options="diagnosisFilterOptions"
               :model-value="columnFilters.diagnosisFirst"

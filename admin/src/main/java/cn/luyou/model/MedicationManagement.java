@@ -29,5 +29,10 @@ public class MedicationManagement extends BaseEntity {
     private LocalDate startTreatmentDate;
     /** 每日服药记录（JSON） */
     private String medicationRecords;
+    /**
+     * 医嘱停药多段（JSON）：
+     * [{ "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "reason": "..." }]
+     */
+    private String orderStopPeriods;
     private LocalDate stopDate;
 }

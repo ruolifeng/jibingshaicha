@@ -73,6 +73,7 @@ public class Notice extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String drugResistance;
     /** 个体化方案详情 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String customPlanDetail;
     /** 痰涂片：未出结果/阴性/阳性/未做/未知 */
     private String sputumSmear;
@@ -80,8 +81,10 @@ public class Notice extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String sputumCulture;
     /** 分子检查 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String molecularTest;
     /** 病理学检查 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String pathologyTest;
     /** 其他注意事项 */
     private String otherNotes;

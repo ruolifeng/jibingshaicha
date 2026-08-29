@@ -59,7 +59,7 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   review_reminder: "复查提醒",
   sputum_culture_pending: "痰培养未补充",
   sputum_culture_supplemented: "痰培养已补充",
-  culture_resistance_changed: "培养、耐药信息变更",
+  culture_resistance_changed: "耐药情况变更",
   follow_up_due: "后续随访提醒",
   supervision_due: "督导表提醒"
 }
@@ -151,6 +151,7 @@ async function viewNoticeDetail(row: any) {
   noticeDetailVisible.value = true
   noticeDetailData.value = null
   try {
+    // 始终按通知单 ID 拉取最新详情，避免展示修改前旧数据
     const { data } = await getNoticeDetailApi(row.bizId)
     noticeDetailData.value = data
   } catch { /* handled */ } finally {
@@ -442,7 +443,9 @@ const activeTab = ref("received")
             <el-table-column prop="type" label="类型">
               <template #default="{ row }">
                 <el-tag size="small" :type="getMessageTypeTagType(row.type)">
-                  {{ MESSAGE_TYPE_LABEL_MAP[row.type] || row.type }}
+                  {{ row.type === 'culture_resistance_changed' && row.title
+                    ? row.title
+                    : (MESSAGE_TYPE_LABEL_MAP[row.type] || row.type) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -864,8 +867,8 @@ const activeTab = ref("received")
       </template>
     </el-dialog>
 
-    <!-- 通知单详情弹窗 -->
-    <el-dialog v-model="noticeDetailVisible" title="通知单详情" width="680px" append-to-body>
+    <!-- 通知单详情弹窗：按 noticeType 展示完整字段，保证接收方看到最新修改 -->
+    <el-dialog v-model="noticeDetailVisible" title="通知单详情" width="720px" append-to-body>
       <div v-loading="noticeDetailLoading" style="min-height: 80px">
         <el-descriptions v-if="noticeDetailData" :column="2" border>
           <el-descriptions-item label="姓名">
@@ -889,38 +892,92 @@ const activeTab = ref("received")
           <el-descriptions-item label="人群分类">
             {{ noticeDetailData.crowdCategory || "-" }}
           </el-descriptions-item>
+          <el-descriptions-item v-if="noticeDetailData.noticeType === 'latent'" label="登记号">
+            {{ noticeDetailData.registrationNo || "-" }}
+          </el-descriptions-item>
           <el-descriptions-item label="现居住地址" :span="2">
             {{ noticeDetailData.currentAddress || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="户籍地址" :span="2">
             {{ noticeDetailData.householdAddress || "-" }}
           </el-descriptions-item>
-          <el-descriptions-item label="感染检测时间">
-            {{ noticeDetailData.infectionDate || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="感染检查方法">
-            {{ noticeDetailData.infectionMethod || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="感染检查结果" :span="2">
-            {{ displayInfectionJudgeResult(noticeDetailData.infectionResultValue) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="胸片检查时间">
-            {{ noticeDetailData.chestXrayDate || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="胸片检查结果">
-            {{ noticeDetailData.chestXrayResult || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="治疗方案" :span="2">
-            {{ noticeDetailData.treatmentPlan || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item v-if="noticeDetailData.customPlanDetail" label="方案详情" :span="2">
-            {{ noticeDetailData.customPlanDetail }}
-          </el-descriptions-item>
+
+          <!-- 潜伏感染者字段 -->
+          <template v-if="noticeDetailData.noticeType === 'latent'">
+            <el-descriptions-item label="感染检测时间">
+              {{ noticeDetailData.infectionDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染检查方法">
+              {{ noticeDetailData.infectionMethod || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="感染检查结果" :span="2">
+              {{ displayInfectionJudgeResult(noticeDetailData.infectionResultValue) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片检查时间">
+              {{ noticeDetailData.chestXrayDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片检查结果">
+              {{ noticeDetailData.chestXrayResult || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="治疗方案" :span="2">
+              {{ noticeDetailData.treatmentPlan || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="noticeDetailData.customPlanDetail" label="方案详情" :span="2">
+              {{ noticeDetailData.customPlanDetail }}
+            </el-descriptions-item>
+          </template>
+
+          <!-- 患者通知单字段（含接收后可修改项） -->
+          <template v-else>
+            <el-descriptions-item label="患者类型">
+              {{ noticeDetailData.patientType || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="管理方式">
+              {{ noticeDetailData.managementMethod || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片检查时间">
+              {{ noticeDetailData.chestXrayDate || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="胸片检查结果">
+              {{ noticeDetailData.chestXrayResult || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="治疗方案">
+              {{ noticeDetailData.treatmentPlan || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="耐药情况">
+              {{ noticeDetailData.drugResistance || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="noticeDetailData.customPlanDetail" label="方案详情" :span="2">
+              {{ noticeDetailData.customPlanDetail }}
+            </el-descriptions-item>
+            <el-descriptions-item label="痰涂片">
+              {{ noticeDetailData.sputumSmear || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="痰培养">
+              {{ noticeDetailData.sputumCulture || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="分子检查">
+              {{ noticeDetailData.molecularTest || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="病理学检查">
+              {{ noticeDetailData.pathologyTest || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item label="服药管理单位" :span="2">
+              {{ noticeDetailData.medicationManagementUnit || "-" }}
+            </el-descriptions-item>
+          </template>
+
           <el-descriptions-item label="治疗机构">
             {{ noticeDetailData.treatmentInstitution || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="下发时间">
             {{ noticeDetailData.issuedTime || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="noticeDetailData.remark" label="备注" :span="2">
+            {{ noticeDetailData.remark }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="noticeDetailData.otherNotes" label="其他注意事项" :span="2">
+            {{ noticeDetailData.otherNotes }}
           </el-descriptions-item>
           <el-descriptions-item label="下发人">
             {{ noticeDetailData.senderName || "-" }}
