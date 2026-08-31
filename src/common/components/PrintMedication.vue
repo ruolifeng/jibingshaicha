@@ -80,6 +80,20 @@ const totalCheckedDays = computed(() =>
   countMedicationMarkedDays(props.medicationData.dayMarks, selectedYear.value)
 )
 
+/** 表格下方展示的医嘱停药原因（多段用分号拼接） */
+const orderStopReasonText = computed(() => {
+  const lines = orderStopPeriods.value
+    .map((p) => {
+      const range = [p.startDate, p.endDate].filter(Boolean).join(" 至 ")
+      const reason = (p.reason || "").trim()
+      if (!range && !reason) return ""
+      if (range && reason) return `${range}  ${reason}`
+      return range || reason
+    })
+    .filter(Boolean)
+  return lines.join("；")
+})
+
 function handlePrint() {
   printElement(
     "print-medication-content",
@@ -212,6 +226,10 @@ function handlePrint() {
           </tr>
         </tbody>
       </table>
+
+      <div v-if="orderStopReasonText" class="print-order-stop">
+        医嘱停药原因：{{ orderStopReasonText }}
+      </div>
 
       <div class="print-footer">
         <div>本年度累计服药天数：<strong>{{ totalCheckedDays }}</strong> 天</div>

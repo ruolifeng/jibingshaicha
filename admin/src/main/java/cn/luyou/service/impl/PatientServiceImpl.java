@@ -1872,7 +1872,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (receiver.getDepartmentId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人未关联部门，无法同步");
         }
-        assertNoDuplicateInReceiverDept(source, receiver.getDepartmentId());
+        assertNoDuplicateInReceiverInstitution(source, receiverUserId);
 
         Patient copy = new Patient();
         BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
@@ -1905,12 +1905,13 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         return newPatientId;
     }
 
-    private void assertNoDuplicateInReceiverDept(Patient source, Long receiverDeptId) {
-        if (ImportIdentitySupport.isBlankOrPlaceholder(source.getIdNumber())) {
+    /** 去重按接收机构（录入人），同一乡镇下其他机构的在管记录不阻挡转出 */
+    private void assertNoDuplicateInReceiverInstitution(Patient source, Long receiverUserId) {
+        if (ImportIdentitySupport.isBlankOrPlaceholder(source.getIdNumber()) || receiverUserId == null) {
             return;
         }
         long count = lambdaQuery()
-                .eq(Patient::getDepartmentId, receiverDeptId)
+                .eq(Patient::getCreatorId, receiverUserId)
                 .eq(Patient::getIdNumber, source.getIdNumber())
                 .eq(Patient::getArchived, 0)
                 .and(w -> w.isNull(Patient::getArchiveRemark)
@@ -1920,7 +1921,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 .count();
         if (count > 0) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "接收方部门已存在相同证件号的在管患者，无法转出");
+                    "接收方机构已存在相同证件号的在管患者，无法转出");
         }
     }
 
