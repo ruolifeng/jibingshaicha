@@ -2362,7 +2362,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         if (receiver.getDepartmentId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "接收人未关联部门，无法同步");
         }
-        assertNoDuplicateLatentInReceiverDept(source, receiver.getDepartmentId());
+        assertNoDuplicateLatentInReceiverInstitution(source, receiverUserId);
 
         LatentInfection copy = new LatentInfection();
         BeanUtils.copyProperties(source, copy, "id", "createTime", "updateTime",
@@ -2395,12 +2395,13 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         return newLatentId;
     }
 
-    private void assertNoDuplicateLatentInReceiverDept(LatentInfection source, Long receiverDeptId) {
-        if (ImportIdentitySupport.isBlankOrPlaceholder(source.getIdNumber())) {
+    /** 去重按接收机构（录入人），同一乡镇下其他机构的在管记录不阻挡转出 */
+    private void assertNoDuplicateLatentInReceiverInstitution(LatentInfection source, Long receiverUserId) {
+        if (ImportIdentitySupport.isBlankOrPlaceholder(source.getIdNumber()) || receiverUserId == null) {
             return;
         }
         long count = lambdaQuery()
-                .eq(LatentInfection::getDepartmentId, receiverDeptId)
+                .eq(LatentInfection::getCreatorId, receiverUserId)
                 .eq(LatentInfection::getIdNumber, source.getIdNumber())
                 .eq(LatentInfection::getArchived, 0)
                 .and(w -> w.isNull(LatentInfection::getArchiveRemark)
@@ -2410,7 +2411,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .count();
         if (count > 0) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "接收方部门已存在相同证件号的在管潜伏感染记录，无法转出");
+                    "接收方机构已存在相同证件号的在管潜伏感染记录，无法转出");
         }
     }
 
