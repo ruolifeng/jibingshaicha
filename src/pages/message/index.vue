@@ -2,7 +2,7 @@
 import type { ReferralDetailVO, SentNoticeVO, SentReferralVO } from "./apis"
 import ConfirmReferralDialog from "@@/components/ConfirmReferralDialog.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { displayInfectionJudgeResult, getPopulationTypeLabel, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import { displayInfectionJudgeResult, getPopulationTypeLabel, normalizeNoticeSputumCulture, NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { formatReferralDisplay } from "@@/utils/referralTracking"
 import { useRouter } from "vue-router"
 import {
@@ -59,7 +59,7 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   review_reminder: "复查提醒",
   sputum_culture_pending: "痰培养未补充",
   sputum_culture_supplemented: "痰培养已补充",
-  culture_resistance_changed: "耐药情况变更",
+  culture_resistance_changed: "培养/耐药变更",
   follow_up_due: "后续随访提醒",
   supervision_due: "督导表提醒"
 }
@@ -954,7 +954,7 @@ const activeTab = ref("received")
               {{ noticeDetailData.sputumSmear || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="痰培养">
-              {{ noticeDetailData.sputumCulture || "-" }}
+              {{ normalizeNoticeSputumCulture(noticeDetailData.sputumCulture) || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="分子检查">
               {{ noticeDetailData.molecularTest || "-" }}

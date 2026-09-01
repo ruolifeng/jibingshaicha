@@ -6,6 +6,8 @@ import {
   CROWD_CATEGORY_OPTIONS,
   DRUG_RESISTANCE_OPTIONS,
   isPatientOtherSensitivePlan,
+  normalizeNoticeSputumCulture,
+  noticeSputumCultureSelectOptions,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
   PATIENT_OTHER_SENSITIVE_PLAN,
@@ -133,7 +135,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     managementMethod: notice.managementMethod || "",
     drugResistance: notice.drugResistance || resolveNoticeDrugResistance(row),
     sputumSmear: notice.sputumSmear || resolveNoticeSputumSmearFromPatient(row),
-    sputumCulture: notice.sputumCulture || "",
+    sputumCulture: normalizeNoticeSputumCulture(notice.sputumCulture),
     molecularTest: notice.molecularTest || "",
     pathologyTest: notice.pathologyTest || "",
     otherNotes: notice.otherNotes || "",
@@ -387,7 +389,7 @@ async function handleSaveDraft() {
               allow-create
               default-first-option
             >
-              <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+              <el-option v-for="item in noticeSputumCultureSelectOptions(noticeForm.sputumCulture)" :key="item" :label="item" :value="item" />
             </el-select>
           </el-form-item>
         </el-col>

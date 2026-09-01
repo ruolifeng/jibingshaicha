@@ -590,8 +590,27 @@ export function resolvePatientTreatmentPlanForSave(
 /** 患者通知单管理方式 */
 export const PATIENT_MANAGEMENT_METHOD_OPTIONS = ["全程督导", "强化督导", "全程管理", "未管理"]
 
-/** 病原学/病理学检查结果（通知单痰涂片、痰培养等表单选项） */
+/** 病原学/病理学检查结果（通知单痰涂片、分子/病理等表单选项） */
 export const PATHOGEN_RESULT_OPTIONS = ["未出结果", "阴性", "阳性", "病原学结果阳性", "未做", "未知"]
+
+/** 通知单痰培养选项（去掉病原学结果阳性，未知改为无结果） */
+export const NOTICE_SPUTUM_CULTURE_OPTIONS = ["未出结果", "阴性", "阳性", "未做", "无结果"]
+
+/** 通知单痰培养历史值兼容：未知 → 无结果 */
+export function normalizeNoticeSputumCulture(value?: string | null): string {
+  const v = (value || "").trim()
+  if (!v) return ""
+  if (v === "未知") return "无结果"
+  return v
+}
+
+/** 编辑下拉：标准选项 + 当前历史值（若不在标准内） */
+export function noticeSputumCultureSelectOptions(current?: string | null): string[] {
+  const opts = [...NOTICE_SPUTUM_CULTURE_OPTIONS]
+  const v = (current || "").trim()
+  if (v && !opts.includes(v)) opts.push(v)
+  return opts
+}
 
 /** 通知单分子检查 / 病理学检查修改选项 */
 export const MOLECULAR_PATHOLOGY_RESULT_OPTIONS = ["阴性", "阳性", "无结果"]
@@ -819,7 +838,7 @@ export const FOLLOW_UP_METHOD_OPTIONS = ["门诊", "家庭", "电话", VISIT_MET
 /** 痰菌情况 */
 export const SPUTUM_STATUS_OPTIONS = ["阳性", "阴性", "未查痰"]
 
-/** 痰培养选项（与通知单病原学选项一致） */
+/** 痰培养选项（首次随访等；通知单痰培养见 NOTICE_SPUTUM_CULTURE_OPTIONS） */
 export const SPUTUM_CULTURE_OPTIONS = PATHOGEN_RESULT_OPTIONS
 
 /** 痰培养「未做」标记值 */

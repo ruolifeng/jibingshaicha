@@ -5,8 +5,9 @@ import {
   DRUG_RESISTANCE_OPTIONS,
   isPatientOtherSensitivePlan,
   MOLECULAR_PATHOLOGY_RESULT_OPTIONS,
+  normalizeNoticeSputumCulture,
   NOTICE_STATUS_MAP,
-  PATHOGEN_RESULT_OPTIONS,
+  noticeSputumCultureSelectOptions,
   resolvePatientTreatmentPlanForSave,
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
@@ -108,7 +109,7 @@ async function loadNotice() {
 
 async function beginEdit() {
   if (!noticeDetailData.value || !canEditCulture.value) return
-  sputumCulture.value = noticeDetailData.value.sputumCulture || ""
+  sputumCulture.value = normalizeNoticeSputumCulture(noticeDetailData.value.sputumCulture)
   drugResistance.value = noticeDetailData.value.drugResistance || ""
   molecularTest.value = normalizeMolecularPathologyResult(noticeDetailData.value.molecularTest)
   pathologyTest.value = normalizeMolecularPathologyResult(noticeDetailData.value.pathologyTest)
@@ -280,10 +281,10 @@ async function handleSaveCulture() {
           placeholder="请选择或输入"
           style="width: 100%"
         >
-          <el-option v-for="item in PATHOGEN_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          <el-option v-for="item in noticeSputumCultureSelectOptions(sputumCulture)" :key="item" :label="item" :value="item" />
         </el-select>
         <template v-else>
-          {{ noticeDetailData.sputumCulture || "-" }}
+          {{ normalizeNoticeSputumCulture(noticeDetailData.sputumCulture) || "-" }}
         </template>
       </el-descriptions-item>
       <el-descriptions-item label="分子检查">
