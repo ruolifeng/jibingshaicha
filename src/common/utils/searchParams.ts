@@ -36,3 +36,20 @@ export function appendColumnFiltersParam(
     params.columnFilters = columnFiltersJson
   }
 }
+
+/** 将搜索栏字段并入 columnFilters JSON（表头未筛该字段时） */
+export function mergeColumnFilter(
+  columnFiltersJson: string | undefined,
+  field: string,
+  value?: string | null
+): string | undefined {
+  const filters: Record<string, string> = columnFiltersJson
+    ? JSON.parse(columnFiltersJson) as Record<string, string>
+    : {}
+  const trimmed = value?.trim() || ""
+  if (trimmed && !filters[field]) {
+    filters[field] = trimmed
+  }
+  const entries = Object.entries(filters).filter(([, v]) => !!v && String(v).trim() !== "")
+  return entries.length ? JSON.stringify(Object.fromEntries(entries)) : undefined
+}

@@ -94,6 +94,21 @@ export function exportPatientFollowUpVisitsApi(params: Record<string, any>) {
   })
 }
 
+/** 导出患者服药管理（ids 勾选；否则按当前筛选） */
+export function exportPatientMedicationsApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
+  return request<Blob>({
+    url: "export/patient-medications",
+    method: "get",
+    params: {
+      archived: 0,
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
+    responseType: "blob"
+  })
+}
+
 /** 导出患者通知单（ids 勾选；否则按当前筛选） */
 export function exportPatientNoticesApi(params: Record<string, any>) {
   const { ids, ...rest } = params
@@ -211,6 +226,19 @@ export function updateNoticeCultureResistanceApi(noticeId: string, data: {
 }) {
   return request<ApiResponseData<null>>({
     url: `notice/${noticeId}/culture-resistance`,
+    method: "post",
+    data
+  })
+}
+
+/** 修改通知单联系电话、现居住地址、户籍地址（同步患者主表） */
+export function updateNoticeContactApi(noticeId: string, data: {
+  phone?: string
+  currentAddress?: string
+  householdAddress?: string
+}) {
+  return request<ApiResponseData<null>>({
+    url: `notice/${noticeId}/contact`,
     method: "post",
     data
   })

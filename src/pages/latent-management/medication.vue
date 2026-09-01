@@ -9,7 +9,9 @@ import {
   getPopulationTypeTagType,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS
 } from "@@/constants/disease"
+import { downloadBlob } from "@@/utils/download"
 import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
+import { confirmDangerDelete } from "@@/utils/listToolbar"
 import {
   canEditMedicationPickup,
   formatMedicationPickupDrugs,
@@ -19,8 +21,16 @@ import {
   LATENT_MEDICATION_PICKUP_PERMISSIONS,
   LATENT_MEDICATION_PICKUP_VIEW_PERMISSIONS
 } from "@@/utils/medicationPickup"
+import { resolveMedicationManagementUnit } from "@@/utils/patient"
+import { extractDateRangeParams, mergeColumnFilter } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
-import { deleteLatentMedicationPickupApi, getLatentMedicationPickupListApi } from "./apis"
+import {
+  batchDeleteLatentApi,
+  deleteLatentByFilterApi,
+  deleteLatentMedicationPickupApi,
+  exportLatentMedicationsApi,
+  getLatentMedicationPickupListApi
+} from "./apis"
 import { useLatentOverviewList } from "./composables/useLatentOverviewList"
 import { useLatentTableHeaderFilters } from "./composables/useLatentTableHeaderFilters"
 
@@ -52,6 +62,7 @@ const {
   searchForm,
   columnFilters,
   setFilter,
+  toQueryParam,
   fetchData,
   handleSearch,
   handleReset
@@ -64,13 +75,121 @@ const {
   loadGenderOptions,
   loadPopulationTypeOptions,
   loadInfectionResultOptions,
+  loadMedicationUnitOptions,
   genderSourceValues,
   populationTypeSourceValues,
-  infectionResultSourceValues
+  infectionResultSourceValues,
+  medicationUnitSourceValues
 } = useLatentTableHeaderFilters(() => searchForm.populationType)
 
 const medicationDialogVisible = ref(false)
 const medicationRow = ref<any>(null)
+
+const selectedRows = ref<any[]>([])
+const exporting = ref(false)
+const batchDeleting = ref(false)
+
+function handleSelectionChange(rows: any[]) {
+  selectedRows.value = rows
+}
+
+function buildListQueryParams() {
+  const columnFiltersParam = mergeColumnFilter(
+    toQueryParam(),
+    "medicationManagementUnit",
+    searchForm.medicationManagementUnit
+  )
+  return {
+    name: searchForm.name || undefined,
+    idNumber: searchForm.idNumber || undefined,
+    phone: searchForm.phone || undefined,
+    populationType: searchForm.populationType || undefined,
+    creatorName: searchForm.creatorName || undefined,
+    crowdCategory: searchForm.keyPopulationSubCategories.length
+      ? searchForm.keyPopulationSubCategories.join(",")
+      : undefined,
+    formatIssue: searchForm.formatIssue || undefined,
+    trackingStatus: 1,
+    ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
+    ...extractDateRangeParams(searchForm.dateRange)
+  }
+}
+
+async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: string[]) {
+  const isSelected = mode === "selected"
+  const label = isSelected ? `选中的 ${ids!.length} 位感染者` : "当前筛选条件下的"
+  try {
+    await ElMessageBox.confirm(`确认导出${label}服药管理数据吗？`, "导出确认", {
+      confirmButtonText: "确认导出",
+      cancelButtonText: "取消",
+      type: "warning"
+    })
+    exporting.value = true
+    const blob = await exportLatentMedicationsApi(isSelected ? { ids } : buildListQueryParams())
+    downloadBlob(blob as unknown as Blob, "潜伏感染者服药管理.xlsx")
+    ElMessage.success("导出成功")
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("导出失败")
+  } finally {
+    exporting.value = false
+  }
+}
+
+function handleExportSelected() {
+  const ids = selectedRows.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning("请先勾选要导出的数据")
+    return
+  }
+  handleExport("selected", ids)
+}
+
+async function handleBatchDelete() {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先勾选要删除的数据")
+    return
+  }
+  if (selectedRows.value.some(r => isLatentTransferLocked(r))) {
+    ElMessage.warning("选中记录包含已转出或转出待确认的数据，不可删除")
+    return
+  }
+  const names = selectedRows.value.map(r => r.name).join("、")
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条记录（${names}）吗？关联的通知单、督导表、服药等数据将一并删除，且不可恢复！`,
+      "危险操作确认",
+      { confirmButtonText: "确认删除", cancelButtonText: "取消", type: "warning", confirmButtonClass: "el-button--danger" }
+    )
+    batchDeleting.value = true
+    await batchDeleteLatentApi(selectedRows.value.map(r => r.id))
+    ElMessage.success(`成功删除 ${selectedRows.value.length} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch (err: any) {
+    if (err !== "cancel") ElMessage.error("删除勾选失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function handleDeleteFiltered() {
+  const ok = await confirmDangerDelete({
+    title: "删除筛选结果",
+    message: "确定删除当前筛选条件下的全部在管潜伏感染者吗？关联的通知单、督导表、服药等数据将一并删除，且不可恢复！"
+  })
+  if (!ok) return
+  batchDeleting.value = true
+  try {
+    const { data } = await deleteLatentByFilterApi(buildListQueryParams())
+    ElMessage.success(`成功删除 ${data ?? 0} 条记录`)
+    selectedRows.value = []
+    fetchData()
+  } catch {
+    ElMessage.error("删除筛选结果失败")
+  } finally {
+    batchDeleting.value = false
+  }
+}
 
 const pickupDialogVisible = ref(false)
 const pickupRow = ref<any>(null)
@@ -181,6 +300,26 @@ async function handleDelete(record: Record<string, any>) {
             style="width: 240px"
           />
         </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-select
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="全部"
+            clearable
+            filterable
+            allow-create
+            default-first-option
+            style="width: 200px"
+            @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
+          >
+            <el-option
+              v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
             <el-option
@@ -203,7 +342,53 @@ async function handleDelete(record: Record<string, any>) {
     </el-card>
 
     <el-card shadow="never" style="margin-top:10px">
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <div class="toolbar flex items-center justify-end gap-2 flex-wrap" style="margin-bottom: 12px">
+        <el-button
+          v-permission="[...LATENT_MEDICATION_PAGE_PERMISSIONS]"
+          type="primary"
+          plain
+          :loading="exporting"
+          @click="handleExport('filtered')"
+        >
+          导出筛选结果
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:overview'"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="handleDeleteFiltered"
+        >
+          删除筛选结果
+        </el-button>
+        <el-button
+          v-permission="[...LATENT_MEDICATION_PAGE_PERMISSIONS]"
+          type="warning"
+          :disabled="!selectedRows.length"
+          :loading="exporting"
+          @click="handleExportSelected"
+        >
+          导出勾选
+        </el-button>
+        <el-button
+          v-permission="'latentManagement:overview'"
+          type="danger"
+          :disabled="!selectedRows.length"
+          :loading="batchDeleting"
+          @click="handleBatchDelete"
+        >
+          删除勾选
+        </el-button>
+      </div>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
         <el-table-column prop="populationType" min-width="110">
           <template #header>
@@ -290,6 +475,25 @@ async function handleDelete(record: Record<string, any>) {
           </template>
           <template #default="{ row }">
             {{ displayInfectionJudgeResult(row.infectionResult) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                setFilter('medicationManagementUnit', v)
+                handleSearch()
+              }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column

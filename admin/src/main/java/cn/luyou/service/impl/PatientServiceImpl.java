@@ -2008,6 +2008,24 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         dataScopeHelper.assertPatientAccessible(id);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void syncContactFromNotice(Long patientId, String phone, String currentAddress, String householdAddress) {
+        if (patientId == null) {
+            return;
+        }
+        Patient entity = getById(patientId);
+        if (entity == null) {
+            return;
+        }
+        lambdaUpdate()
+                .eq(Patient::getId, patientId)
+                .set(Patient::getPhone, phone)
+                .set(Patient::getCurrentAddress, currentAddress)
+                .set(Patient::getHouseholdAddress, householdAddress)
+                .update();
+    }
+
     private void assertPatientNotTransferLocked(Patient patient) {
         if (PatientService.isTransferLocked(patient)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,

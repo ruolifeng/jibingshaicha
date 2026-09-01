@@ -12,11 +12,13 @@ import {
   TREATMENT_PLAN_OPTIONS
 } from "@@/constants/disease"
 import { formatNoticeSentTime, isPatientTransferLocked } from "@@/utils/patient"
+import { validatePhone } from "@@/utils/validate"
 import {
   confirmNoticeApi,
   getNoticeDetailApi,
   getNoticeDistrictLevel3UsersApi,
   getNoticeListByBizApi,
+  updateNoticeContactApi,
   updateNoticeCultureResistanceApi
 } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -43,6 +45,9 @@ const treatmentPlan = ref("")
 const customPlanDetail = ref("")
 const molecularTest = ref("")
 const pathologyTest = ref("")
+const phone = ref("")
+const currentAddress = ref("")
+const householdAddress = ref("")
 const level3Users = ref<any[]>([])
 const receiverUserIds = ref<string[]>([])
 
@@ -74,6 +79,9 @@ function resetEdit() {
   customPlanDetail.value = ""
   molecularTest.value = ""
   pathologyTest.value = ""
+  phone.value = ""
+  currentAddress.value = ""
+  householdAddress.value = ""
   level3Users.value = []
   receiverUserIds.value = []
 }
@@ -113,6 +121,9 @@ async function beginEdit() {
   drugResistance.value = noticeDetailData.value.drugResistance || ""
   molecularTest.value = normalizeMolecularPathologyResult(noticeDetailData.value.molecularTest)
   pathologyTest.value = normalizeMolecularPathologyResult(noticeDetailData.value.pathologyTest)
+  phone.value = noticeDetailData.value.phone || ""
+  currentAddress.value = noticeDetailData.value.currentAddress || ""
+  householdAddress.value = noticeDetailData.value.householdAddress || ""
   const planForm = { treatmentPlan: "", customPlanDetail: "" }
   applyPatientNoticeTreatmentPlan(planForm, noticeDetailData.value.treatmentPlan, noticeDetailData.value.customPlanDetail)
   treatmentPlan.value = planForm.treatmentPlan
@@ -153,6 +164,11 @@ async function handleConfirmNotice(noticeId: string) {
 
 async function handleSaveCulture() {
   if (!noticeDetailData.value) return
+  const phoneVal = phone.value.trim()
+  if (phoneVal && !validatePhone(phoneVal)) {
+    ElMessage.warning("手机号格式不正确（需11位）")
+    return
+  }
   if (isPatientOtherSensitivePlan(treatmentPlan.value) && !customPlanDetail.value?.trim()) {
     ElMessage.warning("请填写其它敏感方案的具体方案")
     return
@@ -170,6 +186,11 @@ async function handleSaveCulture() {
   }
   submitting.value = true
   try {
+    await updateNoticeContactApi(noticeDetailData.value.id, {
+      phone: phoneVal,
+      currentAddress: currentAddress.value.trim(),
+      householdAddress: householdAddress.value.trim()
+    })
     await updateNoticeCultureResistanceApi(noticeDetailData.value.id, {
       sputumCulture: sputumCulture.value || "",
       drugResistance: drugResistance.value || "",
@@ -210,7 +231,16 @@ async function handleSaveCulture() {
         {{ noticeDetailData.age }}
       </el-descriptions-item>
       <el-descriptions-item label="联系方式">
-        {{ noticeDetailData.phone || "-" }}
+        <el-input
+          v-if="editing"
+          v-model="phone"
+          maxlength="11"
+          clearable
+          placeholder="请填写联系电话"
+        />
+        <template v-else>
+          {{ noticeDetailData.phone || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="民族">
         {{ noticeDetailData.ethnicity || "-" }}
@@ -219,10 +249,28 @@ async function handleSaveCulture() {
         {{ noticeDetailData.crowdCategory || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="现居住地址" :span="2">
-        {{ noticeDetailData.currentAddress || "-" }}
+        <el-input
+          v-if="editing"
+          v-model="currentAddress"
+          maxlength="200"
+          clearable
+          placeholder="请填写现居住地址"
+        />
+        <template v-else>
+          {{ noticeDetailData.currentAddress || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="户籍地址" :span="2">
-        {{ noticeDetailData.householdAddress || "-" }}
+        <el-input
+          v-if="editing"
+          v-model="householdAddress"
+          maxlength="200"
+          clearable
+          placeholder="请填写户籍地址"
+        />
+        <template v-else>
+          {{ noticeDetailData.householdAddress || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="患者类型">
         {{ noticeDetailData.patientType || "-" }}

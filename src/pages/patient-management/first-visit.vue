@@ -5,7 +5,7 @@ import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { DRUG_RESISTANCE_OPTIONS, getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { WarningFilled } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
@@ -187,6 +187,7 @@ async function openPrintFirstVisit(row: any) {
             default-first-option
             style="width: 200px"
             @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
           >
             <el-option
               v-for="item in medicationUnitSourceValues"
@@ -338,6 +339,25 @@ async function openPrintFirstVisit(row: any) {
         <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ resolvePatientDiagnosisResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                setFilter('medicationManagementUnit', v)
+                handleSearch()
+              }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="首次随访">

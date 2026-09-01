@@ -162,6 +162,19 @@ export function updateNoticeRegistrationNoApi(noticeId: string, registrationNo: 
   })
 }
 
+/** 修改通知单联系电话、现居住地址、户籍地址（同步潜伏感染主表） */
+export function updateNoticeContactApi(noticeId: string, data: {
+  phone?: string
+  currentAddress?: string
+  householdAddress?: string
+}) {
+  return request<ApiResponseData<null>>({
+    url: `notice/${noticeId}/contact`,
+    method: "post",
+    data
+  })
+}
+
 /** 保存督导表草稿 */
 export function saveSupervisionDraftApi(data: Record<string, any>) {
   return request<ApiResponseData<null>>({ url: "supervision/draft", method: "post", data })
@@ -193,6 +206,23 @@ export function exportLatentSupervisionFormsApi(params: Record<string, any>) {
       referralResult: "latent",
       trackingStatus: 1,
       dateFilterBy: "supervisionFill",
+      ...rest,
+      ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
+    },
+    responseType: "blob"
+  })
+}
+
+/** 导出潜伏感染者服药管理（ids 勾选；否则按当前筛选） */
+export function exportLatentMedicationsApi(params: Record<string, any>) {
+  const { ids, ...rest } = params
+  return request<Blob>({
+    url: "export/latent-medications",
+    method: "get",
+    params: {
+      archived: 0,
+      referralResult: "latent",
+      trackingStatus: 1,
       ...rest,
       ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})
     },

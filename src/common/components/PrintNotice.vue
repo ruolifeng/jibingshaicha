@@ -155,7 +155,7 @@ function handlePrint() {
               {{ noticeData?.treatmentInstitution }}
             </td>
           </tr>
-          <tr v-if="isPatient">
+          <tr>
             <th>服药管理单位</th>
             <td colspan="3" class="party-cell">
               {{ noticeData?.medicationManagementUnit }}

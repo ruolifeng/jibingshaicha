@@ -2,6 +2,7 @@ package cn.luyou.service;
 
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.model.vo.UpdateNoticeContactDTO;
 import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
 import cn.luyou.model.vo.UpdateNoticeRegistrationNoDTO;
 import cn.luyou.model.vo.UserInfoVO;
@@ -41,4 +42,7 @@ public interface NoticeService extends IService<Notice> {
 
     /** 仅更新潜伏感染者通知单登记号，并同步潜伏感染主表（总览/督导/服药/历史共用） */
     void updateRegistrationNo(Long noticeId, UpdateNoticeRegistrationNoDTO dto);
+
+    /** 更新通知单联系电话、现居住地址、户籍地址，并同步患者/潜伏感染主表 */
+    void updateContactInfo(Long noticeId, UpdateNoticeContactDTO dto);
 }

@@ -8,7 +8,8 @@ import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, normalizeLatentTreatmentPlan } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
 import { isLatentTransferLocked } from "@@/utils/latent"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { resolveMedicationManagementUnit } from "@@/utils/patient"
+import { extractDateRangeParams, mergeColumnFilter } from "@@/utils/searchParams"
 import { canEditSupervisionForm, getSupervisionStatusLabel, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteSupervisionApi, exportLatentSupervisionFormsApi, getLatentAggregateListApi, getLatentDetailApi, getSupervisionListApi } from "./apis"
@@ -29,7 +30,8 @@ const searchForm = reactive({
   phone: "",
   dateRange: [] as string[],
   creatorName: "",
-  populationType: ""
+  populationType: "",
+  medicationManagementUnit: ""
 })
 
 const {
@@ -37,15 +39,21 @@ const {
   populationTypeFilterOptions,
   loadGenderOptions,
   loadPopulationTypeOptions,
+  loadMedicationUnitOptions,
   genderSourceValues,
-  populationTypeSourceValues
+  populationTypeSourceValues,
+  medicationUnitSourceValues
 } = useLatentTableHeaderFilters(() => searchForm.populationType)
 
 async function fetchData() {
   loading.value = true
   try {
     const { dateRange, ...rest } = searchForm
-    const columnFiltersParam = toQueryParam()
+    const columnFiltersParam = mergeColumnFilter(
+      toQueryParam(),
+      "medicationManagementUnit",
+      searchForm.medicationManagementUnit
+    )
     const params: Record<string, any> = {
       page: paginationData.currentPage,
       size: paginationData.pageSize,
@@ -60,6 +68,7 @@ async function fetchData() {
     if (!params.populationType) delete params.populationType
     if (!params.phone) delete params.phone
     if (!params.creatorName) delete params.creatorName
+    if (!params.medicationManagementUnit) delete params.medicationManagementUnit
     const { data } = await getLatentAggregateListApi(params)
     tableData.value = data.records ?? []
     total.value = data.total ?? 0
@@ -80,6 +89,7 @@ function handleReset() {
   searchForm.dateRange = []
   searchForm.creatorName = ""
   searchForm.populationType = ""
+  searchForm.medicationManagementUnit = ""
   clearFilters()
   handleSearch()
 }
@@ -112,7 +122,11 @@ function handleSelectionChange(rows: any[]) {
 }
 
 function buildListQueryParams() {
-  const columnFiltersParam = toQueryParam()
+  const columnFiltersParam = mergeColumnFilter(
+    toQueryParam(),
+    "medicationManagementUnit",
+    searchForm.medicationManagementUnit
+  )
   return {
     name: searchForm.name || undefined,
     idNumber: searchForm.idNumber || undefined,
@@ -289,6 +303,26 @@ async function handleDelete(row: Record<string, any>) {
         <el-form-item label="录入者">
           <el-input v-model="searchForm.creatorName" placeholder="姓名或账号" clearable style="width:140px" />
         </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-select
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="全部"
+            clearable
+            filterable
+            allow-create
+            default-first-option
+            style="width: 200px"
+            @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
+          >
+            <el-option
+              v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
             <el-option label="学生筛查" value="school" />
@@ -416,6 +450,25 @@ async function handleDelete(row: Record<string, any>) {
         <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                setFilter('medicationManagementUnit', v)
+                handleSearch()
+              }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="督导表状态">
