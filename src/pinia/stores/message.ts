@@ -29,7 +29,7 @@ const ALERT_TYPE_TITLE: Record<string, string> = {
   visit_timeout: "随访超时",
   sputum_culture_pending: "痰培养未补充",
   review_reminder: "复查提醒",
-  culture_resistance_changed: "耐药情况变更",
+  culture_resistance_changed: "培养/耐药变更",
   follow_up_due: "后续随访提醒",
   supervision_due: "督导表提醒"
 }
@@ -104,8 +104,11 @@ export const useMessageStore = defineStore("message", () => {
         )
         if (items.length > 0) {
           markAlerted(items.map(item => String(item.id)))
+          const alertTitle = type === "culture_resistance_changed" && items.length === 1 && items[0].title
+            ? items[0].title
+            : (ALERT_TYPE_TITLE[type] || "消息提醒")
           await showCenterAlert(
-            ALERT_TYPE_TITLE[type] || "消息提醒",
+            alertTitle,
             buildAlertContent(type, items)
           )
           return

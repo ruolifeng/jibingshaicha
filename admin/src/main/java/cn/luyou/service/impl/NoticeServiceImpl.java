@@ -220,7 +220,9 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少更新内容");
         }
         Notice notice = requirePatientNotice(noticeId);
-        String sputumCulture = StrUtil.trimToNull(dto.getSputumCulture());
+        String previousSputumCulture = notice.getSputumCulture();
+        String previousDrugResistance = notice.getDrugResistance();
+        String sputumCulture = normalizeNoticeSputumCulture(dto.getSputumCulture());
         String drugResistance = StrUtil.trimToNull(dto.getDrugResistance());
         String molecularTest = StrUtil.trimToNull(dto.getMolecularTest());
         String pathologyTest = StrUtil.trimToNull(dto.getPathologyTest());
@@ -244,7 +246,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         notice.setMolecularTest(molecularTest);
         notice.setPathologyTest(pathologyTest);
         syncFirstVisitCultureAndResistance(notice.getBizId(), notice.getSputumCulture(), notice.getDrugResistance());
-        sendCultureResistanceChangedMessages(notice, dto.getReceiverUserIds());
+        sendCultureResistanceChangedMessages(notice, previousSputumCulture, previousDrugResistance, dto.getReceiverUserIds());
     }
 
     @Override
@@ -338,7 +340,11 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         firstVisitSputumCultureSupport.syncMessages(existing, before);
     }
 
-    private void sendCultureResistanceChangedMessages(Notice notice, List<Long> receiverUserIds) {
+    private void sendCultureResistanceChangedMessages(
+            Notice notice,
+            String previousSputumCulture,
+            String previousDrugResistance,
+            List<Long> receiverUserIds) {
         Long districtId = resolvePatientDistrictId(notice.getBizId());
         Set<Long> allowedIds = userService.getLevel3UsersInDistrict(districtId).stream()
                 .map(UserInfoVO::getId)
@@ -369,15 +375,65 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         }
         String operatorName = resolveCurrentUserDisplayName();
         String patientName = StrUtil.blankToDefault(notice.getPatientName(), "患者");
-        String drugResistance = StrUtil.trim(notice.getDrugResistance());
-        // 标题/正文按耐药结果提示，例如「修改为非耐药」
-        String title = StrUtil.isNotBlank(drugResistance)
-                ? "修改为" + drugResistance
-                : "耐药情况变更";
+        String title = resolveCultureResistanceChangedTitle(
+                previousSputumCulture, notice.getSputumCulture(),
+                previousDrugResistance, notice.getDrugResistance());
         String content = operatorName + "对" + patientName + "患者" + title;
         for (Long receiverId : validIds) {
             sysMessageService.sendMessage(receiverId, title, content, MSG_TYPE_CULTURE_RESISTANCE_CHANGED, notice.getId());
         }
+    }
+
+    /**
+     * 按实际变更生成消息标题：痰培养优先；改为阳性时明确提醒。
+     * 「未知」与「无结果」视为同一选项，避免仅重命名时误报修改培养。
+     */
+    private String resolveCultureResistanceChangedTitle(
+            String previousSputumCulture,
+            String sputumCulture,
+            String previousDrugResistance,
+            String drugResistance) {
+        boolean cultureChanged = !StrUtil.equals(
+                cultureCompareKey(previousSputumCulture),
+                cultureCompareKey(sputumCulture));
+        boolean resistanceChanged = !StrUtil.equals(
+                StrUtil.trimToEmpty(previousDrugResistance),
+                StrUtil.trimToEmpty(drugResistance));
+        if (cultureChanged) {
+            String cultureTitle = "阳性".equals(StrUtil.trim(sputumCulture))
+                    ? "修改痰培养结果为阳性"
+                    : "修改培养";
+            if (resistanceChanged) {
+                return cultureTitle + "，并" + resolveResistanceChangedTitle(drugResistance);
+            }
+            return cultureTitle;
+        }
+        if (resistanceChanged) {
+            return resolveResistanceChangedTitle(drugResistance);
+        }
+        return "通知单信息变更";
+    }
+
+    private String resolveResistanceChangedTitle(String drugResistance) {
+        String trimmed = StrUtil.trim(drugResistance);
+        return StrUtil.isNotBlank(trimmed) ? "修改为" + trimmed : "耐药情况变更";
+    }
+
+    /** 通知单痰培养：未知 → 无结果 */
+    private String normalizeNoticeSputumCulture(String value) {
+        String v = StrUtil.trimToNull(value);
+        if ("未知".equals(v)) {
+            return "无结果";
+        }
+        return v;
+    }
+
+    private String cultureCompareKey(String value) {
+        String v = StrUtil.trimToEmpty(value);
+        if ("未知".equals(v)) {
+            return "无结果";
+        }
+        return v;
     }
 
     private String resolveCurrentUserDisplayName() {
