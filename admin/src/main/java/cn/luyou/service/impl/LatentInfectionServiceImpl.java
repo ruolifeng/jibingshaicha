@@ -64,6 +64,7 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.read.listener.ReadListener;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -89,6 +90,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -124,7 +126,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             "name", "registrationNo", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
             "infectionResult", "screenMethod", "diagnosisFirst", "diagnosisResult", "populationType",
             "hasChestXray", "chestXrayResult", "creatorUsername", "crowdCategory", "remark",
-            "noticeConfirmStatus"
+            "noticeConfirmStatus", "medicationManagementUnit"
     );
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
@@ -411,9 +413,49 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                     }
                 }
                 case "noticeConfirmStatus" -> applyNoticeConfirmStatusFilter(wrapper, value);
+                case "medicationManagementUnit" -> applyMedicationManagementUnitFilter(wrapper, value);
                 default -> { }
             }
         });
+    }
+
+    /**
+     * 服药管理单位筛选：通知单服药管理单位，或督导表管理单位。
+     */
+    private void applyMedicationManagementUnitFilter(LambdaQueryWrapper<LatentInfection> wrapper, String value) {
+        Collection<String> values = ColumnFilterSupport.splitValues(value);
+        if (values.isEmpty()) {
+            return;
+        }
+        Set<Long> matchedIds = new HashSet<>();
+        for (String raw : values) {
+            String keyword = raw == null ? "" : raw.trim();
+            if (keyword.isEmpty()) {
+                continue;
+            }
+            noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                            .eq(Notice::getNoticeType, "latent")
+                            .like(Notice::getMedicationManagementUnit, keyword)
+                            .select(Notice::getBizId))
+                    .forEach(n -> {
+                        if (n.getBizId() != null) {
+                            matchedIds.add(n.getBizId());
+                        }
+                    });
+            supervisionFormMapper.selectList(new LambdaQueryWrapper<SupervisionForm>()
+                            .like(SupervisionForm::getManagingUnit, keyword)
+                            .select(SupervisionForm::getLatentInfectionId))
+                    .forEach(f -> {
+                        if (f.getLatentInfectionId() != null) {
+                            matchedIds.add(f.getLatentInfectionId());
+                        }
+                    });
+        }
+        if (matchedIds.isEmpty()) {
+            wrapper.apply("1=0");
+        } else {
+            wrapper.in(LatentInfection::getId, matchedIds);
+        }
     }
 
     /**
@@ -780,6 +822,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setNoticeId(null);
                 r.setNoticeSenderName(null);
                 r.setNoticeReceiverName(null);
+                r.setNoticeMedicationUnit(null);
                 r.setSupervisionCompleted(false);
                 r.setSupervisionStatus(0);
                 r.setTreatmentCompletionStatus(null);
@@ -811,6 +854,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setNoticeSent(notice.getStatus() != null && notice.getStatus() >= 1);
                 r.setNoticeSenderName(notice.getSenderName());
                 r.setNoticeReceiverName(notice.getReceiverName());
+                if (StrUtil.isNotBlank(notice.getMedicationManagementUnit())) {
+                    r.setNoticeMedicationUnit(notice.getMedicationManagementUnit().trim());
+                } else {
+                    r.setNoticeMedicationUnit(null);
+                }
                 // 列表登记号以通知单为准（数据来源：通知单）
                 if (StrUtil.isNotBlank(notice.getRegistrationNo())) {
                     r.setRegistrationNo(notice.getRegistrationNo().trim());
@@ -821,6 +869,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 r.setNoticeSent(false);
                 r.setNoticeSenderName(null);
                 r.setNoticeReceiverName(null);
+                r.setNoticeMedicationUnit(null);
             }
         });
 
@@ -859,6 +908,11 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             r.setSupervisionCompleted(Integer.valueOf(2).equals(status));
             SupervisionForm preferred = preferredSupervisionMap.get(r.getId());
             r.setTreatmentCompletionStatus(preferred != null ? preferred.getTreatmentCompletionStatus() : null);
+            if (StrUtil.isBlank(r.getNoticeMedicationUnit())
+                    && preferred != null
+                    && StrUtil.isNotBlank(preferred.getManagingUnit())) {
+                r.setNoticeMedicationUnit(preferred.getManagingUnit().trim());
+            }
         });
     }
 
@@ -2529,6 +2583,51 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .update();
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void syncContactFromNotice(Long latentId, String phone, String currentAddress, String householdAddress) {
+        if (latentId == null) {
+            return;
+        }
+        LatentInfection entity = getById(latentId);
+        if (entity == null) {
+            return;
+        }
+        lambdaUpdate()
+                .eq(LatentInfection::getId, latentId)
+                .set(LatentInfection::getPhone, phone)
+                .set(LatentInfection::getCurrentAddress, currentAddress)
+                .set(LatentInfection::getHouseholdAddress, householdAddress)
+                .update();
+        syncContactToLinkedScreening(entity, phone, currentAddress, householdAddress);
+    }
+
+    /** 列表展示会从筛查表回填电话/地址，修改通知单后需同步筛查来源，避免列表仍显示旧值 */
+    private void syncContactToLinkedScreening(
+            LatentInfection latent, String phone, String currentAddress, String householdAddress) {
+        if (latent.getScreeningId() == null || StrUtil.isBlank(latent.getPopulationType())) {
+            return;
+        }
+        switch (latent.getPopulationType()) {
+            case "school" -> screeningSchoolMapper.update(null, new LambdaUpdateWrapper<ScreeningSchool>()
+                    .eq(ScreeningSchool::getId, latent.getScreeningId())
+                    .set(ScreeningSchool::getPhone, phone)
+                    .set(ScreeningSchool::getCurrentAddress, currentAddress)
+                    .set(ScreeningSchool::getHouseholdAddress, householdAddress));
+            case "keyPopulation", "regular" -> screeningKeyPopulationMapper.update(null, new LambdaUpdateWrapper<ScreeningKeyPopulation>()
+                    .eq(ScreeningKeyPopulation::getId, latent.getScreeningId())
+                    .set(ScreeningKeyPopulation::getPhone, phone)
+                    .set(ScreeningKeyPopulation::getCurrentAddress, currentAddress)
+                    .set(ScreeningKeyPopulation::getHouseholdAddress, householdAddress));
+            case "closeContact" -> screeningCloseContactMapper.update(null, new LambdaUpdateWrapper<ScreeningCloseContact>()
+                    .eq(ScreeningCloseContact::getId, latent.getScreeningId())
+                    .set(ScreeningCloseContact::getPhone, phone)
+                    .set(ScreeningCloseContact::getCurrentAddress, currentAddress)
+                    .set(ScreeningCloseContact::getHouseholdAddress, householdAddress));
+            default -> { }
+        }
+    }
+
     private void assertLatentNotTransferLocked(LatentInfection latent) {
         if (LatentInfectionService.isTransferLocked(latent)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
@@ -2804,6 +2903,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
 
     @Override
     public List<String> listDistinctColumnValues(String field, String populationType, Integer archived, String referralResult) {
+        if ("medicationManagementUnit".equals(field)) {
+            return listDistinctMedicationManagementUnits(populationType, archived, referralResult);
+        }
         if (StrUtil.isBlank(field) || !COLUMN_DISTINCT_FIELDS.contains(field)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
         }
@@ -2842,6 +2944,43 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         return ColumnDistinctSupport.normalize(list(wrapper).stream()
                 .map(row -> extractDistinctValue(row, field))
                 .toList());
+    }
+
+    /** 服药管理单位去重：通知单 + 督导表管理单位 */
+    private List<String> listDistinctMedicationManagementUnits(String populationType, Integer archived, String referralResult) {
+        int resolvedArchived = archived != null ? archived : 0;
+        LambdaQueryWrapper<LatentInfection> scope = buildDistinctScopeWrapper(populationType, resolvedArchived, referralResult);
+        scope.select(LatentInfection::getId);
+        List<Long> latentIds = list(scope).stream()
+                .map(LatentInfection::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (latentIds.isEmpty()) {
+            return List.of();
+        }
+        Set<String> units = new TreeSet<>();
+        noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
+                        .eq(Notice::getNoticeType, "latent")
+                        .in(Notice::getBizId, latentIds)
+                        .isNotNull(Notice::getMedicationManagementUnit)
+                        .ne(Notice::getMedicationManagementUnit, "")
+                        .select(Notice::getMedicationManagementUnit))
+                .forEach(n -> {
+                    if (StrUtil.isNotBlank(n.getMedicationManagementUnit())) {
+                        units.add(n.getMedicationManagementUnit().trim());
+                    }
+                });
+        supervisionFormMapper.selectList(new LambdaQueryWrapper<SupervisionForm>()
+                        .in(SupervisionForm::getLatentInfectionId, latentIds)
+                        .isNotNull(SupervisionForm::getManagingUnit)
+                        .ne(SupervisionForm::getManagingUnit, "")
+                        .select(SupervisionForm::getManagingUnit))
+                .forEach(f -> {
+                    if (StrUtil.isNotBlank(f.getManagingUnit())) {
+                        units.add(f.getManagingUnit().trim());
+                    }
+                });
+        return new ArrayList<>(units);
     }
 
     /**

@@ -5,6 +5,7 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.Notice;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.model.vo.UpdateNoticeContactDTO;
 import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
 import cn.luyou.model.vo.UpdateNoticeRegistrationNoDTO;
 import cn.luyou.model.vo.UserInfoVO;
@@ -129,6 +130,22 @@ public class NoticeController {
         // 先校验模块权限，再由 Service 校验通知单类型与角色
         userService.checkPermissionCode("latentManagement:notice");
         noticeService.updateRegistrationNo(id, dto);
+        return ResultRes.success(null);
+    }
+
+    @Operation(summary = "修改通知单联系电话、现居住地址、户籍地址，并同步人员主表")
+    @PostMapping("/{id}/contact")
+    @OperationLog(type = "update", module = "patient", action = "修改通知单联系方式及地址")
+    public ResultResponse<Void> updateContact(
+            @PathVariable Long id,
+            @RequestBody UpdateNoticeContactDTO dto) {
+        Notice notice = noticeService.getById(id);
+        if (notice != null && "latent".equals(notice.getNoticeType())) {
+            userService.checkPermissionCode("latentManagement:notice");
+        } else {
+            assertPatientNoticeFill(notice);
+        }
+        noticeService.updateContactInfo(id, dto);
         return ResultRes.success(null);
     }
 }

@@ -56,7 +56,8 @@ const noticeForm = reactive({
   customPlanDetail: "",
   treatmentInstitution: "",
   issuedTime: "",
-  receiverOrgId: undefined as string | undefined
+  receiverOrgId: undefined as string | undefined,
+  medicationManagementUnit: ""
 })
 
 function getNowDateStr() {
@@ -91,7 +92,8 @@ function resetFormFromRow(row: Record<string, any>) {
     customPlanDetail: parsedPlan.customPlanDetail,
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
-    receiverOrgId: userStore.userRole === 6 ? userStore.userId : undefined
+    receiverOrgId: userStore.userRole === 6 ? userStore.userId : undefined,
+    medicationManagementUnit: (userStore.orgName || userStore.departmentName || "").trim()
   })
 }
 
@@ -114,7 +116,8 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     chestXrayResult: notice.chestXrayResult || row.chestXrayResult || "",
     treatmentInstitution: notice.treatmentInstitution || "",
     issuedTime: notice.issuedTime || getNowDateStr(),
-    receiverOrgId: notice.receiverOrgId || undefined
+    receiverOrgId: notice.receiverOrgId || undefined,
+    medicationManagementUnit: notice.medicationManagementUnit || ""
   })
   const parsed = parseLatentNoticeTreatmentPlan(
     notice.treatmentPlan || row.preventivePlan,
@@ -357,6 +360,13 @@ async function handleSaveDraft() {
             <el-input v-model="noticeForm.treatmentInstitution" />
           </el-form-item>
         </el-col>
+        <el-col :span="12">
+          <el-form-item label="服药管理单位">
+            <el-input v-model="noticeForm.medicationManagementUnit" placeholder="可手动填写" />
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-row :gutter="12">
         <el-col :span="12">
           <el-form-item label="下发时间">
             <el-input :model-value="noticeForm.issuedTime" disabled />

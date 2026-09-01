@@ -121,6 +121,10 @@ public class LatentInfection extends BaseEntity {
     @TableField(exist = false)
     private String noticeReceiverName;
 
+    /** 服药管理单位（非持久化：通知单优先，其次督导表管理单位） */
+    @TableField(exist = false)
+    private String noticeMedicationUnit;
+
     /** 督导表是否已完成（status=2，非持久化字段） */
     @TableField(exist = false)
     private Boolean supervisionCompleted;

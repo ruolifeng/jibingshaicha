@@ -1,6 +1,6 @@
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { extractDateRangeParams, mergeColumnFilter } from "@@/utils/searchParams"
 import { getLatentAggregateListApi } from "../apis"
 
 export interface LatentOverviewListOptions {
@@ -27,14 +27,19 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     creatorName: "",
     dateRange: [] as string[],
     formatIssue: "",
-    trackingStatus: undefined as number | undefined
+    trackingStatus: undefined as number | undefined,
+    medicationManagementUnit: ""
   })
 
   async function fetchData() {
     loading.value = true
     try {
       const { dateRange, keyPopulationSubCategories, formatIssue, ...rest } = searchForm
-      const columnFiltersParam = toQueryParam()
+      const columnFiltersParam = mergeColumnFilter(
+        toQueryParam(),
+        "medicationManagementUnit",
+        rest.medicationManagementUnit
+      )
       const params: Record<string, any> = {
         page: 1,
         size: FETCH_ALL_SIZE,
@@ -52,6 +57,7 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
       if (!params.creatorName) delete params.creatorName
+      if (!params.medicationManagementUnit) delete params.medicationManagementUnit
       if (params.trackingStatus == null) delete params.trackingStatus
       const { data } = await getLatentAggregateListApi(params)
       const records = data.records ?? []
@@ -79,6 +85,7 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     searchForm.dateRange = []
     searchForm.formatIssue = ""
     searchForm.trackingStatus = undefined
+    searchForm.medicationManagementUnit = ""
     clearFilters()
     handleSearch()
   }

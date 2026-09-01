@@ -9,6 +9,7 @@ import cn.luyou.model.Patient;
 import cn.luyou.model.User;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.model.vo.SentNoticeVO;
+import cn.luyou.model.vo.UpdateNoticeContactDTO;
 import cn.luyou.model.vo.UpdateNoticeCultureResistanceDTO;
 import cn.luyou.model.vo.UpdateNoticeRegistrationNoDTO;
 import cn.luyou.model.vo.UserInfoVO;
@@ -267,6 +268,32 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         syncLatentRegistrationNo(notice);
     }
 
+    @Override
+    @Transactional
+    public void updateContactInfo(Long noticeId, UpdateNoticeContactDTO dto) {
+        if (dto == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少更新内容");
+        }
+        Notice notice = requireNoticeForContact(noticeId);
+        String phone = StrUtil.trimToNull(dto.getPhone());
+        if (phone != null && !phone.matches("^1[3-9]\\d{9}$")) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "手机号格式不正确");
+        }
+        String currentAddress = StrUtil.trimToNull(dto.getCurrentAddress());
+        String householdAddress = StrUtil.trimToNull(dto.getHouseholdAddress());
+        lambdaUpdate()
+                .eq(Notice::getId, notice.getId())
+                .set(Notice::getPhone, phone)
+                .set(Notice::getCurrentAddress, currentAddress)
+                .set(Notice::getHouseholdAddress, householdAddress)
+                .update();
+        if ("patient".equals(notice.getNoticeType())) {
+            patientService.syncContactFromNotice(notice.getBizId(), phone, currentAddress, householdAddress);
+        } else if ("latent".equals(notice.getNoticeType())) {
+            latentInfectionService.syncContactFromNotice(notice.getBizId(), phone, currentAddress, householdAddress);
+        }
+    }
+
     /** 登记号完善：仅三级(role=4)、四级(role=5)；超管放行 */
     private void assertLevel3Or4ForRegistrationNo() {
         Integer role = BaseContext.getCurrentRole();
@@ -294,6 +321,18 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         }
         if (!"latent".equals(notice.getNoticeType())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅潜伏感染者通知单可修改登记号");
+        }
+        assertBizAccessible(notice.getBizId(), notice.getNoticeType());
+        return notice;
+    }
+
+    private Notice requireNoticeForContact(Long noticeId) {
+        Notice notice = getById(noticeId);
+        if (notice == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "通知单不存在");
+        }
+        if (!"patient".equals(notice.getNoticeType()) && !"latent".equals(notice.getNoticeType())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅患者或潜伏感染者通知单可修改联系方式及地址");
         }
         assertBizAccessible(notice.getBizId(), notice.getNoticeType());
         return notice;

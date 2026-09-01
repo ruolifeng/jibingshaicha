@@ -17,11 +17,13 @@ export interface PatientListOptions {
   firstVisitSearch?: boolean
   /** 后续随访：时间段按填写时间；服药管理单位筛选 */
   followUpSearch?: boolean
+  /** 服药管理：服药管理单位筛选 */
+  medicationSearch?: boolean
 }
 
 function hasMedicationUnitSearch(options?: PatientListOptions) {
   return !!(options?.overviewSearch || options?.noticeSearch
-    || options?.firstVisitSearch || options?.followUpSearch)
+    || options?.firstVisitSearch || options?.followUpSearch || options?.medicationSearch)
 }
 
 function hasFirstVisitFieldSearch(options?: PatientListOptions) {

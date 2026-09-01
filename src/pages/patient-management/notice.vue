@@ -43,8 +43,10 @@ const {
   populationTypeFilterOptions,
   loadGenderOptions,
   loadPopulationTypeOptions,
+  loadMedicationUnitOptions,
   genderSourceValues,
-  populationTypeSourceValues
+  populationTypeSourceValues,
+  medicationUnitSourceValues
 } = usePatientTableHeaderFilters(0)
 
 const noticeStatusFilterOptions = PATIENT_NOTICE_STATUS_FILTER_OPTIONS.map(item => ({
@@ -176,12 +178,24 @@ function getNoticeRowClass({ row }: { row: any }) {
           />
         </el-form-item>
         <el-form-item label="服药管理单位">
-          <el-input
+          <el-select
             v-model="searchForm.medicationManagementUnit"
-            placeholder="请输入"
+            placeholder="全部"
             clearable
-            style="width: 160px"
-          />
+            filterable
+            allow-create
+            default-first-option
+            style="width: 200px"
+            @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
+          >
+            <el-option
+              v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="数据来源">
           <el-select v-model="searchForm.populationType" placeholder="全部" clearable style="width:140px">
@@ -354,6 +368,20 @@ function getNoticeRowClass({ row }: { row: any }) {
           </template>
         </el-table-column>
         <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                setFilter('medicationManagementUnit', v)
+                handleSearch()
+              }"
+            />
+          </template>
           <template #default="{ row }">
             {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>

@@ -40,9 +40,11 @@ export function useLatentTableHeaderFilters(populationType?: Ref<string> | (() =
     loadGenderOptions: () => load("gender"),
     loadPopulationTypeOptions: () => load("populationType"),
     loadInfectionResultOptions: () => load("infectionResult"),
+    loadMedicationUnitOptions: () => load("medicationManagementUnit"),
     genderSourceValues: sourceValues("gender"),
     populationTypeSourceValues: sourceValues("populationType"),
     infectionResultSourceValues: sourceValues("infectionResult"),
+    medicationUnitSourceValues: sourceValues("medicationManagementUnit"),
     clearDistinctCache: clearCache
   }
 }

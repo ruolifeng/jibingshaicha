@@ -185,4 +185,7 @@ public interface LatentInfectionService extends IService<LatentInfection> {
 
     /** 将通知单中的登记号同步到潜伏感染主表 */
     void syncRegistrationNoFromNotice(Long latentId, String registrationNo);
+
+    /** 将通知单中的联系电话、现居住地址、户籍地址同步到潜伏感染主表（有筛查来源时一并回写筛查表） */
+    void syncContactFromNotice(Long latentId, String phone, String currentAddress, String householdAddress);
 }

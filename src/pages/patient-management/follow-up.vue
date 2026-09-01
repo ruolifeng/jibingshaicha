@@ -13,7 +13,7 @@ import {
   canEditFollowUpVisit,
   toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
+import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
@@ -250,6 +250,7 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
             default-first-option
             style="width: 200px"
             @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
           >
             <el-option
               v-for="item in medicationUnitSourceValues"
@@ -401,6 +402,25 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
         <el-table-column label="诊断结果" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ resolvePatientDiagnosisResult(row) || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                setFilter('medicationManagementUnit', v)
+                handleSearch()
+              }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">

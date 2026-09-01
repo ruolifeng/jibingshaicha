@@ -192,6 +192,9 @@ public interface PatientService extends IService<Patient> {
     /** 校验当前用户可查阅该患者（数据权限；已转出源记录对转出单位不可见） */
     void assertPatientAccessible(Long id);
 
+    /** 将通知单中的联系电话、现居住地址、户籍地址同步到患者主表 */
+    void syncContactFromNotice(Long patientId, String phone, String currentAddress, String householdAddress);
+
     /**
      * 首页统计：年度管理患者数（阳性率分母）。
      * 在管+历史、排除已转出；有登记日期按登记日期落在统计年度，无登记日期才按创建时间。

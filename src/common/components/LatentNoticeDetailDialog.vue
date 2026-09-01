@@ -2,10 +2,12 @@
 import PrintNotice from "@@/components/PrintNotice.vue"
 import { displayInfectionJudgeResult, normalizeLatentTreatmentPlan, NOTICE_STATUS_MAP } from "@@/constants/disease"
 import { isLatentTransferLocked } from "@@/utils/latent"
+import { validatePhone } from "@@/utils/validate"
 import {
   confirmNoticeApi,
   getNoticeDetailApi,
   getNoticeListByBizApi,
+  updateNoticeContactApi,
   updateNoticeRegistrationNoApi
 } from "@/pages/latent-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -26,20 +28,33 @@ const printVisible = ref(false)
 const editing = ref(false)
 const submitting = ref(false)
 const registrationNo = ref("")
+const phone = ref("")
+const currentAddress = ref("")
+const householdAddress = ref("")
 
-/** 三级(role=4)、四级(role=5)；超管放行 */
-const canEditRegistrationNo = computed(() => {
-  if (!noticeDetailData.value || isLatentTransferLocked(props.latentRow)) return false
-  const role = userStore.userRole
-  if (role !== 1 && role !== 4 && role !== 5) return false
+/** 待确认/已确认且未转出：可改联系电话与地址 */
+const canEditContact = computed(() => {
+  if (!noticeDetailData.value || isLatentTransferLocked(props.latentRow) || props.latentRow?.archived === 1) return false
   const status = noticeDetailData.value.status
   return status === 1 || status === 2
 })
+
+/** 三级(role=4)、四级(role=5)；超管放行 */
+const canEditRegistrationNo = computed(() => {
+  if (!canEditContact.value) return false
+  const role = userStore.userRole
+  return role === 1 || role === 4 || role === 5
+})
+
+const canEdit = computed(() => canEditContact.value || canEditRegistrationNo.value)
 
 function resetEdit() {
   editing.value = false
   submitting.value = false
   registrationNo.value = ""
+  phone.value = ""
+  currentAddress.value = ""
+  householdAddress.value = ""
 }
 
 async function loadNotice() {
@@ -65,8 +80,11 @@ async function loadNotice() {
 }
 
 function beginEdit() {
-  if (!noticeDetailData.value || !canEditRegistrationNo.value) return
+  if (!noticeDetailData.value || !canEdit.value) return
   registrationNo.value = noticeDetailData.value.registrationNo || ""
+  phone.value = noticeDetailData.value.phone || ""
+  currentAddress.value = noticeDetailData.value.currentAddress || ""
+  householdAddress.value = noticeDetailData.value.householdAddress || ""
   editing.value = true
 }
 
@@ -91,12 +109,26 @@ async function handleConfirmNotice(noticeId: string) {
   } catch { /* cancelled or handled */ }
 }
 
-async function handleSaveRegistrationNo() {
+async function handleSaveEdit() {
   if (!noticeDetailData.value) return
+  const phoneVal = phone.value.trim()
+  if (phoneVal && !validatePhone(phoneVal)) {
+    ElMessage.warning("手机号格式不正确（需11位）")
+    return
+  }
   submitting.value = true
   try {
-    await updateNoticeRegistrationNoApi(noticeDetailData.value.id, registrationNo.value.trim())
-    ElMessage.success("登记号已保存并同步")
+    if (canEditContact.value) {
+      await updateNoticeContactApi(noticeDetailData.value.id, {
+        phone: phoneVal,
+        currentAddress: currentAddress.value.trim(),
+        householdAddress: householdAddress.value.trim()
+      })
+    }
+    if (canEditRegistrationNo.value) {
+      await updateNoticeRegistrationNoApi(noticeDetailData.value.id, registrationNo.value.trim())
+    }
+    ElMessage.success("已保存并同步")
     editing.value = false
     await loadNotice()
     emit("success")
@@ -128,14 +160,23 @@ async function handleSaveRegistrationNo() {
         {{ noticeDetailData.age }}
       </el-descriptions-item>
       <el-descriptions-item label="联系方式">
-        {{ noticeDetailData.phone || "-" }}
+        <el-input
+          v-if="editing && canEditContact"
+          v-model="phone"
+          maxlength="11"
+          clearable
+          placeholder="请填写联系电话"
+        />
+        <template v-else>
+          {{ noticeDetailData.phone || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="民族">
         {{ noticeDetailData.ethnicity || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="登记号">
         <el-input
-          v-if="editing"
+          v-if="editing && canEditRegistrationNo"
           v-model="registrationNo"
           maxlength="64"
           clearable
@@ -149,10 +190,28 @@ async function handleSaveRegistrationNo() {
         {{ noticeDetailData.crowdCategory || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="现居住地址" :span="2">
-        {{ noticeDetailData.currentAddress || "-" }}
+        <el-input
+          v-if="editing && canEditContact"
+          v-model="currentAddress"
+          maxlength="200"
+          clearable
+          placeholder="请填写现居住地址"
+        />
+        <template v-else>
+          {{ noticeDetailData.currentAddress || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="户籍地址" :span="2">
-        {{ noticeDetailData.householdAddress || "-" }}
+        <el-input
+          v-if="editing && canEditContact"
+          v-model="householdAddress"
+          maxlength="200"
+          clearable
+          placeholder="请填写户籍地址"
+        />
+        <template v-else>
+          {{ noticeDetailData.householdAddress || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="感染检测时间">
         {{ noticeDetailData.infectionDate || "-" }}
@@ -174,6 +233,9 @@ async function handleSaveRegistrationNo() {
       </el-descriptions-item>
       <el-descriptions-item label="治疗机构">
         {{ noticeDetailData.treatmentInstitution || "-" }}
+      </el-descriptions-item>
+      <el-descriptions-item label="服药管理单位">
+        {{ noticeDetailData.medicationManagementUnit || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="下发时间">
         {{ noticeDetailData.issuedTime || "-" }}
@@ -208,17 +270,17 @@ async function handleSaveRegistrationNo() {
         <el-button @click="resetEdit">
           取消修改
         </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveRegistrationNo">
-          保存登记号
+        <el-button type="primary" :loading="submitting" @click="handleSaveEdit">
+          保存
         </el-button>
       </template>
       <el-button
-        v-else-if="noticeDetailData && canEditRegistrationNo"
+        v-else-if="noticeDetailData && canEdit"
         v-permission="'latentManagement:notice'"
         type="warning"
         @click="beginEdit"
       >
-        修改登记号
+        修改
       </el-button>
       <el-button
         v-if="noticeDetailData && noticeDetailData.status === 1 && userStore.userRole === 6 && !editing"

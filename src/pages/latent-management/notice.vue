@@ -7,8 +7,8 @@ import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { displayInfectionJudgeResult, getPopulationTypeLabel, getPopulationTypeTagType, getSuspectedConfirmDiagnosisLabel, TRACKING_STATUS_MAP } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { isNoticeSent } from "@@/utils/patient"
-import { extractDateRangeParams } from "@@/utils/searchParams"
+import { isNoticeSent, resolveMedicationManagementUnit } from "@@/utils/patient"
+import { extractDateRangeParams, mergeColumnFilter } from "@@/utils/searchParams"
 import {
   closeCaseApi,
   exportLatentNoticesApi,
@@ -30,7 +30,8 @@ const searchForm = reactive({
   dateRange: [] as string[],
   creatorName: "",
   trackingStatus: undefined as number | undefined,
-  populationType: ""
+  populationType: "",
+  medicationManagementUnit: ""
 })
 
 const {
@@ -40,9 +41,11 @@ const {
   loadGenderOptions,
   loadPopulationTypeOptions,
   loadInfectionResultOptions,
+  loadMedicationUnitOptions,
   genderSourceValues,
   populationTypeSourceValues,
-  infectionResultSourceValues
+  infectionResultSourceValues,
+  medicationUnitSourceValues
 } = useLatentTableHeaderFilters(() => searchForm.populationType)
 
 const selectedRows = ref<any[]>([])
@@ -54,7 +57,11 @@ function handleSelectionChange(rows: any[]) {
 
 function buildListQueryParams() {
   const { dateRange, ...rest } = searchForm
-  const columnFiltersParam = toQueryParam()
+  const columnFiltersParam = mergeColumnFilter(
+    toQueryParam(),
+    "medicationManagementUnit",
+    searchForm.medicationManagementUnit
+  )
   const params: Record<string, any> = {
     ...rest,
     dateFilterBy: "noticeFill",
@@ -64,6 +71,7 @@ function buildListQueryParams() {
   if (!params.populationType) delete params.populationType
   if (!params.phone) delete params.phone
   if (!params.creatorName) delete params.creatorName
+  if (!params.medicationManagementUnit) delete params.medicationManagementUnit
   if (params.trackingStatus === undefined || params.trackingStatus === null || params.trackingStatus === "") {
     delete params.trackingStatus
   }
@@ -129,6 +137,7 @@ function handleReset() {
   searchForm.creatorName = ""
   searchForm.trackingStatus = undefined
   searchForm.populationType = ""
+  searchForm.medicationManagementUnit = ""
   clearFilters()
   handleSearch()
 }
@@ -190,6 +199,26 @@ async function handleCloseCase(row: any) {
         <el-form-item label="追踪状态">
           <el-select v-model="searchForm.trackingStatus" placeholder="全部" clearable style="width:120px">
             <el-option v-for="(label, val) in TRACKING_STATUS_MAP" :key="val" :label="label" :value="Number(val)" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="服药管理单位">
+          <el-select
+            v-model="searchForm.medicationManagementUnit"
+            placeholder="全部"
+            clearable
+            filterable
+            allow-create
+            default-first-option
+            style="width: 200px"
+            @visible-change="(visible) => visible && loadMedicationUnitOptions()"
+            @change="() => { setFilter('medicationManagementUnit', ''); handleSearch() }"
+          >
+            <el-option
+              v-for="item in medicationUnitSourceValues"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="数据来源">
@@ -343,6 +372,25 @@ async function handleCloseCase(row: any) {
         <el-table-column label="确认诊断" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             {{ getSuspectedConfirmDiagnosisLabel(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服药管理单位" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="服药管理单位"
+              type="select"
+              :source-values="medicationUnitSourceValues"
+              :load-options="loadMedicationUnitOptions"
+              :model-value="columnFilters.medicationManagementUnit || searchForm.medicationManagementUnit"
+              @change="(v) => {
+                searchForm.medicationManagementUnit = ''
+                setFilter('medicationManagementUnit', v)
+                handleSearch()
+              }"
+            />
+          </template>
+          <template #default="{ row }">
+            {{ resolveMedicationManagementUnit(row) || "-" }}
           </template>
         </el-table-column>
         <el-table-column label="发送人" min-width="100" show-overflow-tooltip>

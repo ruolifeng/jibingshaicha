@@ -8,6 +8,7 @@ import cn.luyou.common.annotation.OperationLog;
 import cn.luyou.mapper.FirstVisitMapper;
 import cn.luyou.mapper.FollowUpVisitMapper;
 import cn.luyou.mapper.MedicationManagementMapper;
+import cn.luyou.mapper.MedicationPickupMapper;
 import cn.luyou.mapper.NoticeMapper;
 import cn.luyou.mapper.ScreeningKeyPopulationMapper;
 import cn.luyou.mapper.UserMapper;
@@ -15,6 +16,7 @@ import cn.luyou.model.FirstVisit;
 import cn.luyou.model.FollowUpVisit;
 import cn.luyou.model.LatentInfection;
 import cn.luyou.model.MedicationManagement;
+import cn.luyou.model.MedicationPickup;
 import cn.luyou.model.Notice;
 import cn.luyou.model.Patient;
 import cn.luyou.model.ScreeningCloseContact;
@@ -85,6 +87,7 @@ public class ExportController {
     private final FirstVisitMapper firstVisitMapper;
     private final FollowUpVisitMapper followUpVisitMapper;
     private final MedicationManagementMapper medicationManagementMapper;
+    private final MedicationPickupMapper medicationPickupMapper;
     private final ScreeningKeyPopulationMapper screeningKeyPopulationMapper;
     private final DataScopeHelper dataScopeHelper;
     private final ScreeningScopeHelper screeningScopeHelper;
@@ -881,13 +884,27 @@ public class ExportController {
             "下发人", "接收人", "发送时间", "接收时间", "状态"
     );
 
+    /** 患者服药管理导出列（同一患者多条领药各占一行；无领药时一行） */
+    private static final List<String> PATIENT_MEDICATION_EXPORT_HEADERS = List.of(
+            "数据来源", "登记号", "姓名", "性别", "证件号", "联系电话", "病原学结果", "诊断结果", "服药管理单位",
+            "服药管理状态", "管理方式", "督导人员", "治疗前痰菌检查", "开始治疗日期", "停止治疗日期",
+            "领药次数", "第几次", "领取时间", "药品及用量", "领取数量", "发药单位", "录入单位", "录入人员", "备注"
+    );
+
+    /** 潜伏感染者服药管理导出列（同一感染者多条领药各占一行；无领药时一行） */
+    private static final List<String> LATENT_MEDICATION_EXPORT_HEADERS = List.of(
+            "数据来源", "登记号", "姓名", "性别", "证件号", "联系电话", "感染筛查结果", "服药管理单位",
+            "服药管理状态", "管理方式", "督导人员", "治疗前痰菌检查", "开始治疗日期", "停止治疗日期",
+            "领药次数", "第几次", "领取时间", "药品及用量", "领取数量", "发药单位", "录入单位", "录入人员", "备注"
+    );
+
     /** 潜伏感染者通知单导出列 */
     private static final List<String> LATENT_NOTICE_EXPORT_HEADERS = List.of(
             "数据来源", "姓名", "性别", "年龄", "证件号", "联系电话", "民族", "人群分类",
             "现居住地址", "户籍地址", "登记号", "感染筛查结果", "追踪状态", "确认诊断",
             "感染检测时间", "感染检查方法", "感染检查结果",
             "胸片检查时间", "胸片检查结果", "治疗方案",
-            "治疗机构", "下发时间",
+            "治疗机构", "服药管理单位", "下发时间",
             "下发人", "接收人", "发送时间", "接收时间", "状态"
     );
 
@@ -1219,6 +1236,93 @@ public class ExportController {
         writeExcel(response, "督导表", rows, SUPERVISION_FORM_EXPORT_HEADERS);
     }
 
+    @Operation(summary = "导出患者服药管理（ids 勾选；否则按当前筛选）")
+    @GetMapping("/patient-medications")
+    @OperationLog(type = "export", module = "statistics", action = "导出患者服药管理")
+    public void exportPatientMedications(
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String currentAddress,
+            @RequestParam(required = false) String diagnosisResult,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String medicationManagementUnit,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String creatorUsername,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
+            HttpServletResponse response) throws IOException {
+        List<Patient> patients = loadPatientsForVisitExport(
+                ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory, creatorUsername,
+                columnFilters, formatIssue, null, null);
+        if (patients.isEmpty()) {
+            writeExcel(response, "患者服药管理", List.of(), PATIENT_MEDICATION_EXPORT_HEADERS);
+            return;
+        }
+        List<Long> patientIds = patients.stream().map(Patient::getId).toList();
+        Map<Long, Notice> noticeMap = loadLatestNoticeMap(patientIds, "patient");
+        Map<Long, MedicationManagement> medMap = loadLatestMedicationMapByPatientIds(patientIds);
+        Map<Long, List<MedicationPickup>> pickupMap = loadPickupsByPatientIds(patientIds);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Patient p : patients) {
+            rows.addAll(buildPatientMedicationExportRows(
+                    p, noticeMap.get(p.getId()), medMap.get(p.getId()),
+                    pickupMap.getOrDefault(p.getId(), List.of())));
+        }
+        log.info("[导出] 患者服药管理 {} 条", rows.size());
+        writeExcel(response, "患者服药管理", rows, PATIENT_MEDICATION_EXPORT_HEADERS);
+    }
+
+    @Operation(summary = "导出潜伏感染者服药管理（ids 勾选；否则按当前筛选）")
+    @GetMapping("/latent-medications")
+    @OperationLog(type = "export", module = "statistics", action = "导出潜伏感染者服药管理")
+    public void exportLatentMedications(
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) String populationType,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String idNumber,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @RequestParam(required = false) String dateFilterBy,
+            @RequestParam(required = false) String creatorName,
+            @RequestParam(required = false) Integer archived,
+            @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) String referralResult,
+            @RequestParam(required = false) String crowdCategory,
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String departmentIds,
+            HttpServletResponse response) throws IOException {
+        List<LatentInfection> latents = loadLatentsForSupervisionExport(
+                ids, populationType, name, idNumber, phone, dateFrom, dateTo, dateFilterBy, creatorName,
+                archived != null ? archived : 0, trackingStatus != null ? trackingStatus : 1,
+                StrUtil.blankToDefault(referralResult, "latent"),
+                crowdCategory, columnFilters, formatIssue, departmentIds);
+        if (latents.isEmpty()) {
+            writeExcel(response, "潜伏感染者服药管理", List.of(), LATENT_MEDICATION_EXPORT_HEADERS);
+            return;
+        }
+        List<Long> latentIds = latents.stream().map(LatentInfection::getId).toList();
+        Map<Long, Notice> noticeMap = loadLatestNoticeMap(latentIds, "latent");
+        Map<Long, MedicationManagement> medMap = loadLatestMedicationMapByLatentIds(latentIds);
+        Map<Long, List<MedicationPickup>> pickupMap = loadPickupsByLatentIds(latentIds);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (LatentInfection r : latents) {
+            rows.addAll(buildLatentMedicationExportRows(
+                    r, noticeMap.get(r.getId()), medMap.get(r.getId()),
+                    pickupMap.getOrDefault(r.getId(), List.of())));
+        }
+        log.info("[导出] 潜伏感染者服药管理 {} 条", rows.size());
+        writeExcel(response, "潜伏感染者服药管理", rows, LATENT_MEDICATION_EXPORT_HEADERS);
+    }
+
     private List<Long> parseIdList(String ids) {
         if (StrUtil.isBlank(ids)) {
             return List.of();
@@ -1456,6 +1560,9 @@ public class ExportController {
         row.put("胸片检查结果", nullToEmpty(notice.getChestXrayResult()));
         row.put("治疗方案", nullToEmpty(notice.getTreatmentPlan()));
         row.put("治疗机构", nullToEmpty(notice.getTreatmentInstitution()));
+        row.put("服药管理单位", StrUtil.blankToDefault(
+                notice.getMedicationManagementUnit(),
+                StrUtil.blankToDefault(r.getNoticeMedicationUnit(), "")));
         row.put("下发时间", formatDate(notice.getIssuedTime()));
         row.put("下发人", formatNoticeParty(notice.getSenderName(), notice.getSenderOrgName()));
         row.put("接收人", formatNoticeParty(notice.getReceiverName(), notice.getReceiverOrgName()));
@@ -1472,6 +1579,194 @@ public class ExportController {
         row.put("年龄", r.getAge() != null ? r.getAge() : "");
         row.put("证件号", nullToEmpty(r.getIdNumber()));
         row.put("联系电话", nullToEmpty(r.getPhone()));
+    }
+
+    private Map<Long, MedicationManagement> loadLatestMedicationMapByPatientIds(List<Long> patientIds) {
+        Map<Long, MedicationManagement> map = new HashMap<>();
+        if (patientIds == null || patientIds.isEmpty()) {
+            return map;
+        }
+        medicationManagementMapper.selectList(new LambdaQueryWrapper<MedicationManagement>()
+                        .in(MedicationManagement::getPatientId, patientIds)
+                        .isNotNull(MedicationManagement::getPatientId)
+                        .orderByDesc(MedicationManagement::getId))
+                .forEach(m -> map.putIfAbsent(m.getPatientId(), m));
+        return map;
+    }
+
+    private Map<Long, MedicationManagement> loadLatestMedicationMapByLatentIds(List<Long> latentIds) {
+        Map<Long, MedicationManagement> map = new HashMap<>();
+        if (latentIds == null || latentIds.isEmpty()) {
+            return map;
+        }
+        medicationManagementMapper.selectList(new LambdaQueryWrapper<MedicationManagement>()
+                        .in(MedicationManagement::getLatentInfectionId, latentIds)
+                        .isNotNull(MedicationManagement::getLatentInfectionId)
+                        .orderByDesc(MedicationManagement::getId))
+                .forEach(m -> map.putIfAbsent(m.getLatentInfectionId(), m));
+        return map;
+    }
+
+    private Map<Long, List<MedicationPickup>> loadPickupsByPatientIds(List<Long> patientIds) {
+        if (patientIds == null || patientIds.isEmpty()) {
+            return Map.of();
+        }
+        return medicationPickupMapper.selectList(new LambdaQueryWrapper<MedicationPickup>()
+                        .in(MedicationPickup::getPatientId, patientIds)
+                        .isNotNull(MedicationPickup::getPatientId)
+                        .orderByAsc(MedicationPickup::getPickupSeq)
+                        .orderByAsc(MedicationPickup::getId))
+                .stream()
+                .collect(Collectors.groupingBy(MedicationPickup::getPatientId, LinkedHashMap::new, Collectors.toList()));
+    }
+
+    private Map<Long, List<MedicationPickup>> loadPickupsByLatentIds(List<Long> latentIds) {
+        if (latentIds == null || latentIds.isEmpty()) {
+            return Map.of();
+        }
+        return medicationPickupMapper.selectList(new LambdaQueryWrapper<MedicationPickup>()
+                        .in(MedicationPickup::getLatentInfectionId, latentIds)
+                        .isNotNull(MedicationPickup::getLatentInfectionId)
+                        .orderByAsc(MedicationPickup::getPickupSeq)
+                        .orderByAsc(MedicationPickup::getId))
+                .stream()
+                .collect(Collectors.groupingBy(MedicationPickup::getLatentInfectionId, LinkedHashMap::new, Collectors.toList()));
+    }
+
+    private List<Map<String, Object>> buildPatientMedicationExportRows(
+            Patient p, Notice notice, MedicationManagement med, List<MedicationPickup> pickups) {
+        Map<String, Object> base = new LinkedHashMap<>();
+        base.put("数据来源", POP_TYPE_LABEL.getOrDefault(p.getPopulationType(), p.getPopulationType()));
+        base.put("登记号", resolvePatientRegistrationNo(p));
+        base.put("姓名", nullToEmpty(p.getName()));
+        base.put("性别", nullToEmpty(p.getGender()));
+        base.put("证件号", nullToEmpty(p.getIdNumber()));
+        base.put("联系电话", nullToEmpty(p.getPhone()));
+        base.put("病原学结果", resolvePatientPathogenResultForExport(p));
+        base.put("诊断结果", resolvePatientDiagnosisResultForExport(p));
+        base.put("服药管理单位", resolvePatientMedicationUnit(p, notice));
+        putMedicationFormColumns(base, med);
+        return appendPickupExportRows(base, pickups);
+    }
+
+    private List<Map<String, Object>> buildLatentMedicationExportRows(
+            LatentInfection r, Notice notice, MedicationManagement med, List<MedicationPickup> pickups) {
+        Map<String, Object> base = new LinkedHashMap<>();
+        base.put("数据来源", formatLatentPopulationLabel(r.getPopulationType(), r.getCrowdCategory()));
+        base.put("登记号", nullToEmpty(r.getRegistrationNo()));
+        base.put("姓名", nullToEmpty(r.getName()));
+        base.put("性别", nullToEmpty(r.getGender()));
+        base.put("证件号", nullToEmpty(r.getIdNumber()));
+        base.put("联系电话", nullToEmpty(r.getPhone()));
+        base.put("感染筛查结果", nullToEmpty(r.getInfectionResult()));
+        String unit = StrUtil.blankToDefault(r.getNoticeMedicationUnit(), "");
+        if (StrUtil.isBlank(unit) && notice != null) {
+            unit = StrUtil.blankToDefault(notice.getMedicationManagementUnit(), "");
+        }
+        base.put("服药管理单位", unit);
+        putMedicationFormColumns(base, med);
+        return appendPickupExportRows(base, pickups);
+    }
+
+    private void putMedicationFormColumns(Map<String, Object> row, MedicationManagement med) {
+        if (med == null) {
+            row.put("服药管理状态", "待填写");
+            row.put("管理方式", "");
+            row.put("督导人员", "");
+            row.put("治疗前痰菌检查", "");
+            row.put("开始治疗日期", "");
+            row.put("停止治疗日期", "");
+            return;
+        }
+        row.put("服药管理状态", med.getStopDate() != null ? "已完成" : "进行中");
+        row.put("管理方式", nullToEmpty(med.getManagementMethod()));
+        row.put("督导人员", nullToEmpty(med.getSupervisor()));
+        row.put("治疗前痰菌检查", nullToEmpty(med.getSputumResult()));
+        row.put("开始治疗日期", formatDate(med.getStartTreatmentDate()));
+        row.put("停止治疗日期", formatDate(med.getStopDate()));
+    }
+
+    private List<Map<String, Object>> appendPickupExportRows(Map<String, Object> base, List<MedicationPickup> pickups) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (pickups == null || pickups.isEmpty()) {
+            Map<String, Object> row = new LinkedHashMap<>(base);
+            row.put("领药次数", 0);
+            row.put("第几次", "");
+            row.put("领取时间", "");
+            row.put("药品及用量", "");
+            row.put("领取数量", "");
+            row.put("发药单位", "");
+            row.put("录入单位", "");
+            row.put("录入人员", "");
+            row.put("备注", "");
+            rows.add(row);
+            return rows;
+        }
+        for (MedicationPickup pickup : pickups) {
+            Map<String, Object> row = new LinkedHashMap<>(base);
+            row.put("领药次数", pickups.size());
+            row.put("第几次", pickup.getPickupSeq() != null ? pickup.getPickupSeq() : "");
+            row.put("领取时间", formatDate(pickup.getPickupTime()));
+            row.put("药品及用量", StrUtil.blankToDefault(formatExportDrugNames(pickup.getDrugs()), ""));
+            row.put("领取数量", StrUtil.blankToDefault(
+                    formatExportDrugQuantities(pickup.getDrugs(), pickup.getQuantity(), pickup.getQuantityUnit()), ""));
+            row.put("发药单位", nullToEmpty(pickup.getDispensingUnit()));
+            row.put("录入单位", nullToEmpty(pickup.getEntryUnit()));
+            row.put("录入人员", nullToEmpty(pickup.getEntryPerson()));
+            row.put("备注", nullToEmpty(pickup.getRemarks()));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private String formatExportDrugNames(String drugsJson) {
+        if (StrUtil.isBlank(drugsJson)) {
+            return null;
+        }
+        try {
+            JSONArray array = JSONUtil.parseArray(drugsJson);
+            String joined = array.stream()
+                    .map(item -> item instanceof JSONObject obj ? obj.getStr("name") : null)
+                    .filter(StrUtil::isNotBlank)
+                    .collect(Collectors.joining("、"));
+            return StrUtil.isBlank(joined) ? null : joined;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String formatExportDrugQuantities(String drugsJson, java.math.BigDecimal legacyQuantity, String legacyUnit) {
+        if (StrUtil.isNotBlank(drugsJson)) {
+            try {
+                JSONArray array = JSONUtil.parseArray(drugsJson);
+                String joined = array.stream()
+                        .map(item -> {
+                            if (!(item instanceof JSONObject obj)) {
+                                return null;
+                            }
+                            Object quantity = obj.get("quantity");
+                            if (quantity == null) {
+                                return null;
+                            }
+                            String name = obj.getStr("name");
+                            String unit = obj.getStr("quantityUnit");
+                            return (StrUtil.isNotBlank(name) ? name : "药品")
+                                    + new java.math.BigDecimal(quantity.toString()).stripTrailingZeros().toPlainString()
+                                    + (StrUtil.isNotBlank(unit) ? unit : "");
+                        })
+                        .filter(StrUtil::isNotBlank)
+                        .collect(Collectors.joining("；"));
+                if (StrUtil.isNotBlank(joined)) {
+                    return joined;
+                }
+            } catch (Exception ignored) {
+                // fallback
+            }
+        }
+        if (legacyQuantity != null && StrUtil.isNotBlank(legacyUnit)) {
+            return legacyQuantity.stripTrailingZeros().toPlainString() + legacyUnit;
+        }
+        return null;
     }
 
     private Map<String, Object> buildSupervisionExportRow(LatentInfection r, SupervisionForm f) {

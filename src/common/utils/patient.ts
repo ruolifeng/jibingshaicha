@@ -171,7 +171,7 @@ export function resolveRegistrationNo(row: Record<string, any> | null | undefine
     || parseEpidemicDataField(row.epidemicData, "登记号")
 }
 
-/** 解析服药管理单位（来自病案信息/专病网导入） */
+/** 解析服药管理单位（通知单优先，其次病案信息/专病网导入；潜伏感染者回退督导表管理单位） */
 export function resolveMedicationManagementUnit(row: Record<string, any> | null | undefined): string {
   if (!row) return ""
   return row.noticeMedicationUnit
