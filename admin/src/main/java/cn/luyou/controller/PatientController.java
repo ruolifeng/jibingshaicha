@@ -24,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Tag(name = "患者管理")
@@ -313,8 +314,20 @@ public class PatientController {
         return ResultRes.success(null);
     }
 
+    /**
+     * 合并/校验首次随访主键：
+     * - 前端若误带其他患者的记录 id，禁止按该 id 更新（否则会把随访「改挂」到另一患者）
+     * - 未传 id 时按 patientId 回填已有记录，保证一人一条
+     */
     private void mergeExistingFirstVisitId(FirstVisit firstVisit) {
-        if (firstVisit.getId() != null || firstVisit.getPatientId() == null) return;
+        if (firstVisit.getPatientId() == null) return;
+        if (firstVisit.getId() != null) {
+            FirstVisit byId = firstVisitService.getById(firstVisit.getId());
+            if (byId == null || !Objects.equals(byId.getPatientId(), firstVisit.getPatientId())) {
+                throw new ServiceException(StatusEnum.PARAM_INVALID, "首次随访记录与患者不匹配，请关闭后重新打开再保存");
+            }
+            return;
+        }
         FirstVisit existing = firstVisitService.lambdaQuery()
                 .eq(FirstVisit::getPatientId, firstVisit.getPatientId())
                 .one();

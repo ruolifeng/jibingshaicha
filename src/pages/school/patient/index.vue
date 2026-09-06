@@ -382,8 +382,9 @@ async function viewNotice(row: any) {
 const firstVisitDialogVisible = ref(false)
 const firstVisitRow = ref<any>(null)
 const firstVisitCompleted = ref(false)
+const firstVisitEditingId = ref<string | number | undefined>(undefined)
+let firstVisitLoadSeq = 0
 const firstVisitForm = reactive({
-  id: undefined as string | undefined,
   formNo: "",
   visitDate: "",
   visitMethod: "",
@@ -412,11 +413,10 @@ const firstVisitForm = reactive({
   attachmentUrls: ""
 })
 
-function openFirstVisitDialog(row: any) {
-  firstVisitRow.value = row
+function resetFirstVisitForm() {
   firstVisitCompleted.value = false
+  firstVisitEditingId.value = undefined
   Object.assign(firstVisitForm, {
-    id: undefined,
     formNo: "",
     visitDate: "",
     visitMethod: "",
@@ -443,26 +443,56 @@ function openFirstVisitDialog(row: any) {
     remarks: "",
     attachmentUrls: ""
   })
+}
+
+function openFirstVisitDialog(row: any) {
+  firstVisitRow.value = row
+  resetFirstVisitForm()
   firstVisitDialogVisible.value = true
   loadFirstVisitForm(row.id)
 }
 
 async function loadFirstVisitForm(patientId: string) {
+  const seq = ++firstVisitLoadSeq
   try {
     const { data } = await getFirstVisitApi(patientId)
+    if (seq !== firstVisitLoadSeq || firstVisitRow.value?.id !== patientId) return
     if (data) {
+      if (data.patientId != null && String(data.patientId) !== String(patientId)) return
       firstVisitCompleted.value = data.status === 1
+      firstVisitEditingId.value = data.id
       Object.assign(firstVisitForm, {
-        ...data,
+        formNo: data.formNo ?? "",
+        visitDate: data.visitDate ?? "",
+        visitMethod: data.visitMethod ?? "",
+        visitMethodOther: data.visitMethodOther ?? "",
+        patientType: data.patientType ?? "",
+        sputumStatus: data.sputumStatus ?? "",
+        sputumCulture: data.sputumCulture ?? "",
+        drugResistance: data.drugResistance ?? "",
         symptoms: data.symptoms ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        otherSymptoms: data.otherSymptoms ?? "",
+        chemotherapy: data.chemotherapy ?? "",
+        medicationUsage: data.medicationUsage ?? "",
         drugForm: data.drugForm ? String(data.drugForm).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        supervisor: data.supervisor ?? "",
+        separateRoom: data.separateRoom ?? "",
+        ventilation: data.ventilation ?? "",
+        smokingAmount: data.smokingAmount ?? "",
+        drinkingAmount: data.drinkingAmount ?? "",
+        medicationLocation: data.medicationLocation ?? "",
+        medicationPickTime: data.medicationPickTime ?? "",
         educationItems: data.educationItems
           ? (typeof data.educationItems === "string" ? JSON.parse(data.educationItems) : data.educationItems)
           : {},
+        nextVisitDate: data.nextVisitDate ?? "",
+        doctorSignature: data.doctorSignature ?? "",
+        remarks: data.remarks ?? "",
         attachmentUrls: data.attachmentUrls ?? ""
       })
     }
   } catch { /* 首次填写 */ }
+  if (seq !== firstVisitLoadSeq || firstVisitRow.value?.id !== patientId) return
   applyFirstVisitChemotherapyDefault(firstVisitForm, firstVisitRow.value)
   applyFirstVisitSputumStatusDefault(firstVisitForm, firstVisitRow.value)
 }
@@ -477,17 +507,41 @@ watch(
 )
 
 function buildFirstVisitPayload() {
-  return {
+  const payload: Record<string, any> = {
     patientId: firstVisitRow.value.id,
     populationType: "school",
-    ...firstVisitForm,
+    formNo: firstVisitForm.formNo,
+    visitDate: firstVisitForm.visitDate,
+    visitMethod: firstVisitForm.visitMethod,
     visitMethodOther: firstVisitForm.visitMethod === VISIT_METHOD_OTHER
       ? firstVisitForm.visitMethodOther.trim()
       : null,
+    patientType: firstVisitForm.patientType,
+    sputumStatus: firstVisitForm.sputumStatus,
+    sputumCulture: firstVisitForm.sputumCulture,
+    drugResistance: firstVisitForm.drugResistance,
     symptoms: firstVisitForm.symptoms.join(","),
+    otherSymptoms: firstVisitForm.otherSymptoms,
+    chemotherapy: firstVisitForm.chemotherapy,
+    medicationUsage: firstVisitForm.medicationUsage,
     drugForm: firstVisitForm.drugForm.join(","),
-    educationItems: JSON.stringify(firstVisitForm.educationItems)
+    supervisor: firstVisitForm.supervisor,
+    separateRoom: firstVisitForm.separateRoom,
+    ventilation: firstVisitForm.ventilation,
+    smokingAmount: firstVisitForm.smokingAmount,
+    drinkingAmount: firstVisitForm.drinkingAmount,
+    medicationLocation: firstVisitForm.medicationLocation,
+    medicationPickTime: firstVisitForm.medicationPickTime,
+    educationItems: JSON.stringify(firstVisitForm.educationItems),
+    nextVisitDate: firstVisitForm.nextVisitDate,
+    doctorSignature: firstVisitForm.doctorSignature,
+    remarks: firstVisitForm.remarks,
+    attachmentUrls: firstVisitForm.attachmentUrls
   }
+  if (firstVisitEditingId.value != null && firstVisitEditingId.value !== "") {
+    payload.id = firstVisitEditingId.value
+  }
+  return payload
 }
 
 async function handleSaveFirstVisitDraft() {

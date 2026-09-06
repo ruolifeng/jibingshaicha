@@ -94,7 +94,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             "name", "year", "city", "district", "township", "gender", "idNumber", "phone", "ethnicity",
             "reportingOrg", "schoolName", "gradeName", "className", "schoolType", "boardingType",
             "currentAddress", "householdAddress",
-            "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayMethod", "chestXrayResult",
+            "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayDate",
+            "chestXrayMethod", "chestXrayResult",
             "sputumSmearResult", "molecularBiologyResult", "sputumCultureResult",
             "remark", "creatorUsername", "idType", "tbHistory", "closeContactHistory",
             "suspiciousSymptoms", "symptomCough", "symptomHemoptysis", "symptomOther",
@@ -102,8 +103,10 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
     );
     private static final Set<String> COLUMN_FILTER_EQ_FIELDS = Set.of(
             "gender", "year", "city", "district", "township", "ethnicity", "idType", "schoolType", "boardingType",
-            "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayMethod", "chestXrayResult",
-            "tbHistory", "closeContactHistory", "suspiciousSymptoms", "hasInfectionScreen", "screenResult",
+            "screenMethod", "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayDate",
+            "chestXrayMethod", "chestXrayResult",
+            "tbHistory", "closeContactHistory", "suspiciousSymptoms", "symptomCough", "symptomHemoptysis",
+            "symptomOther", "hasInfectionScreen", "screenResult",
             "participatedScreening", "sputumCultureResult", "molecularBiologyResult"
     );
 
@@ -543,6 +546,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
                 case "diagnosisFirst" -> ScreeningDiagnosisSupport.applyScreeningDiagnosisColumnFilter(
                         wrapper, ScreeningSchool::getIsLatent, ScreeningSchool::getDiagnosisFirst, value);
                 case "hasChestXray" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getHasChestXray, value);
+                case "chestXrayDate" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getChestXrayDate, value);
                 case "chestXrayMethod" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningSchool::getChestXrayMethod, value);
                 case "chestXrayResult" -> applyChestXrayResultFilter(wrapper, value);
                 case "sputumSmearResult" -> ColumnFilterSupport.like(wrapper, ScreeningSchool::getSputumSmearResult, value);
@@ -1327,6 +1331,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             case "hasChestXray" -> wrapper.select(ScreeningSchool::getHasChestXray)
                     .isNotNull(ScreeningSchool::getHasChestXray).ne(ScreeningSchool::getHasChestXray, "")
                     .groupBy(ScreeningSchool::getHasChestXray);
+            case "chestXrayDate" -> wrapper.select(ScreeningSchool::getChestXrayDate)
+                    .isNotNull(ScreeningSchool::getChestXrayDate)
+                    .groupBy(ScreeningSchool::getChestXrayDate);
             case "chestXrayMethod" -> wrapper.select(ScreeningSchool::getChestXrayMethod)
                     .isNotNull(ScreeningSchool::getChestXrayMethod).ne(ScreeningSchool::getChestXrayMethod, "")
                     .groupBy(ScreeningSchool::getChestXrayMethod);
@@ -1342,6 +1349,15 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             case "suspiciousSymptoms" -> wrapper.select(ScreeningSchool::getSuspiciousSymptoms)
                     .isNotNull(ScreeningSchool::getSuspiciousSymptoms).ne(ScreeningSchool::getSuspiciousSymptoms, "")
                     .groupBy(ScreeningSchool::getSuspiciousSymptoms);
+            case "symptomCough" -> wrapper.select(ScreeningSchool::getSymptomCough)
+                    .isNotNull(ScreeningSchool::getSymptomCough).ne(ScreeningSchool::getSymptomCough, "")
+                    .groupBy(ScreeningSchool::getSymptomCough);
+            case "symptomHemoptysis" -> wrapper.select(ScreeningSchool::getSymptomHemoptysis)
+                    .isNotNull(ScreeningSchool::getSymptomHemoptysis).ne(ScreeningSchool::getSymptomHemoptysis, "")
+                    .groupBy(ScreeningSchool::getSymptomHemoptysis);
+            case "symptomOther" -> wrapper.select(ScreeningSchool::getSymptomOther)
+                    .isNotNull(ScreeningSchool::getSymptomOther).ne(ScreeningSchool::getSymptomOther, "")
+                    .groupBy(ScreeningSchool::getSymptomOther);
             case "hasInfectionScreen" -> wrapper.select(ScreeningSchool::getHasInfectionScreen)
                     .isNotNull(ScreeningSchool::getHasInfectionScreen).ne(ScreeningSchool::getHasInfectionScreen, "")
                     .groupBy(ScreeningSchool::getHasInfectionScreen);
@@ -1376,11 +1392,15 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             case "infectionResult" -> row.getInfectionResult();
             case "diagnosisFirst" -> row.getDiagnosisFirst();
             case "hasChestXray" -> row.getHasChestXray();
+            case "chestXrayDate" -> row.getChestXrayDate() == null ? null : row.getChestXrayDate().toString();
             case "chestXrayMethod" -> row.getChestXrayMethod();
             case "chestXrayResult" -> row.getChestXrayResult();
             case "tbHistory" -> row.getTbHistory();
             case "closeContactHistory" -> row.getCloseContactHistory();
             case "suspiciousSymptoms" -> row.getSuspiciousSymptoms();
+            case "symptomCough" -> row.getSymptomCough();
+            case "symptomHemoptysis" -> row.getSymptomHemoptysis();
+            case "symptomOther" -> row.getSymptomOther();
             case "hasInfectionScreen" -> row.getHasInfectionScreen();
             case "participatedScreening" -> row.getParticipatedScreening();
             case "screenResult" -> row.getScreenResult();
