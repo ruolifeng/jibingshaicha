@@ -307,10 +307,11 @@ watch(
 
 function buildPayload() {
   const payload: Record<string, any> = {
-    id: draftId.value ?? undefined,
+    ...form,
+    // 必须在 ...form 之后覆盖，防止草稿/历史数据里的 id、patientId 串单
+    id: draftId.value ?? props.initialData?.id ?? undefined,
     patientId: props.patientId,
     populationType: props.populationType,
-    ...form,
     chemotherapyPlan: resolvePatientTreatmentPlanForSave(form.chemotherapyPlan, form.chemotherapyPlanDetail),
     symptoms: form.symptoms.join(",")
   }

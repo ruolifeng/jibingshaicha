@@ -26,6 +26,14 @@ const genderFilterOptions = [
   { text: "女", value: "女" }
 ]
 const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
+const schoolTypeFilterOptions = SCHOOL_TYPE_OPTIONS.map(item => ({ text: item, value: item }))
+const boardingTypeFilterOptions = SCHOOL_BOARDING_TYPE_OPTIONS.map(item => ({ text: item, value: item }))
+const yesNoFilterOptions = YES_NO_OPTIONS.map(item => ({ text: item, value: item }))
+const yesNoHaveFilterOptions = YES_NO_HAVE_OPTIONS.map(item => ({ text: item, value: item }))
+const screenMethodFilterOptions = SCHOOL_SCREEN_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+const screenResultFilterOptions = ["阳性", "阴性", "无"].map(item => ({ text: item, value: item }))
+const chestMethodFilterOptions = SCHOOL_CHEST_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+const chestResultFilterOptions = SCHOOL_CHEST_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
 
 const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
   const { data } = await getScreeningSchoolColumnDistinctApi(field)
@@ -34,6 +42,19 @@ const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(a
 const loadDistrictOptions = () => loadDistinct("district")
 const loadGenderOptions = () => loadDistinct("gender")
 const loadInfectionResultOptions = () => loadDistinct("infectionResult")
+const loadSchoolTypeOptions = () => loadDistinct("schoolType")
+const loadBoardingTypeOptions = () => loadDistinct("boardingType")
+const loadParticipatedScreeningOptions = () => loadDistinct("participatedScreening")
+const loadTbHistoryOptions = () => loadDistinct("tbHistory")
+const loadCloseContactHistoryOptions = () => loadDistinct("closeContactHistory")
+const loadSymptomCoughOptions = () => loadDistinct("symptomCough")
+const loadSymptomHemoptysisOptions = () => loadDistinct("symptomHemoptysis")
+const loadSymptomOtherOptions = () => loadDistinct("symptomOther")
+const loadScreenMethodOptions = () => loadDistinct("screenMethod")
+const loadScreenResultOptions = () => loadDistinct("screenResult")
+const loadChestXrayDateOptions = () => loadDistinct("chestXrayDate")
+const loadChestXrayMethodOptions = () => loadDistinct("chestXrayMethod")
+const loadChestXrayResultOptions = () => loadDistinct("chestXrayResult")
 
 const loading = ref(false)
 const batchDeleting = ref(false)
@@ -648,12 +669,30 @@ watch(
         <el-table-column prop="township" label="乡镇/街道" min-width="100" show-overflow-tooltip />
         <el-table-column prop="schoolType" min-width="100">
           <template #header>
-            <TableHeaderHint label="类型" :hint="SCHOOL_SCREENING_FIELD_HINTS.schoolType" />
+            <TableHeaderFilter
+              label="类型"
+              type="select"
+              :hint="SCHOOL_SCREENING_FIELD_HINTS.schoolType"
+              :options="schoolTypeFilterOptions"
+              :source-values="distinctValues('schoolType').value"
+              :load-options="loadSchoolTypeOptions"
+              :model-value="columnFilters.schoolType"
+              @change="(v) => { setFilter('schoolType', v); handleSearch() }"
+            />
           </template>
         </el-table-column>
         <el-table-column prop="boardingType" min-width="100">
           <template #header>
-            <TableHeaderHint label="是否寄宿制" :hint="SCHOOL_SCREENING_FIELD_HINTS.boardingType" />
+            <TableHeaderFilter
+              label="是否寄宿制"
+              type="select"
+              :hint="SCHOOL_SCREENING_FIELD_HINTS.boardingType"
+              :options="boardingTypeFilterOptions"
+              :source-values="distinctValues('boardingType').value"
+              :load-options="loadBoardingTypeOptions"
+              :model-value="columnFilters.boardingType"
+              @change="(v) => { setFilter('boardingType', v); handleSearch() }"
+            />
           </template>
         </el-table-column>
         <el-table-column prop="schoolName" min-width="120" sortable="custom">
@@ -686,7 +725,16 @@ watch(
         <el-table-column prop="ethnicity" label="民族" />
         <el-table-column min-width="110">
           <template #header>
-            <TableHeaderHint label="是否参加筛查" :hint="SCHOOL_SCREENING_FIELD_HINTS.participatedScreening" />
+            <TableHeaderFilter
+              label="是否参加筛查"
+              type="select"
+              :hint="SCHOOL_SCREENING_FIELD_HINTS.participatedScreening"
+              :options="yesNoFilterOptions"
+              :source-values="distinctValues('participatedScreening').value"
+              :load-options="loadParticipatedScreeningOptions"
+              :model-value="columnFilters.participatedScreening"
+              @change="(v) => { setFilter('participatedScreening', v); handleSearch() }"
+            />
           </template>
           <template #default="{ row }">
             {{ row.participatedScreening || "-" }}
@@ -694,7 +742,16 @@ watch(
         </el-table-column>
         <el-table-column min-width="110">
           <template #header>
-            <TableHeaderHint label="既往结核病史" :hint="SCHOOL_SCREENING_FIELD_HINTS.tbHistory" />
+            <TableHeaderFilter
+              label="既往结核病史"
+              type="select"
+              :hint="SCHOOL_SCREENING_FIELD_HINTS.tbHistory"
+              :options="yesNoHaveFilterOptions"
+              :source-values="distinctValues('tbHistory').value"
+              :load-options="loadTbHistoryOptions"
+              :model-value="columnFilters.tbHistory"
+              @change="(v) => { setFilter('tbHistory', v); handleSearch() }"
+            />
           </template>
           <template #default="{ row }">
             {{ row.tbHistory || "-" }}
@@ -702,7 +759,16 @@ watch(
         </el-table-column>
         <el-table-column min-width="110">
           <template #header>
-            <TableHeaderHint label="肺结核接触史" :hint="SCHOOL_SCREENING_FIELD_HINTS.closeContactHistory" />
+            <TableHeaderFilter
+              label="肺结核接触史"
+              type="select"
+              :hint="SCHOOL_SCREENING_FIELD_HINTS.closeContactHistory"
+              :options="yesNoHaveFilterOptions"
+              :source-values="distinctValues('closeContactHistory').value"
+              :load-options="loadCloseContactHistoryOptions"
+              :model-value="columnFilters.closeContactHistory"
+              @change="(v) => { setFilter('closeContactHistory', v); handleSearch() }"
+            />
           </template>
           <template #default="{ row }">
             {{ row.closeContactHistory || "-" }}
@@ -711,7 +777,16 @@ watch(
         <el-table-column label="结核病可疑症状">
           <el-table-column min-width="120">
             <template #header>
-              <TableHeaderHint label="咳嗽咳痰≥两周" :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomCough" />
+              <TableHeaderFilter
+                label="咳嗽咳痰≥两周"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomCough"
+                :options="yesNoHaveFilterOptions"
+                :source-values="distinctValues('symptomCough').value"
+                :load-options="loadSymptomCoughOptions"
+                :model-value="columnFilters.symptomCough"
+                @change="(v) => { setFilter('symptomCough', v); handleSearch() }"
+              />
             </template>
             <template #default="{ row }">
               {{ row.symptomCough || "-" }}
@@ -719,7 +794,16 @@ watch(
           </el-table-column>
           <el-table-column min-width="100">
             <template #header>
-              <TableHeaderHint label="咯血或血痰" :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomHemoptysis" />
+              <TableHeaderFilter
+                label="咯血或血痰"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomHemoptysis"
+                :options="yesNoHaveFilterOptions"
+                :source-values="distinctValues('symptomHemoptysis').value"
+                :load-options="loadSymptomHemoptysisOptions"
+                :model-value="columnFilters.symptomHemoptysis"
+                @change="(v) => { setFilter('symptomHemoptysis', v); handleSearch() }"
+              />
             </template>
             <template #default="{ row }">
               {{ row.symptomHemoptysis || "-" }}
@@ -727,7 +811,16 @@ watch(
           </el-table-column>
           <el-table-column min-width="80">
             <template #header>
-              <TableHeaderHint label="其他" :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomOther" />
+              <TableHeaderFilter
+                label="其他"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomOther"
+                :options="yesNoHaveFilterOptions"
+                :source-values="distinctValues('symptomOther').value"
+                :load-options="loadSymptomOtherOptions"
+                :model-value="columnFilters.symptomOther"
+                @change="(v) => { setFilter('symptomOther', v); handleSearch() }"
+              />
             </template>
             <template #default="{ row }">
               {{ row.symptomOther || "-" }}
@@ -738,12 +831,30 @@ watch(
           <el-table-column prop="screenDate" label="感染筛查时间" min-width="110" sortable="custom" />
           <el-table-column prop="screenMethod" min-width="80">
             <template #header>
-              <TableHeaderHint label="方法" :hint="SCHOOL_SCREENING_FIELD_HINTS.screenMethod" />
+              <TableHeaderFilter
+                label="方法"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.screenMethod"
+                :options="screenMethodFilterOptions"
+                :source-values="distinctValues('screenMethod').value"
+                :load-options="loadScreenMethodOptions"
+                :model-value="columnFilters.screenMethod"
+                @change="(v) => { setFilter('screenMethod', v); handleSearch() }"
+              />
             </template>
           </el-table-column>
           <el-table-column min-width="120" show-overflow-tooltip>
             <template #header>
-              <TableHeaderHint label="结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.screenResult" />
+              <TableHeaderFilter
+                label="结果"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.screenResult"
+                :options="screenResultFilterOptions"
+                :source-values="distinctValues('screenResult').value"
+                :load-options="loadScreenResultOptions"
+                :model-value="columnFilters.screenResult"
+                @change="(v) => { setFilter('screenResult', v); handleSearch() }"
+              />
             </template>
             <template #default="{ row }">
               {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
@@ -764,15 +875,44 @@ watch(
           </el-table-column>
         </el-table-column>
         <el-table-column label="胸部影像学">
-          <el-table-column prop="chestXrayDate" label="胸片检查时间" min-width="110" />
+          <el-table-column prop="chestXrayDate" min-width="110">
+            <template #header>
+              <TableHeaderFilter
+                label="胸片检查时间"
+                type="select"
+                :source-values="distinctValues('chestXrayDate').value"
+                :load-options="loadChestXrayDateOptions"
+                :model-value="columnFilters.chestXrayDate"
+                @change="(v) => { setFilter('chestXrayDate', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
           <el-table-column prop="chestXrayMethod" min-width="90">
             <template #header>
-              <TableHeaderHint label="方法" :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayMethod" />
+              <TableHeaderFilter
+                label="方法"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayMethod"
+                :options="chestMethodFilterOptions"
+                :source-values="distinctValues('chestXrayMethod').value"
+                :load-options="loadChestXrayMethodOptions"
+                :model-value="columnFilters.chestXrayMethod"
+                @change="(v) => { setFilter('chestXrayMethod', v); handleSearch() }"
+              />
             </template>
           </el-table-column>
           <el-table-column prop="chestXrayResult" min-width="140" show-overflow-tooltip>
             <template #header>
-              <TableHeaderHint label="结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayResult" />
+              <TableHeaderFilter
+                label="结果"
+                type="select"
+                :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayResult"
+                :options="chestResultFilterOptions"
+                :source-values="distinctValues('chestXrayResult').value"
+                :load-options="loadChestXrayResultOptions"
+                :model-value="columnFilters.chestXrayResult"
+                @change="(v) => { setFilter('chestXrayResult', v); handleSearch() }"
+              />
             </template>
           </el-table-column>
         </el-table-column>

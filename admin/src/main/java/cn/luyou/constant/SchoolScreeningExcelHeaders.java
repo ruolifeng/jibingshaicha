@@ -26,7 +26,7 @@ public final class SchoolScreeningExcelHeaders {
     private static final String G_CHEST = "胸部影像学";
 
     /**
-     * 第 2 行分组标题（与官方表一致；无分组列填叶子名，导出时与第 3 行纵向合并）。
+     * 第 1 行分组标题（与官方表一致；无分组列填叶子名，导出时与第 2 行纵向合并）。
      */
     public static final String[] TOP_HEADERS = {
             "填报机构", "市州", "县区", "乡镇/街道", "类型", "是否寄宿制", "学校名称（全称）", "姓名", "年份", "性别",
@@ -37,7 +37,7 @@ public final class SchoolScreeningExcelHeaders {
             "分子生物学结果", "痰培养结果", "筛查结果", "备注"
     };
 
-    /** 第 3 行子表头（无子列时为空，与 TOP 纵向合并） */
+    /** 第 2 行子表头（无子列时为空，与 TOP 纵向合并） */
     public static final String[] SUB_HEADERS = {
             "", "", "", "", "", "", "", "", "", "",
             "", "", "", "", "", "", "", "", "",
@@ -47,7 +47,9 @@ public final class SchoolScreeningExcelHeaders {
             "", "", "", ""
     };
 
-    /** 第 5 行填写说明（对齐官方 Excel；无说明的列为空） */
+    /**
+     * 历史填写说明行文案（导出已不再输出；保留常量供对照官方表）。
+     */
     public static final String[] INSTRUCTION_ROW = {
             "", "", "", "",
             "（填写数字，1=托幼机构，2=小学，3=初中，4=高中阶段教育学校，5=高等教育学校，6=教职工,7=其他（培训学校、特殊教育学校和专门学校等））",

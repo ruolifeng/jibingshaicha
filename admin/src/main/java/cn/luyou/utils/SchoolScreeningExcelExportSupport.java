@@ -21,8 +21,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 学生筛查导出：对齐《2026年秋季新生入学结核病筛查记录表新》
- * （标题 + 两级表头 + 填写说明行 + 全部业务列；导出额外追加录入用户/录入时间）。
+ * 学生筛查导出：两级表头 + 全部业务列；导出额外追加录入用户/录入时间。
+ * <p>不再输出标题行、空行、填写说明行。
  */
 public final class SchoolScreeningExcelExportSupport {
 
@@ -44,34 +44,16 @@ public final class SchoolScreeningExcelExportSupport {
                 : SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT;
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet(SchoolScreeningExcelHeaders.SHEET_NAME);
-            CellStyle titleStyle = createTitleStyle(workbook);
             CellStyle headerStyle = createHeaderStyle(workbook);
-            CellStyle instructionStyle = createInstructionStyle(workbook);
             CellStyle bodyStyle = createBodyStyle(workbook);
             if (SchoolScreeningExcelHeaders.TOP_HEADERS.length != SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT
-                    || SchoolScreeningExcelHeaders.SUB_HEADERS.length != SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT
-                    || SchoolScreeningExcelHeaders.INSTRUCTION_ROW.length != SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT) {
+                    || SchoolScreeningExcelHeaders.SUB_HEADERS.length != SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT) {
                 throw new IllegalStateException("学生筛查 Excel 表头列数与官方 33 列不一致");
             }
 
-            // 第 1 行：官方标题（与原表 E1:AG1 对齐，覆盖全部业务列）
-            Row titleRow = sheet.createRow(0);
-            titleRow.setHeightInPoints(48);
-            Cell titleCell = titleRow.createCell(4);
-            titleCell.setCellValue(SchoolScreeningExcelHeaders.TITLE);
-            titleCell.setCellStyle(titleStyle);
-            sheet.addMergedRegion(new CellRangeAddress(0, 0, 4, SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT - 1));
-            for (int c = 0; c < colCount; c++) {
-                if (c == 4) {
-                    continue;
-                }
-                Cell cell = titleRow.createCell(c);
-                cell.setCellStyle(titleStyle);
-            }
-
-            // 第 2–3 行：两级表头
-            Row topRow = sheet.createRow(1);
-            Row subRow = sheet.createRow(2);
+            // 第 1–2 行：两级表头
+            Row topRow = sheet.createRow(0);
+            Row subRow = sheet.createRow(1);
             topRow.setHeightInPoints(54);
             subRow.setHeightInPoints(29);
             String[] top = SchoolScreeningExcelHeaders.TOP_HEADERS;
@@ -86,36 +68,18 @@ public final class SchoolScreeningExcelExportSupport {
                 writeHeaderCell(topRow, 34, "录入时间", headerStyle);
                 writeHeaderCell(subRow, 34, "", headerStyle);
             }
-            mergeGroup(sheet, 1, 19, 21);
-            mergeGroup(sheet, 1, 22, 25);
-            mergeGroup(sheet, 1, 26, 28);
+            mergeGroup(sheet, 0, 19, 21);
+            mergeGroup(sheet, 0, 22, 25);
+            mergeGroup(sheet, 0, 26, 28);
             for (int c = 0; c < colCount; c++) {
                 boolean grouped = (c >= 19 && c <= 21) || (c >= 22 && c <= 25) || (c >= 26 && c <= 28);
                 if (!grouped) {
-                    sheet.addMergedRegion(new CellRangeAddress(1, 2, c, c));
+                    sheet.addMergedRegion(new CellRangeAddress(0, 1, c, c));
                 }
             }
 
-            // 第 4 行：空行（与官方表一致）
-            sheet.createRow(3).setHeightInPoints(18);
-
-            // 第 5 行：填写说明
-            Row instructionRow = sheet.createRow(4);
-            instructionRow.setHeightInPoints(173);
-            String[] hints = SchoolScreeningExcelHeaders.INSTRUCTION_ROW;
-            for (int c = 0; c < SchoolScreeningExcelHeaders.BIZ_COLUMN_COUNT; c++) {
-                Cell cell = instructionRow.createCell(c);
-                cell.setCellValue(hints[c] == null ? "" : hints[c]);
-                cell.setCellStyle(instructionStyle);
-            }
-            if (includeMeta) {
-                Cell u = instructionRow.createCell(33);
-                u.setCellStyle(instructionStyle);
-                Cell t = instructionRow.createCell(34);
-                t.setCellStyle(instructionStyle);
-            }
-
-            int rowIdx = 5;
+            // 第 3 行起：数据
+            int rowIdx = 2;
             if (records != null) {
                 for (ScreeningSchool record : records) {
                     Row dataRow = sheet.createRow(rowIdx++);
@@ -212,17 +176,6 @@ public final class SchoolScreeningExcelExportSupport {
         };
     }
 
-    private static CellStyle createTitleStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        Font font = workbook.createFont();
-        font.setBold(true);
-        font.setFontHeightInPoints((short) 14);
-        style.setFont(font);
-        style.setAlignment(HorizontalAlignment.CENTER);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
-        return style;
-    }
-
     private static CellStyle createHeaderStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
@@ -230,18 +183,6 @@ public final class SchoolScreeningExcelExportSupport {
         style.setFont(font);
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
-        style.setWrapText(true);
-        applyThinBorder(style);
-        return style;
-    }
-
-    private static CellStyle createInstructionStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        Font font = workbook.createFont();
-        font.setFontHeightInPoints((short) 8);
-        style.setFont(font);
-        style.setAlignment(HorizontalAlignment.LEFT);
-        style.setVerticalAlignment(VerticalAlignment.TOP);
         style.setWrapText(true);
         applyThinBorder(style);
         return style;
