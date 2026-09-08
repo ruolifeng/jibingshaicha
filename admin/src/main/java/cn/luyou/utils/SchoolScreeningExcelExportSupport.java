@@ -171,7 +171,7 @@ public final class SchoolScreeningExcelExportSupport {
     private static int columnWidth(int col) {
         return switch (col) {
             case 4, 6, 10, 12, 33, 34 -> 18 * 256;
-            case 23, 24, 25, 27, 28, 29, 30, 31 -> 16 * 256;
+            case 23, 24, 25, 27, 28, 29, 30, 31 -> 22 * 256;
             default -> 12 * 256;
         };
     }

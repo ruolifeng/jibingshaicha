@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * 学生筛查 Excel 导出行（官方数字码列；末尾追加录入用户/录入时间）。
+ * 学生筛查 Excel 导出行（填写说明「数字=文案」；末尾追加录入用户/录入时间）。
  * 对齐《2026年秋季新生入学结核病筛查记录表新》。
  */
 @Data
@@ -131,8 +131,8 @@ public class SchoolScreeningExcelExportRow {
         row.setCity(source.getCity());
         row.setDistrict(source.getDistrict());
         row.setTownship(source.getTownship());
-        row.setSchoolType(SchoolScreeningCodeSupport.fromSchoolType(source.getSchoolType()));
-        row.setBoardingType(SchoolScreeningCodeSupport.fromBoardingType(source.getBoardingType()));
+        row.setSchoolType(SchoolScreeningCodeSupport.formatSchoolType(source.getSchoolType()));
+        row.setBoardingType(SchoolScreeningCodeSupport.formatBoardingType(source.getBoardingType()));
         row.setSchoolName(source.getSchoolName());
         row.setName(source.getName());
         row.setYear(source.getYear());
@@ -150,15 +150,15 @@ public class SchoolScreeningExcelExportRow {
         row.setSymptomHemoptysis(source.getSymptomHemoptysis());
         row.setSymptomOther(source.getSymptomOther());
         row.setScreenDate(source.getScreenDate());
-        row.setScreenMethod(SchoolScreeningCodeSupport.fromScreenMethod(source.getScreenMethod()));
+        row.setScreenMethod(SchoolScreeningCodeSupport.formatScreenMethod(source.getScreenMethod()));
         row.setScreenResult(source.getScreenResult());
-        row.setInfectionResult(SchoolScreeningCodeSupport.fromInfectionResult(source.getInfectionResult()));
+        row.setInfectionResult(SchoolScreeningCodeSupport.formatInfectionResult(source.getInfectionResult()));
         row.setChestXrayDate(source.getChestXrayDate());
-        row.setChestXrayMethod(SchoolScreeningCodeSupport.fromChestXrayMethod(source.getChestXrayMethod()));
-        row.setChestXrayResult(SchoolScreeningCodeSupport.fromChestXrayResult(source.getChestXrayResult()));
-        row.setMolecularBiologyResult(SchoolScreeningCodeSupport.fromLabResult(source.getMolecularBiologyResult()));
-        row.setSputumCultureResult(SchoolScreeningCodeSupport.fromLabResult(source.getSputumCultureResult()));
-        row.setDiagnosisFirst(SchoolScreeningCodeSupport.fromDiagnosis(source.getDiagnosisFirst()));
+        row.setChestXrayMethod(SchoolScreeningCodeSupport.formatChestXrayMethod(source.getChestXrayMethod()));
+        row.setChestXrayResult(SchoolScreeningCodeSupport.formatChestXrayResult(source.getChestXrayResult()));
+        row.setMolecularBiologyResult(SchoolScreeningCodeSupport.formatLabResult(source.getMolecularBiologyResult()));
+        row.setSputumCultureResult(SchoolScreeningCodeSupport.formatLabResult(source.getSputumCultureResult()));
+        row.setDiagnosisFirst(SchoolScreeningCodeSupport.formatDiagnosis(source.getDiagnosisFirst()));
         row.setRemark(source.getRemark());
         row.setCreatorUsername(source.getCreatorUsername());
         row.setCreateTime(formatCreateTime(source.getCreateTime()));

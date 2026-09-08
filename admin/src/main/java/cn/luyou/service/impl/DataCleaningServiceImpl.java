@@ -282,9 +282,9 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             validateOption(result, excelRowIndex, name, row, 16, "是否参加筛查仅支持：是/否", "是", "否");
             validateOption(result, excelRowIndex, name, row, 17, "既往结核病史仅支持：有/无", "有", "无");
             validateOption(result, excelRowIndex, name, row, 18, "肺结核接触史仅支持：有/无", "有", "无");
-            validateOption(result, excelRowIndex, name, row, 19, "咳嗽咳痰≥两周仅支持：有/无", "有", "无");
-            validateOption(result, excelRowIndex, name, row, 20, "咯血或血痰仅支持：有/无", "有", "无");
-            validateOption(result, excelRowIndex, name, row, 21, "可疑症状-其他仅支持：有/无", "有", "无");
+            validateOption(result, excelRowIndex, name, row, 19, "咳嗽咳痰≥两周仅支持：有/无/未询问", "有", "无", "未询问", "未问");
+            validateOption(result, excelRowIndex, name, row, 20, "咯血或血痰仅支持：有/无/未询问", "有", "无", "未询问", "未问");
+            validateOption(result, excelRowIndex, name, row, 21, "可疑症状-其他仅支持：有/无/未询问", "有", "无", "未询问", "未问");
             validateOption(result, excelRowIndex, name, row, 23, "感染筛查方法仅支持：1-4或PPD/EC/IGRA/未查",
                     "1", "2", "3", "4", "PPD", "EC", "IGRA", "未查");
             validateOption(result, excelRowIndex, name, row, 25, "判定结果仅支持：0-3或对应中文",

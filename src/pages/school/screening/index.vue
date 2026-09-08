@@ -7,7 +7,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { displaySchoolDiagnosis, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_TYPE_OPTIONS, toSchoolDiagnosisOfficial, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
+import { formatSchoolBoardingTypeDisplay, formatSchoolChestMethodDisplay, formatSchoolChestResultDisplay, formatSchoolDiagnosisDisplay, formatSchoolInfectionJudgeDisplay, formatSchoolLabResultDisplay, formatSchoolScreenMethodDisplay, formatSchoolTypeDisplay, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, isSchoolSymptomNotInquired, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_SYMPTOM_OPTIONS, SCHOOL_TYPE_OPTIONS, toSchoolDiagnosisOfficial, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
@@ -25,15 +25,17 @@ const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
 ]
-const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
-const schoolTypeFilterOptions = SCHOOL_TYPE_OPTIONS.map(item => ({ text: item, value: item }))
-const boardingTypeFilterOptions = SCHOOL_BOARDING_TYPE_OPTIONS.map(item => ({ text: item, value: item }))
+const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: formatSchoolDiagnosisDisplay(item.value) || item.label, value: item.value }))
+const schoolTypeFilterOptions = SCHOOL_TYPE_OPTIONS.map(item => ({ text: formatSchoolTypeDisplay(item), value: item }))
+const boardingTypeFilterOptions = SCHOOL_BOARDING_TYPE_OPTIONS.map(item => ({ text: formatSchoolBoardingTypeDisplay(item), value: item }))
 const yesNoFilterOptions = YES_NO_OPTIONS.map(item => ({ text: item, value: item }))
 const yesNoHaveFilterOptions = YES_NO_HAVE_OPTIONS.map(item => ({ text: item, value: item }))
-const screenMethodFilterOptions = SCHOOL_SCREEN_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
+const symptomFilterOptions = SCHOOL_SYMPTOM_OPTIONS.map(item => ({ text: item, value: item }))
+const screenMethodFilterOptions = SCHOOL_SCREEN_METHOD_OPTIONS.map(item => ({ text: formatSchoolScreenMethodDisplay(item), value: item }))
 const screenResultFilterOptions = ["阳性", "阴性", "无"].map(item => ({ text: item, value: item }))
-const chestMethodFilterOptions = SCHOOL_CHEST_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
-const chestResultFilterOptions = SCHOOL_CHEST_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const chestMethodFilterOptions = SCHOOL_CHEST_METHOD_OPTIONS.map(item => ({ text: formatSchoolChestMethodDisplay(item), value: item }))
+const chestResultFilterOptions = SCHOOL_CHEST_RESULT_OPTIONS.map(item => ({ text: formatSchoolChestResultDisplay(item), value: item }))
+const infectionJudgeFilterOptions = SCHOOL_INFECTION_JUDGE_OPTIONS.map(item => ({ text: formatSchoolInfectionJudgeDisplay(item), value: item }))
 
 const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
   const { data } = await getScreeningSchoolColumnDistinctApi(field)
@@ -172,7 +174,13 @@ function openTierCare(row: any) {
 const uploadRef = ref()
 const importResultVisible = ref(false)
 const fillGuideVisible = ref(false)
-const importResult = ref<{ successCount: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
+const importResult = ref<{
+  successCount: number
+  missingIdCount?: number
+  symptomNotInquiredCount?: number
+  errors: string[]
+  warnings?: string[]
+}>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
 async function handleUpload(uploadFile: any) {
@@ -300,9 +308,14 @@ function onChestMethodChange() {
 
 function syncSuspiciousSymptoms() {
   const yes = (v: string) => v === "有" || v === "是" || v === "1"
+  const none = (v: string) => v === "无" || v === "否" || v === "0"
   const { symptomCough, symptomHemoptysis, symptomOther } = editForm.value
   if (yes(symptomCough) || yes(symptomHemoptysis) || yes(symptomOther)) {
     editForm.value.suspiciousSymptoms = "有"
+  } else if (none(symptomCough) || none(symptomHemoptysis) || none(symptomOther)) {
+    editForm.value.suspiciousSymptoms = "无"
+  } else if (isSchoolSymptomNotInquired(symptomCough) || isSchoolSymptomNotInquired(symptomHemoptysis) || isSchoolSymptomNotInquired(symptomOther)) {
+    editForm.value.suspiciousSymptoms = "未询问"
   } else if (symptomCough || symptomHemoptysis || symptomOther) {
     editForm.value.suspiciousSymptoms = "无"
   }
@@ -371,6 +384,22 @@ async function handleSave() {
     const name = editForm.value.name?.trim() || "该筛查记录"
     const confirmed = await confirmEditChange(`「${name}」信息`)
     if (!confirmed) return
+  }
+  const notInquiredFields = [
+    isSchoolSymptomNotInquired(editForm.value.symptomCough) ? "咳嗽咳痰≥两周" : "",
+    isSchoolSymptomNotInquired(editForm.value.symptomHemoptysis) ? "咯血或血痰" : "",
+    isSchoolSymptomNotInquired(editForm.value.symptomOther) ? "其他" : ""
+  ].filter(Boolean)
+  if (notInquiredFields.length > 0) {
+    try {
+      await ElMessageBox.confirm(
+        `「${notInquiredFields.join("、")}」填写为未询问。请核查对方因何未询问（拒答、不在场、漏问等），并尽快补全有/无。是否仍保存？`,
+        "未询问核查提醒",
+        { confirmButtonText: "仍保存", cancelButtonText: "返回修改", type: "warning" }
+      )
+    } catch {
+      return
+    }
   }
   syncSuspiciousSymptoms()
   onScreenMethodChange()
@@ -506,17 +535,17 @@ watch(
         </el-form-item>
         <el-form-item label="胸片结果">
           <el-select v-model="searchForm.chestXrayResult" placeholder="全部" clearable style="width: 200px">
-            <el-option v-for="item in SCHOOL_CHEST_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in SCHOOL_CHEST_RESULT_OPTIONS" :key="item" :label="formatSchoolChestResultDisplay(item)" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="分子生物学结果">
-          <el-select v-model="searchForm.molecularBiologyResult" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          <el-select v-model="searchForm.molecularBiologyResult" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="formatSchoolLabResultDisplay(item)" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="痰培养结果">
-          <el-select v-model="searchForm.sputumCultureResult" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+          <el-select v-model="searchForm.sputumCultureResult" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="formatSchoolLabResultDisplay(item)" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item label="判定结果">
@@ -526,8 +555,8 @@ watch(
           </el-select>
         </el-form-item>
         <el-form-item label="诊断结果">
-          <el-select v-model="searchForm.diagnosisFirst" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="item in SCHOOL_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select v-model="searchForm.diagnosisFirst" placeholder="全部" clearable style="width: 180px">
+            <el-option v-for="item in SCHOOL_DIAGNOSIS_SEARCH_OPTIONS" :key="item.value" :label="formatSchoolDiagnosisDisplay(item.value) || item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="录入时间">
@@ -667,7 +696,7 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="township" label="乡镇/街道" min-width="100" show-overflow-tooltip />
-        <el-table-column prop="schoolType" min-width="100">
+        <el-table-column prop="schoolType" min-width="160">
           <template #header>
             <TableHeaderFilter
               label="类型"
@@ -675,13 +704,17 @@ watch(
               :hint="SCHOOL_SCREENING_FIELD_HINTS.schoolType"
               :options="schoolTypeFilterOptions"
               :source-values="distinctValues('schoolType').value"
+              :format-option-text="formatSchoolTypeDisplay"
               :load-options="loadSchoolTypeOptions"
               :model-value="columnFilters.schoolType"
               @change="(v) => { setFilter('schoolType', v); handleSearch() }"
             />
           </template>
+          <template #default="{ row }">
+            {{ formatSchoolTypeDisplay(row.schoolType) || "-" }}
+          </template>
         </el-table-column>
-        <el-table-column prop="boardingType" min-width="100">
+        <el-table-column prop="boardingType" min-width="130">
           <template #header>
             <TableHeaderFilter
               label="是否寄宿制"
@@ -689,10 +722,14 @@ watch(
               :hint="SCHOOL_SCREENING_FIELD_HINTS.boardingType"
               :options="boardingTypeFilterOptions"
               :source-values="distinctValues('boardingType').value"
+              :format-option-text="formatSchoolBoardingTypeDisplay"
               :load-options="loadBoardingTypeOptions"
               :model-value="columnFilters.boardingType"
               @change="(v) => { setFilter('boardingType', v); handleSearch() }"
             />
+          </template>
+          <template #default="{ row }">
+            {{ formatSchoolBoardingTypeDisplay(row.boardingType) || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="schoolName" min-width="120" sortable="custom">
@@ -781,7 +818,7 @@ watch(
                 label="咳嗽咳痰≥两周"
                 type="select"
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomCough"
-                :options="yesNoHaveFilterOptions"
+                :options="symptomFilterOptions"
                 :source-values="distinctValues('symptomCough').value"
                 :load-options="loadSymptomCoughOptions"
                 :model-value="columnFilters.symptomCough"
@@ -789,7 +826,10 @@ watch(
               />
             </template>
             <template #default="{ row }">
-              {{ row.symptomCough || "-" }}
+              <el-tag v-if="isSchoolSymptomNotInquired(row.symptomCough)" type="warning" size="small">
+                未询问
+              </el-tag>
+              <span v-else>{{ row.symptomCough || "-" }}</span>
             </template>
           </el-table-column>
           <el-table-column min-width="100">
@@ -798,7 +838,7 @@ watch(
                 label="咯血或血痰"
                 type="select"
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomHemoptysis"
-                :options="yesNoHaveFilterOptions"
+                :options="symptomFilterOptions"
                 :source-values="distinctValues('symptomHemoptysis').value"
                 :load-options="loadSymptomHemoptysisOptions"
                 :model-value="columnFilters.symptomHemoptysis"
@@ -806,7 +846,10 @@ watch(
               />
             </template>
             <template #default="{ row }">
-              {{ row.symptomHemoptysis || "-" }}
+              <el-tag v-if="isSchoolSymptomNotInquired(row.symptomHemoptysis)" type="warning" size="small">
+                未询问
+              </el-tag>
+              <span v-else>{{ row.symptomHemoptysis || "-" }}</span>
             </template>
           </el-table-column>
           <el-table-column min-width="80">
@@ -815,7 +858,7 @@ watch(
                 label="其他"
                 type="select"
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.symptomOther"
-                :options="yesNoHaveFilterOptions"
+                :options="symptomFilterOptions"
                 :source-values="distinctValues('symptomOther').value"
                 :load-options="loadSymptomOtherOptions"
                 :model-value="columnFilters.symptomOther"
@@ -823,13 +866,16 @@ watch(
               />
             </template>
             <template #default="{ row }">
-              {{ row.symptomOther || "-" }}
+              <el-tag v-if="isSchoolSymptomNotInquired(row.symptomOther)" type="warning" size="small">
+                未询问
+              </el-tag>
+              <span v-else>{{ row.symptomOther || "-" }}</span>
             </template>
           </el-table-column>
         </el-table-column>
         <el-table-column label="感染筛查">
           <el-table-column prop="screenDate" label="感染筛查时间" min-width="110" sortable="custom" />
-          <el-table-column prop="screenMethod" min-width="80">
+          <el-table-column prop="screenMethod" min-width="220">
             <template #header>
               <TableHeaderFilter
                 label="方法"
@@ -837,10 +883,14 @@ watch(
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.screenMethod"
                 :options="screenMethodFilterOptions"
                 :source-values="distinctValues('screenMethod').value"
+                :format-option-text="formatSchoolScreenMethodDisplay"
                 :load-options="loadScreenMethodOptions"
                 :model-value="columnFilters.screenMethod"
                 @change="(v) => { setFilter('screenMethod', v); handleSearch() }"
               />
+            </template>
+            <template #default="{ row }">
+              {{ formatSchoolScreenMethodDisplay(row.screenMethod) || "-" }}
             </template>
           </el-table-column>
           <el-table-column min-width="120" show-overflow-tooltip>
@@ -860,17 +910,22 @@ watch(
               {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
             </template>
           </el-table-column>
-          <el-table-column prop="infectionResult" min-width="100">
+          <el-table-column prop="infectionResult" min-width="120">
             <template #header>
               <TableHeaderFilter
                 label="判定结果"
                 type="select"
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.infectionResult"
+                :options="infectionJudgeFilterOptions"
                 :source-values="distinctValues('infectionResult').value"
+                :format-option-text="formatSchoolInfectionJudgeDisplay"
                 :load-options="loadInfectionResultOptions"
                 :model-value="columnFilters.infectionResult"
                 @change="(v) => { setFilter('infectionResult', v); handleSearch() }"
               />
+            </template>
+            <template #default="{ row }">
+              {{ formatSchoolInfectionJudgeDisplay(row.infectionResult) || "-" }}
             </template>
           </el-table-column>
         </el-table-column>
@@ -887,7 +942,7 @@ watch(
               />
             </template>
           </el-table-column>
-          <el-table-column prop="chestXrayMethod" min-width="90">
+          <el-table-column prop="chestXrayMethod" min-width="140">
             <template #header>
               <TableHeaderFilter
                 label="方法"
@@ -895,13 +950,17 @@ watch(
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayMethod"
                 :options="chestMethodFilterOptions"
                 :source-values="distinctValues('chestXrayMethod').value"
+                :format-option-text="formatSchoolChestMethodDisplay"
                 :load-options="loadChestXrayMethodOptions"
                 :model-value="columnFilters.chestXrayMethod"
                 @change="(v) => { setFilter('chestXrayMethod', v); handleSearch() }"
               />
             </template>
+            <template #default="{ row }">
+              {{ formatSchoolChestMethodDisplay(row.chestXrayMethod) || "-" }}
+            </template>
           </el-table-column>
-          <el-table-column prop="chestXrayResult" min-width="140" show-overflow-tooltip>
+          <el-table-column prop="chestXrayResult" min-width="220" show-overflow-tooltip>
             <template #header>
               <TableHeaderFilter
                 label="结果"
@@ -909,24 +968,34 @@ watch(
                 :hint="SCHOOL_SCREENING_FIELD_HINTS.chestXrayResult"
                 :options="chestResultFilterOptions"
                 :source-values="distinctValues('chestXrayResult').value"
+                :format-option-text="formatSchoolChestResultDisplay"
                 :load-options="loadChestXrayResultOptions"
                 :model-value="columnFilters.chestXrayResult"
                 @change="(v) => { setFilter('chestXrayResult', v); handleSearch() }"
               />
             </template>
+            <template #default="{ row }">
+              {{ formatSchoolChestResultDisplay(row.chestXrayResult) || "-" }}
+            </template>
           </el-table-column>
         </el-table-column>
-        <el-table-column prop="molecularBiologyResult" min-width="120">
+        <el-table-column prop="molecularBiologyResult" min-width="140">
           <template #header>
             <TableHeaderHint label="分子生物学结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.molecularBiologyResult" />
           </template>
+          <template #default="{ row }">
+            {{ formatSchoolLabResultDisplay(row.molecularBiologyResult) || "-" }}
+          </template>
         </el-table-column>
-        <el-table-column prop="sputumCultureResult" min-width="100">
+        <el-table-column prop="sputumCultureResult" min-width="120">
           <template #header>
             <TableHeaderHint label="痰培养结果" :hint="SCHOOL_SCREENING_FIELD_HINTS.sputumCultureResult" />
           </template>
+          <template #default="{ row }">
+            {{ formatSchoolLabResultDisplay(row.sputumCultureResult) || "-" }}
+          </template>
         </el-table-column>
-        <el-table-column prop="diagnosisFirst" min-width="110">
+        <el-table-column prop="diagnosisFirst" min-width="160">
           <template #header>
             <TableHeaderFilter
               label="筛查结果"
@@ -938,7 +1007,7 @@ watch(
             />
           </template>
           <template #default="{ row }">
-            {{ displaySchoolDiagnosis(row.diagnosisFirst) || "—" }}
+            {{ formatSchoolDiagnosisDisplay(row.diagnosisFirst) || "—" }}
           </template>
         </el-table-column>
         <!-- 预防性治疗情况（结案进入历史患者后同步） -->
@@ -1024,14 +1093,14 @@ watch(
           <el-col :span="8">
             <el-form-item label="类型">
               <el-select v-model="editForm.schoolType" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_TYPE_OPTIONS" :key="item" :label="formatSchoolTypeDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="是否寄宿制">
               <el-select v-model="editForm.boardingType" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_BOARDING_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_BOARDING_TYPE_OPTIONS" :key="item" :label="formatSchoolBoardingTypeDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -1112,21 +1181,21 @@ watch(
           <el-col :span="8">
             <el-form-item label="咳嗽咳痰≥两周">
               <el-select v-model="editForm.symptomCough" style="width:100%" clearable>
-                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_SYMPTOM_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="咯血或血痰">
               <el-select v-model="editForm.symptomHemoptysis" style="width:100%" clearable>
-                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_SYMPTOM_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="其他">
               <el-select v-model="editForm.symptomOther" style="width:100%" clearable>
-                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_SYMPTOM_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -1144,7 +1213,7 @@ watch(
           <el-col :span="8">
             <el-form-item label="方法">
               <el-select v-model="editForm.screenMethod" style="width:100%" clearable @change="onScreenMethodChange">
-                <el-option v-for="item in SCHOOL_SCREEN_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_SCREEN_METHOD_OPTIONS" :key="item" :label="formatSchoolScreenMethodDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -1156,7 +1225,7 @@ watch(
           <el-col :span="8">
             <el-form-item label="判定结果">
               <el-select v-model="editForm.infectionResult" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_INFECTION_JUDGE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_INFECTION_JUDGE_OPTIONS" :key="item" :label="formatSchoolInfectionJudgeDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -1174,35 +1243,35 @@ watch(
           <el-col :span="8">
             <el-form-item label="影像方法">
               <el-select v-model="editForm.chestXrayMethod" style="width:100%" clearable @change="onChestMethodChange">
-                <el-option v-for="item in SCHOOL_CHEST_METHOD_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_CHEST_METHOD_OPTIONS" :key="item" :label="formatSchoolChestMethodDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="影像结果">
               <el-select v-model="editForm.chestXrayResult" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_CHEST_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_CHEST_RESULT_OPTIONS" :key="item" :label="formatSchoolChestResultDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="分子生物学结果">
               <el-select v-model="editForm.molecularBiologyResult" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="formatSchoolLabResultDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="痰培养结果">
               <el-select v-model="editForm.sputumCultureResult" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_LAB_RESULT_OPTIONS" :key="item" :label="formatSchoolLabResultDisplay(item)" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="筛查结果">
               <el-select v-model="editForm.diagnosisFirst" style="width:100%" clearable>
-                <el-option v-for="item in SCHOOL_DIAGNOSIS_EDIT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+                <el-option v-for="item in SCHOOL_DIAGNOSIS_EDIT_OPTIONS" :key="item.value" :label="formatSchoolDiagnosisDisplay(item.value) || item.label" :value="item.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -1244,10 +1313,10 @@ watch(
           {{ detailRow.township || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="类型">
-          {{ detailRow.schoolType }}
+          {{ formatSchoolTypeDisplay(detailRow.schoolType) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="是否寄宿制">
-          {{ detailRow.boardingType || "-" }}
+          {{ formatSchoolBoardingTypeDisplay(detailRow.boardingType) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="学校名称">
           {{ detailRow.schoolName }}
@@ -1283,25 +1352,34 @@ watch(
           {{ detailRow.closeContactHistory }}
         </el-descriptions-item>
         <el-descriptions-item label="咳嗽咳痰≥两周">
-          {{ detailRow.symptomCough || "-" }}
+          <el-tag v-if="isSchoolSymptomNotInquired(detailRow.symptomCough)" type="warning" size="small">
+            未询问
+          </el-tag>
+          <span v-else>{{ detailRow.symptomCough || "-" }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="咯血或血痰">
-          {{ detailRow.symptomHemoptysis || "-" }}
+          <el-tag v-if="isSchoolSymptomNotInquired(detailRow.symptomHemoptysis)" type="warning" size="small">
+            未询问
+          </el-tag>
+          <span v-else>{{ detailRow.symptomHemoptysis || "-" }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="可疑症状其他">
-          {{ detailRow.symptomOther || "-" }}
+          <el-tag v-if="isSchoolSymptomNotInquired(detailRow.symptomOther)" type="warning" size="small">
+            未询问
+          </el-tag>
+          <span v-else>{{ detailRow.symptomOther || "-" }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="感染筛查时间">
           {{ detailRow.screenDate }}
         </el-descriptions-item>
         <el-descriptions-item label="筛查方法">
-          {{ detailRow.screenMethod }}
+          {{ formatSchoolScreenMethodDisplay(detailRow.screenMethod) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="筛查结果">
           {{ formatScreenResultDisplay(detailRow.screenResult, detailRow.screenMethod) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="判定结果">
-          {{ detailRow.infectionResult }}
+          {{ formatSchoolInfectionJudgeDisplay(detailRow.infectionResult) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="待确诊状态">
           {{ getScreeningLatentStatusLabel(detailRow) }}
@@ -1310,19 +1388,19 @@ watch(
           {{ detailRow.chestXrayDate }}
         </el-descriptions-item>
         <el-descriptions-item label="影像方法">
-          {{ detailRow.chestXrayMethod || "-" }}
+          {{ formatSchoolChestMethodDisplay(detailRow.chestXrayMethod) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="影像结果">
-          {{ detailRow.chestXrayResult }}
+          {{ formatSchoolChestResultDisplay(detailRow.chestXrayResult) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="分子生物学结果">
-          {{ detailRow.molecularBiologyResult || "-" }}
+          {{ formatSchoolLabResultDisplay(detailRow.molecularBiologyResult) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="痰培养结果">
-          {{ detailRow.sputumCultureResult || "-" }}
+          {{ formatSchoolLabResultDisplay(detailRow.sputumCultureResult) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="筛查结果（诊断）">
-          {{ displaySchoolDiagnosis(detailRow.diagnosisFirst) || "-" }}
+          {{ formatSchoolDiagnosisDisplay(detailRow.diagnosisFirst) || "-" }}
         </el-descriptions-item>
         <el-descriptions-item label="户籍所在地" :span="3">
           {{ detailRow.householdAddress }}
@@ -1362,13 +1440,28 @@ watch(
     </el-dialog>
 
     <!-- 导入结果弹窗 -->
-    <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
+    <el-dialog v-model="importResultVisible" title="导入结果" width="640px">
       <el-alert
         :title="`成功导入 ${importResult.successCount} 条数据`"
         type="success"
         :closable="false"
         class="mb-3"
       />
+      <el-alert
+        v-if="(importResult.symptomNotInquiredCount ?? 0) > 0"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="mb-3"
+        title="发现可疑症状填写为「未询问」的记录，请医护人员核查未询问原因"
+        :description="`共 ${importResult.symptomNotInquiredCount} 条已导入。请联系筛查对象或填报人员，确认是拒答、不在场、漏问或其他原因，并尽快补全「有/无」。`"
+      />
+      <template v-if="(importResult.warnings?.length ?? 0) > 0">
+        <el-table :data="(importResult.warnings ?? []).map((e, i) => ({ index: i + 1, msg: e }))" border max-height="220" class="mb-3">
+          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="msg" label="未询问提醒" />
+        </el-table>
+      </template>
       <template v-if="importResult.errors.length > 0">
         <el-alert
           :title="importResult.missingIdCount
@@ -1379,7 +1472,7 @@ watch(
           class="mb-3"
         />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
-          <el-table-column prop="index" label="#" />
+          <el-table-column prop="index" label="#" width="50" />
           <el-table-column prop="msg" label="错误信息" />
         </el-table>
       </template>

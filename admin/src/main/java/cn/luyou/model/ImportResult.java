@@ -48,6 +48,12 @@ public class ImportResult {
     /** 错误行描述列表，格式：第N行：原因 - 姓名 */
     private List<String> errors = new ArrayList<>();
 
+    /** 不阻断导入的提醒（如可疑症状未询问） */
+    private List<String> warnings = new ArrayList<>();
+
+    /** 可疑症状填写为「未询问」的行数（已导入，需核查原因） */
+    private int symptomNotInquiredCount;
+
     public static ImportResult of(int successCount) {
         ImportResult r = new ImportResult();
         r.successCount = successCount;
@@ -73,6 +79,12 @@ public class ImportResult {
     public void addDuplicateInFileWarning(int rowNum, String name, String idNumber, String reason) {
         String label = StrUtil.isNotBlank(name) ? name : (StrUtil.isNotBlank(idNumber) ? idNumber : "未知");
         errors.add(String.format("第%d行：%s - %s", rowNum, reason, label));
+    }
+
+    public void addSymptomNotInquiredWarning(int rowNum, String name, String fields) {
+        symptomNotInquiredCount++;
+        warnings.add(String.format("第%d行：%s 填写为「未询问」，请核查未询问原因 - %s",
+                rowNum, fields, StrUtil.isNotBlank(name) ? name : "未知"));
     }
 
     public boolean hasErrors() {

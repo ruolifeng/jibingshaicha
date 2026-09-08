@@ -222,6 +222,18 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
         }
 
+        for (ScreeningSchool d : dataList) {
+            List<String> notInquired = SchoolScreeningCodeSupport.notInquiredSymptomFields(
+                    d.getSymptomCough(), d.getSymptomHemoptysis(), d.getSymptomOther());
+            if (!notInquired.isEmpty()) {
+                Integer rowNo = d.getImportRowNo();
+                result.addSymptomNotInquiredWarning(
+                        rowNo == null ? 0 : rowNo,
+                        d.getName(),
+                        String.join("、", notInquired));
+            }
+        }
+
         // 增量导入：按身份证号去重，同一人多次导入时更新而非重复插入
         List<ScreeningSchool> toInsert = new ArrayList<>();
         List<ScreeningSchool> toUpdate = new ArrayList<>();
@@ -971,9 +983,12 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         data.setTbHistory(field(row, headerIndex, "既往结核病史", "有无既往结核病史"));
         data.setCloseContactHistory(field(row, headerIndex, "密切接触史", "有无肺结核接触史"));
 
-        String cough = field(row, headerIndex, "咳嗽咳痰", "咳嗽咳痰两周");
-        String hemoptysis = field(row, headerIndex, "咯血或血痰");
-        String symptomOther = field(row, headerIndex, "可疑症状其他");
+        String cough = SchoolScreeningCodeSupport.normalizeSymptomValue(
+                field(row, headerIndex, "咳嗽咳痰", "咳嗽咳痰两周"));
+        String hemoptysis = SchoolScreeningCodeSupport.normalizeSymptomValue(
+                field(row, headerIndex, "咯血或血痰"));
+        String symptomOther = SchoolScreeningCodeSupport.normalizeSymptomValue(
+                field(row, headerIndex, "可疑症状其他"));
         data.setSymptomCough(cough);
         data.setSymptomHemoptysis(hemoptysis);
         data.setSymptomOther(symptomOther);
