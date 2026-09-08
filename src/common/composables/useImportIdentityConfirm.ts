@@ -16,6 +16,8 @@ export interface ImportResultData {
   requireIdentityConfirm?: boolean
   requireDuplicateInFileConfirm?: boolean
   errors: string[]
+  warnings?: string[]
+  symptomNotInquiredCount?: number
 }
 
 function buildDuplicateConfirmMessage(result: ImportResultData): string {

@@ -20,13 +20,16 @@ const props = withDefaults(defineProps<{
   loadOptions?: () => void | Promise<void>
   /** 点击列名展示的数字码/填写说明 */
   hint?: string
+  /** 将实际内容去重值格式化为展示文案（筛选值仍用原值） */
+  formatOptionText?: (value: string) => string
 }>(), {
   modelValue: "",
   type: "text",
   options: () => [],
   sourceValues: () => [],
   placeholder: "输入后筛选",
-  hint: ""
+  hint: "",
+  formatOptionText: undefined
 })
 
 const emit = defineEmits<{
@@ -57,7 +60,7 @@ const mergedOptions = computed<HeaderFilterOption[]>(() => {
   }
   for (const raw of props.sourceValues || []) {
     const v = String(raw ?? "").trim()
-    if (v) push(v, v)
+    if (v) push(props.formatOptionText ? (props.formatOptionText(v) || v) : v, v)
   }
   return list
 })

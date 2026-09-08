@@ -156,7 +156,7 @@ onMounted(() => {
 
     <el-card shadow="never">
       <template #header>
-        <span class="text-lg font-bold">学校人群 — 学生报表统计</span>
+        <span class="text-lg font-bold">学校人群 — 学生报表统计(新生统计）</span>
       </template>
       <el-table v-loading="loading" :data="tableData" border stripe max-height="600" show-summary>
         <el-table-column prop="schoolCategory" label="学校分类" min-width="160" fixed />

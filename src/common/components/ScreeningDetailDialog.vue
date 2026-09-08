@@ -3,7 +3,7 @@
  * 通用筛查数据详情弹窗
  * 支持学校人群（school）、重点人群（keyPopulation）、密接人群（closeContact）三种类型
  */
-import { ACTIVE_ROUND_MAP } from "@@/constants/disease"
+import { ACTIVE_ROUND_MAP, formatSchoolChestResultDisplay, formatSchoolDiagnosisDisplay, formatSchoolInfectionJudgeDisplay, formatSchoolScreenMethodDisplay, formatSchoolTypeDisplay } from "@@/constants/disease"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 
 const props = defineProps<{
@@ -73,7 +73,7 @@ const dialogTitle = computed(() => {
             {{ data.phone }}
           </el-descriptions-item>
           <el-descriptions-item label="学校类型">
-            {{ data.schoolType }}
+            {{ formatSchoolTypeDisplay(data.schoolType) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="学校名称">
             {{ data.schoolName }}
@@ -97,13 +97,13 @@ const dialogTitle = computed(() => {
             {{ data.screenDate }}
           </el-descriptions-item>
           <el-descriptions-item label="筛查方法">
-            {{ data.screenMethod }}
+            {{ formatSchoolScreenMethodDisplay(data.screenMethod) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="筛查结果">
             {{ formatScreenResultDisplay(data.screenResult, data.screenMethod) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染筛查结果">
-            {{ data.infectionResult }}
+            {{ formatSchoolInfectionJudgeDisplay(data.infectionResult) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="感染判定">
             {{ data.isLatent === 1 ? "阳性" : "阴性" }}
@@ -115,11 +115,11 @@ const dialogTitle = computed(() => {
             {{ data.chestXrayDate || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="胸片检查结果">
-            {{ data.chestXrayResult || "-" }}
+            {{ formatSchoolChestResultDisplay(data.chestXrayResult) || "-" }}
           </el-descriptions-item>
           <el-descriptions-item label="首次诊断结果" :span="3">
-            <el-tag v-if="data.diagnosisFirst" :type="data.diagnosisFirst?.includes('确诊') || data.diagnosisFirst?.includes('疑似') ? 'danger' : 'info'" size="small">
-              {{ data.diagnosisFirst }}
+            <el-tag v-if="data.diagnosisFirst" :type="data.diagnosisFirst?.includes('确诊') || data.diagnosisFirst?.includes('疑似') || data.diagnosisFirst?.includes('活动性') ? 'danger' : 'info'" size="small">
+              {{ formatSchoolDiagnosisDisplay(data.diagnosisFirst) }}
             </el-tag>
             <span v-else>-</span>
           </el-descriptions-item>

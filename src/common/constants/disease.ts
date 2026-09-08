@@ -771,6 +771,14 @@ export const SCHOOL_CHEST_RESULT_OPTIONS = [
 /** 学生筛查 — 分子生物学/痰培养 */
 export const SCHOOL_LAB_RESULT_OPTIONS = ["阴性", "阳性", "无法判读", "未查"]
 
+/** 学生筛查 — 结核病可疑症状（咳嗽/咯血/其他） */
+export const SCHOOL_SYMPTOM_OPTIONS = ["有", "无", "未询问"]
+
+export function isSchoolSymptomNotInquired(value?: string | null): boolean {
+  const raw = (value || "").trim()
+  return raw === "未询问" || raw === "未问"
+}
+
 /**
  * 学生筛查列表 — 表头点击展示的数字码/填写说明
  * （对齐《2026年秋季新生入学结核病筛查记录表新》第 5 行说明）
@@ -781,9 +789,9 @@ export const SCHOOL_SCREENING_FIELD_HINTS = {
   participatedScreening: "填写是/否",
   tbHistory: "填写有/无",
   closeContactHistory: "填写有/无",
-  symptomCough: "填写有/无",
-  symptomHemoptysis: "填写有/无",
-  symptomOther: "填写有/无",
+  symptomCough: "填写有/无/未询问",
+  symptomHemoptysis: "填写有/无/未询问",
+  symptomOther: "填写有/无/未询问",
   screenMethod: "填写数字，1=结核菌素纯蛋白衍生物（PPD），2=重组结核分枝杆菌融合蛋白（EC），3=γ-干扰素释放试验（IGRA），4=未查",
   screenResult: "PPD填写横径×纵径（mm）及有无双圈、水泡、坏死、淋巴管炎等；EC和IGRA填写阳性/阴性；未查填写「无」",
   infectionResult: "填写数字，0=未感染，1=感染，2=无法判读，3=未查",
@@ -813,6 +821,233 @@ export const SCHOOL_SCREENING_FILL_INSTRUCTIONS = [
   { field: "痰培养结果", hint: SCHOOL_SCREENING_FIELD_HINTS.sputumCultureResult },
   { field: "筛查结果", hint: SCHOOL_SCREENING_FIELD_HINTS.diagnosisFirst }
 ]
+
+/** 填写说明码表：列表/详情/下拉展示「数字=说明」 */
+export const SCHOOL_TYPE_HINT: Record<string, string> = {
+  1: "托幼机构",
+  2: "小学",
+  3: "初中",
+  4: "高中阶段教育学校",
+  5: "高等教育学校",
+  6: "教职工",
+  7: "其他（培训学校、特殊教育学校和专门学校等）"
+}
+
+export const SCHOOL_BOARDING_TYPE_HINT: Record<string, string> = {
+  1: "寄宿制",
+  2: "非寄宿制",
+  3: "大学",
+  4: "其他"
+}
+
+export const SCHOOL_SCREEN_METHOD_HINT: Record<string, string> = {
+  1: "结核菌素纯蛋白衍生物（PPD）",
+  2: "重组结核分枝杆菌融合蛋白（EC）",
+  3: "γ-干扰素释放试验（IGRA）",
+  4: "未查"
+}
+
+export const SCHOOL_INFECTION_JUDGE_HINT: Record<string, string> = {
+  0: "未感染",
+  1: "感染",
+  2: "无法判读",
+  3: "未查"
+}
+
+export const SCHOOL_CHEST_METHOD_HINT: Record<string, string> = {
+  1: "胸部X线",
+  2: "胸部CT",
+  3: "其他（需注明）",
+  4: "未查"
+}
+
+export const SCHOOL_CHEST_RESULT_HINT: Record<string, string> = {
+  0: "未见异常",
+  1: "异常（疑似活动性结核病变）",
+  2: "异常（非活动性结核病变）",
+  3: "其他（需注明）",
+  4: "未查"
+}
+
+export const SCHOOL_LAB_RESULT_HINT: Record<string, string> = {
+  0: "阴性",
+  1: "阳性",
+  2: "无法判读",
+  3: "未查"
+}
+
+export const SCHOOL_DIAGNOSIS_HINT: Record<string, string> = {
+  0: "未发现异常",
+  1: "活动性肺结核",
+  2: "疑似肺结核",
+  3: "潜伏感染者",
+  4: "其他（需注明）"
+}
+
+function peelSchoolCodeEquals(raw: string): { code: string, rest: string } {
+  const trimmed = raw.trim()
+  const eq = trimmed.search(/[=＝]/)
+  if (eq <= 0) return { code: "", rest: trimmed }
+  const left = trimmed.slice(0, eq).trim().replace(/\.0+$/, "")
+  const right = trimmed.slice(eq + 1).trim()
+  if (/^\d+$/.test(left)) return { code: left, rest: right || trimmed }
+  return { code: "", rest: trimmed }
+}
+
+function lookupHintCode(raw: string, hintByCode: Record<string, string>, aliases: Record<string, string>): string {
+  const peeled = peelSchoolCodeEquals(raw)
+  if (peeled.code && hintByCode[peeled.code]) return peeled.code
+  const token = raw.trim().replace(/[（(]需注明[）)]/g, "").trim()
+  if (hintByCode[token]) return token
+  if (aliases[token]) return aliases[token]
+  const official = toSchoolDiagnosisOfficial(token)
+  if (aliases[official]) return aliases[official]
+  for (const [label, code] of Object.entries(aliases)) {
+    if (token.startsWith(`${label}（`) || token.startsWith(`${label}(`)) return code
+  }
+  for (const [code, label] of Object.entries(hintByCode)) {
+    if (token === label || token.startsWith(`${label}（`) || token.startsWith(`${label}(`)) return code
+  }
+  return peeled.code
+}
+
+function formatSchoolHintDisplay(
+  value: string | null | undefined,
+  hintByCode: Record<string, string>,
+  aliases: Record<string, string>
+): string {
+  const raw = (value || "").trim()
+  if (!raw) return ""
+  const code = lookupHintCode(raw, hintByCode, aliases)
+  const label = hintByCode[code]
+  return label ? `${code}=${label}` : raw
+}
+
+const SCHOOL_TYPE_ALIASES: Record<string, string> = {
+  "托幼机构": "1",
+  "小学": "2",
+  "初中": "3",
+  "高中阶段教育学校": "4",
+  "高等教育学校": "5",
+  "教职工": "6",
+  "其他": "7",
+  "其他（培训学校、特殊教育学校和专门学校等）": "7"
+}
+
+const SCHOOL_BOARDING_ALIASES: Record<string, string> = {
+  寄宿制: "1",
+  非寄宿制: "2",
+  大学: "3",
+  其他: "4"
+}
+
+const SCHOOL_INFECTION_JUDGE_ALIASES: Record<string, string> = {
+  未感染: "0",
+  感染: "1",
+  无法判读: "2",
+  未查: "3"
+}
+
+const SCHOOL_CHEST_METHOD_ALIASES: Record<string, string> = {
+  胸部X线: "1",
+  胸部CT: "2",
+  其他: "3",
+  未查: "4"
+}
+
+const SCHOOL_CHEST_RESULT_ALIASES: Record<string, string> = {
+  "未见异常": "0",
+  "正常": "0",
+  "异常（疑似活动性结核病变）": "1",
+  "异常": "1",
+  "异常（非活动性结核病变）": "2",
+  "其他": "3",
+  "未查": "4"
+}
+
+const SCHOOL_LAB_ALIASES: Record<string, string> = {
+  阴性: "0",
+  阳性: "1",
+  无法判读: "2",
+  未查: "3"
+}
+
+const SCHOOL_DIAGNOSIS_ALIASES: Record<string, string> = {
+  "未发现异常": "0",
+  "排除": "0",
+  "正常": "0",
+  "活动性肺结核": "1",
+  "确诊患者": "1",
+  "确诊结核": "1",
+  "在治患者": "1",
+  "疑似肺结核": "2",
+  "疑似结核": "2",
+  "潜伏感染者": "3",
+  "其他": "4",
+  "其它": "4",
+  "其他（需注明）": "4",
+  "其它（需注明）": "4"
+}
+
+function toSchoolScreenMethodCode(raw: string): string {
+  const peeled = peelSchoolCodeEquals(raw)
+  if (peeled.code && SCHOOL_SCREEN_METHOD_HINT[peeled.code]) return peeled.code
+  const token = (peeled.rest || raw).trim()
+  const upper = token.toUpperCase()
+  if (token === "1" || upper.includes("PPD") || token.includes("结核菌素")) return "1"
+  if (token === "2" || token === "EC" || token.includes("（EC）") || token.includes("(EC)")
+    || token.includes("融合蛋白") || token.includes("结核抗原")) {
+    return "2"
+  }
+  if (token === "3" || upper.includes("IGRA") || token.includes("干扰素")) return "3"
+  if (token === "4" || token === "未查" || token === "未做") return "4"
+  return peeled.code
+}
+
+export function formatSchoolTypeDisplay(value?: string | null): string {
+  return formatSchoolHintDisplay(value, SCHOOL_TYPE_HINT, SCHOOL_TYPE_ALIASES)
+}
+
+export function formatSchoolBoardingTypeDisplay(value?: string | null): string {
+  return formatSchoolHintDisplay(value, SCHOOL_BOARDING_TYPE_HINT, SCHOOL_BOARDING_ALIASES)
+}
+
+export function formatSchoolScreenMethodDisplay(value?: string | null): string {
+  const raw = (value || "").trim()
+  if (!raw) return ""
+  const code = toSchoolScreenMethodCode(raw)
+  const label = SCHOOL_SCREEN_METHOD_HINT[code]
+  return label ? `${code}=${label}` : raw
+}
+
+export function formatSchoolInfectionJudgeDisplay(value?: string | null): string {
+  return formatSchoolHintDisplay(value, SCHOOL_INFECTION_JUDGE_HINT, SCHOOL_INFECTION_JUDGE_ALIASES)
+}
+
+export function formatSchoolChestMethodDisplay(value?: string | null): string {
+  return formatSchoolHintDisplay(value, SCHOOL_CHEST_METHOD_HINT, SCHOOL_CHEST_METHOD_ALIASES)
+}
+
+export function formatSchoolChestResultDisplay(value?: string | null): string {
+  return formatSchoolHintDisplay(value, SCHOOL_CHEST_RESULT_HINT, SCHOOL_CHEST_RESULT_ALIASES)
+}
+
+export function formatSchoolLabResultDisplay(value?: string | null): string {
+  return formatSchoolHintDisplay(value, SCHOOL_LAB_RESULT_HINT, SCHOOL_LAB_ALIASES)
+}
+
+export function formatSchoolDiagnosisDisplay(value?: string | null): string {
+  const raw = (value || "").trim()
+  if (!raw) return ""
+  const code = lookupHintCode(raw, SCHOOL_DIAGNOSIS_HINT, SCHOOL_DIAGNOSIS_ALIASES)
+  const hintLabel = SCHOOL_DIAGNOSIS_HINT[code]
+  if (!hintLabel) return raw
+  if (code === "4") {
+    const shown = displaySchoolDiagnosis(raw)
+    return shown ? `4=${shown}` : raw
+  }
+  return `${code}=${hintLabel}`
+}
 
 /** 有无类选项 */
 export const YES_NO_HAVE_OPTIONS = ["有", "无"]

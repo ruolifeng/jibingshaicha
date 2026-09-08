@@ -92,6 +92,56 @@ public final class SchoolScreeningCodes {
             "4", "其他"
     );
 
+    /**
+     * 填写说明展示文案（列表/导出：数字=说明）。
+     * 与《2026年秋季新生入学结核病筛查记录表新》第 5 行一致，可比入库短码更完整。
+     */
+    public static final Map<String, String> SCHOOL_TYPE_HINT = ordered(
+            "1", "托幼机构",
+            "2", "小学",
+            "3", "初中",
+            "4", "高中阶段教育学校",
+            "5", "高等教育学校",
+            "6", "教职工",
+            "7", "其他（培训学校、特殊教育学校和专门学校等）"
+    );
+
+    public static final Map<String, String> BOARDING_TYPE_HINT = BOARDING_TYPE;
+
+    public static final Map<String, String> SCREEN_METHOD_HINT = ordered(
+            "1", "结核菌素纯蛋白衍生物（PPD）",
+            "2", "重组结核分枝杆菌融合蛋白（EC）",
+            "3", "γ-干扰素释放试验（IGRA）",
+            "4", "未查"
+    );
+
+    public static final Map<String, String> INFECTION_JUDGE_HINT = INFECTION_JUDGE;
+
+    public static final Map<String, String> CHEST_METHOD_HINT = ordered(
+            "1", "胸部X线",
+            "2", "胸部CT",
+            "3", "其他（需注明）",
+            "4", "未查"
+    );
+
+    public static final Map<String, String> CHEST_RESULT_HINT = ordered(
+            "0", "未见异常",
+            "1", "异常（疑似活动性结核病变）",
+            "2", "异常（非活动性结核病变）",
+            "3", "其他（需注明）",
+            "4", "未查"
+    );
+
+    public static final Map<String, String> LAB_RESULT_HINT = LAB_RESULT;
+
+    public static final Map<String, String> SCREENING_RESULT_HINT = ordered(
+            "0", "未发现异常",
+            "1", "活动性肺结核",
+            "2", "疑似肺结核",
+            "3", "潜伏感染者",
+            "4", "其他（需注明）"
+    );
+
     private static Map<String, String> ordered(String... kv) {
         Map<String, String> map = new LinkedHashMap<>();
         for (int i = 0; i + 1 < kv.length; i += 2) {
