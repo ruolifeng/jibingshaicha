@@ -14,6 +14,7 @@ import cn.luyou.utils.BaseContext;
 import cn.luyou.utils.CloseContactCaseExcelDerivedSupport;
 import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.CloseContactCaseLatentSyncSupport;
+import cn.luyou.utils.CloseContactCaseSupervisionSyncSupport;
 import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
@@ -60,6 +61,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     private final UserMapper userMapper;
     private final ScreeningScopeHelper screeningScopeHelper;
     private final CloseContactCaseLatentSyncSupport closeContactCaseLatentSyncSupport;
+    private final CloseContactCaseSupervisionSyncSupport closeContactCaseSupervisionSyncSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "year", "city", "district", "gender", "idNumber", "phone",
@@ -207,6 +209,8 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
 
         if (!toInsert.isEmpty()) saveBatch(toInsert, 500);
         if (!toUpdate.isEmpty()) updateBatchById(toUpdate, 500);
+        overlaySupervisionFields(toInsert);
+        overlaySupervisionFields(toUpdate);
 
         for (CloseContactCase d : toInsert) {
             try {
@@ -261,6 +265,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         applyDepartmentFilter(wrapper);
         IPage<CloseContactCase> result = page(new Page<>(page, size), wrapper);
         CloseContactCaseExcelDerivedSupport.applyAll(result.getRecords());
+        overlaySupervisionFields(result.getRecords());
         return result;
     }
 
@@ -306,6 +311,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         data.setCreatorUsername(CreatorUserSupport.resolveCurrentUsername(userMapper));
         save(data);
+        overlaySupervisionFields(data);
         try {
             closeContactCaseLatentSyncSupport.syncFromCase(data);
         } catch (Exception e) {
@@ -335,6 +341,13 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         // 不在此调用 ExcelDerivedSupport.apply：其中 ensureFollowupDueDates 会把用户清空的随访到期日再写回
         updateById(data);
         CloseContactCase latest = getById(data.getId());
+        overlaySupervisionFields(latest != null ? latest : data);
+        if (latest != null) {
+            data.setHasPreventiveTreatment(latest.getHasPreventiveTreatment());
+            data.setPreventivePlan(latest.getPreventivePlan());
+            data.setTreatmentCompleted(latest.getTreatmentCompleted());
+            data.setPreventiveSyncedFromSupervision(latest.getPreventiveSyncedFromSupervision());
+        }
         try {
             closeContactCaseLatentSyncSupport.syncFromCase(latest != null ? latest : data);
         } catch (Exception e) {
@@ -414,6 +427,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         applyDepartmentFilter(wrapper);
         List<CloseContactCase> list = list(wrapper);
         CloseContactCaseExcelDerivedSupport.applyAll(list);
+        overlaySupervisionFields(list);
         return list;
     }
 
@@ -622,7 +636,19 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     public CloseContactCase getAccessibleById(Long id) {
         CloseContactCase existing = requireAccessibleCase(id);
         CloseContactCaseExcelDerivedSupport.apply(existing);
+        overlaySupervisionFields(existing);
         return existing;
+    }
+
+    private void overlaySupervisionFields(CloseContactCase caze) {
+        if (caze == null) {
+            return;
+        }
+        overlaySupervisionFields(List.of(caze));
+    }
+
+    private void overlaySupervisionFields(List<CloseContactCase> cases) {
+        closeContactCaseSupervisionSyncSupport.overlayAndPersist(cases);
     }
 
     private CloseContactCase requireAccessibleCase(Long id) {

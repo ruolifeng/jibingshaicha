@@ -937,6 +937,7 @@ onMounted(() => {
                     v-model="editForm.hasPreventiveTreatment"
                     clearable
                     placeholder="请选择"
+                    :disabled="!!editForm.preventiveSyncedFromSupervision"
                     style="width:100%"
                   >
                     <el-option
@@ -952,6 +953,7 @@ onMounted(() => {
                     clearable
                     filterable
                     placeholder="请选择"
+                    :disabled="!!editForm.preventiveSyncedFromSupervision"
                     style="width:100%"
                   >
                     <el-option
@@ -961,6 +963,19 @@ onMounted(() => {
                       :value="opt"
                     />
                   </el-select>
+                  <el-input
+                    v-else-if="field === 'treatmentCompleted'"
+                    v-model="editForm.treatmentCompleted"
+                    :disabled="!!editForm.preventiveSyncedFromSupervision"
+                    :placeholder="editForm.preventiveSyncedFromSupervision ? '已从历史患者最近一次督导表同步' : undefined"
+                    clearable
+                  />
+                  <div
+                    v-if="field === 'treatmentCompleted' && editForm.preventiveSyncedFromSupervision"
+                    class="mt-1 text-xs text-gray-400"
+                  >
+                    已从潜伏感染者历史患者最近一次督导表同步
+                  </div>
                   <el-select
                     v-else-if="field === 'infectionCheckMethod'"
                     v-model="editForm.infectionCheckMethod"

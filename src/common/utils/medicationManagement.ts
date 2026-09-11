@@ -250,6 +250,30 @@ export function applyLatentMedicationFormDefaults(
   }
 }
 
+/** 历史患者服药卡：停止完成时间取后续随访中最近一次「停止治疗时间」 */
+export function resolveMedicationStopDateFromFollowUps(
+  followUps?: Array<{
+    stopTreatment?: string | null
+    stopTreatmentDate?: string | null
+    createTime?: string | null
+    id?: string | number | null
+  }> | null
+): string {
+  if (!followUps?.length) return ""
+  const withStop = followUps.filter(item =>
+    item.stopTreatment === "是" && String(item.stopTreatmentDate || "").trim())
+  if (!withStop.length) return ""
+  withStop.sort((a, b) => {
+    const ta = a.createTime || ""
+    const tb = b.createTime || ""
+    if (ta !== tb) return ta < tb ? -1 : 1
+    const ida = Number(a.id) || 0
+    const idb = Number(b.id) || 0
+    return ida - idb
+  })
+  return String(withStop[withStop.length - 1].stopTreatmentDate || "").trim()
+}
+
 /** 日历标记变化时同步开始治疗日期（未手改时取最早标记日） */
 export function syncStartTreatmentDateFromMarks(
   form: Pick<MedicationFormFields, "startTreatmentDate" | "dayMarks">,

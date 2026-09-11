@@ -9,6 +9,7 @@ import cn.luyou.mapper.SupervisionFormMapper;
 import cn.luyou.service.LatentInfectionService;
 import cn.luyou.service.SupervisionFormService;
 import cn.luyou.utils.BaseContext;
+import cn.luyou.utils.CloseContactCaseSupervisionSyncSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.context.annotation.Lazy;
@@ -23,9 +24,12 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
         implements SupervisionFormService {
 
     private final LatentInfectionService latentInfectionService;
+    private final CloseContactCaseSupervisionSyncSupport closeContactCaseSupervisionSyncSupport;
 
-    public SupervisionFormServiceImpl(@Lazy LatentInfectionService latentInfectionService) {
+    public SupervisionFormServiceImpl(@Lazy LatentInfectionService latentInfectionService,
+                                      CloseContactCaseSupervisionSyncSupport closeContactCaseSupervisionSyncSupport) {
         this.latentInfectionService = latentInfectionService;
+        this.closeContactCaseSupervisionSyncSupport = closeContactCaseSupervisionSyncSupport;
     }
 
     @Override
@@ -72,12 +76,14 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
                     form.setFormSeq(existing.getFormSeq());
                 }
                 updateById(form);
+                syncCloseContactCaseIfArchived(form.getLatentInfectionId());
                 return;
             }
         }
         form.setId(null);
         form.setFormSeq(nextFormSeq(form.getLatentInfectionId()));
         save(form);
+        syncCloseContactCaseIfArchived(form.getLatentInfectionId());
     }
 
     @Override
@@ -186,6 +192,15 @@ public class SupervisionFormServiceImpl extends ServiceImpl<SupervisionFormMappe
             latent.setTreatmentPhase(1);
             latentInfectionService.updateById(latent);
         }
+        closeContactCaseSupervisionSyncSupport.syncCasesFromArchivedLatent(latent);
+    }
+
+    private void syncCloseContactCaseIfArchived(Long latentInfectionId) {
+        if (latentInfectionId == null) {
+            return;
+        }
+        closeContactCaseSupervisionSyncSupport.syncCasesFromArchivedLatent(
+                latentInfectionService.getById(latentInfectionId));
     }
 
     /** 保存/提交/归档时补全填写人，便于列表按录入者检索（编辑时保留原填写人） */

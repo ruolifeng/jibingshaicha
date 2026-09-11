@@ -651,6 +651,7 @@ public class PatientController {
             patient.setArchiveRemark(archiveRemark);
             patientService.updateById(patient);
         }
+        medicationManagementService.syncStopDateFromFollowUp(followUpVisit.getPatientId());
     }
 
     private int nextFollowUpSeq(Long patientId) {
@@ -752,7 +753,9 @@ public class PatientController {
         wrapper.eq(MedicationManagement::getPatientId, patientId)
                 .orderByDesc(MedicationManagement::getCreateTime)
                 .last("LIMIT 1");
-        return ResultRes.success(medicationManagementService.getOne(wrapper));
+        MedicationManagement medication = medicationManagementService.getOne(wrapper);
+        medicationManagementService.fillStopDateFromFollowUp(medication);
+        return ResultRes.success(medication);
     }
 
     @Operation(summary = "完成服药管理（归档患者）")
@@ -764,6 +767,7 @@ public class PatientController {
         if (medication.getStopDate() != null) {
             patientService.archivePatient(medication.getPatientId());
         }
+        medicationManagementService.syncStopDateFromFollowUp(medication.getPatientId());
         return ResultRes.success(null);
     }
 
