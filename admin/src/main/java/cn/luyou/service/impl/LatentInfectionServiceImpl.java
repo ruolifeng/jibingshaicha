@@ -49,6 +49,7 @@ import cn.luyou.utils.ColumnDistinctSupport;
 import cn.luyou.utils.ColumnFilterSupport;
 import cn.luyou.utils.CreatorUserSupport;
 import cn.luyou.utils.CloseContactCaseLatentSyncSupport;
+import cn.luyou.utils.CloseContactCaseSupervisionSyncSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.IdentityFormatFilterSupport;
@@ -121,6 +122,7 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     private final EpidemicReportService epidemicReportService;
     private final NoticePartyFillSupport noticePartyFillSupport;
     private final CloseContactCaseLatentSyncSupport closeContactCaseLatentSyncSupport;
+    private final CloseContactCaseSupervisionSyncSupport closeContactCaseSupervisionSyncSupport;
 
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "registrationNo", "gender", "idNumber", "phone", "currentAddress", "householdAddress",
@@ -1648,8 +1650,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         entity.setArchived(1);
         entity.setArchivedTime(LocalDateTime.now());
         updateById(entity);
-        // 进入历史患者后，再将督导表预防性治疗数据回写到筛查管理
+        // 进入历史患者后，再将督导表预防性治疗数据回写到筛查管理 / 密接个案表
         syncPreventiveTreatmentToScreening(entity);
+        closeContactCaseSupervisionSyncSupport.syncCasesFromArchivedLatent(entity);
     }
 
     /**

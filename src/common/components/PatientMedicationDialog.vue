@@ -15,6 +15,7 @@ import {
   applyMedicationFormDefaults,
   MEDICATION_LOCKED_MANAGEMENT_METHOD,
   medicationSelectOptions,
+  resolveMedicationStopDateFromFollowUps,
   serializeOrderStopPeriods,
   syncStartTreatmentDateFromMarks,
   validateOrderStopPeriods
@@ -25,6 +26,7 @@ import {
   parseMedicationRecords,
   serializeMedicationRecords
 } from "@@/utils/medicationRecords"
+import { getFollowUpVisitListApi } from "@/pages/patient-management/apis"
 import {
   completeMedicationApi,
   getFirstVisitApi,
@@ -108,6 +110,16 @@ async function loadMedication() {
     firstVisit,
     patientRow: props.patientRow
   })
+
+  try {
+    const { data: followUps } = await getFollowUpVisitListApi(props.patientRow.id)
+    const followUpStopDate = resolveMedicationStopDateFromFollowUps(
+      Array.isArray(followUps) ? followUps : []
+    )
+    if (followUpStopDate) {
+      medicationForm.stopDate = followUpStopDate
+    }
+  } catch { /* 无后续随访 */ }
 }
 
 watch(
@@ -284,6 +296,9 @@ function handleStartTreatmentDateChange() {
           style="width: 100%"
           :disabled="readOnly"
         />
+        <div v-if="readOnly && medicationForm.stopDate" class="mt-1 text-xs text-gray-400">
+          已与后续随访「停止治疗时间」同步
+        </div>
       </el-form-item>
       <el-alert v-if="!readOnly && medicationForm.stopDate" type="warning" :closable="false">
         已填写停止完成时间。点击「保存草稿」仅暂存数据；点击「完成并归档」后，患者将从在管列表移入历史患者。

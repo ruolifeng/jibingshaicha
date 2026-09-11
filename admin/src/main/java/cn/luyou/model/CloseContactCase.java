@@ -359,4 +359,9 @@ public class CloseContactCase extends BaseEntity {
     /** 录入用户名（系统账号统一命名格式；导出末尾追加列，导入模板不含） */
     @ExcelProperty(index = 72)
     private String creatorUsername;
+
+    /** 预防性治疗三字段是否已从历史患者最近一次督导表同步（非持久化，详情/编辑展示） */
+    @ExcelIgnore
+    @TableField(exist = false)
+    private Boolean preventiveSyncedFromSupervision;
 }
