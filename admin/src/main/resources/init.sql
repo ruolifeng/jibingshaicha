@@ -4429,16 +4429,16 @@ WHERE c.deleted = 0
   AND (c.creator_username IS NULL OR c.creator_username = '');
 
 UPDATE `close_contact_case`
-SET `followup_6_due_date` = DATE_ADD(`registration_date`, INTERVAL 6 MONTH)
-WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup_6_due_date` IS NULL;
+SET `followup6_due_date` = DATE_ADD(`registration_date`, INTERVAL 6 MONTH)
+WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup6_due_date` IS NULL;
 
 UPDATE `close_contact_case`
-SET `followup_12_due_date` = DATE_ADD(`registration_date`, INTERVAL 12 MONTH)
-WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup_12_due_date` IS NULL;
+SET `followup12_due_date` = DATE_ADD(`registration_date`, INTERVAL 12 MONTH)
+WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup12_due_date` IS NULL;
 
 UPDATE `close_contact_case`
-SET `followup_24_due_date` = DATE_ADD(`registration_date`, INTERVAL 24 MONTH)
-WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup_24_due_date` IS NULL;
+SET `followup24_due_date` = DATE_ADD(`registration_date`, INTERVAL 24 MONTH)
+WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup24_due_date` IS NULL;
 -- end V123
 
 -- ==================== V124：回退误归档的可继续追踪记录 ====================
