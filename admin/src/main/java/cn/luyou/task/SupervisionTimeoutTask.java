@@ -4,6 +4,7 @@ import cn.luyou.model.Notice;
 import cn.luyou.model.SupervisionForm;
 import cn.luyou.service.NoticeService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.service.SysMessageReminderConfigService;
 import cn.luyou.service.SysMessageService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,13 @@ public class SupervisionTimeoutTask {
     private final NoticeService noticeService;
     private final SupervisionFormService supervisionFormService;
     private final SysMessageService sysMessageService;
+    private final SysMessageReminderConfigService reminderConfigService;
 
     @Scheduled(fixedRate = 3600000)
     public void checkSupervisionTimeout() {
+        if (!reminderConfigService.isEnabled("supervision_timeout")) {
+            return;
+        }
         LocalDateTime threshold = LocalDateTime.now().minusHours(72);
 
         // 查找已确认但超过72h、且尚未发过督导超时提醒的潜伏者通知单

@@ -4,6 +4,7 @@ import cn.luyou.model.FirstVisit;
 import cn.luyou.model.Notice;
 import cn.luyou.service.FirstVisitService;
 import cn.luyou.service.NoticeService;
+import cn.luyou.service.SysMessageReminderConfigService;
 import cn.luyou.service.SysMessageService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,13 @@ public class VisitTimeoutTask {
     private final NoticeService noticeService;
     private final FirstVisitService firstVisitService;
     private final SysMessageService sysMessageService;
+    private final SysMessageReminderConfigService reminderConfigService;
 
     @Scheduled(fixedRate = 3600000)
     public void checkFirstVisitTimeout() {
+        if (!reminderConfigService.isEnabled("visit_timeout")) {
+            return;
+        }
         LocalDateTime threshold = LocalDateTime.now().minusHours(72);
 
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();

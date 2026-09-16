@@ -197,7 +197,7 @@ public class ReferralTrackingController {
     }
 
     @OperationLog(type = "update", module = "referral", action = "开启共同追踪")
-    @Operation(summary = "接收方开启共同追踪（发起方与接收方均可追踪）")
+    @Operation(summary = "开启共同追踪（开启后同辖区三/四/五级均可追踪）")
     @PostMapping("/{id}/joint-tracking")
     public ResultResponse<Void> enableJointTracking(@PathVariable Long id) {
         referralTrackingService.enableJointTracking(id);

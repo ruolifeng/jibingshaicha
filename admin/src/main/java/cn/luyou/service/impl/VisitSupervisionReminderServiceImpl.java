@@ -18,6 +18,7 @@ import cn.luyou.service.NoticeService;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.SmsService;
 import cn.luyou.service.SupervisionFormService;
+import cn.luyou.service.SysMessageReminderConfigService;
 import cn.luyou.service.SysMessageService;
 import cn.luyou.service.UserService;
 import cn.luyou.service.VisitSupervisionReminderLogService;
@@ -65,6 +66,7 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
     private final UserService userService;
     private final DataScopeHelper dataScopeHelper;
     private final DepartmentFilterSupport departmentFilterSupport;
+    private final SysMessageReminderConfigService reminderConfigService;
 
     private record Candidate(
             String type,
@@ -196,7 +198,15 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
         int supervision = 0;
         int messages = 0;
         int sms = 0;
+        boolean followUpEnabled = reminderConfigService.isEnabled(MSG_FOLLOW_UP_DUE);
+        boolean supervisionEnabled = reminderConfigService.isEnabled(MSG_SUPERVISION_DUE);
         for (Candidate item : due) {
+            if (TYPE_FOLLOW_UP.equals(item.type()) && !followUpEnabled) {
+                continue;
+            }
+            if (TYPE_SUPERVISION.equals(item.type()) && !supervisionEnabled) {
+                continue;
+            }
             List<Long> receivers = resolveReceivers(item);
             if (receivers.isEmpty()) {
                 log.warn("随访/督导到期无接收人 type={} bizId={} name={}", item.type(), item.bizId(), item.name());

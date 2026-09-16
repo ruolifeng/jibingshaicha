@@ -348,13 +348,23 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: "/message",
     component: Layouts,
-    meta: { permission: "message" },
+    meta: { permission: "message", title: "系统消息", elIcon: "Bell" },
     children: [
       {
         path: "",
         component: () => import("@/pages/message/index.vue"),
         name: "Message",
-        meta: { title: "系统消息", elIcon: "Bell", permission: "message", unreadBadge: true }
+        meta: { title: "消息列表", elIcon: "Bell", permission: "message", unreadBadge: true }
+      },
+      {
+        path: "reminders",
+        component: () => import("@/pages/message/reminder-config.vue"),
+        name: "MessageReminderConfig",
+        meta: {
+          title: "消息提醒配置",
+          elIcon: "Setting",
+          anyPermission: ["message:reminderConfig", "message"]
+        }
       }
     ]
   },

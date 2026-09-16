@@ -924,7 +924,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     public void update(Long id, Map<String, Object> params) {
         ReferralTracking record = getAndCheckExist(id);
         if (isConfirmedReceivedRecommend(record)) {
-            checkConfirmedRecommendReceiverOnly(record);
+            assertConfirmedRecommendParticipant(record);
         } else {
             assertCanMutateRecord(record);
         }
@@ -1188,7 +1188,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (record.getCreatorId() != null) {
             String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
             sysMessageService.sendMessage(record.getCreatorId(), "推介通知单已确认接收",
-                    String.format("「%s」的推介通知单已被接收方确认，待接收方在推介页点击「追踪」开启共同追踪后，您也可参与追踪。", name),
+                    String.format("「%s」的推介通知单已被接收方确认。四级用户选择未到位或点击「共同追踪」开启后，三/四/五级可共同追踪。", name),
                     "referral_tracking_confirmed", id);
         }
         log.info("推介通知单已确认接收，recordId={}", id);
@@ -1248,7 +1248,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             log.info("共同追踪已开启（幂等），recordId={}", id);
             return;
         }
-        checkRecommendReceiver(record);
+        // 发起方 / 接收方 / 四级用户可开启
+        assertCanEnableJointTracking(record);
 
         lambdaUpdate()
                 .eq(ReferralTracking::getId, id)
@@ -1256,10 +1257,19 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .set(ReferralTracking::getJointTrackingTime, LocalDateTime.now())
                 .update();
 
-        if (record.getCreatorId() != null) {
+        Long currentId = BaseContext.getCurrentId();
+        Long notifyUserId = null;
+        if (currentId != null && currentId.equals(record.getReceiverUserId())) {
+            notifyUserId = record.getCreatorId();
+        } else if (currentId != null && currentId.equals(record.getCreatorId())) {
+            notifyUserId = record.getReceiverUserId();
+        } else if (record.getCreatorId() != null) {
+            notifyUserId = record.getCreatorId();
+        }
+        if (notifyUserId != null && !notifyUserId.equals(currentId)) {
             String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
-            sysMessageService.sendMessage(record.getCreatorId(), "共同追踪已开启",
-                    String.format("「%s」的推介已由接收方开启共同追踪，您可前往「推介」页面参与追踪。", name),
+            sysMessageService.sendMessage(notifyUserId, "共同追踪已开启",
+                    String.format("「%s」的推介已开启共同追踪，三/四/五级用户可前往「推介」页面参与追踪。", name),
                     "referral_tracking_joint", id);
         }
         log.info("共同追踪已开启，recordId={}", id);
@@ -1357,14 +1367,16 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         checkTrackOperatorOrCreator(record);
 
-        // 已归档/已完成流程则不允许再操作
-        if (record.getArchived() != null && record.getArchived() == 1) {
+        Integer trackingStatus = record.getTrackingStatus();
+        boolean otherOnlyArchive = Integer.valueOf(3).equals(trackingStatus)
+                && StrUtil.isBlank(record.getDiagnosisResult());
+        // 已归档：确诊结案等不可继续；历史「其他」误归档允许恢复继续追踪
+        if (record.getArchived() != null && record.getArchived() == 1 && !otherOnlyArchive) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法继续追踪");
         }
 
-        // 仅待追踪或未到位状态可继续追踪
-        Integer trackingStatus = record.getTrackingStatus();
-        if (trackingStatus != null && trackingStatus != 0 && trackingStatus != 2) {
+        // 待追踪 / 未到位 / 其他 均可继续；到位与强制结束不可
+        if (trackingStatus != null && trackingStatus != 0 && trackingStatus != 2 && trackingStatus != 3) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "当前追踪状态不允许继续操作");
         }
 
@@ -1401,12 +1413,14 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         .set(ReferralTracking::getActualArrivalDate, actualArrivalDate)
                         .set(ReferralTracking::getTrackingRemark, remark)
                         .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
+                        .set(ReferralTracking::getArchived, 0)
                         .update();
                 log.info("推介追踪到位，recordId={}", id);
             }
             case 2 -> {
-                // 未到位：累计次数；已确认推介（共同追踪）4 次强制结束，原生追踪 3 次
-                int forceEndThreshold = isConfirmedReceivedRecommend(record) ? 4 : 3;
+                // 未到位：累计次数；已确认推介 / 推介业务 4 次强制结束，原生追踪 3 次
+                int forceEndThreshold = (isConfirmedReceivedRecommend(record)
+                        || "recommend".equals(record.getBizMode())) ? 4 : 3;
                 int newCount = (record.getNotInPlaceCount() == null ? 0 : record.getNotInPlaceCount()) + 1;
 
                 Map<String, Object> entry = new HashMap<>();
@@ -1433,11 +1447,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                             .set(ReferralTracking::getNotInPlaceCount, newCount)
                             .set(ReferralTracking::getTrackingRemark, remark)
                             .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
+                            .set(ReferralTracking::getArchived, 0)
                             .update();
                 }
             }
             case 3 -> {
-                // 其他：归档
+                // 其他：仅记录本次备注，不归档，仍可继续追踪至到位或未到位次数用尽
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("attempt", history.size() + 1);
                 entry.put("status", 3);
@@ -1450,9 +1465,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         .set(ReferralTracking::getTrackingStatus, 3)
                         .set(ReferralTracking::getTrackingRemark, remark)
                         .set(ReferralTracking::getTrackingHistoryJson, JSONUtil.toJsonStr(history))
-                        .set(ReferralTracking::getArchived, 1)
+                        .set(ReferralTracking::getArchived, 0)
                         .update();
-                log.info("推介追踪选择其他，已归档，recordId={}", id);
+                log.info("推介追踪选择其他（不结束），recordId={}", id);
             }
         }
     }
@@ -1651,11 +1666,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
     }
 
-    /** 已确认推介：仅接收方可追踪；其余记录按辖区/创建人/接收人规则 */
+    /** 已确认推介：按共同追踪规则校验操作人；不再自动开启共同追踪 */
     private void checkTrackOperatorOrCreator(ReferralTracking record) {
         assertNotPendingCrossTown(record);
         if (isConfirmedReceivedRecommend(record)) {
-            checkConfirmedRecommendReceiverOnly(record);
+            assertConfirmedRecommendParticipant(record);
             return;
         }
         if (!canOperateRecord(record)) {
@@ -1667,7 +1682,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         return isConfirmedRecommend(record) && record.getRecommendSentTime() != null;
     }
 
-    private void checkConfirmedRecommendReceiverOnly(ReferralTracking record) {
+    /**
+     * 已确认推介的追踪参与方：
+     * - 未开共同追踪：超管 / 接收人 / 发起人
+     * - 已开共同追踪：上述人员 + 同辖区三/四/五级（role=4/5/6）
+     */
+    private void assertConfirmedRecommendParticipant(ReferralTracking record) {
         if (BaseContext.isSuperAdmin()) {
             return;
         }
@@ -1675,11 +1695,45 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (userId != null && userId.equals(record.getReceiverUserId())) {
             return;
         }
-        if (Integer.valueOf(1).equals(record.getJointTracking())
-                && userId != null && userId.equals(record.getCreatorId())) {
+        if (userId != null && userId.equals(record.getCreatorId())) {
             return;
         }
-        throw new ServiceException(StatusEnum.PARAM_INVALID, "该推介已由接收方承接追踪，仅接收方可操作");
+        if (Integer.valueOf(1).equals(record.getJointTracking())
+                && isLevel345Role(BaseContext.getCurrentRole())
+                && userId != null
+                && canAccessViaDepartmentScope(record, userId)) {
+            return;
+        }
+        throw new ServiceException(StatusEnum.PARAM_INVALID,
+                Integer.valueOf(1).equals(record.getJointTracking())
+                        ? "共同追踪仅同辖区三/四/五级用户可操作"
+                        : "未开启共同追踪前，仅推介发起方或接收方可操作");
+    }
+
+    /** 开启共同追踪：超管 / 发起方 / 接收方 / 四级 */
+    private void assertCanEnableJointTracking(ReferralTracking record) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Long userId = BaseContext.getCurrentId();
+        if (userId != null && userId.equals(record.getReceiverUserId())) {
+            return;
+        }
+        if (userId != null && userId.equals(record.getCreatorId())) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        // role=5 为四级
+        if (Integer.valueOf(5).equals(role) && userId != null
+                && canAccessViaDepartmentScope(record, userId)) {
+            return;
+        }
+        throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介发起方、接收方或四级用户可开启共同追踪");
+    }
+
+    /** 三/四/五级：role=4/5/6 */
+    private boolean isLevel345Role(Integer role) {
+        return role != null && role >= 4 && role <= 6;
     }
 
     /** 编辑：创建人、接收人或辖区一至五级用户 */

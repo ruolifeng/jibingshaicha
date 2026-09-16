@@ -84,7 +84,7 @@ public class ReferralTracking extends BaseEntity {
     private String rejectedReason;
     private LocalDateTime recommendSentTime;
     private LocalDateTime recommendConfirmTime;
-    /** 是否共同追踪：0否 1是（接收方开启后，发起方与接收方均可追踪，次数合并计算） */
+    /** 是否共同追踪：0否 1是（开启后同辖区三/四/五级均可追踪，次数合并计算） */
     private Integer jointTracking;
     /** 开启共同追踪时间 */
     private LocalDateTime jointTrackingTime;
