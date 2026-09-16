@@ -61,19 +61,19 @@ WHERE c.deleted = 0
 
 -- 列表展示用的 6/12/24 月到期日若未落库，按登记日补齐，供定时提醒查询
 UPDATE `close_contact_case`
-SET `followup_6_due_date` = DATE_ADD(`registration_date`, INTERVAL 6 MONTH)
+SET `followup6_due_date` = DATE_ADD(`registration_date`, INTERVAL 6 MONTH)
 WHERE `deleted` = 0
   AND `registration_date` IS NOT NULL
-  AND `followup_6_due_date` IS NULL;
+  AND `followup6_due_date` IS NULL;
 
 UPDATE `close_contact_case`
-SET `followup_12_due_date` = DATE_ADD(`registration_date`, INTERVAL 12 MONTH)
+SET `followup12_due_date` = DATE_ADD(`registration_date`, INTERVAL 12 MONTH)
 WHERE `deleted` = 0
   AND `registration_date` IS NOT NULL
-  AND `followup_12_due_date` IS NULL;
+  AND `followup12_due_date` IS NULL;
 
 UPDATE `close_contact_case`
-SET `followup_24_due_date` = DATE_ADD(`registration_date`, INTERVAL 24 MONTH)
+SET `followup24_due_date` = DATE_ADD(`registration_date`, INTERVAL 24 MONTH)
 WHERE `deleted` = 0
   AND `registration_date` IS NOT NULL
-  AND `followup_24_due_date` IS NULL;
+  AND `followup24_due_date` IS NULL;
