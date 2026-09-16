@@ -119,6 +119,13 @@ function handleConfirm() {
         :closable="false"
         show-icon
       />
+      <el-alert
+        v-else-if="status === 3"
+        title="「其他」仅记录本次说明，不会结束追踪；仍可继续追踪，直至到位或未到位次数用尽"
+        type="info"
+        :closable="false"
+        show-icon
+      />
     </el-form>
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">

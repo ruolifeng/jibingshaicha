@@ -23,10 +23,14 @@ import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
 import {
+  canShowArrivalFollowupButtons,
+  canShowContinueTrackButton,
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
   getRecommendTime,
   parseTrackingHistory,
+  RECOMMEND_FORCE_END_THRESHOLD,
+  TRACK_FORCE_END_THRESHOLD,
   TRACK_STATUS_LABEL,
   TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
@@ -69,34 +73,44 @@ function isRejectedCrossTown(row: any) {
   return Number(row?.crossTownConfirmStatus) === 3
 }
 
-/** 有接收人时仅接收人可操作；共同追踪时发起方与接收方均可；无接收人时创建人或辖区一至五级用户可操作 */
+/** 有接收人时：已确认推介按共同追踪规则；跨镇已确认双方可操作；其余为创建人或辖区一至五级 */
 function canOperateTrack(row: any) {
   if (isPendingCrossTown(row) || isRejectedCrossTown(row)) return false
   if (userStore.userRole === 1) return true
   const uid = String(userStore.userId)
   if (isFromRecommend(row) && row.receiverUserId) {
-    if (isJointTrackingEnabled(row)) {
-      return uid === String(row.receiverUserId) || uid === String(row.creatorId)
-    }
-    return uid === String(row.receiverUserId)
+    if (uid === String(row.receiverUserId) || uid === String(row.creatorId)) return true
+    // 共同追踪开启后：三/四/五级可参与
+    return isJointTrackingEnabled(row) && [4, 5, 6].includes(userStore.userRole)
   }
-  if (row.receiverUserId && Number(row?.crossTownConfirmStatus) === 2) {
-    // 跨镇已确认：创建五级与接收三级均可
+  if (Number(row?.crossTownConfirmStatus) === 2) {
     return uid === String(row.receiverUserId) || uid === String(row.creatorId)
       || (userStore.userRole >= 2 && userStore.userRole <= 6)
   }
-  if (row.receiverUserId && !isFromRecommend(row) && Number(row?.crossTownConfirmStatus) !== 2) {
-    return uid === String(row.receiverUserId)
-  }
   if (uid === String(row.creatorId)) return true
-  // 追踪/大疫情：辖区一至五级用户对可见记录均可操作
   return userStore.userRole >= 2 && userStore.userRole <= 6
 }
 
-/** 接收方在推介确认后可开启共同追踪 */
+/** 推介确认后可开启共同追踪：发起方 / 接收方 / 四级 / 超管 */
 function canEnableJointTracking(row: any) {
-  if (row.archived || row.recommendStatus !== 2 || isJointTrackingEnabled(row)) return false
-  return String(row.receiverUserId) === String(userStore.userId) || userStore.userRole === 1
+  if (Number(row.archived) === 1 || Number(row.recommendStatus) !== 2 || isJointTrackingEnabled(row)) return false
+  if (userStore.userRole === 1) return true
+  if (userStore.userRole === 5) return true
+  const uid = String(userStore.userId)
+  return uid === String(row.receiverUserId) || uid === String(row.creatorId)
+}
+
+function trackForceEndThreshold(row: any) {
+  return isFromRecommend(row) ? RECOMMEND_FORCE_END_THRESHOLD : TRACK_FORCE_END_THRESHOLD
+}
+
+function canShowTrackOperateButton(row: any) {
+  return canOperateTrack(row)
+    && canShowContinueTrackButton(row, trackForceEndThreshold(row))
+}
+
+function canShowTrackFollowupButtons(row: any) {
+  return canOperateTrack(row) && canShowArrivalFollowupButtons(row)
 }
 
 // ===== 列表 =====
@@ -758,10 +772,12 @@ async function handleTrack(payload: TrackConfirmPayload) {
   if (trackSubmitting.value) return
   trackSubmitting.value = true
   try {
-    const willForceEnd = payload.status === 2 && (trackRow.value?.notInPlaceCount ?? 0) >= 2
+    const threshold = trackForceEndThreshold(trackRow.value)
+    const willForceEnd = payload.status === 2
+      && (trackRow.value?.notInPlaceCount ?? 0) >= threshold - 1
     await trackReferralApi(trackRow.value.id, payload.status, payload.remark, payload.actualArrivalDate)
     if (willForceEnd) {
-      ElMessage.warning("已记录第 3 次未到位，追踪已强制结束")
+      ElMessage.warning(`已记录第 ${threshold} 次未到位，追踪已强制结束`)
     } else if (payload.status === 1) {
       ElMessage.success("已确认到位")
     } else {
@@ -776,12 +792,12 @@ async function handleTrack(payload: TrackConfirmPayload) {
 
 async function handleEnableJointTracking(row: any) {
   await ElMessageBox.confirm(
-    `确认对「${row.name}」开启共同追踪吗？开启后您与推介发起方均可进行追踪，双方操作次数合并计算。`,
+    `确认对「${row.name}」开启共同追踪吗？开启后三/四/五级用户均可参与追踪，双方操作次数合并计算。`,
     "共同追踪确认",
     { type: "warning", confirmButtonText: "确认开启", cancelButtonText: "取消" }
   )
   await enableJointTrackingApi(row.id)
-  ElMessage.success("已开启共同追踪，推介发起方也可参与追踪")
+  ElMessage.success("已开启共同追踪，三/四/五级用户均可参与")
   fetchList()
 }
 
@@ -1198,10 +1214,10 @@ function getRowClass({ row }: { row: any }) {
             >
               共同追踪
             </el-button>
-            <!-- 追踪：待追踪或未到位 -->
+            <!-- 追踪：待追踪/未到位/其他（未满强制结束次数）均可继续 -->
             <el-button
-              v-if="canOperateTrack(row) && [0, 2].includes(row.trackingStatus) && !row.archived"
-              v-permission="'referralManagement:trackOperate'"
+              v-if="canShowTrackOperateButton(row)"
+              v-permission="['referralManagement:trackOperate', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
               type="warning" link size="small"
               @click="openTrackDialog(row)"
             >
@@ -1209,8 +1225,8 @@ function getRowClass({ row }: { row: any }) {
             </el-button>
             <!-- 筛查信息：已到位 -->
             <el-button
-              v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
-              v-permission="'referralManagement:xray'"
+              v-if="canShowTrackFollowupButtons(row)"
+              v-permission="['referralManagement:xray', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >
@@ -1218,8 +1234,8 @@ function getRowClass({ row }: { row: any }) {
             </el-button>
             <!-- 诊断：已到位 -->
             <el-button
-              v-if="canOperateTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
-              v-permission="'referralManagement:diagnosis'"
+              v-if="canShowTrackFollowupButtons(row)"
+              v-permission="['referralManagement:diagnosis', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >
@@ -1927,6 +1943,7 @@ function getRowClass({ row }: { row: any }) {
       v-model="trackDialogVisible"
       :history-json="trackRow?.trackingHistoryJson"
       :not-in-place-count="trackRow?.notInPlaceCount ?? 0"
+      :force-end-threshold="trackForceEndThreshold(trackRow)"
       :loading="trackSubmitting"
       @confirm="handleTrack"
     />

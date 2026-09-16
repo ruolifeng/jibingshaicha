@@ -157,3 +157,20 @@ export function getSentReferralListApi(params: { pageNum: number, size: number }
     params
   })
 }
+
+/** 消息提醒配置列表 */
+export function getMessageReminderListApi() {
+  return request<ApiResponseData<any[]>>({
+    url: "message/reminders",
+    method: "get"
+  })
+}
+
+/** 更新消息提醒开关 */
+export function updateMessageReminderEnabledApi(code: string, enabled: boolean) {
+  return request<ApiResponseData<null>>({
+    url: `message/reminders/${code}/enabled`,
+    method: "put",
+    data: { enabled }
+  })
+}

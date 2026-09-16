@@ -22,10 +22,13 @@ import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
 import {
+  canShowArrivalFollowupButtons,
+  canShowContinueTrackButton,
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
   getRecommendTime,
   parseTrackingHistory,
+  RECOMMEND_FORCE_END_THRESHOLD,
   TRACK_STATUS_LABEL,
   TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
@@ -58,32 +61,62 @@ import { createReferralWithDuplicateConfirm, isReferralDuplicateCancel } from ".
 const userStore = useUserStore()
 const messageStore = useMessageStore()
 
-/** 推介模块共同追踪：未到位 4 次强制结束 */
-const RECOMMEND_FORCE_END_THRESHOLD = 4
-
 function isJointTrackingEnabled(row: any) {
   return Number(row?.jointTracking) === 1
 }
 
-/** 已确认推介：接收方可点击追踪（自动开启共同追踪）；共同追踪开启后发起方也可追踪 */
+function isRecommendAccepted(row: any) {
+  return Number(row?.recommendStatus) === 2
+}
+
+function isArchivedRow(row: any) {
+  return Number(row?.archived) === 1
+}
+
+/** 三/四/五级：role=4/5/6 */
+function isLevel345Role(role: number = userStore.userRole) {
+  return role === 4 || role === 5 || role === 6
+}
+
+/** 四级：role=5 */
+function isLevel4Role(role: number = userStore.userRole) {
+  return role === 5
+}
+
+/**
+ * 已确认推介：
+ * - 未开共同追踪：发起方 / 接收方可追踪
+ * - 已开共同追踪：发起方 / 接收方 / 同辖区三四五级均可追踪
+ */
 function canOperateRecommendTrack(row: any) {
-  if (row.archived || row.recommendStatus !== 2) return false
+  if (isArchivedRow(row) || !isRecommendAccepted(row)) return false
   if (userStore.userRole === 1) return true
   const uid = String(userStore.userId)
-  if (uid === String(row.receiverUserId)) return true
-  if (isJointTrackingEnabled(row) && uid === String(row.creatorId)) return true
-  return false
+  if (uid === String(row.receiverUserId) || uid === String(row.creatorId)) return true
+  return isJointTrackingEnabled(row) && isLevel345Role()
 }
 
 /** 详情中修正追踪过程：已接受即可（含归档后），同步到操作列追踪过程 */
 function canEditRecommendTrackingHistory(row: any) {
-  if (!row || row.recommendStatus !== 2) return false
+  if (!row || !isRecommendAccepted(row)) return false
   if (!parseTrackingHistory(row.trackingHistoryJson).length) return false
+  return canOperateRecommendTrack(row) || userStore.userRole === 1
+}
+
+/** 未开启时可点「共同追踪」：发起方 / 接收方 / 四级 / 超管 */
+function canEnableRecommendJointTracking(row: any) {
+  if (isArchivedRow(row) || !isRecommendAccepted(row) || isJointTrackingEnabled(row)) return false
   if (userStore.userRole === 1) return true
-  const uid = String(userStore.userId)
-  if (uid === String(row.receiverUserId)) return true
-  if (isJointTrackingEnabled(row) && uid === String(row.creatorId)) return true
-  return false
+  if (isLevel4Role()) return true
+  return isReceiver(row) || isCreator(row)
+}
+
+function canShowRecommendTrackButton(row: any) {
+  return canOperateRecommendTrack(row) && canShowContinueTrackButton(row, RECOMMEND_FORCE_END_THRESHOLD)
+}
+
+function canShowRecommendFollowupButtons(row: any) {
+  return canOperateRecommendTrack(row) && canShowArrivalFollowupButtons(row)
 }
 
 const TRACK_STATUS_EDIT_OPTIONS = [
@@ -641,7 +674,7 @@ async function handleSend(row: any) {
 async function handleConfirm(row: any) {
   await ElMessageBox.confirm(`确认接受「${row.name}」的推介通知单？确认后请在本页开展追踪。`, "确认接收", { type: "info" })
   await confirmRecommendApi(row.id)
-  ElMessage.success("已确认接受，请在本页点击「追踪」开展共同追踪")
+  ElMessage.success("已确认接受，请在本页开展追踪；四级用户选择未到位时可开启共同追踪")
   await messageStore.fetchUnreadCount()
   fetchList()
 }
@@ -674,31 +707,46 @@ function openTrackDialog(row: any) {
   trackDialogVisible.value = true
 }
 
-/** 推介模块：点击「追踪」即开启共同追踪（接收方首次点击时自动开启） */
-async function handleRecommendTrack(row: any) {
-  if (isReceiver(row) && !isJointTrackingEnabled(row)) {
+/** 推介模块：直接打开追踪弹窗（共同追踪改由按钮或四级未到位时询问开启） */
+function handleRecommendTrack(row: any) {
+  openTrackDialog(row)
+}
+
+async function handleEnableRecommendJointTracking(row: any) {
+  await ElMessageBox.confirm(
+    `确认对「${row.name}」开启共同追踪吗？开启后三/四/五级用户均可参与追踪，操作次数合并计算（${RECOMMEND_FORCE_END_THRESHOLD} 次未到位自动结束）。`,
+    "共同追踪确认",
+    { type: "warning", confirmButtonText: "确认开启", cancelButtonText: "取消" }
+  )
+  await enableJointTrackingApi(row.id)
+  ElMessage.success("已开启共同追踪，三/四/五级用户均可参与")
+  fetchList()
+}
+
+/** 四级用户记录未到位后，询问是否开启共同追踪 */
+async function promptJointTrackingAfterNotInPlace(row: any) {
+  if (!row || isJointTrackingEnabled(row) || !isLevel4Role()) return
+  try {
     await ElMessageBox.confirm(
-      `确认对「${row.name}」开启共同追踪并开展追踪吗？开启后您与推介发起方均可追踪，双方操作次数合并计算（${RECOMMEND_FORCE_END_THRESHOLD} 次未到位自动结束）。`,
-      "追踪确认",
-      { type: "warning", confirmButtonText: "确认", cancelButtonText: "取消" }
+      `已记录「${row.name}」未到位。是否开启共同追踪？开启后三/四/五级用户均可参与追踪，次数合并计算（${RECOMMEND_FORCE_END_THRESHOLD} 次未到位自动结束）。`,
+      "开启共同追踪",
+      { type: "warning", confirmButtonText: "开启", cancelButtonText: "暂不开启" }
     )
     await enableJointTrackingApi(row.id)
     ElMessage.success("已开启共同追踪")
-    await fetchList()
-    const updated = tableData.value.find((r: any) => r.id === row.id) ?? { ...row, jointTracking: 1 }
-    openTrackDialog(updated)
-    return
+  } catch {
+    // 用户取消：仅保留未到位记录，不开启共同追踪
   }
-  openTrackDialog(row)
 }
 
 async function handleTrack(payload: TrackConfirmPayload) {
   if (trackSubmitting.value) return
   trackSubmitting.value = true
   try {
+    const currentRow = trackRow.value
     const willForceEnd = payload.status === 2
-      && (trackRow.value?.notInPlaceCount ?? 0) >= RECOMMEND_FORCE_END_THRESHOLD - 1
-    await trackReferralApi(trackRow.value.id, payload.status, payload.remark, payload.actualArrivalDate)
+      && (currentRow?.notInPlaceCount ?? 0) >= RECOMMEND_FORCE_END_THRESHOLD - 1
+    await trackReferralApi(currentRow.id, payload.status, payload.remark, payload.actualArrivalDate)
     if (willForceEnd) {
       ElMessage.warning(`已记录第 ${RECOMMEND_FORCE_END_THRESHOLD} 次未到位，追踪已强制结束`)
     } else if (payload.status === 1) {
@@ -707,6 +755,9 @@ async function handleTrack(payload: TrackConfirmPayload) {
       ElMessage.success("追踪记录已保存")
     }
     trackDialogVisible.value = false
+    if (payload.status === 2 && !willForceEnd) {
+      await promptJointTrackingAfterNotInPlace(currentRow)
+    }
     fetchList()
   } finally {
     trackSubmitting.value = false
@@ -792,10 +843,11 @@ async function handleDelete(row: any) {
 
 // ===== 状态标签辅助 =====
 function getRowClass({ row }: { row: any }) {
-  if (row.archived && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
-  if (isCreator(row) && (row.recommendStatus === 2 || row.recommendStatus === 3)) {
-    if (row.recommendStatus === 2 && isJointTrackingEnabled(row) && !row.archived
-      && row.trackingStatus !== 4 && !row.diagnosisResult) {
+  if (isArchivedRow(row) && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
+  if (isCreator(row) && (isRecommendAccepted(row) || Number(row.recommendStatus) === 3)) {
+    // 已接受且仍可继续追踪/补录时不高亮为办结灰行
+    if (isRecommendAccepted(row) && !isArchivedRow(row)
+      && (canShowRecommendTrackButton(row) || canShowRecommendFollowupButtons(row))) {
       return ""
     }
     return "recommend-settled-row"
@@ -888,7 +940,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         type="info"
         :closable="false"
         class="mb-3"
-        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后请在本页点击「追踪」开展共同追踪（双方次数合并计算，4 次未到位自动结束）。您发起的推介仍保留在本页，共同追踪开启后您也可参与追踪。"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后可在本页追踪；四级用户选择「未到位」时会询问是否开启共同追踪，也可点击「共同追踪」手动开启。开启后三/四/五级均可参与（次数合并，4 次未到位自动结束；到位后可录入感染检测/胸片与诊断）。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap">
         <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">
@@ -1131,26 +1183,35 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             >
               拒绝
             </el-button>
-            <!-- 已确认推介：追踪（合并共同追踪，仅推介模块） -->
+            <!-- 共同追踪：未开启时可手动开启 -->
             <el-button
-              v-if="canOperateRecommendTrack(row) && [0, 2].includes(row.trackingStatus)"
-              v-permission="'referralManagement:trackOperate'"
+              v-if="canEnableRecommendJointTracking(row)"
+              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm']"
+              type="success" link size="small"
+              @click="handleEnableRecommendJointTracking(row)"
+            >
+              共同追踪
+            </el-button>
+            <!-- 已确认推介：待追踪/未到位（未满 4 次）显示追踪；到位后显示录入 -->
+            <el-button
+              v-if="canShowRecommendTrackButton(row)"
+              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm']"
               type="warning" link size="small"
               @click="handleRecommendTrack(row)"
             >
               追踪
             </el-button>
             <el-button
-              v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
-              v-permission="'referralManagement:xray'"
+              v-if="canShowRecommendFollowupButtons(row)"
+              v-permission="['referralManagement:xray', 'referralManagement:recommendXray', 'referralManagement:confirm']"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >
               录入感染检测结果及胸片结果
             </el-button>
             <el-button
-              v-if="canOperateRecommendTrack(row) && row.trackingStatus === 1 && !row.diagnosisResult"
-              v-permission="'referralManagement:diagnosis'"
+              v-if="canShowRecommendFollowupButtons(row)"
+              v-permission="['referralManagement:diagnosis', 'referralManagement:recommendDiagnosis', 'referralManagement:confirm']"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >
@@ -1524,7 +1585,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </div>
               <el-button
                 v-if="!viewTrackingEditMode && canEditRecommendTrackingHistory(viewDetail)"
-                v-permission="'referralManagement:trackOperate'"
+                v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm']"
                 type="warning"
                 link
                 size="small"

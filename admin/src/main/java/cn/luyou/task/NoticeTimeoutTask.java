@@ -2,6 +2,7 @@ package cn.luyou.task;
 
 import cn.luyou.model.Notice;
 import cn.luyou.service.NoticeService;
+import cn.luyou.service.SysMessageReminderConfigService;
 import cn.luyou.service.SysMessageService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
@@ -23,9 +24,13 @@ public class NoticeTimeoutTask {
 
     private final NoticeService noticeService;
     private final SysMessageService sysMessageService;
+    private final SysMessageReminderConfigService reminderConfigService;
 
     @Scheduled(fixedRate = 3600000) // 每小时检查一次
     public void checkNoticeTimeout() {
+        if (!reminderConfigService.isEnabled("notice_timeout")) {
+            return;
+        }
         LocalDateTime threshold = LocalDateTime.now().minusHours(48);
 
         LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<>();

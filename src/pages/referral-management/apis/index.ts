@@ -60,7 +60,7 @@ export function rejectRecommendApi(id: string, reason?: string) {
   })
 }
 
-/** 接收方开启共同追踪（发起方与接收方均可追踪，次数合并计算） */
+/** 开启共同追踪（开启后同辖区三/四/五级均可追踪，次数合并计算） */
 export function enableJointTrackingApi(id: string) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/joint-tracking`,
