@@ -1241,7 +1241,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!isConfirmedRecommend(record)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅已确认接收的推介可开启共同追踪");
         }
-        if (record.getArchived() != null && record.getArchived() == 1) {
+        boolean recoverableArchive = isRecoverableTrackingArchive(record);
+        // 确诊结案等不可开启；待追踪/未到位/其他/到位未诊断误归档允许开启并解除归档
+        if (record.getArchived() != null && record.getArchived() == 1 && !recoverableArchive) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法开启共同追踪");
         }
         if (Integer.valueOf(1).equals(record.getJointTracking())) {
@@ -1255,6 +1257,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .eq(ReferralTracking::getId, id)
                 .set(ReferralTracking::getJointTracking, 1)
                 .set(ReferralTracking::getJointTrackingTime, LocalDateTime.now())
+                .set(recoverableArchive, ReferralTracking::getArchived, 0)
                 .update();
 
         Long currentId = BaseContext.getCurrentId();
@@ -1368,10 +1371,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         checkTrackOperatorOrCreator(record);
 
         Integer trackingStatus = record.getTrackingStatus();
-        boolean otherOnlyArchive = Integer.valueOf(3).equals(trackingStatus)
-                && StrUtil.isBlank(record.getDiagnosisResult());
-        // 已归档：确诊结案等不可继续；历史「其他」误归档允许恢复继续追踪
-        if (record.getArchived() != null && record.getArchived() == 1 && !otherOnlyArchive) {
+        boolean recoverableArchive = isRecoverableTrackingArchive(record);
+        // 已归档：确诊结案等不可继续；待追踪/未到位/其他/到位未诊断误归档允许恢复继续追踪
+        if (record.getArchived() != null && record.getArchived() == 1 && !recoverableArchive) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法继续追踪");
         }
 
@@ -1530,7 +1532,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (!Integer.valueOf(1).equals(record.getTrackingStatus())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "仅追踪到位后才可录入诊断结果");
         }
-        if (record.getArchived() != null && record.getArchived() == 1) {
+        if (record.getArchived() != null && record.getArchived() == 1
+                && StrUtil.isNotBlank(record.getDiagnosisResult())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法修改诊断结果");
         }
         checkTrackOperatorOrCreator(record);
@@ -1734,6 +1737,25 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     /** 三/四/五级：role=4/5/6 */
     private boolean isLevel345Role(Integer role) {
         return role != null && role >= 4 && role <= 6;
+    }
+
+    /**
+     * 误归档但仍可继续追踪的记录：无诊断结果，且状态为待追踪/未到位/其他/到位。
+     * （强制结束、诊断结案不可恢复）
+     */
+    private boolean isRecoverableTrackingArchive(ReferralTracking record) {
+        if (record == null || !Integer.valueOf(1).equals(record.getArchived())) {
+            return false;
+        }
+        if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
+            return false;
+        }
+        Integer status = record.getTrackingStatus();
+        return status == null
+                || status == 0
+                || status == 1
+                || status == 2
+                || status == 3;
     }
 
     /** 编辑：创建人、接收人或辖区一至五级用户 */

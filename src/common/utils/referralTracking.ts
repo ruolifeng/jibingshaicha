@@ -32,6 +32,17 @@ export function toTrackingStatus(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** 是否已真正结束追踪流程（强制结束，或诊断结案归档） */
+export function isTrackingFlowClosed(
+  row: { trackingStatus?: unknown, archived?: unknown, diagnosisResult?: unknown }
+): boolean {
+  const status = toTrackingStatus(row.trackingStatus)
+  if (status === 4) return true
+  const hasDiagnosis = row.diagnosisResult !== null && row.diagnosisResult !== undefined && row.diagnosisResult !== ""
+  // 仅「有诊断且已归档」视为结案；待追踪/未到位/其他/到位未诊断即使误归档也应可继续
+  return Number(row.archived) === 1 && hasDiagnosis
+}
+
 /** 原生追踪（大疫情等）未到位强制结束次数 */
 export const TRACK_FORCE_END_THRESHOLD = 3
 
@@ -48,11 +59,7 @@ export function canShowContinueTrackButton(
 ): boolean {
   const status = toTrackingStatus(row.trackingStatus)
   if (status === 1 || status === 4) return false
-  const archived = Number(row.archived) === 1
-  const hasDiagnosis = row.diagnosisResult !== null && row.diagnosisResult !== undefined && row.diagnosisResult !== ""
-  // 确诊/诊断结案归档后不可再追踪；「其他」历史误归档仍可继续
-  if (archived && hasDiagnosis) return false
-  if (archived && status !== 3 && status !== 0 && status !== 2 && status !== null) return false
+  if (isTrackingFlowClosed(row)) return false
   if (status === null || status === 0 || status === 2 || status === 3) {
     return Number(row.notInPlaceCount ?? 0) < forceEndThreshold
   }

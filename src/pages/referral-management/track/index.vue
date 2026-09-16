@@ -29,6 +29,7 @@ import {
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
   getRecommendTime,
+  isTrackingFlowClosed,
   parseTrackingHistory,
   RECOMMEND_FORCE_END_THRESHOLD,
   TRACK_FORCE_END_THRESHOLD,
@@ -94,7 +95,9 @@ function canOperateTrack(row: any) {
 
 /** 推介确认后可开启共同追踪：发起方 / 接收方 / 四级 / 超管 */
 function canEnableJointTracking(row: any) {
-  if (Number(row.archived) === 1 || Number(row.recommendStatus) !== 2 || isJointTrackingEnabled(row)) return false
+  if (isTrackingFlowClosed(row) || Number(row.recommendStatus) !== 2 || isJointTrackingEnabled(row)) {
+    return false
+  }
   if (userStore.userRole === 1) return true
   if (userStore.userRole === 5) return true
   const uid = String(userStore.userId)
@@ -107,6 +110,7 @@ function trackForceEndThreshold(row: any) {
 
 function canShowTrackOperateButton(row: any) {
   return canOperateTrack(row)
+    && !isTrackingFlowClosed(row)
     && canShowContinueTrackButton(row, trackForceEndThreshold(row))
 }
 

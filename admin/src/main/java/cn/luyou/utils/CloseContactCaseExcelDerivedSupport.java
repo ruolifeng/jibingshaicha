@@ -11,7 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 密接 Excel 自动生成列：报表填报季度、随访期限提示、年龄组；并补全 6/12/24 月随访到期日（仅导出/展示，不写库）。
+ * 密接 Excel 自动生成列：报表填报季度、随访期限提示、年龄组；
+ * 并补全 6/12/24 月随访到期日（新增/导入会写库；列表/导出展示也会就地补齐）。
  */
 public final class CloseContactCaseExcelDerivedSupport {
 

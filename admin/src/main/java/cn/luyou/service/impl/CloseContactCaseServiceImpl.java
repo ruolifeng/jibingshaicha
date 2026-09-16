@@ -90,7 +90,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
     @Override
     public ImportResult uploadAndParse(MultipartFile file, boolean confirmSkipInvalid, boolean confirmSkipDuplicateInFile) {
         String batchId = IdUtil.fastSimpleUUID();
-        final String creatorUsername = CreatorUserSupport.resolveCurrentUsername(userMapper);
+        final CreatorUserSupport.CreatorSnapshot creator = CreatorUserSupport.resolveCurrentCreator(userMapper);
         final List<CloseContactCase> parsedList = new ArrayList<>();
         ImportResult result = new ImportResult();
         byte[] fileBytes;
@@ -145,10 +145,12 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                     if (data.getRegistrationDate() != null) {
                         data.setYear(String.valueOf(data.getRegistrationDate().getYear()));
                     }
+                    // 导入也落库到期日，供定时提醒查询（列表展示同样依赖）
+                    CloseContactCaseExcelDerivedSupport.apply(data);
                     data.setUploadBatch(batchId);
                     data.setImportRowNo(row);
                     data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
-                    data.setCreatorUsername(creatorUsername);
+                    CreatorUserSupport.applyCreator(creator, data::setCreatorId, data::setCreatorUsername);
                     parsedList.add(data);
                 }
 
@@ -241,6 +243,9 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         // 覆盖导入：Excel 空单元格直接清空已有字段
         ScreeningImportMergeSupport.mergeCloseContactCase(existing, incoming);
         // 覆盖导入只更新业务字段与行号，保留首次录入人；历史空值则补当前导入人
+        if (existing.getCreatorId() == null && incoming.getCreatorId() != null) {
+            existing.setCreatorId(incoming.getCreatorId());
+        }
         if (StrUtil.isBlank(existing.getCreatorUsername()) && StrUtil.isNotBlank(incoming.getCreatorUsername())) {
             existing.setCreatorUsername(incoming.getCreatorUsername());
         }
@@ -309,7 +314,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
         }
         CloseContactCaseExcelDerivedSupport.apply(data);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
-        data.setCreatorUsername(CreatorUserSupport.resolveCurrentUsername(userMapper));
+        CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
         save(data);
         overlaySupervisionFields(data);
         try {
@@ -333,6 +338,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             data.setYear(null);
         }
         // 系统字段不可被前端覆盖（ALWAYS 策略下缺省/null 会清空库中值）
+        data.setCreatorId(existing.getCreatorId());
         data.setCreatorUsername(existing.getCreatorUsername());
         data.setDepartmentId(existing.getDepartmentId());
         data.setUploadBatch(existing.getUploadBatch());

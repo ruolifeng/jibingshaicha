@@ -404,6 +404,7 @@ CREATE TABLE IF NOT EXISTS `close_contact_case` (
     `current_address`                 VARCHAR(256) DEFAULT NULL COMMENT '现住址',
     `upload_batch`                    VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
     `department_id`                   BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_id`                      BIGINT       DEFAULT NULL COMMENT '录入人用户ID',
     `creator_username`                VARCHAR(64)  DEFAULT NULL COMMENT '录入用户名',
     `create_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -412,6 +413,7 @@ CREATE TABLE IF NOT EXISTS `close_contact_case` (
     KEY `idx_id_number` (`id_number`),
     KEY `idx_district` (`district`),
     KEY `idx_final_result` (`final_screening_result`),
+    KEY `idx_creator_id` (`creator_id`),
     KEY `idx_creator_username` (`creator_username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接个案表（电子表格，73列）';
 
@@ -2505,6 +2507,7 @@ CREATE TABLE IF NOT EXISTS `close_contact_case` (
     `current_address`                 VARCHAR(256) DEFAULT NULL COMMENT '现住址',
     `upload_batch`                    VARCHAR(64)  DEFAULT NULL COMMENT '上传批次号',
     `department_id`                   BIGINT       DEFAULT NULL COMMENT '所属部门ID',
+    `creator_id`                      BIGINT       DEFAULT NULL COMMENT '录入人用户ID',
     `creator_username`                VARCHAR(64)  DEFAULT NULL COMMENT '录入用户名',
     `create_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time`                     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2513,6 +2516,7 @@ CREATE TABLE IF NOT EXISTS `close_contact_case` (
     KEY `idx_id_number` (`id_number`),
     KEY `idx_district` (`district`),
     KEY `idx_final_result` (`final_screening_result`),
+    KEY `idx_creator_id` (`creator_id`),
     KEY `idx_creator_username` (`creator_username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密接个案表（电子表格，73列）';
 
@@ -4369,3 +4373,78 @@ WHERE p.`code` = 'message:reminderConfig'
     );
 
 -- end V122
+
+-- ==================== V123：密接个案 creator_id + 随访到期日回填 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'close_contact_case' AND COLUMN_NAME = 'creator_id'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `close_contact_case` ADD COLUMN `creator_id` BIGINT DEFAULT NULL COMMENT ''录入人用户ID'' AFTER `department_id`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @idx_exists = (
+    SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'close_contact_case' AND INDEX_NAME = 'idx_creator_id'
+);
+SET @ddl = IF(@idx_exists = 0,
+    'ALTER TABLE `close_contact_case` ADD KEY `idx_creator_id` (`creator_id`)',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+UPDATE `close_contact_case` c
+    INNER JOIN `user` u ON u.deleted = 0
+        AND (u.username = c.creator_username OR u.real_name = c.creator_username)
+SET c.creator_id = u.id
+WHERE c.deleted = 0
+  AND c.creator_id IS NULL
+  AND c.creator_username IS NOT NULL
+  AND c.creator_username <> '';
+
+UPDATE `close_contact_case` c
+    INNER JOIN (
+        SELECT u.department_id, MIN(u.id) AS user_id
+        FROM `user` u
+        WHERE u.role = 6 AND u.deleted = 0 AND u.department_id IS NOT NULL
+        GROUP BY u.department_id
+        HAVING COUNT(*) = 1
+    ) solo ON solo.department_id = c.department_id
+SET c.creator_id = solo.user_id
+WHERE c.deleted = 0
+  AND c.creator_id IS NULL
+  AND c.department_id IS NOT NULL;
+
+UPDATE `close_contact_case` c
+    INNER JOIN `user` u ON u.id = c.creator_id AND u.deleted = 0
+SET c.creator_username = COALESCE(NULLIF(TRIM(u.username), ''), NULLIF(TRIM(u.real_name), ''))
+WHERE c.deleted = 0
+  AND c.creator_id IS NOT NULL
+  AND (c.creator_username IS NULL OR c.creator_username = '');
+
+UPDATE `close_contact_case`
+SET `followup_6_due_date` = DATE_ADD(`registration_date`, INTERVAL 6 MONTH)
+WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup_6_due_date` IS NULL;
+
+UPDATE `close_contact_case`
+SET `followup_12_due_date` = DATE_ADD(`registration_date`, INTERVAL 12 MONTH)
+WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup_12_due_date` IS NULL;
+
+UPDATE `close_contact_case`
+SET `followup_24_due_date` = DATE_ADD(`registration_date`, INTERVAL 24 MONTH)
+WHERE `deleted` = 0 AND `registration_date` IS NOT NULL AND `followup_24_due_date` IS NULL;
+-- end V123
+
+-- ==================== V124：回退误归档的可继续追踪记录 ====================
+UPDATE `referral_tracking`
+SET `archived` = 0
+WHERE `archived` = 1
+  AND `tracking_status` IN (0, 1, 2, 3)
+  AND (`diagnosis_result` IS NULL OR `diagnosis_result` = '');
+-- end V124
