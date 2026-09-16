@@ -51,21 +51,16 @@ class CloseContactCaseSupervisionSyncSupportTest {
 
     @Test
     void selectsLatestUploadedFormByCreateTime() {
-        SupervisionForm first = SupervisionForm.builder()
-                .id(1L)
-                .status(1)
-                .createTime(LocalDateTime.of(2026, 8, 1, 10, 0))
-                .build();
-        SupervisionForm last = SupervisionForm.builder()
-                .id(2L)
-                .status(2)
-                .createTime(LocalDateTime.of(2026, 9, 1, 18, 44))
-                .build();
-        SupervisionForm draft = SupervisionForm.builder()
-                .id(3L)
-                .status(0)
-                .createTime(LocalDateTime.of(2026, 9, 11, 12, 0))
-                .build();
+        // id/createTime 在 BaseEntity，@Builder 不含父类字段，需 set 赋值
+        SupervisionForm first = SupervisionForm.builder().status(1).build();
+        first.setId(1L);
+        first.setCreateTime(LocalDateTime.of(2026, 8, 1, 10, 0));
+        SupervisionForm last = SupervisionForm.builder().status(2).build();
+        last.setId(2L);
+        last.setCreateTime(LocalDateTime.of(2026, 9, 1, 18, 44));
+        SupervisionForm draft = SupervisionForm.builder().status(0).build();
+        draft.setId(3L);
+        draft.setCreateTime(LocalDateTime.of(2026, 9, 11, 12, 0));
         assertEquals(2L, CloseContactCaseSupervisionSyncSupport.selectLastUploaded(List.of(first, last, draft)).getId());
     }
 
