@@ -31,6 +31,7 @@ import {
   isTrackingFlowClosed,
   parseTrackingHistory,
   RECOMMEND_FORCE_END_THRESHOLD,
+  toTrackingStatus,
   TRACK_STATUS_LABEL,
   TRACKING_STATUS_MAP
 } from "@@/utils/referralTracking"
@@ -63,6 +64,15 @@ import { createReferralWithDuplicateConfirm, isReferralDuplicateCancel } from ".
 const userStore = useUserStore()
 const messageStore = useMessageStore()
 
+/** 当前用户角色（统一成数字，避免接口返回字符串导致 === 判断失败） */
+function currentRole() {
+  return Number(userStore.userRole) || 0
+}
+
+function isSuperAdmin() {
+  return currentRole() === 1
+}
+
 function isJointTrackingEnabled(row: any) {
   return Number(row?.jointTracking) === 1
 }
@@ -76,24 +86,24 @@ function isRecommendAccepted(row: any) {
 }
 
 /** 三/四/五级：role=4/5/6 */
-function isLevel345Role(role: number = userStore.userRole) {
+function isLevel345Role(role: number = currentRole()) {
   return role === 4 || role === 5 || role === 6
 }
 
 /** 四级：role=5 */
-function isLevel4Role(role: number = userStore.userRole) {
+function isLevel4Role(role: number = currentRole()) {
   return role === 5
 }
 
 /**
- * 已确认推介：
- * - 未开共同追踪：发起方 / 接收方可追踪
- * - 已开共同追踪：发起方 / 接收方 / 同辖区三四五级均可追踪
- * 注意：仅「诊断结案/强制结束」不可操作；待追踪等误归档仍可继续。
+ * 已确认推介可操作追踪：
+ * - 超管 / 发起方 / 接收方
+ * - 已开共同追踪时同辖区三四五级
+ * 不因误归档隐藏（结案由 canShowContinueTrackButton 按状态判断）
  */
 function canOperateRecommendTrack(row: any) {
-  if (!isRecommendAccepted(row) || isTrackingFlowClosed(row)) return false
-  if (userStore.userRole === 1) return true
+  if (!isRecommendAccepted(row)) return false
+  if (isSuperAdmin()) return true
   const uid = String(userStore.userId)
   if (uid === String(row.receiverUserId) || uid === String(row.creatorId)) return true
   return isJointTrackingEnabled(row) && isLevel345Role()
@@ -103,13 +113,15 @@ function canOperateRecommendTrack(row: any) {
 function canEditRecommendTrackingHistory(row: any) {
   if (!row || !isRecommendAccepted(row)) return false
   if (!parseTrackingHistory(row.trackingHistoryJson).length) return false
-  return canOperateRecommendTrack(row) || userStore.userRole === 1
+  return canOperateRecommendTrack(row) || isSuperAdmin()
 }
 
 /** 未开启时可点「共同追踪」：发起方 / 接收方 / 四级 / 超管 */
 function canEnableRecommendJointTracking(row: any) {
-  if (!isRecommendAccepted(row) || isJointTrackingEnabled(row) || isTrackingFlowClosed(row)) return false
-  if (userStore.userRole === 1) return true
+  if (!isRecommendAccepted(row) || isJointTrackingEnabled(row)) return false
+  // 强制结束不可再开
+  if (toTrackingStatus(row.trackingStatus) === 4) return false
+  if (isSuperAdmin()) return true
   if (isLevel4Role()) return true
   return isReceiver(row) || isCreator(row)
 }
@@ -130,10 +142,10 @@ const TRACK_STATUS_EDIT_OPTIONS = [
 
 /** 超级管理员或拥有新增权限的一至五级用户可发起推介 */
 const canCreateRecommend = computed(() =>
-  userStore.userRole === 1 || ([2, 3, 4, 5, 6].includes(userStore.userRole) && userStore.hasPermission("referralManagement:create"))
+  isSuperAdmin() || ([2, 3, 4, 5, 6].includes(currentRole()) && userStore.hasPermission("referralManagement:create"))
 )
 /** 超级管理员和一至五级用户展示推介操作指引 */
-const showRecommendGuide = computed(() => userStore.userRole === 1 || [2, 3, 4, 5, 6].includes(userStore.userRole))
+const showRecommendGuide = computed(() => isSuperAdmin() || [2, 3, 4, 5, 6].includes(currentRole()))
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -488,17 +500,14 @@ function isReceiver(row: any) {
   return String(row.receiverUserId) === String(userStore.userId)
 }
 
-/** 推介任意状态（未发送/已发送/已接受/已拒绝及追踪各态）均可编辑，诊断结案归档除外 */
-function canEditRecommend(row: any) {
-  if (isTrackingFlowClosed(row)) return false
-  if (userStore.userRole === 1) return true
-  return isCreator(row)
+/** 推介列表可见即可编辑（含归档/各追踪状态；后端对已结案另有校验） */
+function canEditRecommend(_row: any) {
+  return isSuperAdmin() || (currentRole() >= 2 && currentRole() <= 6)
 }
 
 /** 推介列表可见即可删（未追踪、已追踪、已结案等推介后各状态均允许，具体权限由 v-permission 控制） */
 function canDeleteRecommend(_row: any) {
-  if (userStore.userRole === 1) return true
-  return userStore.userRole >= 2 && userStore.userRole <= 6
+  return isSuperAdmin() || (currentRole() >= 2 && currentRole() <= 6)
 }
 
 // ===== 查看详情 =====
@@ -1187,10 +1196,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             >
               拒绝
             </el-button>
-            <!-- 共同追踪：未开启时可手动开启 -->
+            <!-- 共同追踪：未开启时可手动开启（权限由业务条件控制，避免 v-permission 在用户信息未就绪时误删节点） -->
             <el-button
               v-if="canEnableRecommendJointTracking(row)"
-              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="success" link size="small"
               @click="handleEnableRecommendJointTracking(row)"
             >
@@ -1199,7 +1207,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <!-- 已确认推介：待追踪/未到位（未满 4 次）显示追踪；到位后显示录入 -->
             <el-button
               v-if="canShowRecommendTrackButton(row)"
-              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="warning" link size="small"
               @click="handleRecommendTrack(row)"
             >
@@ -1207,7 +1214,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-button>
             <el-button
               v-if="canShowRecommendFollowupButtons(row)"
-              v-permission="['referralManagement:xray', 'referralManagement:recommendXray', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >
@@ -1215,7 +1221,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-button>
             <el-button
               v-if="canShowRecommendFollowupButtons(row)"
-              v-permission="['referralManagement:diagnosis', 'referralManagement:recommendDiagnosis', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >
@@ -1590,7 +1595,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </div>
               <el-button
                 v-if="!viewTrackingEditMode && canEditRecommendTrackingHistory(viewDetail)"
-                v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
                 type="warning"
                 link
                 size="small"
