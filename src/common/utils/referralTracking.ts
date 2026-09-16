@@ -49,9 +49,9 @@ export const TRACK_FORCE_END_THRESHOLD = 3
 /**
  * 是否显示「追踪」按钮：
  * - 到位(1)、强制结束(4)：不显示
- * - 已诊断并归档（结案）：不显示
  * - 待追踪(0) / 未到位(2) / 其他(3)：未到位次数未达上限则继续显示
  * 「其他」仅表示本次备注结果，不结束追踪流程。
+ * 注意：不因 archived 隐藏——历史误归档的待追踪必须仍可点「追踪」。
  */
 export function canShowContinueTrackButton(
   row: { trackingStatus?: unknown, archived?: unknown, notInPlaceCount?: unknown, diagnosisResult?: unknown },
@@ -59,7 +59,6 @@ export function canShowContinueTrackButton(
 ): boolean {
   const status = toTrackingStatus(row.trackingStatus)
   if (status === 1 || status === 4) return false
-  if (isTrackingFlowClosed(row)) return false
   if (status === null || status === 0 || status === 2 || status === 3) {
     return Number(row.notInPlaceCount ?? 0) < forceEndThreshold
   }
