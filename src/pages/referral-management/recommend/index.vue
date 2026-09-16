@@ -27,6 +27,7 @@ import {
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
   getRecommendTime,
+  isTrackingFlowClosed,
   parseTrackingHistory,
   RECOMMEND_FORCE_END_THRESHOLD,
   TRACK_STATUS_LABEL,
@@ -65,12 +66,12 @@ function isJointTrackingEnabled(row: any) {
   return Number(row?.jointTracking) === 1
 }
 
-function isRecommendAccepted(row: any) {
-  return Number(row?.recommendStatus) === 2
-}
-
 function isArchivedRow(row: any) {
   return Number(row?.archived) === 1
+}
+
+function isRecommendAccepted(row: any) {
+  return Number(row?.recommendStatus) === 2
 }
 
 /** 三/四/五级：role=4/5/6 */
@@ -87,9 +88,10 @@ function isLevel4Role(role: number = userStore.userRole) {
  * 已确认推介：
  * - 未开共同追踪：发起方 / 接收方可追踪
  * - 已开共同追踪：发起方 / 接收方 / 同辖区三四五级均可追踪
+ * 注意：仅「诊断结案/强制结束」不可操作；待追踪等误归档仍可继续。
  */
 function canOperateRecommendTrack(row: any) {
-  if (isArchivedRow(row) || !isRecommendAccepted(row)) return false
+  if (!isRecommendAccepted(row) || isTrackingFlowClosed(row)) return false
   if (userStore.userRole === 1) return true
   const uid = String(userStore.userId)
   if (uid === String(row.receiverUserId) || uid === String(row.creatorId)) return true
@@ -105,7 +107,7 @@ function canEditRecommendTrackingHistory(row: any) {
 
 /** 未开启时可点「共同追踪」：发起方 / 接收方 / 四级 / 超管 */
 function canEnableRecommendJointTracking(row: any) {
-  if (isArchivedRow(row) || !isRecommendAccepted(row) || isJointTrackingEnabled(row)) return false
+  if (!isRecommendAccepted(row) || isJointTrackingEnabled(row) || isTrackingFlowClosed(row)) return false
   if (userStore.userRole === 1) return true
   if (isLevel4Role()) return true
   return isReceiver(row) || isCreator(row)
@@ -485,10 +487,11 @@ function isReceiver(row: any) {
   return String(row.receiverUserId) === String(userStore.userId)
 }
 
-/** 推介任意状态（未发送/已发送/已接受/已拒绝及追踪各态）均可编辑，归档除外 */
+/** 推介任意状态（未发送/已发送/已接受/已拒绝及追踪各态）均可编辑，诊断结案归档除外 */
 function canEditRecommend(row: any) {
-  if (userStore.userRole === 1) return !row.archived
-  return isCreator(row) && !row.archived
+  if (isTrackingFlowClosed(row)) return false
+  if (userStore.userRole === 1) return true
+  return isCreator(row)
 }
 
 /** 推介列表可见即可删（未追踪、已追踪、已结案等推介后各状态均允许，具体权限由 v-permission 控制） */
@@ -843,10 +846,10 @@ async function handleDelete(row: any) {
 
 // ===== 状态标签辅助 =====
 function getRowClass({ row }: { row: any }) {
-  if (isArchivedRow(row) && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
+  if (isTrackingFlowClosed(row) && isConfirmedPatientDiagnosis(row)) return "confirmed-row"
   if (isCreator(row) && (isRecommendAccepted(row) || Number(row.recommendStatus) === 3)) {
     // 已接受且仍可继续追踪/补录时不高亮为办结灰行
-    if (isRecommendAccepted(row) && !isArchivedRow(row)
+    if (isRecommendAccepted(row) && !isTrackingFlowClosed(row)
       && (canShowRecommendTrackButton(row) || canShowRecommendFollowupButtons(row))) {
       return ""
     }
@@ -1162,7 +1165,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-button>
             <!-- 补发未发送的推介 -->
             <el-button
-              v-if="isCreator(row) && row.recommendStatus === 0 && !row.archived"
+              v-if="isCreator(row) && row.recommendStatus === 0 && !isArchivedRow(row)"
               type="primary" link size="small"
               @click="handleSend(row)"
             >
@@ -1186,7 +1189,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <!-- 共同追踪：未开启时可手动开启 -->
             <el-button
               v-if="canEnableRecommendJointTracking(row)"
-              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm']"
+              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="success" link size="small"
               @click="handleEnableRecommendJointTracking(row)"
             >
@@ -1195,7 +1198,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <!-- 已确认推介：待追踪/未到位（未满 4 次）显示追踪；到位后显示录入 -->
             <el-button
               v-if="canShowRecommendTrackButton(row)"
-              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm']"
+              v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="warning" link size="small"
               @click="handleRecommendTrack(row)"
             >
@@ -1203,7 +1206,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-button>
             <el-button
               v-if="canShowRecommendFollowupButtons(row)"
-              v-permission="['referralManagement:xray', 'referralManagement:recommendXray', 'referralManagement:confirm']"
+              v-permission="['referralManagement:xray', 'referralManagement:recommendXray', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="primary" link size="small"
               @click="openScreeningDialog(row)"
             >
@@ -1211,7 +1214,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-button>
             <el-button
               v-if="canShowRecommendFollowupButtons(row)"
-              v-permission="['referralManagement:diagnosis', 'referralManagement:recommendDiagnosis', 'referralManagement:confirm']"
+              v-permission="['referralManagement:diagnosis', 'referralManagement:recommendDiagnosis', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >
@@ -1585,7 +1588,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </div>
               <el-button
                 v-if="!viewTrackingEditMode && canEditRecommendTrackingHistory(viewDetail)"
-                v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm']"
+                v-permission="['referralManagement:trackOperate', 'referralManagement:recommendTrack', 'referralManagement:confirm', 'referralManagement:edit', 'referralManagement:create']"
                 type="warning"
                 link
                 size="small"

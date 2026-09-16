@@ -186,6 +186,9 @@ public class CloseContactReminderTask {
     }
 
     private Long resolveCaseCreatorId(CloseContactCase record, Map<String, Long> cache) {
+        if (record.getCreatorId() != null) {
+            return record.getCreatorId();
+        }
         return resolveUserIdByUsername(record.getCreatorUsername(), cache);
     }
 

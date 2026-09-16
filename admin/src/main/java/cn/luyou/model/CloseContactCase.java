@@ -356,6 +356,10 @@ public class CloseContactCase extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer importRowNo;
 
+    /** 录入人用户ID（提醒/权限用；导出不含） */
+    @ExcelIgnore
+    private Long creatorId;
+
     /** 录入用户名（系统账号统一命名格式；导出末尾追加列，导入模板不含） */
     @ExcelProperty(index = 72)
     private String creatorUsername;
