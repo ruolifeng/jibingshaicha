@@ -32,14 +32,16 @@ export function toTrackingStatus(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** 是否已真正结束追踪流程（强制结束，或诊断结案归档） */
+/** 是否已真正结束追踪流程（强制结束，或到位后诊断结案归档） */
 export function isTrackingFlowClosed(
   row: { trackingStatus?: unknown, archived?: unknown, diagnosisResult?: unknown }
 ): boolean {
   const status = toTrackingStatus(row.trackingStatus)
   if (status === 4) return true
+  // 待追踪/未到位/其他：创建预填诊断导致的误归档不算结案，仍应可追踪
+  if (status === null || status === 0 || status === 2 || status === 3) return false
   const hasDiagnosis = row.diagnosisResult !== null && row.diagnosisResult !== undefined && row.diagnosisResult !== ""
-  // 仅「有诊断且已归档」视为结案；待追踪/未到位/其他/到位未诊断即使误归档也应可继续
+  // 到位后：有诊断且已归档才视为结案
   return Number(row.archived) === 1 && hasDiagnosis
 }
 

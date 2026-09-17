@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `sys_message_reminder_config` (
     `sort`          INT          NOT NULL DEFAULT 0,
     `create_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP,
     `update_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`       TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_code` (`code`)
 ) COMMENT='系统定时消息提醒开关';

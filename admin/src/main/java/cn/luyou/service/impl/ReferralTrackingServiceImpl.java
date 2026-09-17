@@ -143,10 +143,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             sendRecommend(record.getId());
             record = getById(record.getId());
         }
-        if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
-            applyDiagnosisRouting(record.getId(), record.getDiagnosisResult());
-            record = getById(record.getId());
-        }
+        // 创建时可预填诊断，但不要立刻归档/分流：患者仍需先追踪到位，
+        // 否则会出现「待追踪 + 已归档」导致无法点追踪确认。
         return record;
     }
 
@@ -1418,6 +1416,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         .set(ReferralTracking::getArchived, 0)
                         .update();
                 log.info("推介追踪到位，recordId={}", id);
+                // 创建时已预填诊断：到位后再执行归档/分流，避免未追踪就结案
+                if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
+                    applyDiagnosisRouting(id, record.getDiagnosisResult());
+                }
             }
             case 2 -> {
                 // 未到位：累计次数；已确认推介 / 推介业务 4 次强制结束，原生追踪 3 次
@@ -1740,22 +1742,26 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /**
-     * 误归档但仍可继续追踪的记录：无诊断结果，且状态为待追踪/未到位/其他/到位。
-     * （强制结束、诊断结案不可恢复）
+     * 误归档但仍可继续追踪的记录。
+     * - 待追踪/未到位/其他：即使有创建预填诊断，也允许恢复继续追踪
+     * - 到位：仅无诊断时可继续补录
+     * - 强制结束不可恢复
      */
     private boolean isRecoverableTrackingArchive(ReferralTracking record) {
         if (record == null || !Integer.valueOf(1).equals(record.getArchived())) {
             return false;
         }
-        if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
+        Integer status = record.getTrackingStatus();
+        if (Integer.valueOf(4).equals(status)) {
             return false;
         }
-        Integer status = record.getTrackingStatus();
-        return status == null
-                || status == 0
-                || status == 1
-                || status == 2
-                || status == 3;
+        if (status == null || status == 0 || status == 2 || status == 3) {
+            return true;
+        }
+        if (Integer.valueOf(1).equals(status)) {
+            return StrUtil.isBlank(record.getDiagnosisResult());
+        }
+        return false;
     }
 
     /** 编辑：创建人、接收人或辖区一至五级用户 */
