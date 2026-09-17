@@ -77,7 +77,7 @@ export function trackReferralApi(id: string, status: number, remark?: string, ac
   })
 }
 
-/** 保存到位后的感染筛查+胸片信息 */
+/** 保存到位后的感染检测 / 胸片信息（可分字段提交，写入同一条推介追踪记录） */
 export function saveScreeningInfoApi(id: string, data: Record<string, any>) {
   return request<ApiResponseData<null>>({
     url: `referral-tracking/${id}/screening`,
