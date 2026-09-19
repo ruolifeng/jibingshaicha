@@ -22,6 +22,7 @@ import {
 } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { LATENT_IMPORT_FIELDS } from "@@/constants/latent-import"
+import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import { getLatentTransferStatusLabel, isLatentTransferLocked } from "@@/utils/latent"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
@@ -53,7 +54,8 @@ const {
   toQueryParam,
   fetchData,
   handleSearch,
-  handleReset
+  handleReset,
+  handleSortChange
 } = useLatentOverviewList()
 
 const genderFilterOptions = [
@@ -509,6 +511,7 @@ async function handleImport(uploadFile: any) {
         stripe
         row-key="id"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" label="#" :index="getTableIndex" />
@@ -688,6 +691,11 @@ async function handleImport(uploadFile: any) {
               {{ getLatentTransferStatusLabel(row.archiveRemark) }}
             </el-tag>
             <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
+          <template #default="{ row }">
+            {{ row.createTime ? formatDateTime(row.createTime) : "-" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="260">

@@ -24,7 +24,7 @@ import java.util.Map;
 
 /**
  * 密接随访/复查提醒：
- * - 密接个案表：按 6/12/24 月随访日期提醒对应录入者
+ * - 密接个案表：按 6/12/24 月随访日期提醒；用两个开关分别控制「未开展 / 已开展」预防性治疗人群
  * - 密接筛查表：保留 6/12 月窗口提醒，接收人改为录入者（不再广播四级）
  */
 @Slf4j
@@ -32,9 +32,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CloseContactReminderTask {
 
-    public static final String REMINDER_CASE_6 = "close_contact_case_followup_6";
-    public static final String REMINDER_CASE_12 = "close_contact_case_followup_12";
-    public static final String REMINDER_CASE_24 = "close_contact_case_followup_24";
+    /** 密接个案：未开展预防性治疗的 6/12/24 月随访提醒 */
+    public static final String REMINDER_CASE_NO_PREVENTIVE = "close_contact_case_followup_no_preventive";
+    /** 密接个案：已开展预防性治疗的 6/12/24 月随访提醒 */
+    public static final String REMINDER_CASE_WITH_PREVENTIVE = "close_contact_case_followup_with_preventive";
+
     public static final String REMINDER_SCREENING_6 = "close_contact_screening_review_6";
     public static final String REMINDER_SCREENING_12 = "close_contact_screening_review_12";
 
@@ -54,18 +56,26 @@ public class CloseContactReminderTask {
         LocalDate windowStart = today.minusDays(LEAD_DAYS);
         LocalDate windowEnd = today.plusDays(LEAD_DAYS);
 
-        int case6 = sendCaseDueReminders(windowStart, windowEnd, REMINDER_CASE_6,
-                "密接个案6月随访提醒",
-                "密接个案【%s】的 6 月随访日期为 %s，请尽快完成随访录入。",
-                true, false, false);
-        int case12 = sendCaseDueReminders(windowStart, windowEnd, REMINDER_CASE_12,
-                "密接个案12月随访提醒",
-                "密接个案【%s】的 12 月随访日期为 %s，请尽快完成随访录入。",
-                false, true, false);
-        int case24 = sendCaseDueReminders(windowStart, windowEnd, REMINDER_CASE_24,
-                "密接个案24月随访提醒",
-                "密接个案【%s】的 24 月随访日期为 %s，请尽快完成随访录入。",
-                false, false, true);
+        boolean remindNoPreventive = reminderConfigService.isEnabled(REMINDER_CASE_NO_PREVENTIVE);
+        boolean remindWithPreventive = reminderConfigService.isEnabled(REMINDER_CASE_WITH_PREVENTIVE);
+
+        int case6 = 0;
+        int case12 = 0;
+        int case24 = 0;
+        if (remindNoPreventive || remindWithPreventive) {
+            case6 = sendCaseDueReminders(windowStart, windowEnd,
+                    "密接个案6月随访提醒",
+                    "密接个案【%s】的 6 月随访日期为 %s（%s），请尽快完成随访录入。",
+                    true, false, false, remindNoPreventive, remindWithPreventive);
+            case12 = sendCaseDueReminders(windowStart, windowEnd,
+                    "密接个案12月随访提醒",
+                    "密接个案【%s】的 12 月随访日期为 %s（%s），请尽快完成随访录入。",
+                    false, true, false, remindNoPreventive, remindWithPreventive);
+            case24 = sendCaseDueReminders(windowStart, windowEnd,
+                    "密接个案24月随访提醒",
+                    "密接个案【%s】的 24 月随访日期为 %s（%s），请尽快完成随访录入。",
+                    false, false, true, remindNoPreventive, remindWithPreventive);
+        }
 
         int screening6 = 0;
         int screening12 = 0;
@@ -96,16 +106,14 @@ public class CloseContactReminderTask {
                     true);
         }
 
-        log.info("密接随访提醒完成：个案6/12/24月={}/{}/{}，筛查6/12月={}/{}",
-                case6, case12, case24, screening6, screening12);
+        log.info("密接随访提醒完成：个案6/12/24月={}/{}/{}（未开展开关={}，已开展开关={}），筛查6/12月={}/{}",
+                case6, case12, case24, remindNoPreventive, remindWithPreventive, screening6, screening12);
     }
 
-    private int sendCaseDueReminders(LocalDate windowStart, LocalDate windowEnd, String reminderCode,
-                                     String title, String contentTemplate,
-                                     boolean month6, boolean month12, boolean month24) {
-        if (!reminderConfigService.isEnabled(reminderCode)) {
-            return 0;
-        }
+    private int sendCaseDueReminders(LocalDate windowStart, LocalDate windowEnd,
+                                     String titleBase, String contentTemplate,
+                                     boolean month6, boolean month12, boolean month24,
+                                     boolean remindNoPreventive, boolean remindWithPreventive) {
         LambdaQueryWrapper<CloseContactCase> wrapper = new LambdaQueryWrapper<>();
         if (month6) {
             wrapper.isNotNull(CloseContactCase::getFollowup6DueDate)
@@ -132,6 +140,18 @@ public class CloseContactReminderTask {
         Map<String, Long> usernameCache = new HashMap<>();
         int sent = 0;
         for (CloseContactCase record : list) {
+            Boolean withPreventive = classifyPreventiveTreatment(record.getHasPreventiveTreatment());
+            if (withPreventive == null) {
+                continue;
+            }
+            if (withPreventive) {
+                if (!remindWithPreventive) {
+                    continue;
+                }
+            } else if (!remindNoPreventive) {
+                continue;
+            }
+
             LocalDate dueDate = month6 ? record.getFollowup6DueDate()
                     : month12 ? record.getFollowup12DueDate()
                     : record.getFollowup24DueDate();
@@ -140,16 +160,37 @@ public class CloseContactReminderTask {
                 log.warn("密接个案随访提醒跳过：无录入者 caseId={} name={}", record.getId(), record.getName());
                 continue;
             }
+            String treatmentLabel = withPreventive ? "已开展预防性治疗" : "未开展预防性治疗";
+            String title = titleBase + "（" + treatmentLabel + "）";
             if (alreadySentToday(receiverId, record.getId(), title)) {
                 continue;
             }
             String content = String.format(contentTemplate,
                     StrUtil.blankToDefault(record.getName(), "未知"),
-                    dueDate != null ? dueDate.toString() : "未知");
+                    dueDate != null ? dueDate.toString() : "未知",
+                    treatmentLabel);
             sysMessageService.sendMessage(receiverId, title, content, MSG_TYPE, record.getId());
             sent++;
         }
         return sent;
+    }
+
+    /**
+     * @return true=已开展，false=未开展，null=无法归类（跳过）
+     */
+    private Boolean classifyPreventiveTreatment(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            // 空值按未开展，便于提醒补录随访
+            return false;
+        }
+        String value = raw.trim();
+        if ("开展".equals(value) || "是".equals(value)) {
+            return true;
+        }
+        if ("未开展".equals(value) || "否".equals(value) || "不服药".equals(value)) {
+            return false;
+        }
+        return null;
     }
 
     private int sendScreeningReminders(List<ScreeningCloseContact> list, String title,

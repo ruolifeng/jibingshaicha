@@ -22,6 +22,7 @@ import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
+import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.InfectionScreenFieldSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.ScreeningImportMergeSupport;
@@ -74,6 +75,11 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             "district", "city", "year", "gender", "sourcePatientBacteriologyResult",
             "finalScreeningResult", "infectionCheckMethod", "infectionCheckResult", "imagingResult",
             "sputumCheckResult", "hasPreventiveTreatment"
+    );
+
+    private static final Map<String, String> SORT_COLUMNS = Map.of(
+            "createTime", "create_time",
+            "importRowNo", "import_row_no"
     );
 
     @Override
@@ -260,13 +266,14 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                                               String diagnosisResult, String sourcePatientBacteriologyResult,
                                               String reportQuarter,
                                               String createTimeFrom, String createTimeTo,
-                                              String columnFilters, String formatIssue) {
+                                              String columnFilters, String formatIssue,
+                                              String sortField, String sortOrder) {
         LambdaQueryWrapper<CloseContactCase> wrapper = buildQueryWrapper(
                 name, idNumber, district, phone, creatorUsername, diagnosisResult,
                 sourcePatientBacteriologyResult, reportQuarter,
                 createTimeFrom, createTimeTo, formatIssue);
         applyColumnFilters(wrapper, columnFilters);
-        ImportRowOrderSupport.applyWithBatch(wrapper);
+        ListSortSupport.apply(wrapper, sortField, sortOrder, SORT_COLUMNS, ImportRowOrderSupport.WITH_BATCH);
         applyDepartmentFilter(wrapper);
         IPage<CloseContactCase> result = page(new Page<>(page, size), wrapper);
         CloseContactCaseExcelDerivedSupport.applyAll(result.getRecords());

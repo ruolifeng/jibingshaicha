@@ -4,6 +4,7 @@ import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityConfirm"
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import {
   applyFinalScreeningResult,
   CASE_IMAGING_METHOD_OPTIONS,
@@ -26,6 +27,7 @@ import {
   CC_INFECTION_CHECK_RESULT_OPTIONS,
   selectOptionsWithLegacy
 } from "@@/constants/screening-close-contact"
+import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete, confirmEditChange } from "@@/utils/listToolbar"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
@@ -46,6 +48,7 @@ import {
 
 const { paginationData, handleCurrentChange, handleSizeChange } = usePagination()
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const { onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 const batchDeleting = ref(false)
 
 /** 支持表头筛选的列（与后端 columnFilters 白名单对齐） */
@@ -185,7 +188,8 @@ async function fetchData() {
     const res = await getCloseContactCaseListApi({
       page: paginationData.currentPage,
       size: paginationData.pageSize,
-      ...buildListQueryParams()
+      ...buildListQueryParams(),
+      ...toSortQueryParam()
     })
     tableData.value = res.data.records
     total.value = res.data.total
@@ -194,6 +198,14 @@ async function fetchData() {
     selectedRows.value = []
     tableRef.value?.clearCheckboxRow?.()
   }
+}
+
+function handleSortChange({ property, field, order }: { property?: string, field?: string, order?: string | null }) {
+  onSortChange({
+    prop: property || field,
+    order: order === "asc" ? "ascending" : order === "desc" ? "descending" : null
+  })
+  fetchData()
 }
 
 function handleSearch() {
@@ -214,6 +226,7 @@ function handleReset() {
   searchForm.entryTimeRange = []
   searchForm.formatIssue = []
   clearFilters()
+  resetSort()
   handleSearch()
 }
 
@@ -797,12 +810,14 @@ onMounted(() => {
           max-height="620"
           :row-config="{ keyField: 'id' }"
           :column-config="{ resizable: true }"
+          :sort-config="{ remote: true, trigger: 'cell' }"
           :scroll-x="{ enabled: true, gt: 0 }"
           :scroll-y="{ enabled: true, gt: 0 }"
           show-overflow
           show-header-overflow
           @checkbox-change="handleCheckboxChange"
           @checkbox-all="handleCheckboxChange"
+          @sort-change="handleSortChange"
         >
           <vxe-column type="checkbox" width="40" fixed="left" />
           <vxe-column
@@ -812,6 +827,7 @@ onMounted(() => {
             :title="col.title"
             :min-width="col.width"
             :fixed="col.fixed"
+            :sortable="col.field === 'createTime'"
           >
             <template v-if="getHeaderFilter(col.field)" #header>
               <TableHeaderFilter
@@ -829,6 +845,9 @@ onMounted(() => {
                 {{ row.finalScreeningResult }}
               </el-tag>
               <span v-else class="text-gray-400">—</span>
+            </template>
+            <template v-else-if="col.field === 'createTime'" #default="{ row }">
+              {{ row.createTime ? formatDateTime(row.createTime) : "—" }}
             </template>
           </vxe-column>
           <vxe-column title="操作" width="140" fixed="right">
@@ -851,7 +870,7 @@ onMounted(() => {
         <el-pagination
           v-model:current-page="paginationData.currentPage"
           v-model:page-size="paginationData.pageSize"
-          :page-sizes="[10, 20, 50, 100]"
+          :page-sizes="paginationData.pageSizes"
           :total="total"
           layout="total, sizes, prev, pager, next, jumper"
           @current-change="handleCurrentChange"

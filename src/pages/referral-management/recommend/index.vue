@@ -6,6 +6,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import {
   applyReferralChestXrayResult,
@@ -26,6 +27,7 @@ import {
   canShowContinueTrackButton,
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
+  formatTrackingAttemptCount,
   getRecommendTime,
   isTrackingFlowClosed,
   parseTrackingHistory,
@@ -108,9 +110,10 @@ function canOperateRecommendTrack(row: any) {
   return isJointTrackingEnabled(row) && isLevel345Role()
 }
 
-/** 详情中修正追踪过程：已接受即可（含归档后），同步到操作列追踪过程 */
+/** 详情中修正追踪过程：已接受即可（含归档后）；共同追踪过程仅只读，不可在查看页修改 */
 function canEditRecommendTrackingHistory(row: any) {
   if (!row || !isRecommendAccepted(row)) return false
+  if (Number(row.jointTracking) === 1) return false
   if (!parseTrackingHistory(row.trackingHistoryJson).length) return false
   return canOperateRecommendTrack(row) || isSuperAdmin()
 }
@@ -154,6 +157,7 @@ const tableData = ref<any[]>([])
 const total = ref(0)
 const selectedRows = ref<any[]>([])
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const { onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
@@ -208,6 +212,7 @@ async function fetchList() {
   try {
     const res = await getReferralTrackingListApi({
       ...buildFilterParams(),
+      ...toSortQueryParam(),
       page: paginationData.currentPage,
       size: paginationData.pageSize
     })
@@ -217,6 +222,11 @@ async function fetchList() {
   } finally {
     loading.value = false
   }
+}
+
+function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+  onSortChange(payload)
+  fetchList()
 }
 
 onMounted(fetchList)
@@ -236,6 +246,7 @@ function handleReset() {
   searchForm.dateRange = []
   searchForm.trackingStatus = undefined
   clearFilters()
+  resetSort()
   handleSearch()
 }
 
@@ -592,6 +603,7 @@ const editDialogVisible = ref(false)
 const editRow = ref<any>(null)
 const editFormRef = ref()
 const savingEdit = ref(false)
+const editTrackingHistory = ref<{ attempt: number, status: number, trackTime: string, reason: string, operatorName?: string }[]>([])
 const editForm = reactive({
   name: "",
   gender: "",
@@ -610,15 +622,29 @@ const editForm = reactive({
   chestXrayDate: "",
   chestXrayResult: "",
   chestXrayRemark: "",
-  recommendReason: ""
+  recommendReason: "",
+  diagnosisResult: "",
+  diagnosisRemark: ""
+})
+
+const canEditDiagnosis = computed(() => Boolean(editRow.value?.diagnosisResult))
+/** 有追踪过程即可展示；共同追踪在编辑页也只读（与查看页一致） */
+const showEditTrackingHistory = computed(() => editTrackingHistory.value.length > 0)
+const canEditTrackingHistory = computed(() =>
+  showEditTrackingHistory.value && Number(editRow.value?.jointTracking) !== 1
+)
+
+/** 编辑诊断：兼容历史「确诊患者 / 其他」 */
+const editDiagnosisOptions = computed(() => {
+  const current = editForm.diagnosisResult
+  const opts: Array<{ label: string, value: string }> = REFERRAL_TRACKING_DIAGNOSIS_OPTIONS.map(item => ({ ...item }))
+  if (current && !opts.some(item => item.value === current)) {
+    opts.push({ label: current, value: current })
+  }
+  return opts
 })
 
 const editFormRules = {
-  name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
-  idNumber: [idCardRule(false)],
-  phone: [phoneRule(true)],
-  currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
-  crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
   recommendReason: [{ required: true, message: "请填写推介原因", trigger: "blur" }]
 }
 
@@ -642,11 +668,45 @@ async function openEditDialog(row: any) {
     chestXrayDate: row.chestXrayDate ?? "",
     chestXrayResult: "",
     chestXrayRemark: "",
-    recommendReason: row.recommendReason ?? ""
+    recommendReason: row.recommendReason ?? "",
+    diagnosisResult: row.diagnosisResult ?? "",
+    diagnosisRemark: row.diagnosisRemark ?? ""
   })
   applyReferralChestXrayResult(editForm, row.chestXrayResult)
+  editTrackingHistory.value = parseTrackingHistory(row.trackingHistoryJson).map(item => ({
+    attempt: item.attempt,
+    status: item.status,
+    trackTime: item.trackTime,
+    reason: item.reason ?? "",
+    operatorName: item.operatorName
+  }))
   editDialogVisible.value = true
   nextTick(() => editFormRef.value?.clearValidate())
+  // 列表可能缺诊断备注/完整追踪过程，打开时拉详情补齐
+  try {
+    const res = await getReferralTrackingDetailApi(row.id)
+    const detail = res.data
+    if (detail) {
+      editRow.value = { ...row, ...detail }
+      editForm.diagnosisResult = detail.diagnosisResult ?? editForm.diagnosisResult
+      editForm.diagnosisRemark = detail.diagnosisRemark ?? editForm.diagnosisRemark
+      editTrackingHistory.value = parseTrackingHistory(detail.trackingHistoryJson).map(item => ({
+        attempt: item.attempt,
+        status: item.status,
+        trackTime: item.trackTime,
+        reason: item.reason ?? "",
+        operatorName: item.operatorName
+      }))
+      if (detail.screenDate != null) editForm.screenDate = detail.screenDate ?? ""
+      if (detail.screenMethod != null) editForm.screenMethod = normalizeReferralScreenMethod(detail.screenMethod)
+      if (detail.infectionResult != null) editForm.infectionResult = normalizeReferralInfectionResult(detail.infectionResult)
+      if (detail.chestXrayDate != null) editForm.chestXrayDate = detail.chestXrayDate ?? ""
+      if (detail.chestXrayResult != null) applyReferralChestXrayResult(editForm, detail.chestXrayResult)
+      if (detail.recommendReason != null) editForm.recommendReason = detail.recommendReason ?? ""
+    }
+  } catch {
+    /* 详情失败时仍可用列表数据编辑筛查/推介原因 */
+  }
 }
 
 async function handleEditSave() {
@@ -659,13 +719,48 @@ async function handleEditSave() {
     ElMessage.warning("请填写胸片检查结果备注")
     return
   }
+  if (canEditDiagnosis.value) {
+    if (!editForm.diagnosisResult) {
+      ElMessage.warning("请选择诊断结果")
+      return
+    }
+    if (editForm.diagnosisResult === "其他" && !editForm.diagnosisRemark.trim()) {
+      ElMessage.warning("选择其他时请填写诊断备注")
+      return
+    }
+  }
+  if (canEditTrackingHistory.value) {
+    const emptyRemark = editTrackingHistory.value.find(item => !item.reason.trim())
+    if (emptyRemark) {
+      ElMessage.warning(`请填写第${emptyRemark.attempt}次追踪备注`)
+      return
+    }
+  }
   savingEdit.value = true
   try {
-    const { chestXrayRemark, ...rest } = editForm
-    await updateReferralTrackingApi(editRow.value.id, {
-      ...rest,
-      chestXrayResult: resolveReferralChestXrayResultForSave(editForm.chestXrayResult, chestXrayRemark)
-    })
+    // 基本信息只读，不提交；仅保存筛查、推介原因及可选的诊断/追踪过程
+    const payload: Record<string, any> = {
+      screenDate: editForm.screenDate,
+      screenMethod: editForm.screenMethod,
+      infectionResult: editForm.infectionResult,
+      chestXrayDate: editForm.chestXrayDate,
+      chestXrayResult: resolveReferralChestXrayResultForSave(editForm.chestXrayResult, editForm.chestXrayRemark),
+      recommendReason: editForm.recommendReason
+    }
+    if (canEditDiagnosis.value) {
+      payload.diagnosisResult = editForm.diagnosisResult
+      payload.diagnosisRemark = editForm.diagnosisResult === "其他"
+        ? editForm.diagnosisRemark.trim()
+        : ""
+    }
+    if (canEditTrackingHistory.value) {
+      payload.trackingHistory = editTrackingHistory.value.map(item => ({
+        attempt: item.attempt,
+        status: item.status,
+        reason: item.reason.trim()
+      }))
+    }
+    await updateReferralTrackingApi(editRow.value.id, payload)
     ElMessage.success("保存成功")
     editDialogVisible.value = false
     fetchList()
@@ -776,63 +871,75 @@ async function handleTrack(payload: TrackConfirmPayload) {
   }
 }
 
-// ===== 查看追踪记录（只读） =====
-const historyViewVisible = ref(false)
-const historyViewRow = ref<any>(null)
-const historyViewList = computed(() =>
-  parseTrackingHistory(historyViewRow.value?.trackingHistoryJson)
-)
-
 function formatRecommendTime(row: any) {
   const time = getRecommendTime(row)
   return time ? formatDateTime(time) : "-"
 }
 
-// ===== 筛查信息 =====
-const screeningDialogVisible = ref(false)
-const screeningRow = ref<any>(null)
-const chestXrayResultSelectOptions = computed(() =>
-  referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, screeningForm.chestXrayResult))
-
-const screeningForm = reactive({
+// ===== 感染检测（到位后单独录入，写入同一推介记录） =====
+const infectionDialogVisible = ref(false)
+const infectionRow = ref<any>(null)
+const infectionForm = reactive({
   hasInfectionScreen: "",
   screenDate: "",
   screenMethod: "",
-  infectionResult: "",
+  infectionResult: ""
+})
+
+function openInfectionDialog(row: any) {
+  infectionRow.value = row
+  Object.assign(infectionForm, {
+    hasInfectionScreen: row.hasInfectionScreen ?? "",
+    screenDate: row.screenDate ?? "",
+    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
+    infectionResult: normalizeReferralInfectionResult(row.infectionResult)
+  })
+  infectionDialogVisible.value = true
+}
+
+async function handleSaveInfection() {
+  await saveScreeningInfoApi(infectionRow.value.id, { ...infectionForm })
+  ElMessage.success("感染检测信息已保存")
+  infectionDialogVisible.value = false
+  fetchList()
+}
+
+// ===== 胸片（到位后单独录入，写入同一推介记录） =====
+const xrayDialogVisible = ref(false)
+const xrayRow = ref<any>(null)
+const xrayForm = reactive({
   hasChestXray: "",
   chestXrayDate: "",
   chestXrayResult: "",
   chestXrayRemark: ""
 })
+const chestXrayResultSelectOptions = computed(() =>
+  referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, xrayForm.chestXrayResult))
 
-function openScreeningDialog(row: any) {
-  screeningRow.value = row
-  Object.assign(screeningForm, {
-    hasInfectionScreen: row.hasInfectionScreen ?? "",
-    screenDate: row.screenDate ?? "",
-    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
-    infectionResult: normalizeReferralInfectionResult(row.infectionResult),
+function openXrayDialog(row: any) {
+  xrayRow.value = row
+  Object.assign(xrayForm, {
     hasChestXray: row.hasChestXray ?? "",
     chestXrayDate: row.chestXrayDate ?? "",
     chestXrayResult: "",
     chestXrayRemark: ""
   })
-  applyReferralChestXrayResult(screeningForm, row.chestXrayResult)
-  screeningDialogVisible.value = true
+  applyReferralChestXrayResult(xrayForm, row.chestXrayResult)
+  xrayDialogVisible.value = true
 }
 
-async function handleSaveScreening() {
-  if (isReferralChestXrayOther(screeningForm.chestXrayResult) && !screeningForm.chestXrayRemark.trim()) {
+async function handleSaveXray() {
+  if (isReferralChestXrayOther(xrayForm.chestXrayResult) && !xrayForm.chestXrayRemark.trim()) {
     ElMessage.warning("请填写胸片检查结果备注")
     return
   }
-  const { chestXrayRemark, ...rest } = screeningForm
-  await saveScreeningInfoApi(screeningRow.value.id, {
+  const { chestXrayRemark, ...rest } = xrayForm
+  await saveScreeningInfoApi(xrayRow.value.id, {
     ...rest,
-    chestXrayResult: resolveReferralChestXrayResultForSave(screeningForm.chestXrayResult, chestXrayRemark)
+    chestXrayResult: resolveReferralChestXrayResultForSave(xrayForm.chestXrayResult, chestXrayRemark)
   })
-  ElMessage.success("筛查信息已保存")
-  screeningDialogVisible.value = false
+  ElMessage.success("胸片信息已保存")
+  xrayDialogVisible.value = false
   fetchList()
 }
 
@@ -952,7 +1059,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         type="info"
         :closable="false"
         class="mb-3"
-        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后可在本页追踪；四级用户选择「未到位」时会询问是否开启共同追踪，也可点击「共同追踪」手动开启。开启后三/四/五级均可参与（次数合并，4 次未到位自动结束；到位后可录入感染检测/胸片与诊断）。"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后可在本页追踪；四级用户选择「未到位」时会询问是否开启共同追踪，也可点击「共同追踪」手动开启。开启后三/四/五级均可参与（次数合并，4 次未到位自动结束；到位后可分别录入诊断、感染检测与胸片）。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap">
         <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">
@@ -1010,6 +1117,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         row-key="id"
         :row-class-name="getRowClass"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" fixed />
         <el-table-column prop="name" min-width="90">
@@ -1121,7 +1229,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             {{ formatRecommendTime(row) }}
           </template>
         </el-table-column>
-        <el-table-column label="录入时间" min-width="160">
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
           </template>
@@ -1149,7 +1257,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         </el-table-column>
         <el-table-column label="追踪次数" width="100">
           <template #default="{ row }">
-            {{ row.notInPlaceCount > 0 ? `${row.notInPlaceCount}次未到位` : "-" }}
+            {{ formatTrackingAttemptCount(row.trackingHistoryJson) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="200">
@@ -1213,17 +1321,24 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-button>
             <el-button
               v-if="canShowRecommendFollowupButtons(row)"
-              type="primary" link size="small"
-              @click="openScreeningDialog(row)"
-            >
-              录入感染检测结果及胸片结果
-            </el-button>
-            <el-button
-              v-if="canShowRecommendFollowupButtons(row)"
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >
               录入诊断
+            </el-button>
+            <el-button
+              v-if="canShowRecommendFollowupButtons(row)"
+              type="primary" link size="small"
+              @click="openInfectionDialog(row)"
+            >
+              录入感染检测
+            </el-button>
+            <el-button
+              v-if="canShowRecommendFollowupButtons(row)"
+              type="primary" link size="small"
+              @click="openXrayDialog(row)"
+            >
+              录入胸片
             </el-button>
           </template>
         </el-table-column>
@@ -1574,12 +1689,15 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item v-if="viewDetail.diagnosisRemark" label="诊断备注" :span="2">
               {{ viewDetail.diagnosisRemark }}
             </el-descriptions-item>
+            <el-descriptions-item label="追踪次数">
+              {{ formatTrackingAttemptCount(viewDetail.trackingHistoryJson) }}
+            </el-descriptions-item>
             <el-descriptions-item label="未到位次数">
               {{ viewDetail.notInPlaceCount > 0 ? `${viewDetail.notInPlaceCount}次` : "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="共同追踪">
-              <el-tag :type="viewDetail.jointTracking === 1 ? 'success' : 'info'" size="small">
-                {{ viewDetail.jointTracking === 1 ? "已开启" : "未开启" }}
+              <el-tag :type="Number(viewDetail.jointTracking) === 1 ? 'success' : 'info'" size="small">
+                {{ Number(viewDetail.jointTracking) === 1 ? "已开启" : "未开启" }}
               </el-tag>
             </el-descriptions-item>
             <el-descriptions-item v-if="viewDetail.jointTrackingTime" label="共同追踪时间">
@@ -1589,7 +1707,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           <div v-if="viewTrackingHistory.length || viewTrackingEditMode" class="view-tracking-section">
             <div class="view-tracking-title-row">
               <div class="view-tracking-title">
-                {{ viewDetail.jointTracking === 1 ? "共同追踪过程" : "对方追踪过程" }}
+                {{ Number(viewDetail.jointTracking) === 1 ? "共同追踪过程" : "对方追踪过程" }}
               </div>
               <el-button
                 v-if="!viewTrackingEditMode && canEditRecommendTrackingHistory(viewDetail)"
@@ -1636,6 +1754,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
                   {{ TRACK_STATUS_LABEL[item.status] }}
                 </el-tag>
                 <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+                <span
+                  v-if="Number(viewDetail.jointTracking) === 1 && item.operatorName"
+                  class="tracking-history-operator"
+                >
+                  填写人：{{ item.operatorName }}
+                </span>
                 <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
               </div>
             </div>
@@ -1664,16 +1788,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
 
     <!-- 编辑推介弹窗 -->
     <el-dialog v-model="editDialogVisible" title="编辑推介记录" width="720px">
-      <el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="100px">
+      <el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="110px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="姓名" prop="name">
-              <el-input v-model="editForm.name" />
+            <el-form-item label="姓名">
+              <el-input v-model="editForm.name" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="性别">
-              <el-select v-model="editForm.gender" style="width: 100%">
+              <el-select v-model="editForm.gender" disabled style="width: 100%">
                 <el-option label="男" value="男" />
                 <el-option label="女" value="女" />
               </el-select>
@@ -1681,47 +1805,47 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="出生日期">
-              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" disabled style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="年龄">
-              <el-input-number v-model="editForm.age" :min="0" :max="150" style="width: 100%" />
+              <el-input-number v-model="editForm.age" :min="0" :max="150" disabled style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="证件类型">
-              <el-input v-model="editForm.idType" />
+              <el-input v-model="editForm.idType" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="证件号" prop="idNumber">
-              <el-input v-model="editForm.idNumber" />
+            <el-form-item label="证件号">
+              <el-input v-model="editForm.idNumber" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="民族">
-              <el-input v-model="editForm.ethnicity" />
+              <el-input v-model="editForm.ethnicity" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="联系电话" prop="phone">
-              <el-input v-model="editForm.phone" />
+            <el-form-item label="联系电话">
+              <el-input v-model="editForm.phone" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="24">
             <el-form-item label="户籍地址">
-              <el-input v-model="editForm.householdAddress" />
+              <el-input v-model="editForm.householdAddress" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="现住址" prop="currentAddress">
-              <el-input v-model="editForm.currentAddress" />
+            <el-form-item label="现住址">
+              <el-input v-model="editForm.currentAddress" readonly />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="人群分类" prop="crowdCategory">
-              <el-select v-model="editForm.crowdCategory" placeholder="请选择" style="width: 100%">
+            <el-form-item label="人群分类">
+              <el-select v-model="editForm.crowdCategory" disabled placeholder="请选择" style="width: 100%">
                 <el-option
                   v-for="item in REFERRAL_CROWD_CATEGORY_OPTIONS"
                   :key="item"
@@ -1808,6 +1932,94 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               <el-input v-model="editForm.recommendReason" type="textarea" :rows="3" />
             </el-form-item>
           </el-col>
+          <template v-if="canEditDiagnosis">
+            <el-col :span="24">
+              <el-divider content-position="left">
+                诊断结果
+              </el-divider>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item label="诊断结果" required>
+                <el-radio-group v-model="editForm.diagnosisResult">
+                  <el-radio
+                    v-for="item in editDiagnosisOptions"
+                    :key="item.value"
+                    :value="item.value"
+                  >
+                    {{ item.label }}
+                  </el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+            <el-col v-if="editForm.diagnosisResult === '其他'" :span="24">
+              <el-form-item label="诊断备注" required>
+                <el-input
+                  v-model="editForm.diagnosisRemark"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  show-word-limit
+                  placeholder="请输入其他诊断结果说明"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-alert
+                title="修改诊断结果仅更新本页展示，不会重新触发分流（如创建潜伏感染者）"
+                type="info"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 8px"
+              />
+            </el-col>
+          </template>
+          <template v-if="showEditTrackingHistory">
+            <el-col :span="24">
+              <el-divider content-position="left">
+                追踪过程
+              </el-divider>
+            </el-col>
+            <el-col
+              v-for="item in editTrackingHistory"
+              :key="item.attempt"
+              :span="24"
+            >
+              <el-form-item :label="`第${item.attempt}次追踪`" :required="canEditTrackingHistory">
+                <div class="edit-tracking-meta">
+                  <el-select v-model="item.status" style="width: 120px" size="small" :disabled="!canEditTrackingHistory">
+                    <el-option label="到位" :value="1" />
+                    <el-option label="未到位" :value="2" />
+                    <el-option label="其他" :value="3" />
+                  </el-select>
+                  <span class="edit-tracking-time">{{ formatDateTime(item.trackTime) }}</span>
+                  <span v-if="item.operatorName" class="tracking-history-operator">
+                    填写人：{{ item.operatorName }}
+                  </span>
+                  <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
+                    {{ TRACK_STATUS_LABEL[item.status] || "-" }}
+                  </el-tag>
+                </div>
+                <el-input
+                  v-model="item.reason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  show-word-limit
+                  :readonly="!canEditTrackingHistory"
+                  placeholder="请填写追踪备注"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="!canEditTrackingHistory" :span="24">
+              <el-alert
+                title="共同追踪过程仅可查看，不可在此修改"
+                type="info"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 8px"
+              />
+            </el-col>
+          </template>
         </el-row>
       </el-form>
       <template #footer>
@@ -1837,28 +2049,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
       </template>
     </el-dialog>
 
-    <!-- 查看追踪记录弹窗（只读） -->
-    <el-dialog v-model="historyViewVisible" title="追踪过程" width="520px">
-      <div v-if="historyViewList.length === 0" class="tracking-history-empty">
-        暂无追踪记录
-      </div>
-      <div v-else class="tracking-history">
-        <div v-for="item in historyViewList" :key="item.attempt" class="tracking-history-item">
-          <span class="tracking-history-attempt">第{{ item.attempt }}次</span>
-          <el-tag :type="item.status === 1 ? 'success' : item.status === 2 ? 'warning' : 'info'" size="small">
-            {{ TRACK_STATUS_LABEL[item.status] }}
-          </el-tag>
-          <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
-          <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="historyViewVisible = false">
-          关闭
-        </el-button>
-      </template>
-    </el-dialog>
-
     <!-- 追踪操作弹窗 -->
     <TrackingOperationDialog
       v-model="trackDialogVisible"
@@ -1869,13 +2059,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
       @confirm="handleTrack"
     />
 
-    <!-- 录入筛查信息弹窗 -->
-    <el-dialog v-model="screeningDialogVisible" title="录入感染检测结果及胸片结果" width="600px">
-      <el-form :model="screeningForm" label-width="120px">
+    <!-- 录入感染检测弹窗 -->
+    <el-dialog v-model="infectionDialogVisible" title="录入感染检测" width="560px">
+      <el-form :model="infectionForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="是否感染检测">
-              <el-select v-model="screeningForm.hasInfectionScreen" style="width: 100%">
+              <el-select v-model="infectionForm.hasInfectionScreen" style="width: 100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -1883,14 +2073,14 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染检测日期">
-              <el-date-picker v-model="screeningForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="infectionForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染检测方法">
-              <el-select v-model="screeningForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+              <el-select v-model="infectionForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, screeningForm.screenMethod)"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, infectionForm.screenMethod)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1900,9 +2090,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染检测结果">
-              <el-select v-model="screeningForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+              <el-select v-model="infectionForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, screeningForm.infectionResult)"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, infectionForm.infectionResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1910,9 +2100,25 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </el-select>
             </el-form-item>
           </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="infectionDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSaveInfection">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 录入胸片弹窗 -->
+    <el-dialog v-model="xrayDialogVisible" title="录入胸片" width="560px">
+      <el-form :model="xrayForm" label-width="120px">
+        <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="是否胸片检查">
-              <el-select v-model="screeningForm.hasChestXray" style="width: 100%">
+              <el-select v-model="xrayForm.hasChestXray" style="width: 100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -1920,17 +2126,17 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片检查日期">
-              <el-date-picker v-model="screeningForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="xrayForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片结果">
               <el-select
-                v-model="screeningForm.chestXrayResult"
+                v-model="xrayForm.chestXrayResult"
                 placeholder="请选择"
                 clearable
                 style="width: 100%"
-                @change="() => { if (!isReferralChestXrayOther(screeningForm.chestXrayResult)) screeningForm.chestXrayRemark = '' }"
+                @change="() => { if (!isReferralChestXrayOther(xrayForm.chestXrayResult)) xrayForm.chestXrayRemark = '' }"
               >
                 <el-option
                   v-for="opt in chestXrayResultSelectOptions"
@@ -1941,18 +2147,18 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="isReferralChestXrayOther(screeningForm.chestXrayResult)" :span="24">
+          <el-col v-if="isReferralChestXrayOther(xrayForm.chestXrayResult)" :span="24">
             <el-form-item label="胸片结果备注">
-              <el-input v-model="screeningForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
+              <el-input v-model="xrayForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
             </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="screeningDialogVisible = false">
+        <el-button @click="xrayDialogVisible = false">
           取消
         </el-button>
-        <el-button type="primary" @click="handleSaveScreening">
+        <el-button type="primary" @click="handleSaveXray">
           保存
         </el-button>
       </template>
@@ -1992,6 +2198,11 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
 
 .tracking-history-time {
   color: var(--el-text-color-secondary);
+}
+
+.tracking-history-operator {
+  color: var(--el-color-primary);
+  font-weight: 500;
 }
 
 .tracking-history-reason {
@@ -2034,6 +2245,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.edit-tracking-time {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .recommend-dialog-footer {

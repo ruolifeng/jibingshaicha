@@ -584,7 +584,7 @@ CREATE TABLE IF NOT EXISTS `visit_supervision_reminder_log` (
     `biz_id`      BIGINT       NOT NULL COMMENT '患者ID或潜伏感染ID',
     `source_id`   BIGINT       DEFAULT NULL COMMENT '首次随访/后续随访/督导表记录ID',
     `due_date`    DATE         NOT NULL COMMENT '计划下次随访或督导日期',
-    `lead_days`   INT          NOT NULL COMMENT '提前天数：7/3/1',
+    `lead_days`   INT          NOT NULL COMMENT '提前天数：7/3/1/0（0=当天）',
     `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`     TINYINT      NOT NULL DEFAULT 0,
@@ -4276,28 +4276,21 @@ CREATE TABLE IF NOT EXISTS `sys_message_reminder_config` (
     `sort`          INT          NOT NULL DEFAULT 0,
     `create_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP,
     `update_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    `deleted`       TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_code` (`code`)
 ) COMMENT='系统定时消息提醒开关';
 
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
-SELECT 122000001, 'close_contact_case_followup_6', '密接个案-6月随访提醒',
-       '按个案「6月随访日期」到期窗口提醒对应录入者', '每天 08:00', 1, 10
-WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_6');
+SELECT 127000001, 'close_contact_case_followup_no_preventive', '密接个案-未开展预防性治疗随访提醒',
+       '密接个案表 6/12/24 月随访到期时，对「未开展」预防性治疗的人群提醒录入者', '每天 08:00', 1, 10
+WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_no_preventive');
 
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
-SELECT 122000002, 'close_contact_case_followup_12', '密接个案-12月随访提醒',
-       '按个案「12月随访日期」到期窗口提醒对应录入者', '每天 08:00', 1, 20
-WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_12');
-
-INSERT INTO `sys_message_reminder_config`
-(`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
-SELECT 122000003, 'close_contact_case_followup_24', '密接个案-24月随访提醒',
-       '按个案「24月随访日期」到期窗口提醒对应录入者', '每天 08:00', 1, 30
-WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_24');
+SELECT 127000002, 'close_contact_case_followup_with_preventive', '密接个案-已开展预防性治疗随访提醒',
+       '密接个案表 6/12/24 月随访到期时，对「开展」预防性治疗的人群提醒录入者', '每天 08:00', 1, 15
+WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_with_preventive');
 
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
@@ -4314,13 +4307,13 @@ WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'cl
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
 SELECT 122000006, 'follow_up_due', '患者后续随访提醒',
-       '患者下次随访到期前 7/3/1 天提醒', '每天 08:00', 1, 60
+       '患者下次随访到期前 7/3/1 天及当天提醒；当天提醒不受此前已读影响', '每天 08:00', 1, 60
 WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'follow_up_due');
 
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
 SELECT 122000007, 'supervision_due', '督导表到期提醒',
-       '潜伏督导到期前 7/3/1 天提醒', '每天 08:00', 1, 70
+       '潜伏督导到期前 7/3/1 天及当天提醒；当天提醒不受此前已读影响', '每天 08:00', 1, 70
 WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'supervision_due');
 
 INSERT INTO `sys_message_reminder_config`

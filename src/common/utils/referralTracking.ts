@@ -6,6 +6,10 @@ export interface TrackingHistoryItem {
   status: number
   trackTime: string
   reason?: string
+  /** 本次填写人用户 ID（字符串，兼容雪花） */
+  operatorId?: string
+  /** 本次填写人展示名（真实姓名优先） */
+  operatorName?: string
 }
 
 export const TRACK_STATUS_LABEL: Record<number, string> = {
@@ -67,7 +71,7 @@ export function canShowContinueTrackButton(
   return false
 }
 
-/** 到位后且尚未诊断：可录入感染检测/胸片与诊断 */
+/** 到位后且尚未诊断：可分别录入诊断、感染检测与胸片 */
 export function canShowArrivalFollowupButtons(
   row: { trackingStatus?: unknown, archived?: unknown, diagnosisResult?: unknown }
 ): boolean {
@@ -82,10 +86,22 @@ export function canShowArrivalFollowupButtons(
 export function parseTrackingHistory(json?: string): TrackingHistoryItem[] {
   if (!json) return []
   try {
-    return JSON.parse(json)
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
+}
+
+/** 追踪次数：按「追踪过程」记录条数同步（含到位/未到位/其他） */
+export function getTrackingAttemptCount(trackingHistoryJson?: string): number {
+  return parseTrackingHistory(trackingHistoryJson).length
+}
+
+/** 列表展示：有记录显示「N次」，无记录显示「-」 */
+export function formatTrackingAttemptCount(trackingHistoryJson?: string): string {
+  const count = getTrackingAttemptCount(trackingHistoryJson)
+  return count > 0 ? `${count}次` : "-"
 }
 
 /** 推介时间：已发送取发送时间，否则取创建时间 */

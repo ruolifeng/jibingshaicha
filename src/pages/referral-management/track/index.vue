@@ -6,6 +6,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
 import {
@@ -27,6 +28,7 @@ import {
   canShowContinueTrackButton,
   formatArrivalDisplay,
   formatReferralDiagnosisDisplay,
+  formatTrackingAttemptCount,
   getRecommendTime,
   isTrackingFlowClosed,
   parseTrackingHistory,
@@ -126,6 +128,7 @@ const tableData = ref<any[]>([])
 const total = ref(0)
 const selectedRows = ref<any[]>([])
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const { onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
@@ -182,6 +185,7 @@ async function fetchList() {
   try {
     const res = await getReferralTrackingListApi({
       ...buildFilterParams(),
+      ...toSortQueryParam(),
       page: paginationData.currentPage,
       size: paginationData.pageSize
     })
@@ -191,6 +195,11 @@ async function fetchList() {
   } finally {
     loading.value = false
   }
+}
+
+function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+  onSortChange(payload)
+  fetchList()
 }
 
 onMounted(fetchList)
@@ -211,6 +220,7 @@ function handleReset() {
   searchForm.createTimeRange = []
   searchForm.trackingStatus = undefined
   clearFilters()
+  resetSort()
   handleSearch()
 }
 
@@ -805,51 +815,70 @@ async function handleEnableJointTracking(row: any) {
   fetchList()
 }
 
-// ===== 筛查信息 =====
-const screeningDialogVisible = ref(false)
-const screeningRow = ref<any>(null)
-const screeningForm = reactive({
+// ===== 感染检测（到位后单独录入，写入同一推介/追踪记录） =====
+const infectionDialogVisible = ref(false)
+const infectionRow = ref<any>(null)
+const infectionForm = reactive({
   hasInfectionScreen: "",
   screenDate: "",
   screenMethod: "",
-  infectionResult: "",
+  infectionResult: ""
+})
+
+function openInfectionDialog(row: any) {
+  infectionRow.value = row
+  Object.assign(infectionForm, {
+    hasInfectionScreen: row.hasInfectionScreen ?? "",
+    screenDate: row.screenDate ?? "",
+    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
+    infectionResult: normalizeReferralInfectionResult(row.infectionResult)
+  })
+  infectionDialogVisible.value = true
+}
+
+async function handleSaveInfection() {
+  await saveScreeningInfoApi(infectionRow.value.id, { ...infectionForm })
+  ElMessage.success("感染检测信息已保存")
+  infectionDialogVisible.value = false
+  fetchList()
+}
+
+// ===== 胸片（到位后单独录入，写入同一推介/追踪记录） =====
+const xrayDialogVisible = ref(false)
+const xrayRow = ref<any>(null)
+const xrayForm = reactive({
   hasChestXray: "",
   chestXrayDate: "",
   chestXrayResult: "",
   chestXrayRemark: ""
 })
-
 const chestXrayResultSelectOptions = computed(() =>
-  referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, screeningForm.chestXrayResult))
+  referralSelectOptionsWithLegacy(REFERRAL_CHEST_XRAY_RESULT_OPTIONS, xrayForm.chestXrayResult))
 
-function openScreeningDialog(row: any) {
-  screeningRow.value = row
-  Object.assign(screeningForm, {
-    hasInfectionScreen: row.hasInfectionScreen ?? "",
-    screenDate: row.screenDate ?? "",
-    screenMethod: normalizeReferralScreenMethod(row.screenMethod),
-    infectionResult: normalizeReferralInfectionResult(row.infectionResult),
+function openXrayDialog(row: any) {
+  xrayRow.value = row
+  Object.assign(xrayForm, {
     hasChestXray: row.hasChestXray ?? "",
     chestXrayDate: row.chestXrayDate ?? "",
     chestXrayResult: "",
     chestXrayRemark: ""
   })
-  applyReferralChestXrayResult(screeningForm, row.chestXrayResult)
-  screeningDialogVisible.value = true
+  applyReferralChestXrayResult(xrayForm, row.chestXrayResult)
+  xrayDialogVisible.value = true
 }
 
-async function handleSaveScreening() {
-  if (isReferralChestXrayOther(screeningForm.chestXrayResult) && !screeningForm.chestXrayRemark.trim()) {
+async function handleSaveXray() {
+  if (isReferralChestXrayOther(xrayForm.chestXrayResult) && !xrayForm.chestXrayRemark.trim()) {
     ElMessage.warning("请填写胸片检查结果备注")
     return
   }
-  const { chestXrayRemark, ...rest } = screeningForm
-  await saveScreeningInfoApi(screeningRow.value.id, {
+  const { chestXrayRemark, ...rest } = xrayForm
+  await saveScreeningInfoApi(xrayRow.value.id, {
     ...rest,
-    chestXrayResult: resolveReferralChestXrayResultForSave(screeningForm.chestXrayResult, chestXrayRemark)
+    chestXrayResult: resolveReferralChestXrayResultForSave(xrayForm.chestXrayResult, chestXrayRemark)
   })
-  ElMessage.success("筛查信息已保存")
-  screeningDialogVisible.value = false
+  ElMessage.success("胸片信息已保存")
+  xrayDialogVisible.value = false
   fetchList()
 }
 
@@ -1019,6 +1048,7 @@ function getRowClass({ row }: { row: any }) {
         row-key="id"
         :row-class-name="getRowClass"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" fixed />
         <el-table-column label="来源" width="130">
@@ -1137,9 +1167,9 @@ function getRowClass({ row }: { row: any }) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="追踪次数">
+        <el-table-column label="追踪次数" width="100">
           <template #default="{ row }">
-            {{ row.notInPlaceCount > 0 ? `${row.notInPlaceCount}次未到位` : "-" }}
+            {{ formatTrackingAttemptCount(row.trackingHistoryJson) }}
           </template>
         </el-table-column>
         <el-table-column prop="diagnosisResult" min-width="160" show-overflow-tooltip>
@@ -1163,7 +1193,7 @@ function getRowClass({ row }: { row: any }) {
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="录入时间" min-width="160">
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
           </template>
@@ -1227,16 +1257,7 @@ function getRowClass({ row }: { row: any }) {
             >
               追踪
             </el-button>
-            <!-- 筛查信息：已到位 -->
-            <el-button
-              v-if="canShowTrackFollowupButtons(row)"
-              v-permission="['referralManagement:xray', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
-              type="primary" link size="small"
-              @click="openScreeningDialog(row)"
-            >
-              录入感染检测结果及胸片结果
-            </el-button>
-            <!-- 诊断：已到位 -->
+            <!-- 到位后：诊断 / 感染检测 / 胸片分别录入，同步到同一条记录 -->
             <el-button
               v-if="canShowTrackFollowupButtons(row)"
               v-permission="['referralManagement:diagnosis', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
@@ -1244,6 +1265,22 @@ function getRowClass({ row }: { row: any }) {
               @click="openDiagnosisDialog(row)"
             >
               录入诊断
+            </el-button>
+            <el-button
+              v-if="canShowTrackFollowupButtons(row)"
+              v-permission="['referralManagement:xray', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
+              type="primary" link size="small"
+              @click="openInfectionDialog(row)"
+            >
+              录入感染检测
+            </el-button>
+            <el-button
+              v-if="canShowTrackFollowupButtons(row)"
+              v-permission="['referralManagement:xray', 'referralManagement:edit', 'referralManagement:epidemicImport', 'referralManagement:confirm']"
+              type="primary" link size="small"
+              @click="openXrayDialog(row)"
+            >
+              录入胸片
             </el-button>
             <!-- 删除 -->
             <el-button
@@ -1410,6 +1447,9 @@ function getRowClass({ row }: { row: any }) {
               <el-tag :type="TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.type as any" size="small">
                 {{ TRACKING_STATUS_MAP[viewDetail.trackingStatus]?.label }}
               </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="追踪次数">
+              {{ formatTrackingAttemptCount(viewDetail.trackingHistoryJson) }}
             </el-descriptions-item>
             <el-descriptions-item label="未到位次数">
               {{ viewDetail.notInPlaceCount > 0 ? `${viewDetail.notInPlaceCount}次` : "-" }}
@@ -1952,13 +1992,13 @@ function getRowClass({ row }: { row: any }) {
       @confirm="handleTrack"
     />
 
-    <!-- 录入筛查信息弹窗 -->
-    <el-dialog v-model="screeningDialogVisible" title="录入感染检测结果及胸片结果" width="600px">
-      <el-form :model="screeningForm" label-width="120px">
+    <!-- 录入感染检测弹窗 -->
+    <el-dialog v-model="infectionDialogVisible" title="录入感染检测" width="560px">
+      <el-form :model="infectionForm" label-width="120px">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="是否感染检测">
-              <el-select v-model="screeningForm.hasInfectionScreen" style="width: 100%">
+              <el-select v-model="infectionForm.hasInfectionScreen" style="width: 100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -1966,14 +2006,14 @@ function getRowClass({ row }: { row: any }) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染检测日期">
-              <el-date-picker v-model="screeningForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="infectionForm.screenDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染检测方法">
-              <el-select v-model="screeningForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
+              <el-select v-model="infectionForm.screenMethod" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, screeningForm.screenMethod)"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_METHOD_OPTIONS, infectionForm.screenMethod)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1983,9 +2023,9 @@ function getRowClass({ row }: { row: any }) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="感染检测结果">
-              <el-select v-model="screeningForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
+              <el-select v-model="infectionForm.infectionResult" placeholder="请选择" clearable style="width: 100%">
                 <el-option
-                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, screeningForm.infectionResult)"
+                  v-for="opt in referralSelectOptionsWithLegacy(REFERRAL_INFECTION_SCREEN_RESULT_OPTIONS, infectionForm.infectionResult)"
                   :key="opt"
                   :label="opt"
                   :value="opt"
@@ -1993,9 +2033,25 @@ function getRowClass({ row }: { row: any }) {
               </el-select>
             </el-form-item>
           </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="infectionDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="handleSaveInfection">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 录入胸片弹窗 -->
+    <el-dialog v-model="xrayDialogVisible" title="录入胸片" width="560px">
+      <el-form :model="xrayForm" label-width="120px">
+        <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="是否胸片检查">
-              <el-select v-model="screeningForm.hasChestXray" style="width: 100%">
+              <el-select v-model="xrayForm.hasChestXray" style="width: 100%">
                 <el-option label="是" value="是" />
                 <el-option label="否" value="否" />
               </el-select>
@@ -2003,17 +2059,17 @@ function getRowClass({ row }: { row: any }) {
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片检查日期">
-              <el-date-picker v-model="screeningForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker v-model="xrayForm.chestXrayDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="胸片结果">
               <el-select
-                v-model="screeningForm.chestXrayResult"
+                v-model="xrayForm.chestXrayResult"
                 placeholder="请选择"
                 clearable
                 style="width: 100%"
-                @change="() => { if (!isReferralChestXrayOther(screeningForm.chestXrayResult)) screeningForm.chestXrayRemark = '' }"
+                @change="() => { if (!isReferralChestXrayOther(xrayForm.chestXrayResult)) xrayForm.chestXrayRemark = '' }"
               >
                 <el-option
                   v-for="opt in chestXrayResultSelectOptions"
@@ -2024,18 +2080,18 @@ function getRowClass({ row }: { row: any }) {
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="isReferralChestXrayOther(screeningForm.chestXrayResult)" :span="24">
+          <el-col v-if="isReferralChestXrayOther(xrayForm.chestXrayResult)" :span="24">
             <el-form-item label="胸片结果备注">
-              <el-input v-model="screeningForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
+              <el-input v-model="xrayForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
             </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="screeningDialogVisible = false">
+        <el-button @click="xrayDialogVisible = false">
           取消
         </el-button>
-        <el-button type="primary" @click="handleSaveScreening">
+        <el-button type="primary" @click="handleSaveXray">
           保存
         </el-button>
       </template>

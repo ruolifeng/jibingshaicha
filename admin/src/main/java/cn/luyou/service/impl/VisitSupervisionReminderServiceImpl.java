@@ -52,7 +52,8 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
     public static final String MSG_SUPERVISION_DUE = "supervision_due";
 
     private static final int CHUNK = 400;
-    private static final Set<Integer> LEAD_DAYS = Set.of(7, 3, 1);
+    /** 站内/短信发送节点：提前 7/3/1 天 + 随访/督导当天（0），当天提醒不受此前已读影响 */
+    private static final Set<Integer> LEAD_DAYS = Set.of(7, 3, 1, 0);
 
     private final PatientService patientService;
     private final FirstVisitService firstVisitService;
@@ -220,9 +221,7 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
             } else {
                 supervision++;
             }
-            String title = TYPE_FOLLOW_UP.equals(item.type())
-                    ? "后续随访提醒（提前" + item.leadDays() + "天）"
-                    : "督导表提醒（提前" + item.leadDays() + "天）";
+            String title = buildTitle(item);
             String content = buildContent(item);
             for (Long receiverId : receivers) {
                 if (sendMessage) {
@@ -246,10 +245,29 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
                 .build();
     }
 
+    private String buildTitle(Candidate item) {
+        if (TYPE_FOLLOW_UP.equals(item.type())) {
+            return item.leadDays() == 0
+                    ? "后续随访提醒（今天应随访）"
+                    : "后续随访提醒（提前" + item.leadDays() + "天）";
+        }
+        return item.leadDays() == 0
+                ? "督导表提醒（今天应督导）"
+                : "督导表提醒（提前" + item.leadDays() + "天）";
+    }
+
     private String buildContent(Candidate item) {
         if (TYPE_FOLLOW_UP.equals(item.type())) {
+            if (item.leadDays() == 0) {
+                return String.format("患者【%s】今天（%s）应进行后续随访且尚未完成，请尽快完成随访，避免漏访。",
+                        StrUtil.blankToDefault(item.name(), "患者"), item.dueDate());
+            }
             return String.format("患者【%s】下次随访时间为 %s，距今 %d 天，请按时完成后续随访。",
                     StrUtil.blankToDefault(item.name(), "患者"), item.dueDate(), item.leadDays());
+        }
+        if (item.leadDays() == 0) {
+            return String.format("潜伏感染者【%s】今天（%s）应进行后续督导且尚未完成，请尽快完成督导表，避免漏管。",
+                    StrUtil.blankToDefault(item.name(), "潜伏感染者"), item.dueDate());
         }
         return String.format("潜伏感染者【%s】下次督导时间为 %s，距今 %d 天，请按时完成后续督导表。",
                 StrUtil.blankToDefault(item.name(), "潜伏感染者"), item.dueDate(), item.leadDays());
@@ -307,7 +325,7 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
         return list;
     }
 
-    /** 首页展示未来 7 天内；站内/短信仅在正好提前 7/3/1 天发送 */
+    /** 首页展示未来 7 天内；站内/短信在正好提前 7/3/1 天及当天（0）发送 */
     private Integer leadDaysOf(LocalDate today, LocalDate due, boolean exactLeadDays) {
         if (due == null) {
             return null;

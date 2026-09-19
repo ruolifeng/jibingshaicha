@@ -13,6 +13,7 @@ import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportRowOrderSupport;
 import cn.luyou.utils.ImportIdentitySupport;
+import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.PatientAddressRegionParser;
 import cn.luyou.utils.StatYearPeriod;
 import cn.luyou.mapper.LatentInfectionMapper;
@@ -143,8 +144,10 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             sendRecommend(record.getId());
             record = getById(record.getId());
         }
-        // 创建时可预填诊断，但不要立刻归档/分流：患者仍需先追踪到位，
-        // 否则会出现「待追踪 + 已归档」导致无法点追踪确认。
+        if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
+            applyDiagnosisRouting(record.getId(), record.getDiagnosisResult());
+            record = getById(record.getId());
+        }
         return record;
     }
 
@@ -163,6 +166,11 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             "creatorUserName", "creatorUsername", "entryUnit"
     );
 
+    private static final Map<String, String> SORT_COLUMNS = Map.of(
+            "createTime", "create_time",
+            "importRowNo", "import_row_no"
+    );
+
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
             "creatorUserName", "creatorUsername", "creatorName", "entryUnit"
     );
@@ -177,7 +185,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                                               String dateFrom, String dateTo, String sourceType,
                                               String creatorOrEntryUnit, String columnFilters,
                                               String createTimeFrom, String createTimeTo,
-                                              String creatorName, String entryUnit) {
+                                              String creatorName, String entryUnit,
+                                              String sortField, String sortOrder) {
         Integer role = BaseContext.getCurrentRole();
         boolean level5RecommendView = "recommend".equals(bizMode) && Integer.valueOf(6).equals(role);
 
@@ -190,6 +199,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
         applyColumnFilters(wrapper, columnFilters);
         applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
+        applyListOrder(wrapper, bizMode, sortField, sortOrder);
 
         IPage<ReferralTracking> pageResult = page(new Page<>(page, size), wrapper);
 
@@ -625,6 +635,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             applyEntryUnitFilter(wrapper, entryUnit);
             applyCreatorOrEntryUnitFilter(wrapper, creatorOrEntryUnit);
             applyUserScopeFilter(wrapper, bizMode, level5RecommendView);
+            applyListOrder(wrapper, bizMode, null, null);
         }
         List<ReferralTracking> records = list(wrapper);
 
@@ -1394,16 +1405,15 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
 
         LocalDateTime now = LocalDateTime.now();
         List<Map<String, Object>> history = parseTrackingHistory(record.getTrackingHistoryJson());
+        Long operatorId = BaseContext.getCurrentId();
+        User operator = operatorId != null ? userService.getById(operatorId) : null;
+        String operatorName = resolveFillUserName(operator);
 
         switch (status) {
             case 1 -> {
                 // 到位：记录系统到位时间与手动录入的真实到位日期
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("attempt", history.size() + 1);
-                entry.put("status", 1);
-                entry.put("trackTime", now.toString());
+                Map<String, Object> entry = newTrackingHistoryEntry(history.size() + 1, 1, now, remark, operatorId, operatorName);
                 entry.put("actualArrivalDate", actualArrivalDate.toString());
-                entry.put("reason", remark);
                 history.add(entry);
 
                 lambdaUpdate()
@@ -1416,10 +1426,6 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         .set(ReferralTracking::getArchived, 0)
                         .update();
                 log.info("推介追踪到位，recordId={}", id);
-                // 创建时已预填诊断：到位后再执行归档/分流，避免未追踪就结案
-                if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
-                    applyDiagnosisRouting(id, record.getDiagnosisResult());
-                }
             }
             case 2 -> {
                 // 未到位：累计次数；已确认推介 / 推介业务 4 次强制结束，原生追踪 3 次
@@ -1427,11 +1433,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         || "recommend".equals(record.getBizMode())) ? 4 : 3;
                 int newCount = (record.getNotInPlaceCount() == null ? 0 : record.getNotInPlaceCount()) + 1;
 
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("attempt", history.size() + 1);
-                entry.put("status", 2);
-                entry.put("trackTime", now.toString());
-                entry.put("reason", remark);
+                Map<String, Object> entry = newTrackingHistoryEntry(history.size() + 1, 2, now, remark, operatorId, operatorName);
                 history.add(entry);
 
                 if (newCount >= forceEndThreshold) {
@@ -1457,11 +1459,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             }
             case 3 -> {
                 // 其他：仅记录本次备注，不归档，仍可继续追踪至到位或未到位次数用尽
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("attempt", history.size() + 1);
-                entry.put("status", 3);
-                entry.put("trackTime", now.toString());
-                entry.put("reason", remark);
+                Map<String, Object> entry = newTrackingHistoryEntry(history.size() + 1, 3, now, remark, operatorId, operatorName);
                 history.add(entry);
 
                 lambdaUpdate()
@@ -1474,6 +1472,24 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 log.info("推介追踪选择其他（不结束），recordId={}", id);
             }
         }
+    }
+
+    /** 构建单次追踪历史（含填写人，便于共同追踪过程展示） */
+    private Map<String, Object> newTrackingHistoryEntry(
+            int attempt, int status, LocalDateTime trackTime, String remark,
+            Long operatorId, String operatorName) {
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("attempt", attempt);
+        entry.put("status", status);
+        entry.put("trackTime", trackTime.toString());
+        entry.put("reason", remark);
+        if (operatorId != null) {
+            entry.put("operatorId", String.valueOf(operatorId));
+        }
+        if (StrUtil.isNotBlank(operatorName)) {
+            entry.put("operatorName", operatorName);
+        }
+        return entry;
     }
 
     /** 解析追踪历史 JSON */
@@ -1742,26 +1758,22 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     }
 
     /**
-     * 误归档但仍可继续追踪的记录。
-     * - 待追踪/未到位/其他：即使有创建预填诊断，也允许恢复继续追踪
-     * - 到位：仅无诊断时可继续补录
-     * - 强制结束不可恢复
+     * 误归档但仍可继续追踪的记录：无诊断结果，且状态为待追踪/未到位/其他/到位。
+     * （强制结束、诊断结案不可恢复）
      */
     private boolean isRecoverableTrackingArchive(ReferralTracking record) {
         if (record == null || !Integer.valueOf(1).equals(record.getArchived())) {
             return false;
         }
-        Integer status = record.getTrackingStatus();
-        if (Integer.valueOf(4).equals(status)) {
+        if (StrUtil.isNotBlank(record.getDiagnosisResult())) {
             return false;
         }
-        if (status == null || status == 0 || status == 2 || status == 3) {
-            return true;
-        }
-        if (Integer.valueOf(1).equals(status)) {
-            return StrUtil.isBlank(record.getDiagnosisResult());
-        }
-        return false;
+        Integer status = record.getTrackingStatus();
+        return status == null
+                || status == 0
+                || status == 1
+                || status == 2
+                || status == 3;
     }
 
     /** 编辑：创建人、接收人或辖区一至五级用户 */
@@ -2740,13 +2752,19 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if ("track".equals(bizMode)) {
             wrapper.ge(from != null, ReferralTracking::getReportCardTime, from)
                     .le(to != null, ReferralTracking::getReportCardTime, to);
-            ImportRowOrderSupport.applyWithBatch(wrapper);
         } else {
             wrapper.ge(from != null, ReferralTracking::getCreateTime, from)
-                    .le(to != null, ReferralTracking::getCreateTime, to)
-                    .orderByDesc(ReferralTracking::getCreateTime);
+                    .le(to != null, ReferralTracking::getCreateTime, to);
         }
         return wrapper;
+    }
+
+    private void applyListOrder(LambdaQueryWrapper<ReferralTracking> wrapper,
+                                String bizMode, String sortField, String sortOrder) {
+        String defaultOrder = "track".equals(bizMode)
+                ? ImportRowOrderSupport.WITH_BATCH
+                : "ORDER BY create_time DESC, id ASC";
+        ListSortSupport.apply(wrapper, sortField, sortOrder, SORT_COLUMNS, defaultOrder);
     }
 
     /** 录入时间（create_time）筛选，推介与追踪均可叠加使用 */

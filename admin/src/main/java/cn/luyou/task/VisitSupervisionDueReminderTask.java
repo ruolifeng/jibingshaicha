@@ -7,7 +7,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 患者后续随访、潜伏感染者后续督导：按系统日期在下次日期前 7/3/1 天发送站内提醒。
+ * 患者后续随访、潜伏感染者后续督导：按系统日期在下次日期前 7/3/1 天及当天发送站内提醒。
+ * 当天提醒为独立消息，不受提前节点「已读」影响，避免漏访/漏管。
  */
 @Slf4j
 @Component
