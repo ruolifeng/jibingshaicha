@@ -865,6 +865,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (StrUtil.isNotBlank(notice.getRegistrationNo())) {
                     r.setRegistrationNo(notice.getRegistrationNo().trim());
                 }
+                if (StrUtil.isBlank(r.getEthnicity()) && StrUtil.isNotBlank(notice.getEthnicity())) {
+                    r.setEthnicity(notice.getEthnicity().trim());
+                }
             } else {
                 r.setNoticeStatus(null);
                 r.setNoticeId(null);
@@ -910,6 +913,29 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             r.setSupervisionCompleted(Integer.valueOf(2).equals(status));
             SupervisionForm preferred = preferredSupervisionMap.get(r.getId());
             r.setTreatmentCompletionStatus(preferred != null ? preferred.getTreatmentCompletionStatus() : null);
+            if (preferred != null) {
+                if (StrUtil.isNotBlank(preferred.getTreatmentPlan()) && StrUtil.isBlank(r.getTreatmentPlan())) {
+                    r.setTreatmentPlan(preferred.getTreatmentPlan());
+                }
+                if (preferred.getTreatmentStartDate() != null) {
+                    r.setTreatmentStartDate(preferred.getTreatmentStartDate());
+                }
+                if (preferred.getTreatmentEndDate() != null) {
+                    r.setTreatmentEndDate(preferred.getTreatmentEndDate());
+                }
+                if (StrUtil.isBlank(r.getEthnicity()) && StrUtil.isNotBlank(preferred.getEthnicity())) {
+                    r.setEthnicity(preferred.getEthnicity());
+                }
+            }
+            if (StrUtil.isBlank(r.getTreatmentPlan())) {
+                cn.luyou.model.Notice notice = noticeMap.get(r.getId());
+                if (notice != null && StrUtil.isNotBlank(notice.getTreatmentPlan())) {
+                    r.setTreatmentPlan(notice.getTreatmentPlan().trim());
+                }
+            }
+            if (StrUtil.isBlank(r.getTreatmentPlan()) && StrUtil.isNotBlank(r.getPreventivePlan())) {
+                r.setTreatmentPlan(r.getPreventivePlan());
+            }
             if (StrUtil.isBlank(r.getNoticeMedicationUnit())
                     && preferred != null
                     && StrUtil.isNotBlank(preferred.getManagingUnit())) {
@@ -975,7 +1001,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 ScreeningSchool s = screeningSchoolMapper.selectById(latent.getScreeningId());
                 if (s == null) return;
                 latent.setBirthDate(s.getBirthDate());
-                latent.setEthnicity(s.getEthnicity());
+                if (StrUtil.isBlank(latent.getEthnicity())) {
+                    latent.setEthnicity(s.getEthnicity());
+                }
                 if (StrUtil.isNotBlank(s.getPhone())) {
                     latent.setPhone(s.getPhone());
                 }
@@ -989,6 +1017,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (StrUtil.isNotBlank(s.getPreventivePlan())) {
                     latent.setPreventivePlan(s.getPreventivePlan());
                 }
+                if (latent.getTreatmentStartDate() == null && s.getPreventiveStartDate() != null) {
+                    latent.setTreatmentStartDate(s.getPreventiveStartDate());
+                }
+                if (latent.getTreatmentEndDate() == null && s.getPreventiveEndDate() != null) {
+                    latent.setTreatmentEndDate(s.getPreventiveEndDate());
+                }
                 // 学校人群通知单人群分类默认“学生”
                 latent.setCrowdCategory("学生");
             }
@@ -997,7 +1031,9 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(latent.getScreeningId());
                 if (k == null) return;
                 latent.setBirthDate(k.getBirthDate());
-                latent.setEthnicity(k.getEthnicity());
+                if (StrUtil.isBlank(latent.getEthnicity())) {
+                    latent.setEthnicity(k.getEthnicity());
+                }
                 if (StrUtil.isNotBlank(k.getPhone())) {
                     latent.setPhone(k.getPhone());
                 }
@@ -1011,13 +1047,21 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 if (StrUtil.isNotBlank(k.getPreventivePlan())) {
                     latent.setPreventivePlan(k.getPreventivePlan());
                 }
+                if (latent.getTreatmentStartDate() == null && k.getPreventiveStartDate() != null) {
+                    latent.setTreatmentStartDate(k.getPreventiveStartDate());
+                }
+                if (latent.getTreatmentEndDate() == null && k.getPreventiveEndDate() != null) {
+                    latent.setTreatmentEndDate(k.getPreventiveEndDate());
+                }
                 latent.setCrowdCategory(resolveKeyPopulationCrowdCategory(k));
             }
             case "closeContact" -> {
                 ScreeningCloseContact c = screeningCloseContactMapper.selectById(latent.getScreeningId());
                 if (c == null) return;
                 // ScreeningCloseContact 无独立 birthDate 字段，通知单出生日期留空由前端手填
-                latent.setEthnicity(c.getEthnicity());
+                if (StrUtil.isBlank(latent.getEthnicity())) {
+                    latent.setEthnicity(c.getEthnicity());
+                }
                 if (StrUtil.isNotBlank(c.getPhone())) {
                     latent.setPhone(c.getPhone());
                 }
@@ -1959,10 +2003,82 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
             latent.setTrackingRemark(body.get("trackingRemark").toString());
         }
         if (body.get("remark") != null) latent.setRemark(body.get("remark").toString());
+        if (body.containsKey("ethnicity")) {
+            String ethnicity = body.get("ethnicity") == null ? "" : body.get("ethnicity").toString().trim();
+            latent.setEthnicity(StrUtil.isBlank(ethnicity) ? null : ethnicity);
+        }
+        if (body.containsKey("treatmentPlan")) {
+            String treatmentPlan = body.get("treatmentPlan") == null ? "" : body.get("treatmentPlan").toString().trim();
+            latent.setTreatmentPlan(StrUtil.isBlank(treatmentPlan) ? null : treatmentPlan);
+        }
         if (latent.getScreeningId() == null && body.get("crowdCategory") != null) {
             applyManualCrowdCategory(latent, body.get("crowdCategory").toString());
         }
         updateById(latent);
+        // updateById 默认跳过 null，清空民族/治疗方案需显式 set
+        if (body.containsKey("ethnicity") || body.containsKey("treatmentPlan")) {
+            var clearUw = lambdaUpdate().eq(LatentInfection::getId, id);
+            if (body.containsKey("ethnicity")) {
+                clearUw.set(LatentInfection::getEthnicity, latent.getEthnicity());
+            }
+            if (body.containsKey("treatmentPlan")) {
+                clearUw.set(LatentInfection::getTreatmentPlan, latent.getTreatmentPlan());
+            }
+            clearUw.update();
+            syncOverviewEditableFieldsToRelated(latent);
+        }
+    }
+
+    /** 总览编辑的民族/治疗方案同步到筛查表与通知单，保持各端一致 */
+    private void syncOverviewEditableFieldsToRelated(LatentInfection latent) {
+        if (latent == null || latent.getId() == null) {
+            return;
+        }
+        String ethnicity = StrUtil.trim(latent.getEthnicity());
+        String treatmentPlan = StrUtil.trim(latent.getTreatmentPlan());
+        String ethnicityVal = StrUtil.isBlank(ethnicity) ? null : ethnicity;
+        String treatmentPlanVal = StrUtil.isBlank(treatmentPlan) ? null : treatmentPlan;
+        if (latent.getScreeningId() != null && StrUtil.isNotBlank(latent.getPopulationType())) {
+            switch (latent.getPopulationType()) {
+                case "school" -> {
+                    ScreeningSchool s = screeningSchoolMapper.selectById(latent.getScreeningId());
+                    if (s != null) {
+                        s.setEthnicity(ethnicityVal);
+                        s.setPreventivePlan(treatmentPlanVal);
+                        screeningSchoolMapper.updateById(s);
+                    }
+                }
+                case "keyPopulation", "regular" -> {
+                    ScreeningKeyPopulation k = screeningKeyPopulationMapper.selectById(latent.getScreeningId());
+                    if (k != null) {
+                        k.setEthnicity(ethnicityVal);
+                        k.setPreventivePlan(treatmentPlanVal);
+                        screeningKeyPopulationMapper.updateById(k);
+                    }
+                }
+                case "closeContact" -> {
+                    ScreeningCloseContact c = screeningCloseContactMapper.selectById(latent.getScreeningId());
+                    if (c != null) {
+                        c.setEthnicity(ethnicityVal);
+                        c.setPreventivePlan(treatmentPlanVal);
+                        screeningCloseContactMapper.updateById(c);
+                    }
+                }
+                default -> { }
+            }
+        }
+        Notice notice = noticeMapper.selectOne(new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getBizId, latent.getId())
+                .eq(Notice::getNoticeType, "latent")
+                .orderByDesc(Notice::getId)
+                .last("LIMIT 1"));
+        if (notice != null) {
+            // 显式 set，保证可清空（ethnicity/treatmentPlan 无 FieldStrategy.ALWAYS）
+            noticeMapper.update(null, new LambdaUpdateWrapper<Notice>()
+                    .eq(Notice::getId, notice.getId())
+                    .set(Notice::getEthnicity, ethnicityVal)
+                    .set(Notice::getTreatmentPlan, treatmentPlanVal));
+        }
     }
 
     /**
@@ -2087,6 +2203,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         boolean keepPendingDiagnosis = "suspected".equals(referralCode);
         boolean archived = !"latent".equals(referralCode) && !keepPendingDiagnosis;
 
+        String ethnicity = body.getOrDefault("ethnicity", "").toString().trim();
+        String treatmentPlan = body.getOrDefault("treatmentPlan", "").toString().trim();
         LatentInfection latent = LatentInfection.builder()
                 .populationType(populationType)
                 .crowdCategory(crowdCategory)
@@ -2101,6 +2219,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .age(parseIntegerField(body.get("age")))
                 .screenMethod(screenMethodNormalized)
                 .infectionResult(infectionResultNormalized)
+                .ethnicity(StrUtil.isBlank(ethnicity) ? null : ethnicity)
+                .treatmentPlan(StrUtil.isBlank(treatmentPlan) ? null : treatmentPlan)
                 .diagnosisFirst(diagnosisFirst)
                 .hasChestXray(body.getOrDefault("hasChestXray", "").toString())
                 .chestXrayDate(parseDateCell(body.get("chestXrayDate")))

@@ -13,6 +13,7 @@ import {
 } from "@@/constants/disease"
 import { idCardRule, phoneRule } from "@@/utils/validate"
 import { getNoticeListByBizApi, saveNoticeDraftApi, sendNoticeApi } from "@/pages/latent-management/apis"
+import { useLatentTableHeaderFilters } from "@/pages/latent-management/composables/useLatentTableHeaderFilters"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -29,6 +30,9 @@ const userStore = useUserStore()
 const level5Users = ref<any[]>([])
 const submitting = ref(false)
 const noticeFormRef = ref()
+const { loadMedicationUnitOptions, medicationUnitSourceValues } = useLatentTableHeaderFilters(
+  () => props.latentRow?.populationType
+)
 
 const noticeFormRules = {
   receiverOrgId: [{ required: true, message: "请选择接收单位", trigger: "change" }],
@@ -60,6 +64,14 @@ const noticeForm = reactive({
   medicationManagementUnit: ""
 })
 
+/** 下拉选项：distinct 结果 + 当前已填值（兼容手动录入） */
+const medicationUnitOptions = computed(() => {
+  const current = (noticeForm.medicationManagementUnit || "").trim()
+  const list = [...medicationUnitSourceValues.value]
+  if (current && !list.includes(current)) list.unshift(current)
+  return list
+})
+
 function getNowDateStr() {
   const now = new Date()
   const year = now.getFullYear()
@@ -71,7 +83,7 @@ function getNowDateStr() {
 const infectionResultOptions = computed(() => infectionJudgeSelectOptions(noticeForm.infectionResultValue))
 
 function resetFormFromRow(row: Record<string, any>) {
-  const parsedPlan = parseLatentNoticeTreatmentPlan(row.preventivePlan || "")
+  const parsedPlan = parseLatentNoticeTreatmentPlan(row.treatmentPlan || row.preventivePlan || "")
   Object.assign(noticeForm, {
     idNumber: row.idNumber || "",
     gender: row.gender || "",
@@ -120,7 +132,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     medicationManagementUnit: notice.medicationManagementUnit || ""
   })
   const parsed = parseLatentNoticeTreatmentPlan(
-    notice.treatmentPlan || row.preventivePlan,
+    notice.treatmentPlan || row.treatmentPlan || row.preventivePlan,
     notice.customPlanDetail
   )
   noticeForm.treatmentPlan = parsed.treatmentPlan
@@ -154,7 +166,7 @@ watch(
   () => props.visible,
   async (val) => {
     if (val && props.latentRow) {
-      await loadDraftIfNeeded(props.latentRow)
+      await Promise.all([loadDraftIfNeeded(props.latentRow), loadMedicationUnitOptions()])
     }
   }
 )
@@ -362,7 +374,23 @@ async function handleSaveDraft() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="服药管理单位">
-            <el-input v-model="noticeForm.medicationManagementUnit" placeholder="可手动填写" />
+            <el-select
+              v-model="noticeForm.medicationManagementUnit"
+              placeholder="请选择或手动输入"
+              clearable
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+              @visible-change="(visible: boolean) => visible && loadMedicationUnitOptions()"
+            >
+              <el-option
+                v-for="item in medicationUnitOptions"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
       </el-row>

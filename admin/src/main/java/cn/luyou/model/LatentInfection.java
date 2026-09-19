@@ -44,6 +44,10 @@ public class LatentInfection extends BaseEntity {
     private LocalDate infectionScreenDate;
     /** 感染筛查方法（PPD/EC/IGRA 等；筛查关联记录也可由筛查表回填展示） */
     private String screenMethod;
+    /** 民族（总览可编辑；无值时由筛查/通知单回填展示） */
+    private String ethnicity;
+    /** 治疗方案（总览可编辑；无值时由督导表/通知单/筛查回填展示） */
+    private String treatmentPlan;
     private String infectionResult;
     /** 追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束 */
     private Integer trackingStatus;
@@ -140,17 +144,21 @@ public class LatentInfection extends BaseEntity {
     // ===== 通知单自动回填字段（非持久化）=====
     @TableField(exist = false)
     private LocalDate birthDate;
-    @TableField(exist = false)
-    private String ethnicity;
     /** 感染检测时间（通知单展示，优先筛查表，否则取 infectionScreenDate） */
     @TableField(exist = false)
     private LocalDate screenDate;
     /** 感染检查结果（通知单展示，来自筛查表） */
     @TableField(exist = false)
     private String screenResult;
-    /** 预防性治疗方案（通知单展示，来自筛查表） */
+    /** 预防性治疗方案（通知单展示，来自筛查表；详情治疗方案兜底） */
     @TableField(exist = false)
     private String preventivePlan;
+    /** 治疗开始时间（详情展示：督导表优先，其次筛查预防治疗开始时间） */
+    @TableField(exist = false)
+    private LocalDate treatmentStartDate;
+    /** 治疗结束时间（详情展示：督导表优先，其次筛查预防治疗结束时间） */
+    @TableField(exist = false)
+    private LocalDate treatmentEndDate;
 
     // ===== 领药摘要（非持久化，服药管理列表填充）=====
     @TableField(exist = false)

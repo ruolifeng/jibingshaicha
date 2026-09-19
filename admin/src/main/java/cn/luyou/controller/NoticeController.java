@@ -133,9 +133,9 @@ public class NoticeController {
         return ResultRes.success(null);
     }
 
-    @Operation(summary = "修改通知单联系电话、现居住地址、户籍地址，并同步人员主表")
+    @Operation(summary = "修改通知单联系方式、地址、治疗机构、服药管理单位，并同步人员主表联系信息")
     @PostMapping("/{id}/contact")
-    @OperationLog(type = "update", module = "patient", action = "修改通知单联系方式及地址")
+    @OperationLog(type = "update", module = "patient", action = "修改通知单联系方式及机构信息")
     public ResultResponse<Void> updateContact(
             @PathVariable Long id,
             @RequestBody UpdateNoticeContactDTO dto) {

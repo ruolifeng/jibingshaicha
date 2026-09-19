@@ -21,6 +21,7 @@ import {
   updateNoticeContactApi,
   updateNoticeCultureResistanceApi
 } from "@/pages/patient-management/apis"
+import { usePatientTableHeaderFilters } from "@/pages/patient-management/composables/usePatientTableHeaderFilters"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -48,8 +49,19 @@ const pathologyTest = ref("")
 const phone = ref("")
 const currentAddress = ref("")
 const householdAddress = ref("")
+const treatmentInstitution = ref("")
+const medicationManagementUnit = ref("")
 const level3Users = ref<any[]>([])
 const receiverUserIds = ref<string[]>([])
+const { loadMedicationUnitOptions, medicationUnitSourceValues } = usePatientTableHeaderFilters(0)
+
+/** 下拉选项：distinct 结果 + 当前已填值（兼容手动录入） */
+const medicationUnitOptions = computed(() => {
+  const current = (medicationManagementUnit.value || "").trim()
+  const list = [...medicationUnitSourceValues.value]
+  if (current && !list.includes(current)) list.unshift(current)
+  return list
+})
 
 const canEditCulture = computed(() => {
   if (isPatientTransferLocked(props.patientRow) || props.patientRow?.archived === 1) return false
@@ -82,6 +94,8 @@ function resetEdit() {
   phone.value = ""
   currentAddress.value = ""
   householdAddress.value = ""
+  treatmentInstitution.value = ""
+  medicationManagementUnit.value = ""
   level3Users.value = []
   receiverUserIds.value = []
 }
@@ -124,12 +138,15 @@ async function beginEdit() {
   phone.value = noticeDetailData.value.phone || ""
   currentAddress.value = noticeDetailData.value.currentAddress || ""
   householdAddress.value = noticeDetailData.value.householdAddress || ""
+  treatmentInstitution.value = noticeDetailData.value.treatmentInstitution || ""
+  medicationManagementUnit.value = noticeDetailData.value.medicationManagementUnit || ""
   const planForm = { treatmentPlan: "", customPlanDetail: "" }
   applyPatientNoticeTreatmentPlan(planForm, noticeDetailData.value.treatmentPlan, noticeDetailData.value.customPlanDetail)
   treatmentPlan.value = planForm.treatmentPlan
   customPlanDetail.value = planForm.customPlanDetail
   receiverUserIds.value = []
   editing.value = true
+  loadMedicationUnitOptions()
   try {
     const { data } = await getNoticeDistrictLevel3UsersApi(noticeDetailData.value.id)
     level3Users.value = data ?? []
@@ -189,7 +206,9 @@ async function handleSaveCulture() {
     await updateNoticeContactApi(noticeDetailData.value.id, {
       phone: phoneVal,
       currentAddress: currentAddress.value.trim(),
-      householdAddress: householdAddress.value.trim()
+      householdAddress: householdAddress.value.trim(),
+      treatmentInstitution: treatmentInstitution.value.trim(),
+      medicationManagementUnit: medicationManagementUnit.value.trim()
     })
     await updateNoticeCultureResistanceApi(noticeDetailData.value.id, {
       sputumCulture: sputumCulture.value || "",
@@ -374,10 +393,39 @@ async function handleSaveCulture() {
         </template>
       </el-descriptions-item>
       <el-descriptions-item label="治疗机构">
-        {{ noticeDetailData.treatmentInstitution || "-" }}
+        <el-input
+          v-if="editing"
+          v-model="treatmentInstitution"
+          maxlength="200"
+          clearable
+          placeholder="请填写治疗机构"
+        />
+        <template v-else>
+          {{ noticeDetailData.treatmentInstitution || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="服药管理单位">
-        {{ noticeDetailData.medicationManagementUnit || "-" }}
+        <el-select
+          v-if="editing"
+          v-model="medicationManagementUnit"
+          placeholder="请选择或手动输入"
+          clearable
+          filterable
+          allow-create
+          default-first-option
+          style="width: 100%"
+          @visible-change="(visible: boolean) => visible && loadMedicationUnitOptions()"
+        >
+          <el-option
+            v-for="item in medicationUnitOptions"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+        <template v-else>
+          {{ noticeDetailData.medicationManagementUnit || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="下发时间">
         {{ noticeDetailData.issuedTime || "-" }}

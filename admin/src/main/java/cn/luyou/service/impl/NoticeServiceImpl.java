@@ -281,12 +281,20 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         }
         String currentAddress = StrUtil.trimToNull(dto.getCurrentAddress());
         String householdAddress = StrUtil.trimToNull(dto.getHouseholdAddress());
-        lambdaUpdate()
+        // 缺省字段不覆盖：仅当请求显式带了治疗机构/服药管理单位时才更新（空串表示清空）
+        boolean updateOrgFields = dto.getTreatmentInstitution() != null || dto.getMedicationManagementUnit() != null;
+        String treatmentInstitution = StrUtil.trimToNull(dto.getTreatmentInstitution());
+        String medicationManagementUnit = StrUtil.trimToNull(dto.getMedicationManagementUnit());
+        var updater = lambdaUpdate()
                 .eq(Notice::getId, notice.getId())
                 .set(Notice::getPhone, phone)
                 .set(Notice::getCurrentAddress, currentAddress)
-                .set(Notice::getHouseholdAddress, householdAddress)
-                .update();
+                .set(Notice::getHouseholdAddress, householdAddress);
+        if (updateOrgFields) {
+            updater.set(Notice::getTreatmentInstitution, treatmentInstitution)
+                    .set(Notice::getMedicationManagementUnit, medicationManagementUnit);
+        }
+        updater.update();
         if ("patient".equals(notice.getNoticeType())) {
             patientService.syncContactFromNotice(notice.getBizId(), phone, currentAddress, householdAddress);
         } else if ("latent".equals(notice.getNoticeType())) {

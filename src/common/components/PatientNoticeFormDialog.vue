@@ -10,7 +10,6 @@ import {
   noticeSputumCultureSelectOptions,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
-  PATIENT_OTHER_SENSITIVE_PLAN,
   PATIENT_TYPE_OPTIONS,
   resolvePatientTreatmentPlanForSave,
   TREATMENT_PLAN_OPTIONS
@@ -26,6 +25,7 @@ import {
 } from "@@/utils/patient"
 import { idCardRule } from "@@/utils/validate"
 import { getNoticeListByBizApi } from "@/pages/patient-management/apis"
+import { usePatientTableHeaderFilters } from "@/pages/patient-management/composables/usePatientTableHeaderFilters"
 import { saveNoticeDraftApi, sendNoticeApi } from "@/pages/school/latent/apis"
 import { useUserStore } from "@/pinia/stores/user"
 
@@ -43,6 +43,7 @@ const userStore = useUserStore()
 const level5Users = ref<any[]>([])
 const submitting = ref(false)
 const noticeFormRef = ref()
+const { loadMedicationUnitOptions, medicationUnitSourceValues } = usePatientTableHeaderFilters(0)
 
 const noticeFormRules = {
   idNumber: [idCardRule()],
@@ -78,6 +79,14 @@ const noticeForm = reactive({
   medicationManagementUnit: "",
   remark: "",
   receiverOrgId: undefined as string | undefined
+})
+
+/** 下拉选项：distinct 结果 + 当前已填值（兼容手动录入） */
+const medicationUnitOptions = computed(() => {
+  const current = (noticeForm.medicationManagementUnit || "").trim()
+  const list = [...medicationUnitSourceValues.value]
+  if (current && !list.includes(current)) list.unshift(current)
+  return list
 })
 
 function resolveNoticeDrugResistance(row: Record<string, any>): string {
@@ -172,7 +181,7 @@ watch(
   () => props.visible,
   async (val) => {
     if (val && props.patientRow) {
-      await loadDraftIfNeeded(props.patientRow)
+      await Promise.all([loadDraftIfNeeded(props.patientRow), loadMedicationUnitOptions()])
     }
   }
 )
@@ -423,7 +432,23 @@ async function handleSaveDraft() {
         </el-col>
       </el-row>
       <el-form-item label="服药管理单位">
-        <el-input v-model="noticeForm.medicationManagementUnit" placeholder="来自病案信息，可手动调整" />
+        <el-select
+          v-model="noticeForm.medicationManagementUnit"
+          placeholder="请选择或手动输入"
+          clearable
+          filterable
+          allow-create
+          default-first-option
+          style="width: 100%"
+          @visible-change="(visible: boolean) => visible && loadMedicationUnitOptions()"
+        >
+          <el-option
+            v-for="item in medicationUnitOptions"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item label="备注">
         <el-input v-model="noticeForm.remark" type="textarea" :rows="2" placeholder="手动填写备注信息，打印时将显示" />

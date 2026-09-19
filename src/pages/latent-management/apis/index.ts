@@ -162,11 +162,13 @@ export function updateNoticeRegistrationNoApi(noticeId: string, registrationNo: 
   })
 }
 
-/** 修改通知单联系电话、现居住地址、户籍地址（同步潜伏感染主表） */
+/** 修改通知单联系电话、现居住地址、户籍地址、治疗机构、服药管理单位（同步潜伏感染主表联系信息） */
 export function updateNoticeContactApi(noticeId: string, data: {
   phone?: string
   currentAddress?: string
   householdAddress?: string
+  treatmentInstitution?: string
+  medicationManagementUnit?: string
 }) {
   return request<ApiResponseData<null>>({
     url: `notice/${noticeId}/contact`,
