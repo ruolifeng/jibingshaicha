@@ -52,11 +52,13 @@ public class ReferralTrackingController {
             @RequestParam(required = false) String creatorOrEntryUnit,
             @RequestParam(required = false) String creatorName,
             @RequestParam(required = false) String entryUnit,
-            @RequestParam(required = false) String columnFilters) {
+            @RequestParam(required = false) String columnFilters,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder) {
         return ResultRes.success(referralTrackingService.queryPage(
                 page, size, bizMode, name, idNumber, trackingStatus, archived,
                 phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters,
-                createTimeFrom, createTimeTo, creatorName, entryUnit));
+                createTimeFrom, createTimeTo, creatorName, entryUnit, sortField, sortOrder));
     }
 
     @Operation(summary = "表头/搜索栏列去重值（录入者、录入单位等）")

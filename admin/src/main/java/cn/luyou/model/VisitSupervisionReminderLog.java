@@ -25,6 +25,6 @@ public class VisitSupervisionReminderLog extends BaseEntity {
     /** 产生下次日期的随访/督导记录 ID */
     private Long sourceId;
     private LocalDate dueDate;
-    /** 7 / 3 / 1 */
+    /** 提前天数：7 / 3 / 1 / 0（0=当天） */
     private Integer leadDays;
 }

@@ -6,6 +6,10 @@ export interface TrackingHistoryItem {
   status: number
   trackTime: string
   reason?: string
+  /** 本次填写人用户 ID（字符串，兼容雪花） */
+  operatorId?: string
+  /** 本次填写人展示名（真实姓名优先） */
+  operatorName?: string
 }
 
 export const TRACK_STATUS_LABEL: Record<number, string> = {

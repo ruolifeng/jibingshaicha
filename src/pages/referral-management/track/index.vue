@@ -6,6 +6,7 @@ import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import TrackingOperationDialog from "@@/components/TrackingOperationDialog.vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
+import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { isConfirmedPatientDiagnosis, REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
 import { EPIDEMIC_TRACK_IMPORT_FIELDS } from "@@/constants/epidemic-track-import"
 import {
@@ -127,6 +128,7 @@ const tableData = ref<any[]>([])
 const total = ref(0)
 const selectedRows = ref<any[]>([])
 const { columnFilters, setFilter, clearFilters, toQueryParam } = useServerColumnFilters()
+const { onSortChange, resetSort, toQueryParam: toSortQueryParam } = useServerTableSort()
 const genderFilterOptions = [
   { text: "男", value: "男" },
   { text: "女", value: "女" }
@@ -183,6 +185,7 @@ async function fetchList() {
   try {
     const res = await getReferralTrackingListApi({
       ...buildFilterParams(),
+      ...toSortQueryParam(),
       page: paginationData.currentPage,
       size: paginationData.pageSize
     })
@@ -192,6 +195,11 @@ async function fetchList() {
   } finally {
     loading.value = false
   }
+}
+
+function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+  onSortChange(payload)
+  fetchList()
 }
 
 onMounted(fetchList)
@@ -212,6 +220,7 @@ function handleReset() {
   searchForm.createTimeRange = []
   searchForm.trackingStatus = undefined
   clearFilters()
+  resetSort()
   handleSearch()
 }
 
@@ -1039,6 +1048,7 @@ function getRowClass({ row }: { row: any }) {
         row-key="id"
         :row-class-name="getRowClass"
         @selection-change="handleSelectionChange"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="selection" width="48" fixed />
         <el-table-column label="来源" width="130">
@@ -1183,7 +1193,7 @@ function getRowClass({ row }: { row: any }) {
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="录入时间" min-width="160">
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
           </template>

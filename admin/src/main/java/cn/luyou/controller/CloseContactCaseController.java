@@ -58,11 +58,13 @@ public class CloseContactCaseController {
             @RequestParam(required = false) String createTimeFrom,
             @RequestParam(required = false) String createTimeTo,
             @RequestParam(required = false) String columnFilters,
-            @RequestParam(required = false) String formatIssue) {
+            @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortOrder) {
         return ResultRes.success(closeContactCaseService.queryPage(
                 page, PageQueryUtil.clampSize(size), name, idNumber, district, phone, creatorUsername,
                 diagnosisResult, sourcePatientBacteriologyResult, reportQuarter, createTimeFrom, createTimeTo,
-                columnFilters, formatIssue));
+                columnFilters, formatIssue, sortField, sortOrder));
     }
 
     @Operation(summary = "新增密接个案")

@@ -25,13 +25,25 @@ public interface CloseContactCaseService extends IService<CloseContactCase> {
                                       String diagnosisResult, String sourcePatientBacteriologyResult,
                                       String reportQuarter,
                                       String createTimeFrom, String createTimeTo,
-                                      String columnFilters, String formatIssue);
+                                      String columnFilters, String formatIssue,
+                                      String sortField, String sortOrder);
+
+    default IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
+                                              String district, String phone, String creatorUsername,
+                                              String diagnosisResult, String sourcePatientBacteriologyResult,
+                                              String reportQuarter,
+                                              String createTimeFrom, String createTimeTo,
+                                              String columnFilters, String formatIssue) {
+        return queryPage(page, size, name, idNumber, district, phone, creatorUsername,
+                diagnosisResult, sourcePatientBacteriologyResult, reportQuarter,
+                createTimeFrom, createTimeTo, columnFilters, formatIssue, null, null);
+    }
 
     default IPage<CloseContactCase> queryPage(int page, int size, String name, String idNumber,
                                               String district, String phone, String creatorUsername,
                                               String diagnosisResult, String createTimeFrom, String createTimeTo) {
         return queryPage(page, size, name, idNumber, district, phone, creatorUsername,
-                diagnosisResult, null, null, createTimeFrom, createTimeTo, null, null);
+                diagnosisResult, null, null, createTimeFrom, createTimeTo, null, null, null, null);
     }
 
     void createCase(CloseContactCase data);

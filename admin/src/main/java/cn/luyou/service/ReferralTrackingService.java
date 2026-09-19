@@ -26,7 +26,21 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
                                       String dateFrom, String dateTo, String sourceType,
                                       String creatorOrEntryUnit, String columnFilters,
                                       String createTimeFrom, String createTimeTo,
-                                      String creatorName, String entryUnit);
+                                      String creatorName, String entryUnit,
+                                      String sortField, String sortOrder);
+
+    default IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
+                                              String name, String idNumber,
+                                              Integer trackingStatus, Integer archived,
+                                              String phone, String township,
+                                              String dateFrom, String dateTo, String sourceType,
+                                              String creatorOrEntryUnit, String columnFilters,
+                                              String createTimeFrom, String createTimeTo,
+                                              String creatorName, String entryUnit) {
+        return queryPage(page, size, bizMode, name, idNumber, trackingStatus, archived,
+                phone, township, dateFrom, dateTo, sourceType, creatorOrEntryUnit, columnFilters,
+                createTimeFrom, createTimeTo, creatorName, entryUnit, null, null);
+    }
 
     default IPage<ReferralTracking> queryPage(int page, int size, String bizMode,
                                               String name, String idNumber,

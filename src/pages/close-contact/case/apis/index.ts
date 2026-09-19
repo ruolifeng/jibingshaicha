@@ -54,6 +54,8 @@ export function getCloseContactCaseListApi(params: {
   createTimeFrom?: string
   createTimeTo?: string
   formatIssue?: string
+  sortField?: string
+  sortOrder?: "asc" | "desc"
 }) {
   return request<ApiResponseData<any>>({
     url: "close-contact/case/list",

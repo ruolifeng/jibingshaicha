@@ -9,6 +9,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { getLatentPopulationDisplayLabel, getPopulationTypeTagType, LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS, NOTICE_STATUS_MAP, PATHOGEN_RESULT_FILTER_OPTIONS, PATIENT_MEDICATION_STATUS_FILTER_OPTIONS, PATIENT_NOTICE_STATUS_FILTER_OPTIONS, PATIENT_VISIT_STATUS_FILTER_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PATIENT_MANUAL_IMPORT_FIELDS } from "@@/constants/patient-import"
+import { formatDateTime } from "@@/utils/datetime"
 import { downloadBlob } from "@@/utils/download"
 import { confirmDangerDelete } from "@@/utils/listToolbar"
 import { getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferPending, isRetreatmentPatient, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo, resolveTreatmentClass } from "@@/utils/patient"
@@ -839,6 +840,11 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
               {{ getPatientTransferStatusLabel(row.archiveRemark) }}
             </el-tag>
             <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
+          <template #default="{ row }">
+            {{ row.createTime ? formatDateTime(row.createTime) : "-" }}
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right">

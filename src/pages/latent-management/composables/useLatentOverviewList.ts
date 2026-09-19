@@ -15,8 +15,13 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
 
   const loading = ref(false)
   const tableData = ref<any[]>([])
+  const allRecords = ref<any[]>([])
   const total = ref(0)
   const FETCH_ALL_SIZE = 10000
+  const sortState = reactive<{ prop: string, order: "ascending" | "descending" | null }>({
+    prop: "",
+    order: null
+  })
 
   const searchForm = reactive({
     name: "",
@@ -30,6 +35,22 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     trackingStatus: undefined as number | undefined,
     medicationManagementUnit: ""
   })
+
+  function applySortAndPage() {
+    const list = [...allRecords.value]
+    if (sortState.order && sortState.prop === "createTime") {
+      const desc = sortState.order === "descending"
+      list.sort((a, b) => {
+        const ta = a.createTime ? new Date(a.createTime).getTime() : 0
+        const tb = b.createTime ? new Date(b.createTime).getTime() : 0
+        return desc ? tb - ta : ta - tb
+      })
+    }
+    const start = (paginationData.currentPage - 1) * paginationData.pageSize
+    const end = start + paginationData.pageSize
+    tableData.value = list.slice(start, end)
+    total.value = list.length
+  }
 
   async function fetchData() {
     loading.value = true
@@ -60,14 +81,17 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
       if (!params.medicationManagementUnit) delete params.medicationManagementUnit
       if (params.trackingStatus == null) delete params.trackingStatus
       const { data } = await getLatentAggregateListApi(params)
-      const records = data.records ?? []
-      const start = (paginationData.currentPage - 1) * paginationData.pageSize
-      const end = start + paginationData.pageSize
-      tableData.value = records.slice(start, end)
-      total.value = records.length
+      allRecords.value = data.records ?? []
+      applySortAndPage()
     } finally {
       loading.value = false
     }
+  }
+
+  function handleSortChange(payload: { prop?: string, order?: "ascending" | "descending" | null }) {
+    sortState.prop = payload.prop || ""
+    sortState.order = payload.order ?? null
+    applySortAndPage()
   }
 
   function handleSearch() {
@@ -86,12 +110,14 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     searchForm.formatIssue = ""
     searchForm.trackingStatus = undefined
     searchForm.medicationManagementUnit = ""
+    sortState.prop = ""
+    sortState.order = null
     clearFilters()
     handleSearch()
   }
 
   onMounted(fetchData)
-  watch([() => paginationData.currentPage, () => paginationData.pageSize], fetchData)
+  watch([() => paginationData.currentPage, () => paginationData.pageSize], applySortAndPage)
 
   return {
     paginationData,
@@ -108,6 +134,7 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
     toQueryParam,
     fetchData,
     handleSearch,
-    handleReset
+    handleReset,
+    handleSortChange
   }
 }

@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS `visit_supervision_reminder_log` (
     `biz_id`      BIGINT       NOT NULL COMMENT '患者ID或潜伏感染ID',
     `source_id`   BIGINT       DEFAULT NULL COMMENT '首次随访/后续随访/督导表记录ID',
     `due_date`    DATE         NOT NULL COMMENT '计划下次随访或督导日期',
-    `lead_days`   INT          NOT NULL COMMENT '提前天数：7/3/1',
+    `lead_days`   INT          NOT NULL COMMENT '提前天数：7/3/1/0（0=当天）',
     `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`     TINYINT      NOT NULL DEFAULT 0,

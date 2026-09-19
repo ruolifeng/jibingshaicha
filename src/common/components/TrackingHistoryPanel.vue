@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import { TRACK_STATUS_LABEL, parseTrackingHistory } from "@@/utils/referralTracking"
 import { formatDateTime } from "@@/utils/datetime"
+import { parseTrackingHistory, TRACK_STATUS_LABEL } from "@@/utils/referralTracking"
 
 const props = withDefaults(defineProps<{
   historyJson?: string
@@ -23,6 +23,9 @@ const historyList = computed(() => parseTrackingHistory(props.historyJson))
         {{ TRACK_STATUS_LABEL[item.status] }}
       </el-tag>
       <span class="tracking-history-time">{{ formatDateTime(item.trackTime) }}</span>
+      <span v-if="item.operatorName" class="tracking-history-operator">
+        填写人：{{ item.operatorName }}
+      </span>
       <span v-if="item.reason" class="tracking-history-reason">备注：{{ item.reason }}</span>
     </div>
   </div>
@@ -54,6 +57,11 @@ const historyList = computed(() => parseTrackingHistory(props.historyJson))
 
 .tracking-history-time {
   color: var(--el-text-color-secondary);
+}
+
+.tracking-history-operator {
+  color: var(--el-color-primary);
+  font-weight: 500;
 }
 
 .tracking-history-reason {

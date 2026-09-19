@@ -10,6 +10,7 @@ import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { formatSchoolBoardingTypeDisplay, formatSchoolChestMethodDisplay, formatSchoolChestResultDisplay, formatSchoolDiagnosisDisplay, formatSchoolInfectionJudgeDisplay, formatSchoolLabResultDisplay, formatSchoolScreenMethodDisplay, formatSchoolTypeDisplay, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, isSchoolSymptomNotInquired, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_SYMPTOM_OPTIONS, SCHOOL_TYPE_OPTIONS, toSchoolDiagnosisOfficial, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
+import { formatDateTime } from "@@/utils/datetime"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams } from "@@/utils/searchParams"
@@ -1026,6 +1027,11 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
+          <template #default="{ row }">
+            {{ row.createTime ? formatDateTime(row.createTime) : "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="200">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">

@@ -9,6 +9,7 @@ import { useServerTableSort } from "@@/composables/useServerTableSort"
 import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, KEY_INFECTION_JUDGE_RESULT_OPTIONS, KEY_INFECTION_SCREEN_METHOD_OPTIONS, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
+import { formatDateTime } from "@@/utils/datetime"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
 import { formatScreenResultDisplay } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
@@ -873,6 +874,11 @@ watch(
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" />
+        <el-table-column prop="createTime" label="录入时间" min-width="160" sortable="custom">
+          <template #default="{ row }">
+            {{ row.createTime ? formatDateTime(row.createTime) : "-" }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" fixed="right" min-width="200">
           <template #default="{ row }">
             <el-button type="info" link size="small" @click="viewDetail(row)">

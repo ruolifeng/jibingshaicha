@@ -96,7 +96,7 @@ defineExpose({ refresh: fetchData })
   <div class="upcoming-panel">
     <div class="section-label">
       <span class="label-bar" />随访 / 督导到期提醒
-      <span class="section-hint">展示未来 7 天内到期项；系统在提前 7/3/1 天发送站内提醒</span>
+      <span class="section-hint">展示未来 7 天内到期项；系统在提前 7/3/1 天及当天发送站内提醒</span>
     </div>
 
     <el-row v-loading="loading" :gutter="20" class="summary-cards">
