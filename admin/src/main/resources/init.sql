@@ -431,6 +431,8 @@ CREATE TABLE IF NOT EXISTS `latent_infection` (
     `phone`               VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
     `registration_no`     VARCHAR(64)  DEFAULT NULL COMMENT '登记号（来自通知单同步）',
     `infection_result`    VARCHAR(128) DEFAULT NULL COMMENT '感染筛查结果',
+    `ethnicity`             VARCHAR(32)  DEFAULT NULL COMMENT '民族',
+    `treatment_plan`        VARCHAR(256) DEFAULT NULL COMMENT '治疗方案',
     `tracking_status`     TINYINT      NOT NULL DEFAULT 0 COMMENT '追踪状态：0待追踪 1到位 2未到位 3其他 4强制结束',
     `not_in_place_count`  INT          NOT NULL DEFAULT 0 COMMENT '未到位次数',
     `tracking_remark`     TEXT         DEFAULT NULL COMMENT '追踪备注原因',
@@ -4442,3 +4444,31 @@ WHERE `archived` = 1
   AND `tracking_status` IN (0, 1, 2, 3)
   AND (`diagnosis_result` IS NULL OR `diagnosis_result` = '');
 -- end V124
+
+-- ==================== V128：潜伏感染者总览民族、治疗方案 ====================
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'ethnicity'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection`
+        ADD COLUMN `ethnicity` VARCHAR(32) DEFAULT NULL COMMENT ''民族'' AFTER `screen_method`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'latent_infection' AND COLUMN_NAME = 'treatment_plan'
+);
+SET @ddl = IF(@col_exists = 0,
+    'ALTER TABLE `latent_infection`
+        ADD COLUMN `treatment_plan` VARCHAR(256) DEFAULT NULL COMMENT ''治疗方案'' AFTER `ethnicity`',
+    'SELECT 1'
+);
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+-- end V128

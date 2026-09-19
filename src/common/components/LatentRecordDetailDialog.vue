@@ -66,6 +66,15 @@ watch(() => props.visible, (val) => {
           <el-descriptions-item label="民族">
             {{ detail.ethnicity || "-" }}
           </el-descriptions-item>
+          <el-descriptions-item label="治疗方案">
+            {{ detail.treatmentPlan || detail.preventivePlan || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="治疗开始时间">
+            {{ detail.treatmentStartDate || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="治疗结束时间">
+            {{ detail.treatmentEndDate || "-" }}
+          </el-descriptions-item>
           <el-descriptions-item label="证件号" :span="2">
             {{ detail.idNumber || "-" }}
           </el-descriptions-item>

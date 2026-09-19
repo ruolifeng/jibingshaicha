@@ -18,6 +18,9 @@ import { parseAttachmentUrls } from "@@/utils/attachment"
 import { canEditSupervisionForm, mergeSupervisionProfileFields } from "@@/utils/supervisionForm"
 import {
   getLatentDetailApi,
+  getNoticeDetailApi,
+  getNoticeListByBizApi,
+  getSupervisionDetailApi,
   getSupervisionDraftApi,
   saveSupervisionApi,
   saveSupervisionDraftApi
@@ -153,6 +156,65 @@ function parseSupervisionRecords(records?: string) {
   }
 }
 
+/** 通知单接收人展示：姓名（机构），与通知单详情一致 */
+function formatNoticeReceiverParty(notice: Record<string, any> | null | undefined): string {
+  if (!notice) return ""
+  const name = (notice.receiverName || "").trim()
+  const org = (notice.receiverOrgName || "").trim()
+  if (name && org) return `${name}（${org}）`
+  return name || org || ""
+}
+
+/** 拉取潜伏感染者通知单的接收人信息，用作督导表管理单位 */
+async function fetchNoticeReceiverParty(row: any): Promise<string> {
+  if (!row?.id) return ""
+  try {
+    if (row.noticeId) {
+      const { data } = await getNoticeDetailApi(String(row.noticeId))
+      const party = formatNoticeReceiverParty(data)
+      if (party) return party
+    }
+    const { data } = await getNoticeListByBizApi(String(row.id), "latent")
+    if (data?.length) {
+      return formatNoticeReceiverParty(data[0])
+    }
+  } catch { /* 无通知单 */ }
+  return ""
+}
+
+/** 是否开始预防性治疗：以追踪状态为准，到位(1)即为「是」 */
+function resolveHasPreventiveTreatment(row: any): string {
+  return Number(row?.trackingStatus) === 1 ? "是" : "否"
+}
+
+/** 拉取上一份已提交/已归档督导表的治疗方案与开始时间 */
+async function fetchPreviousTreatmentFields(latentInfectionId: string) {
+  try {
+    const { data } = await getSupervisionDetailApi(latentInfectionId)
+    if (!data) return null
+    return {
+      treatmentPlan: data.treatmentPlan as string | undefined,
+      treatmentStartDate: formatDateValue(data.treatmentStartDate)
+    }
+  } catch {
+    return null
+  }
+}
+
+/** 用上一份督导表回填治疗方案、治疗开始时间（onlyIfEmpty 时不覆盖已有值） */
+function applyPreviousTreatmentFields(
+  previous: { treatmentPlan?: string, treatmentStartDate?: string } | null,
+  onlyIfEmpty = true
+) {
+  if (!previous) return
+  if (previous.treatmentPlan && (!onlyIfEmpty || !supervisionForm.treatmentPlan)) {
+    parseTreatmentPlan(previous.treatmentPlan)
+  }
+  if (previous.treatmentStartDate && (!onlyIfEmpty || !supervisionForm.treatmentStartDate)) {
+    supervisionForm.treatmentStartDate = previous.treatmentStartDate
+  }
+}
+
 function resetFormFromRow(row: any) {
   draftId.value = undefined
   recordCreateTime.value = null
@@ -166,16 +228,14 @@ function resetFormFromRow(row: any) {
   supervisionForm.idNumber = row.idNumber || ""
   supervisionForm.birthDate = formatDateValue(row.birthDate)
   supervisionForm.ethnicity = row.ethnicity || ""
-  supervisionForm.hasPreventiveTreatment = ""
+  supervisionForm.hasPreventiveTreatment = resolveHasPreventiveTreatment(row)
   supervisionForm.treatmentStartDate = ""
   supervisionForm.treatmentEndDate = ""
   supervisionForm.nextSupervisionDate = ""
   supervisionForm.treatmentPlan = ""
   supervisionForm.customPlanDetail = ""
+  // 管理单位优先后续从通知单接收人回填，此处仅用档案已有值
   supervisionForm.managingUnit = row.managingUnit || row.preventiveManager || ""
-  if (!supervisionForm.managingUnit.trim()) {
-    supervisionForm.managingUnit = (userStore.orgName || userStore.departmentName || "").trim()
-  }
   supervisionForm.supervisingDoctor = row.supervisingDoctor || ""
   supervisionForm.supervisionRecords = [createEmptyRecord()]
   supervisionForm.treatmentCompletionStatus = ""
@@ -242,14 +302,32 @@ async function loadDraft() {
     const { data } = await getSupervisionDraftApi(props.latentRow.id)
     if (data) {
       applyFormData(data, profile)
+      // 草稿回填后仍以当前追踪状态为准
+      supervisionForm.hasPreventiveTreatment = resolveHasPreventiveTreatment(profile)
     }
   } catch { /* 无草稿 */ }
+  // 治疗方案/开始时间取上一份督导表；管理单位取通知单接收人
+  const [previous, noticeReceiver] = await Promise.all([
+    fetchPreviousTreatmentFields(props.latentRow.id),
+    fetchNoticeReceiverParty({ ...profile, noticeId: profile.noticeId || props.latentRow.noticeId })
+  ])
+  applyPreviousTreatmentFields(previous, true)
+  // 草稿已手改管理单位则保留；空或仍是本机构默认值时，用通知单接收人
+  const draftUnit = supervisionForm.managingUnit.trim()
+  const selfOrg = (userStore.orgName || userStore.departmentName || "").trim()
+  if (noticeReceiver && (!draftUnit || draftUnit === selfOrg)) {
+    supervisionForm.managingUnit = noticeReceiver
+  } else if (!draftUnit) {
+    supervisionForm.managingUnit = selfOrg
+  }
 }
 
 async function loadInitialData() {
   if (!props.initialData || !props.latentRow) return
   const profile = await resolveLatentProfile(props.latentRow)
   applyFormData(props.initialData, profile)
+  // 修改时仍以当前追踪状态为准
+  supervisionForm.hasPreventiveTreatment = resolveHasPreventiveTreatment(profile)
 }
 
 async function initForm() {
@@ -579,9 +657,11 @@ async function handleArchive() {
           <el-form-item label="管理单位">
             <el-select
               v-model="supervisionForm.managingUnit"
-              placeholder="请选择管理单位"
+              placeholder="请选择或手动输入"
               clearable
               filterable
+              allow-create
+              default-first-option
               :loading="orgOptionsLoading"
               style="width: 100%"
             >

@@ -9,6 +9,7 @@ import {
   LATENT_CLOSE_CONTACT_TYPE_OPTIONS,
   LATENT_KEY_POPULATION_SUB_CATEGORY_OPTIONS,
   LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
+  LATENT_TREATMENT_PLAN_OPTIONS,
   SCHOOL_SCREEN_METHOD_OPTIONS
 } from "@@/constants/disease"
 import { formatDateTime } from "@@/utils/datetime"
@@ -70,6 +71,8 @@ const form = reactive({
   idNumber: "",
   phone: "",
   phoneContactRelation: "",
+  ethnicity: "",
+  treatmentPlan: "",
   householdAddress: "",
   currentAddress: "",
   infectionScreenDate: "",
@@ -123,6 +126,8 @@ function resetForm() {
     idNumber: "",
     phone: "",
     phoneContactRelation: "",
+    ethnicity: "",
+    treatmentPlan: "",
     householdAddress: "",
     currentAddress: "",
     infectionScreenDate: "",
@@ -194,6 +199,8 @@ async function loadDetail() {
       idNumber: data.idNumber || "",
       phone: data.phone || "",
       phoneContactRelation: data.phoneContactRelation || "",
+      ethnicity: data.ethnicity || "",
+      treatmentPlan: data.treatmentPlan || data.preventivePlan || "",
       householdAddress: data.householdAddress || "",
       currentAddress: data.currentAddress || "",
       infectionScreenDate: data.infectionScreenDate || data.screenDate || "",
@@ -374,6 +381,31 @@ async function handleSubmit() {
         <el-col :span="12">
           <el-form-item label="与联系人关系">
             <el-input v-model="form.phoneContactRelation" placeholder="如：本人、母亲" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="民族">
+            <el-input v-model="form.ethnicity" placeholder="如：汉族" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="治疗方案">
+            <el-select
+              v-model="form.treatmentPlan"
+              placeholder="请选择"
+              clearable
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in LATENT_TREATMENT_PLAN_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col v-if="showCrowdCategoryFields" :span="12">

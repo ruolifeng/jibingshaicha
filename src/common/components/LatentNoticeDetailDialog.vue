@@ -10,6 +10,7 @@ import {
   updateNoticeContactApi,
   updateNoticeRegistrationNoApi
 } from "@/pages/latent-management/apis"
+import { useLatentTableHeaderFilters } from "@/pages/latent-management/composables/useLatentTableHeaderFilters"
 import { useUserStore } from "@/pinia/stores/user"
 
 const props = defineProps<{
@@ -31,6 +32,19 @@ const registrationNo = ref("")
 const phone = ref("")
 const currentAddress = ref("")
 const householdAddress = ref("")
+const treatmentInstitution = ref("")
+const medicationManagementUnit = ref("")
+const { loadMedicationUnitOptions, medicationUnitSourceValues } = useLatentTableHeaderFilters(
+  () => props.latentRow?.populationType
+)
+
+/** 下拉选项：distinct 结果 + 当前已填值（兼容手动录入） */
+const medicationUnitOptions = computed(() => {
+  const current = (medicationManagementUnit.value || "").trim()
+  const list = [...medicationUnitSourceValues.value]
+  if (current && !list.includes(current)) list.unshift(current)
+  return list
+})
 
 /** 待确认/已确认且未转出：可改联系电话与地址 */
 const canEditContact = computed(() => {
@@ -55,6 +69,8 @@ function resetEdit() {
   phone.value = ""
   currentAddress.value = ""
   householdAddress.value = ""
+  treatmentInstitution.value = ""
+  medicationManagementUnit.value = ""
 }
 
 async function loadNotice() {
@@ -85,7 +101,10 @@ function beginEdit() {
   phone.value = noticeDetailData.value.phone || ""
   currentAddress.value = noticeDetailData.value.currentAddress || ""
   householdAddress.value = noticeDetailData.value.householdAddress || ""
+  treatmentInstitution.value = noticeDetailData.value.treatmentInstitution || ""
+  medicationManagementUnit.value = noticeDetailData.value.medicationManagementUnit || ""
   editing.value = true
+  loadMedicationUnitOptions()
 }
 
 watch(
@@ -122,7 +141,9 @@ async function handleSaveEdit() {
       await updateNoticeContactApi(noticeDetailData.value.id, {
         phone: phoneVal,
         currentAddress: currentAddress.value.trim(),
-        householdAddress: householdAddress.value.trim()
+        householdAddress: householdAddress.value.trim(),
+        treatmentInstitution: treatmentInstitution.value.trim(),
+        medicationManagementUnit: medicationManagementUnit.value.trim()
       })
     }
     if (canEditRegistrationNo.value) {
@@ -232,10 +253,39 @@ async function handleSaveEdit() {
         {{ normalizeLatentTreatmentPlan(noticeDetailData.treatmentPlan) || "-" }}
       </el-descriptions-item>
       <el-descriptions-item label="治疗机构">
-        {{ noticeDetailData.treatmentInstitution || "-" }}
+        <el-input
+          v-if="editing && canEditContact"
+          v-model="treatmentInstitution"
+          maxlength="200"
+          clearable
+          placeholder="请填写治疗机构"
+        />
+        <template v-else>
+          {{ noticeDetailData.treatmentInstitution || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="服药管理单位">
-        {{ noticeDetailData.medicationManagementUnit || "-" }}
+        <el-select
+          v-if="editing && canEditContact"
+          v-model="medicationManagementUnit"
+          placeholder="请选择或手动输入"
+          clearable
+          filterable
+          allow-create
+          default-first-option
+          style="width: 100%"
+          @visible-change="(visible: boolean) => visible && loadMedicationUnitOptions()"
+        >
+          <el-option
+            v-for="item in medicationUnitOptions"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+        <template v-else>
+          {{ noticeDetailData.medicationManagementUnit || "-" }}
+        </template>
       </el-descriptions-item>
       <el-descriptions-item label="下发时间">
         {{ noticeDetailData.issuedTime || "-" }}
