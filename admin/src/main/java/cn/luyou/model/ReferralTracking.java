@@ -88,6 +88,12 @@ public class ReferralTracking extends BaseEntity {
     private Integer jointTracking;
     /** 开启共同追踪时间 */
     private LocalDateTime jointTrackingTime;
+    /** 允许编辑共同追踪过程的角色（逗号分隔，如 5 / 6 / 5,6） */
+    private String jointTrackingEditRoles;
+    /** 共同追踪编辑授权时间 */
+    private LocalDateTime jointTrackingEditTime;
+    /** 共同追踪编辑授权人用户ID */
+    private Long jointTrackingEditBy;
     /**
      * 大疫情跨镇导入确认：0无需 1待区县三级确认 2已确认 3已拒绝。
      * 独立于 recommendStatus，避免确认后被剔出追踪列表。
@@ -121,7 +127,7 @@ public class ReferralTracking extends BaseEntity {
     private String symptomsJson;
 
     // ===== 诊断 =====
-    /** 诊断结果：排除 / 正常 / 疑似结核 / 确诊结核 / 潜伏感染者 / 在治患者（兼容历史：确诊患者 / 其他） */
+    /** 诊断结果：排除 / 正常 / 疑似结核 / 确诊结核 / 潜伏感染者 / 在治患者 / 拒绝 / 陈旧性结核（兼容历史：确诊患者 / 其他） */
     private String diagnosisResult;
     /** 诊断结果选择其他时的补充说明 */
     private String diagnosisRemark;

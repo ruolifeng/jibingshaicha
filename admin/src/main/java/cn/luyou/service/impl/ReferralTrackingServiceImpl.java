@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -969,45 +970,53 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         }
         if (getStr(params, "epidemicRemark") != null) record.setEpidemicRemark(getStr(params, "epidemicRemark"));
 
-        // 诊断结果修正（仅更新展示字段，不重新触发分流）
+        // 诊断结果修正（仅更新展示字段，不重新触发分流；允许清空）
         boolean clearDiagnosisRemark = false;
+        boolean clearDiagnosisResult = false;
         if (params.containsKey("diagnosisResult")) {
             String diagnosisResult = getStr(params, "diagnosisResult");
             String diagnosisRemark = getStr(params, "diagnosisRemark");
-            if (StrUtil.isBlank(diagnosisResult)) {
-                throw new ServiceException(StatusEnum.PARAM_INVALID, "诊断结果不能为空");
-            }
-            validateReferralDiagnosisResult(diagnosisResult, diagnosisRemark);
             if (StrUtil.isBlank(record.getDiagnosisResult())) {
                 throw new ServiceException(StatusEnum.PARAM_INVALID, "首次录入诊断请使用「录入诊断」功能");
             }
-            record.setDiagnosisResult(diagnosisResult);
-            if ("其他".equals(diagnosisResult)) {
-                record.setDiagnosisRemark(diagnosisRemark.trim());
-            } else {
+            if (StrUtil.isBlank(diagnosisResult)) {
+                record.setDiagnosisResult(null);
                 record.setDiagnosisRemark(null);
+                clearDiagnosisResult = true;
                 clearDiagnosisRemark = true;
+            } else {
+                validateReferralDiagnosisResult(diagnosisResult, diagnosisRemark);
+                record.setDiagnosisResult(diagnosisResult);
+                if ("其他".equals(diagnosisResult)) {
+                    record.setDiagnosisRemark(diagnosisRemark.trim());
+                } else {
+                    record.setDiagnosisRemark(null);
+                    clearDiagnosisRemark = true;
+                }
             }
         }
 
         // 追踪过程修正：按 attempt 回写 status/reason，并同步主表追踪状态
         boolean hasTrackingHistoryUpdate = params.containsKey("trackingHistory");
         if (hasTrackingHistoryUpdate) {
+            assertCanEditJointTrackingHistory(record);
             applyTrackingHistoryRemarkUpdates(record, params.get("trackingHistory"));
         }
 
         if ("recommend".equals(record.getBizMode())) {
             boolean archived = Integer.valueOf(1).equals(record.getArchived());
-            // 已归档仅允许修正追踪过程；推介/追踪各状态均可编辑基本信息与推介字段
+            // 已归档允许修正追踪过程或诊断展示字段
             if (archived) {
-                if (!hasTrackingHistoryUpdate) {
+                boolean hasDiagnosisUpdate = params.containsKey("diagnosisResult");
+                if (!hasTrackingHistoryUpdate && !hasDiagnosisUpdate) {
                     throw new ServiceException(StatusEnum.PARAM_INVALID, "已归档记录不可编辑");
                 }
                 updateById(record);
-                if (clearDiagnosisRemark) {
+                if (clearDiagnosisResult || clearDiagnosisRemark) {
                     lambdaUpdate()
                             .eq(ReferralTracking::getId, id)
-                            .set(ReferralTracking::getDiagnosisRemark, null)
+                            .set(clearDiagnosisResult, ReferralTracking::getDiagnosisResult, null)
+                            .set(clearDiagnosisRemark, ReferralTracking::getDiagnosisRemark, null)
                             .update();
                 }
                 return;
@@ -1044,11 +1053,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             }
         }
         updateById(record);
-        // updateById 默认忽略 null，切换「其他」以外结果时需显式清空诊断备注
-        if (clearDiagnosisRemark) {
+        // updateById 默认忽略 null，清空诊断或切换非「其他」时需显式置空
+        if (clearDiagnosisResult || clearDiagnosisRemark) {
             lambdaUpdate()
                     .eq(ReferralTracking::getId, id)
-                    .set(ReferralTracking::getDiagnosisRemark, null)
+                    .set(clearDiagnosisResult, ReferralTracking::getDiagnosisResult, null)
+                    .set(clearDiagnosisRemark, ReferralTracking::getDiagnosisRemark, null)
                     .update();
         }
     }
@@ -1285,6 +1295,51 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                     "referral_tracking_joint", id);
         }
         log.info("共同追踪已开启，recordId={}", id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void enableJointTrackingEdit(Long id, List<Integer> roles) {
+        ReferralTracking record = getAndCheckExist(id);
+        if (!isConfirmedRecommend(record)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅已确认接收的推介可授权编辑共同追踪");
+        }
+        if (!Integer.valueOf(1).equals(record.getJointTracking())) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请先开启共同追踪后再授权编辑");
+        }
+        assertCanGrantJointTrackingEdit(record);
+
+        List<Integer> normalized = normalizeJointTrackingEditRoles(roles);
+        if (normalized.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请至少选择四级或五级用户开放编辑权限");
+        }
+        String rolesCsv = normalized.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+        Long currentId = BaseContext.getCurrentId();
+        lambdaUpdate()
+                .eq(ReferralTracking::getId, id)
+                .set(ReferralTracking::getJointTrackingEditRoles, rolesCsv)
+                .set(ReferralTracking::getJointTrackingEditTime, LocalDateTime.now())
+                .set(ReferralTracking::getJointTrackingEditBy, currentId)
+                .update();
+
+        String roleLabels = formatJointTrackingEditRoleLabels(normalized);
+        Long notifyUserId = null;
+        if (currentId != null && currentId.equals(record.getReceiverUserId())) {
+            notifyUserId = record.getCreatorId();
+        } else if (currentId != null && currentId.equals(record.getCreatorId())) {
+            notifyUserId = record.getReceiverUserId();
+        } else if (record.getCreatorId() != null) {
+            notifyUserId = record.getCreatorId();
+        }
+        if (notifyUserId != null && !notifyUserId.equals(currentId)) {
+            String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
+            sysMessageService.sendMessage(notifyUserId, "共同追踪编辑已开放",
+                    String.format("「%s」的共同追踪过程已向参与管理的%s用户开放编辑权限。", name, roleLabels),
+                    "referral_tracking_joint_edit", id);
+        }
+        log.info("共同追踪编辑已授权，recordId={}, roles={}", id, rolesCsv);
     }
 
     @Override
@@ -1554,6 +1609,15 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 && StrUtil.isNotBlank(record.getDiagnosisResult())) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该记录已归档，无法修改诊断结果");
         }
+        // 曾诊断结案后又在编辑中清空展示：禁止再次「录入诊断」，避免重复分流
+        if (record.getArchived() != null && record.getArchived() == 1
+                && StrUtil.isBlank(record.getDiagnosisResult())
+                && (record.getDiagnosisTime() != null
+                || record.getTargetLatentId() != null
+                || record.getTargetPatientId() != null)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "该记录已结案归档，诊断结果仅可在编辑中修改展示，不可再次录入诊断");
+        }
         checkTrackOperatorOrCreator(record);
 
         lambdaUpdate()
@@ -1570,9 +1634,9 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     /** 推介/追踪诊断结果合法值校验 */
     private void validateReferralDiagnosisResult(String diagnosisResult, String diagnosisRemark) {
         if (!Set.of("排除", "正常", "疑似结核", "确诊结核", "潜伏感染者", "在治患者",
-                "确诊患者", "其他").contains(diagnosisResult)) {
+                "拒绝", "陈旧性结核", "确诊患者", "其他").contains(diagnosisResult)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "无效的诊断结果，有效值：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
+                    "无效的诊断结果，有效值：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者/拒绝/陈旧性结核");
         }
         if ("其他".equals(diagnosisResult) && StrUtil.isBlank(diagnosisRemark)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "选择其他时请填写备注");
@@ -1583,7 +1647,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
     private void applyDiagnosisRouting(Long id, String diagnosisResult) {
         ReferralTracking updated = getById(id);
         switch (diagnosisResult) {
-            case "排除", "正常", "疑似结核", "其他" -> {
+            case "排除", "正常", "疑似结核", "拒绝", "陈旧性结核", "其他" -> {
                 archiveTrackingDiagnosis(id);
                 log.info("推介追踪诊断归档（{}），recordId={}", diagnosisResult, id);
             }
@@ -1601,7 +1665,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 log.info("推介追踪潜伏感染者，已创建潜伏记录 latentId={}，recordId={}", latentId, id);
             }
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID,
-                    "无效的诊断结果，有效值：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
+                    "无效的诊断结果，有效值：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者/拒绝/陈旧性结核");
         }
     }
 
@@ -1750,6 +1814,105 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return;
         }
         throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介发起方、接收方或四级用户可开启共同追踪");
+    }
+
+    /**
+     * 同意编辑共同追踪：超管或三级以上（role=1~4），
+     * 且为发起/接收方或同辖区可访问该记录的用户。
+     */
+    private void assertCanGrantJointTrackingEdit(ReferralTracking record) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role == null || role < 1 || role > 4) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "仅三级以上用户可开放共同追踪编辑权限");
+        }
+        Long userId = BaseContext.getCurrentId();
+        if (userId != null && userId.equals(record.getReceiverUserId())) {
+            return;
+        }
+        if (userId != null && userId.equals(record.getCreatorId())) {
+            return;
+        }
+        if (userId != null && canAccessViaDepartmentScope(record, userId)) {
+            return;
+        }
+        throw new ServiceException(StatusEnum.PARAM_INVALID, "无权对该记录开放共同追踪编辑权限");
+    }
+
+    /** 规范化授权角色：仅保留四级(5)、五级(6)，去重并排序 */
+    private List<Integer> normalizeJointTrackingEditRoles(List<Integer> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        return roles.stream()
+                .filter(Objects::nonNull)
+                .filter(r -> r == 5 || r == 6)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
+    private String formatJointTrackingEditRoleLabels(List<Integer> roles) {
+        List<String> labels = new ArrayList<>();
+        if (roles != null) {
+            if (roles.contains(5)) {
+                labels.add("四级");
+            }
+            if (roles.contains(6)) {
+                labels.add("五级");
+            }
+        }
+        return String.join("、", labels);
+    }
+
+    /** 解析已授权编辑的角色集合 */
+    private Set<Integer> parseJointTrackingEditRoles(String rolesCsv) {
+        if (StrUtil.isBlank(rolesCsv)) {
+            return Set.of();
+        }
+        Set<Integer> result = new LinkedHashSet<>();
+        for (String part : rolesCsv.split(",")) {
+            if (StrUtil.isBlank(part)) {
+                continue;
+            }
+            try {
+                int role = Integer.parseInt(part.trim());
+                if (role == 5 || role == 6) {
+                    result.add(role);
+                }
+            } catch (Exception ignored) {
+                // skip invalid
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 共同追踪过程是否可修正：
+     * - 未开共同追踪：参与方即可（由上层校验）
+     * - 已开共同追踪：须已授权，且当前用户为三级以上(1~4)或授权角色中的四/五级
+     */
+    private void assertCanEditJointTrackingHistory(ReferralTracking record) {
+        if (!Integer.valueOf(1).equals(record.getJointTracking())) {
+            return;
+        }
+        Set<Integer> granted = parseJointTrackingEditRoles(record.getJointTrackingEditRoles());
+        if (granted.isEmpty()) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "共同追踪过程仅可查看，尚未开放编辑权限");
+        }
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Integer role = BaseContext.getCurrentRole();
+        if (role != null && role >= 1 && role <= 4) {
+            return;
+        }
+        if (role != null && granted.contains(role)) {
+            return;
+        }
+        throw new ServiceException(StatusEnum.PARAM_INVALID, "无权编辑共同追踪过程，请联系三级以上用户开放权限");
     }
 
     /** 三/四/五级：role=4/5/6 */

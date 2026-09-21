@@ -1,6 +1,12 @@
 <script lang="ts" setup>
 import PrintNotice from "@@/components/PrintNotice.vue"
-import { displayInfectionJudgeResult, normalizeLatentTreatmentPlan, NOTICE_STATUS_MAP } from "@@/constants/disease"
+import {
+  displayInfectionJudgeResult,
+  mergeLatentMedicationUnitOptions,
+  normalizeLatentMedicationManagementUnit,
+  normalizeLatentTreatmentPlan,
+  NOTICE_STATUS_MAP
+} from "@@/constants/disease"
 import { isLatentTransferLocked } from "@@/utils/latent"
 import { validatePhone } from "@@/utils/validate"
 import {
@@ -38,13 +44,10 @@ const { loadMedicationUnitOptions, medicationUnitSourceValues } = useLatentTable
   () => props.latentRow?.populationType
 )
 
-/** 下拉选项：distinct 结果 + 当前已填值（兼容手动录入） */
-const medicationUnitOptions = computed(() => {
-  const current = (medicationManagementUnit.value || "").trim()
-  const list = [...medicationUnitSourceValues.value]
-  if (current && !list.includes(current)) list.unshift(current)
-  return list
-})
+/** 下拉选项：预设机构 + distinct 结果 + 当前已填值（兼容手动录入） */
+const medicationUnitOptions = computed(() =>
+  mergeLatentMedicationUnitOptions(medicationUnitSourceValues.value, medicationManagementUnit.value)
+)
 
 /** 待确认/已确认且未转出：可改联系电话与地址 */
 const canEditContact = computed(() => {
@@ -102,7 +105,9 @@ function beginEdit() {
   currentAddress.value = noticeDetailData.value.currentAddress || ""
   householdAddress.value = noticeDetailData.value.householdAddress || ""
   treatmentInstitution.value = noticeDetailData.value.treatmentInstitution || ""
-  medicationManagementUnit.value = noticeDetailData.value.medicationManagementUnit || ""
+  medicationManagementUnit.value = normalizeLatentMedicationManagementUnit(
+    noticeDetailData.value.medicationManagementUnit
+  )
   editing.value = true
   loadMedicationUnitOptions()
 }
@@ -143,7 +148,7 @@ async function handleSaveEdit() {
         currentAddress: currentAddress.value.trim(),
         householdAddress: householdAddress.value.trim(),
         treatmentInstitution: treatmentInstitution.value.trim(),
-        medicationManagementUnit: medicationManagementUnit.value.trim()
+        medicationManagementUnit: normalizeLatentMedicationManagementUnit(medicationManagementUnit.value)
       })
     }
     if (canEditRegistrationNo.value) {

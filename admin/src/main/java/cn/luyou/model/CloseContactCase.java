@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 /**
- * 密接个案表（电子表格，72列官方模板与密接筛查表一致，独立存储不含流程状态）
+ * 密接个案表（电子表格，73列官方模板与密接筛查表一致，独立存储不含流程状态）
  */
 @Data
 @Builder
@@ -324,6 +324,11 @@ public class CloseContactCase extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
+    /** 患者传报卡编号（Excel 备注后一列） */
+    @ExcelProperty(index = 72, converter = ExcelTextStringConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String sourcePatientReportCardNo;
+
     @ExcelIgnore
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String uploadBatch;
@@ -361,7 +366,7 @@ public class CloseContactCase extends BaseEntity {
     private Long creatorId;
 
     /** 录入用户名（系统账号统一命名格式；导出末尾追加列，导入模板不含） */
-    @ExcelProperty(index = 72)
+    @ExcelProperty(index = 73)
     private String creatorUsername;
 
     /** 预防性治疗三字段是否已从历史患者最近一次督导表同步（非持久化，详情/编辑展示） */

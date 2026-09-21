@@ -6,8 +6,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 密接个案表 / 密接筛查 72 列 Excel 表头（官方模板，已移除原患者身份证号列）。
- * <p>导入模板 72 列；导出在末尾追加「录入用户」共 73 列（官方列序不变，避免再导入列错位）。
+ * 密接个案表 / 密接筛查 Excel 表头（官方模板，已移除原患者身份证号列；备注后含患者传报卡编号）。
+ * <p>导入模板 73 列；导出在末尾追加「录入用户」共 74 列。
  */
 public final class CloseContactCaseExcelHeaders {
 
@@ -86,7 +86,8 @@ public final class CloseContactCaseExcelHeaders {
             "24月随访-病原学检查方法",
             "24月随访-病原学检查结果",
             "24月随访-筛查结果",
-            "备注"
+            "备注",
+            "患者传报卡编号"
     ));
 
     /** 导入模板表头（不含录入用户） */
@@ -94,7 +95,7 @@ public final class CloseContactCaseExcelHeaders {
         return asEasyExcelHead();
     }
 
-    /** 导出表头：官方 72 列不变，末尾追加录入用户 */
+    /** 导出表头：官方列序不变，末尾追加录入用户 */
     public static List<List<String>> asExportHead() {
         List<List<String>> heads = new ArrayList<>(asEasyExcelHead());
         heads.add(List.of("录入用户"));

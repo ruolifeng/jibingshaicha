@@ -2,8 +2,10 @@ import type { Ref } from "vue"
 import { useColumnDistinct } from "@@/composables/useColumnDistinct"
 import {
   KEY_INFECTION_JUDGE_RESULT_OPTIONS,
-  LATENT_MANUAL_POPULATION_TYPE_OPTIONS
+  LATENT_MANUAL_POPULATION_TYPE_OPTIONS,
+  mergeLatentMedicationUnitOptions
 } from "@@/constants/disease"
+import { computed } from "vue"
 import { getLatentColumnDistinctApi } from "../apis"
 
 /** 潜伏感染者列表页共用的表头筛选选项 / distinct 加载 */
@@ -33,6 +35,12 @@ export function useLatentTableHeaderFilters(populationType?: Ref<string> | (() =
     return Array.isArray(data) ? data : []
   })
 
+  const rawMedicationUnitSourceValues = sourceValues("medicationManagementUnit")
+  /** 含预设机构，并对「富顺县*」做名称归一 */
+  const medicationUnitSourceValues = computed(() =>
+    mergeLatentMedicationUnitOptions(rawMedicationUnitSourceValues.value)
+  )
+
   return {
     genderFilterOptions,
     populationTypeFilterOptions,
@@ -44,7 +52,7 @@ export function useLatentTableHeaderFilters(populationType?: Ref<string> | (() =
     genderSourceValues: sourceValues("gender"),
     populationTypeSourceValues: sourceValues("populationType"),
     infectionResultSourceValues: sourceValues("infectionResult"),
-    medicationUnitSourceValues: sourceValues("medicationManagementUnit"),
+    medicationUnitSourceValues,
     clearDistinctCache: clearCache
   }
 }

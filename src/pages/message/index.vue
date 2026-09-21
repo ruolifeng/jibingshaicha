@@ -53,6 +53,7 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   referral_tracking_confirmed: "推介已接收",
   referral_tracking_rejected: "推介已被拒绝",
   referral_tracking_joint: "共同追踪已开启",
+  referral_tracking_joint_edit: "共同追踪编辑已开放",
   epidemic_cross_town_receive: "待确认跨镇导入",
   epidemic_cross_town_confirmed: "跨镇导入已确认",
   epidemic_cross_town_rejected: "跨镇导入已拒绝",
@@ -75,6 +76,7 @@ function getMessageTypeTagType(type: string) {
   if (type === "referral_tracking_confirmed") return "success"
   if (type === "referral_tracking_rejected") return "danger"
   if (type === "referral_tracking_joint") return "success"
+  if (type === "referral_tracking_joint_edit") return "success"
   if (type === "epidemic_cross_town_receive") return "warning"
   if (type === "epidemic_cross_town_confirmed") return "success"
   if (type === "epidemic_cross_town_rejected") return "danger"
@@ -564,7 +566,7 @@ const activeTab = ref("received")
             <el-pagination
               v-model:current-page="paginationData.currentPage"
               v-model:page-size="paginationData.pageSize"
-              :page-sizes="paginationData.pageSizes"
+              :page-sizes="[10, 20, 50]"
               :total="total"
               layout="total, sizes, prev, pager, next, jumper"
               @current-change="handleCurrentChange"
@@ -625,7 +627,7 @@ const activeTab = ref("received")
             <el-pagination
               v-model:current-page="sentPagination.currentPage"
               v-model:page-size="sentPagination.pageSize"
-              :page-sizes="sentPagination.pageSizes"
+              :page-sizes="[10, 20, 50]"
               :total="sentTotal"
               layout="total, sizes, prev, pager, next, jumper"
               @current-change="sentHandleCurrentChange"
@@ -692,7 +694,7 @@ const activeTab = ref("received")
             <el-pagination
               v-model:current-page="referralPagination.currentPage"
               v-model:page-size="referralPagination.pageSize"
-              :page-sizes="referralPagination.pageSizes"
+              :page-sizes="[10, 20, 50]"
               :total="referralTotal"
               layout="total, sizes, prev, pager, next, jumper"
               @current-change="referralHandleCurrentChange"

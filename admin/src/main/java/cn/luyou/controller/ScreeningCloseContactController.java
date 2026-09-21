@@ -31,7 +31,7 @@ public class ScreeningCloseContactController {
 
     private final ScreeningCloseContactService screeningCloseContactService;
 
-    @Operation(summary = "上传密接人群筛查Excel（72列官方模板）")
+    @Operation(summary = "上传密接人群筛查Excel（官方模板，含患者传报卡编号）")
     @PostMapping("/upload")
     @OperationLog(type = "import", module = "screening", action = "上传密接人群筛查Excel")
     public ResultResponse<ImportResult> upload(

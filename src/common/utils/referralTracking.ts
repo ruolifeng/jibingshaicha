@@ -73,11 +73,23 @@ export function canShowContinueTrackButton(
 
 /** 到位后且尚未诊断：可分别录入诊断、感染检测与胸片 */
 export function canShowArrivalFollowupButtons(
-  row: { trackingStatus?: unknown, archived?: unknown, diagnosisResult?: unknown }
+  row: {
+    trackingStatus?: unknown
+    archived?: unknown
+    diagnosisResult?: unknown
+    diagnosisTime?: unknown
+    targetLatentId?: unknown
+    targetPatientId?: unknown
+  }
 ): boolean {
   if (toTrackingStatus(row.trackingStatus) !== 1) return false
   const diagnosis = row.diagnosisResult
   if (diagnosis !== null && diagnosis !== undefined && diagnosis !== "") return false
+  // 曾诊断结案后又清空展示：不允许再走「录入诊断」，避免重复分流
+  if (Number(row.archived) === 1
+    && (row.diagnosisTime || row.targetLatentId || row.targetPatientId)) {
+    return false
+  }
   // 到位未诊断时即使误归档也允许补录
   return true
 }

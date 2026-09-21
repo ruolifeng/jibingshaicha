@@ -88,7 +88,9 @@ export const REFERRAL_TRACKING_DIAGNOSIS_OPTIONS = [
   { label: SUSPECTED_TB_DIAGNOSIS, value: SUSPECTED_TB_DIAGNOSIS },
   { label: "确诊结核", value: "确诊结核" },
   { label: "潜伏感染者", value: "潜伏感染者" },
-  { label: "在治患者", value: "在治患者" }
+  { label: "在治患者", value: "在治患者" },
+  { label: "拒绝", value: "拒绝" },
+  { label: "陈旧性结核", value: "陈旧性结核" }
 ] as const
 
 /** 推介追踪诊断结果：是否为标红结案类（不进患者管理） */
@@ -430,6 +432,54 @@ export const LATENT_TREATMENT_PLAN_OPTIONS = [
 
 /** @deprecated 请使用 LATENT_TREATMENT_PLAN_OPTIONS */
 export const LATENT_TREATMENT_OPTIONS = LATENT_TREATMENT_PLAN_OPTIONS
+
+/**
+ * 潜伏感染者通知单 — 服药管理单位预设（始终出现在下拉中）。
+ * 含业务要求新增机构，以及去掉「富顺县」前缀后的代寺/童寺/邓关。
+ */
+export const LATENT_MEDICATION_MANAGEMENT_UNIT_PRESETS = [
+  "板桥镇中心卫生院",
+  "赵化镇中心卫生院",
+  "骑龙镇卫生院",
+  "龙万乡卫生院",
+  "安溪镇卫生院",
+  "飞龙镇卫生院",
+  "长滩镇卫生院",
+  "古佛镇卫生院",
+  "李桥镇卫生院",
+  "琵琶镇卫生院",
+  "富世街道社区卫生服务中心",
+  "代寺镇中心卫生院",
+  "童寺镇中心卫生院",
+  "邓关街道社区卫生服务中心"
+] as const
+
+/** 历史带「富顺县」前缀的服药管理单位 → 现行名称 */
+export const LATENT_MEDICATION_UNIT_ALIASES: Record<string, string> = {
+  富顺县代寺镇中心卫生院: "代寺镇中心卫生院",
+  富顺县童寺镇中心卫生院: "童寺镇中心卫生院",
+  富顺县邓关街道社区卫生服务中心: "邓关街道社区卫生服务中心"
+}
+
+/** 规范化服药管理单位名称（去掉富顺县前缀等） */
+export function normalizeLatentMedicationManagementUnit(unit?: string | null): string {
+  const text = String(unit || "").trim()
+  if (!text) return ""
+  return LATENT_MEDICATION_UNIT_ALIASES[text] || text
+}
+
+/** 合并预设 + 库内去重值 + 当前值，并做别名归一、去重、中文排序 */
+export function mergeLatentMedicationUnitOptions(source: string[] = [], current?: string | null): string[] {
+  const set = new Set<string>()
+  const add = (value?: string | null) => {
+    const normalized = normalizeLatentMedicationManagementUnit(value)
+    if (normalized) set.add(normalized)
+  }
+  for (const item of LATENT_MEDICATION_MANAGEMENT_UNIT_PRESETS) add(item)
+  for (const item of source) add(item)
+  add(current)
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-CN"))
+}
 
 /** 判断是否为潜伏感染者个体方案（含历史「个体化方案」） */
 export function isLatentIndividualPlan(plan?: string): boolean {

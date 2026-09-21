@@ -32,7 +32,7 @@ public class CloseContactCaseController {
 
     private final CloseContactCaseService closeContactCaseService;
 
-    @Operation(summary = "上传密接个案表Excel（72列官方模板）")
+    @Operation(summary = "上传密接个案表Excel（官方模板，含患者传报卡编号）")
     @PostMapping("/upload")
     @OperationLog(type = "import", module = "screening", action = "上传密接个案表Excel")
     public ResultResponse<ImportResult> upload(
@@ -184,7 +184,7 @@ public class CloseContactCaseController {
         response.setHeader("Content-Disposition", "attachment;filename=" +
                 URLEncoder.encode(fileName, StandardCharsets.UTF_8));
 
-        // 官方 72 列表头，与导入模板一致
+        // 官方列表头，与导入模板一致
         CloseContactCaseExcelExportSupport.write(response.getOutputStream(), CloseContactCaseExcelExportSupport.SHEET_NAME, CloseContactCase.class, list);
     }
 

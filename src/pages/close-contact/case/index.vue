@@ -165,10 +165,14 @@ const searchForm = reactive({
   formatIssue: [] as string[]
 })
 
-/** 组合为后端可识别的「2026年Q1,2026年Q2」（支持多季度） */
+/** 组合为后端可识别的季度参数（支持多季度；可只选季度不选年份） */
 const reportQuarterParam = computed(() => {
-  if (!searchForm.reportYear || !searchForm.reportQuarterNo.length) return undefined
-  return searchForm.reportQuarterNo.map(q => `${searchForm.reportYear}年Q${q}`).join(",")
+  if (!searchForm.reportQuarterNo.length) return undefined
+  if (searchForm.reportYear) {
+    return searchForm.reportQuarterNo.map(q => `${searchForm.reportYear}年Q${q}`).join(",")
+  }
+  // 仅选季度：传 Q1,Q2，后端按月份跨年匹配
+  return searchForm.reportQuarterNo.map(q => `Q${q}`).join(",")
 })
 
 const previewColumns = CLOSE_CONTACT_CASE_COLUMNS
@@ -1104,7 +1108,7 @@ onMounted(() => {
           v-for="col in CLOSE_CONTACT_CASE_COLUMNS"
           :key="col.field"
           :label="col.title"
-          :span="['remark', 'contraindicationRemark', 'preventivePlanRemark', 'createTime'].includes(col.field) ? 2 : 1"
+          :span="['remark', 'sourcePatientReportCardNo', 'contraindicationRemark', 'preventivePlanRemark', 'createTime'].includes(col.field) ? 2 : 1"
         >
           <template v-if="col.field === 'finalScreeningResult'">
             <el-tag v-if="detailRow.finalScreeningResult" :type="getDiagnosisTag(detailRow.finalScreeningResult)">

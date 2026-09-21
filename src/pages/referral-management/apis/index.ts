@@ -68,6 +68,15 @@ export function enableJointTrackingApi(id: string) {
   })
 }
 
+/** 同意编辑共同追踪：向参与管理的四/五级开放追踪过程编辑（roles: 5/6） */
+export function enableJointTrackingEditApi(id: string, roles: number[]) {
+  return request<ApiResponseData<null>>({
+    url: `referral-tracking/${id}/joint-tracking-edit`,
+    method: "post",
+    data: { roles }
+  })
+}
+
 /** 追踪操作（status: 1到位 2未到位 3其他） */
 export function trackReferralApi(id: string, status: number, remark?: string, actualArrivalDate?: string) {
   return request<ApiResponseData<null>>({
