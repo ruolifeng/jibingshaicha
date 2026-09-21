@@ -68,7 +68,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             "name", "year", "city", "district", "gender", "idNumber", "phone",
             "sourcePatientName", "sourcePatientBacteriologyResult", "finalScreeningResult",
             "infectionCheckMethod", "infectionCheckResult", "imagingResult", "sputumCheckResult", "hasPreventiveTreatment",
-            "remark", "creatorUsername"
+            "remark", "sourcePatientReportCardNo", "creatorUsername"
     );
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
@@ -301,6 +301,7 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 case "sputumCheckResult" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getSputumCheckResult, value);
                 case "hasPreventiveTreatment" -> ColumnFilterSupport.eqOrIn(wrapper, CloseContactCase::getHasPreventiveTreatment, value);
                 case "remark" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getRemark, value);
+                case "sourcePatientReportCardNo" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getSourcePatientReportCardNo, value);
                 case "creatorUsername" -> ColumnFilterSupport.like(wrapper, CloseContactCase::getCreatorUsername, value);
                 default -> { }
             }
@@ -603,25 +604,37 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
             return;
         }
         boolean hasEmpty = quarters.stream().anyMatch(CloseContactCaseExcelDerivedSupport::isEmptyRegistrationQuarter);
-        java.util.List<java.time.LocalDate[]> ranges = quarters.stream()
-                .filter(q -> !CloseContactCaseExcelDerivedSupport.isEmptyRegistrationQuarter(q))
-                .map(CloseContactCaseExcelDerivedSupport::resolveReportQuarterDateRange)
-                .filter(java.util.Objects::nonNull)
-                .toList();
-        if (!hasEmpty && ranges.isEmpty()) {
+        java.util.List<java.time.LocalDate[]> ranges = new java.util.ArrayList<>();
+        java.util.LinkedHashSet<Integer> quarterOnly = new java.util.LinkedHashSet<>();
+        for (String raw : quarters) {
+            if (CloseContactCaseExcelDerivedSupport.isEmptyRegistrationQuarter(raw)) {
+                continue;
+            }
+            java.time.LocalDate[] range = CloseContactCaseExcelDerivedSupport.resolveReportQuarterDateRange(raw);
+            if (range != null) {
+                ranges.add(range);
+                continue;
+            }
+            Integer q = CloseContactCaseExcelDerivedSupport.resolveQuarterNumber(raw);
+            if (q != null) {
+                quarterOnly.add(q);
+            }
+        }
+        if (!hasEmpty && ranges.isEmpty() && quarterOnly.isEmpty()) {
             wrapper.eq(CloseContactCase::getId, -1L);
             return;
         }
-        if (quarters.size() == 1 && !hasEmpty) {
+        // 单条件：年份+单季度，直接 between，避免多余嵌套
+        if (!hasEmpty && ranges.size() == 1 && quarterOnly.isEmpty()) {
             java.time.LocalDate[] range = ranges.get(0);
-            wrapper.ge(CloseContactCase::getRegistrationDate, range[0])
-                    .le(CloseContactCase::getRegistrationDate, range[1]);
+            wrapper.between(CloseContactCase::getRegistrationDate, range[0], range[1]);
             return;
         }
-        if (quarters.size() == 1 && hasEmpty) {
+        if (quarters.size() == 1 && hasEmpty && ranges.isEmpty() && quarterOnly.isEmpty()) {
             wrapper.isNull(CloseContactCase::getRegistrationDate);
             return;
         }
+        // 多季度 / 仅季度：用 between/月份条件 + or，避免嵌套 and 把多季度误拼成「同时满足」
         wrapper.and(w -> {
             boolean first = true;
             if (hasEmpty) {
@@ -632,9 +645,16 @@ public class CloseContactCaseServiceImpl extends ServiceImpl<CloseContactCaseMap
                 if (!first) {
                     w.or();
                 }
-                // 每个季度用嵌套 and，避免 ge/le 与 or 优先级错乱
-                w.and(inner -> inner.ge(CloseContactCase::getRegistrationDate, range[0])
-                        .le(CloseContactCase::getRegistrationDate, range[1]));
+                w.between(CloseContactCase::getRegistrationDate, range[0], range[1]);
+                first = false;
+            }
+            for (Integer q : quarterOnly) {
+                int startMonth = (q - 1) * 3 + 1;
+                int endMonth = startMonth + 2;
+                if (!first) {
+                    w.or();
+                }
+                w.apply("MONTH(registration_date) BETWEEN {0} AND {1}", startMonth, endMonth);
                 first = false;
             }
         });

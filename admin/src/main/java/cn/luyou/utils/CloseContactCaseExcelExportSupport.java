@@ -11,7 +11,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 密接个案表 / 密接筛查 — 导出含录入用户；导入模板仍为官方 72 列。
+ * 密接个案表 / 密接筛查 — 导出含录入用户；导入模板为官方列（含患者传报卡编号）。
  */
 public final class CloseContactCaseExcelExportSupport {
 
@@ -29,7 +29,7 @@ public final class CloseContactCaseExcelExportSupport {
                 .doWrite(rows);
     }
 
-    /** 下载空模板（仅官方 72 列表头，不含录入用户） */
+    /** 下载空模板（官方列表头，不含录入用户） */
     public static void writeTemplate(OutputStream outputStream) {
         EasyExcel.write(outputStream, CloseContactCase.class)
                 .head(CloseContactCaseExcelHeaders.asTemplateHead())

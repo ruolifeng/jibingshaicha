@@ -554,6 +554,15 @@ const editDiagnosisOptions = computed(() => {
   return opts
 })
 
+/** 诊断结果支持反选：再次点击已选项则清空 */
+function toggleEditDiagnosis(value: string) {
+  if (editForm.diagnosisResult === value) {
+    nextTick(() => {
+      editForm.diagnosisResult = ""
+    })
+  }
+}
+
 async function openEditDialog(row: any) {
   editRow.value = row
   Object.assign(editForm, {
@@ -607,10 +616,6 @@ async function openEditDialog(row: any) {
 
 async function handleEditSave() {
   if (canEditDiagnosis.value) {
-    if (!editForm.diagnosisResult) {
-      ElMessage.warning("请选择诊断结果")
-      return
-    }
     if (editForm.diagnosisResult === "其他" && !editForm.diagnosisRemark.trim()) {
       ElMessage.warning("选择其他时请填写诊断备注")
       return
@@ -1735,12 +1740,13 @@ function getRowClass({ row }: { row: any }) {
               </el-divider>
             </el-col>
             <el-col :span="24">
-              <el-form-item label="诊断结果" required>
+              <el-form-item label="诊断结果">
                 <el-radio-group v-model="editForm.diagnosisResult">
                   <el-radio
                     v-for="item in editDiagnosisOptions"
                     :key="item.value"
                     :value="item.value"
+                    @click="toggleEditDiagnosis(item.value)"
                   >
                     {{ item.label }}
                   </el-radio>

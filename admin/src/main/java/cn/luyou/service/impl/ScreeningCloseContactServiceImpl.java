@@ -64,7 +64,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * 密接人群筛查 Service（官方 72 列模板，基于 finalScreeningResult 分类）
+ * 密接人群筛查 Service（官方模板与密接个案表一致，基于 finalScreeningResult 分类）
  *
  * 分类规则（AD列 = final_screening_result）：
  *  - 活动性肺结核  → ccStatus=1，标红结案（不进入患者管理）

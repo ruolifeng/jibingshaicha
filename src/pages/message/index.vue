@@ -53,6 +53,7 @@ const MESSAGE_TYPE_LABEL_MAP: Record<string, string> = {
   referral_tracking_confirmed: "推介已接收",
   referral_tracking_rejected: "推介已被拒绝",
   referral_tracking_joint: "共同追踪已开启",
+  referral_tracking_joint_edit: "共同追踪编辑已开放",
   epidemic_cross_town_receive: "待确认跨镇导入",
   epidemic_cross_town_confirmed: "跨镇导入已确认",
   epidemic_cross_town_rejected: "跨镇导入已拒绝",
@@ -75,6 +76,7 @@ function getMessageTypeTagType(type: string) {
   if (type === "referral_tracking_confirmed") return "success"
   if (type === "referral_tracking_rejected") return "danger"
   if (type === "referral_tracking_joint") return "success"
+  if (type === "referral_tracking_joint_edit") return "success"
   if (type === "epidemic_cross_town_receive") return "warning"
   if (type === "epidemic_cross_town_confirmed") return "success"
   if (type === "epidemic_cross_town_rejected") return "danger"

@@ -266,7 +266,7 @@ export const CLOSE_CONTACT_CASE_EDIT_GROUPS: { key: string, label: string, field
   {
     key: "remark",
     label: "备注",
-    fields: ["remark"]
+    fields: ["remark", "sourcePatientReportCardNo"]
   }
 ]
 
@@ -348,6 +348,7 @@ export const CLOSE_CONTACT_CASE_COLUMNS: CloseContactCaseColumn[] = [
   { field: "followup24SputumResult", title: "24月随访-病原学检查结果", width: 270 },
   { field: "followup24Result", title: "24月随访-筛查结果", width: 230 },
   { field: "remark", title: "备注", width: 150 },
+  { field: "sourcePatientReportCardNo", title: "患者传报卡编号", width: 180 },
   { field: "createTime", title: "录入时间", width: 160, fixed: "right" }
 ]
 

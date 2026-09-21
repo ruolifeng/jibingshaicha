@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 public final class CloseContactCaseExcelDerivedSupport {
 
     private static final Pattern REPORT_QUARTER_PATTERN = Pattern.compile("^(\\d{4})年Q([1-4])$");
+    private static final Pattern QUARTER_ONLY_PATTERN = Pattern.compile("^(?:Q|第)?([1-4])(?:季度?|季)?$", Pattern.CASE_INSENSITIVE);
 
     private CloseContactCaseExcelDerivedSupport() {
     }
@@ -100,6 +101,20 @@ public final class CloseContactCaseExcelDerivedSupport {
         LocalDate start = LocalDate.of(year, (quarter - 1) * 3 + 1, 1);
         LocalDate end = start.plusMonths(3).minusDays(1);
         return new LocalDate[]{start, end};
+    }
+
+    /**
+     * 解析仅季度（无年份）：Q1 / 1 / 第一季 / 第一季度 → 1~4；无法解析返回 null。
+     */
+    public static Integer resolveQuarterNumber(String reportQuarter) {
+        if (StrUtil.isBlank(reportQuarter) || isEmptyRegistrationQuarter(reportQuarter)) {
+            return null;
+        }
+        Matcher matcher = QUARTER_ONLY_PATTERN.matcher(reportQuarter.trim());
+        if (!matcher.matches()) {
+            return null;
+        }
+        return Integer.parseInt(matcher.group(1));
     }
 
     /** 是否筛选登记日期为空（报表填报季度=登记日期为空）。 */

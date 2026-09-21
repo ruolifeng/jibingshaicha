@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 /**
- * 密接人群筛查数据（官方 72 列模板，含 6/12/24 月随访）
+ * 密接人群筛查数据（官方模板与密接个案表一致，含 6/12/24 月随访）
  *
  * 列映射（0-based index，与 {@link cn.luyou.constant.CloseContactCaseExcelHeaders} 一致）：
  *   0-9   : 原患者及登记信息
@@ -381,6 +381,11 @@ public class ScreeningCloseContact extends BaseEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
+    /** 患者传报卡编号（Excel 备注后一列） */
+    @ExcelProperty(index = 72, converter = ExcelTextStringConverter.class)
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String sourcePatientReportCardNo;
+
     // ===== 系统字段（不从 Excel 读取）=====
 
     /**
@@ -461,7 +466,7 @@ public class ScreeningCloseContact extends BaseEntity {
     private Long creatorId;
 
     /** 录入用户名（导出末尾追加列，导入模板不含） */
-    @ExcelProperty(index = 72)
+    @ExcelProperty(index = 73)
     private String creatorUsername;
 
     /** 是否已发送通知单（非数据库字段，查询时动态填充） */

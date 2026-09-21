@@ -8,6 +8,8 @@ import {
   infectionJudgeSelectOptions,
   isLatentIndividualPlan,
   LATENT_TREATMENT_PLAN_OPTIONS,
+  mergeLatentMedicationUnitOptions,
+  normalizeLatentMedicationManagementUnit,
   parseLatentNoticeTreatmentPlan,
   resolveInfectionJudgeSelectValue
 } from "@@/constants/disease"
@@ -64,13 +66,10 @@ const noticeForm = reactive({
   medicationManagementUnit: ""
 })
 
-/** 下拉选项：distinct 结果 + 当前已填值（兼容手动录入） */
-const medicationUnitOptions = computed(() => {
-  const current = (noticeForm.medicationManagementUnit || "").trim()
-  const list = [...medicationUnitSourceValues.value]
-  if (current && !list.includes(current)) list.unshift(current)
-  return list
-})
+/** 下拉选项：预设机构 + distinct 结果 + 当前已填值（兼容手动录入） */
+const medicationUnitOptions = computed(() =>
+  mergeLatentMedicationUnitOptions(medicationUnitSourceValues.value, noticeForm.medicationManagementUnit)
+)
 
 function getNowDateStr() {
   const now = new Date()
@@ -105,7 +104,9 @@ function resetFormFromRow(row: Record<string, any>) {
     treatmentInstitution: "",
     issuedTime: getNowDateStr(),
     receiverOrgId: userStore.userRole === 6 ? userStore.userId : undefined,
-    medicationManagementUnit: (userStore.orgName || userStore.departmentName || "").trim()
+    medicationManagementUnit: normalizeLatentMedicationManagementUnit(
+      userStore.orgName || userStore.departmentName || ""
+    )
   })
 }
 
@@ -129,7 +130,7 @@ function assignFormFromNotice(notice: Record<string, any>, row: Record<string, a
     treatmentInstitution: notice.treatmentInstitution || "",
     issuedTime: notice.issuedTime || getNowDateStr(),
     receiverOrgId: notice.receiverOrgId || undefined,
-    medicationManagementUnit: notice.medicationManagementUnit || ""
+    medicationManagementUnit: normalizeLatentMedicationManagementUnit(notice.medicationManagementUnit)
   })
   const parsed = parseLatentNoticeTreatmentPlan(
     notice.treatmentPlan || row.treatmentPlan || row.preventivePlan,
@@ -181,6 +182,7 @@ function buildPayload() {
     bizId: row.id,
     patientName: row.name,
     ...noticeForm,
+    medicationManagementUnit: normalizeLatentMedicationManagementUnit(noticeForm.medicationManagementUnit),
     treatmentPlan: formatLatentNoticeTreatmentPlan(noticeForm.treatmentPlan, noticeForm.customPlanDetail),
     senderId: userStore.userId
   }

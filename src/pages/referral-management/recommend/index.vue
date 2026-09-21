@@ -49,6 +49,7 @@ import {
   deleteReferralTrackingApi,
   deleteReferralTrackingByFilterApi,
   enableJointTrackingApi,
+  enableJointTrackingEditApi,
   exportReferralTrackApi,
   getLevel34UsersApi,
   getReferralTrackingColumnDistinctApi,
@@ -96,6 +97,32 @@ function isLevel4Role(role: number = currentRole()) {
   return role === 5
 }
 
+/** 三级以上（超管/一/二/三级）：role=1~4 */
+function isLevel3OrAboveRole(role: number = currentRole()) {
+  return role >= 1 && role <= 4
+}
+
+/** 解析共同追踪编辑授权角色（5=四级，6=五级） */
+function parseJointTrackingEditRoles(row: any): number[] {
+  const raw = row?.jointTrackingEditRoles
+  if (raw == null || String(raw).trim() === "") return []
+  return String(raw)
+    .split(",")
+    .map(s => Number(String(s).trim()))
+    .filter(n => n === 5 || n === 6)
+}
+
+function hasJointTrackingEditGrant(row: any) {
+  return parseJointTrackingEditRoles(row).length > 0
+}
+
+function formatJointTrackingEditRoleLabels(roles: number[]) {
+  const labels: string[] = []
+  if (roles.includes(5)) labels.push("四级")
+  if (roles.includes(6)) labels.push("五级")
+  return labels.join("、")
+}
+
 /**
  * 已确认推介可操作追踪：
  * - 超管 / 发起方 / 接收方
@@ -110,12 +137,26 @@ function canOperateRecommendTrack(row: any) {
   return isJointTrackingEnabled(row) && isLevel345Role()
 }
 
-/** 详情中修正追踪过程：已接受即可（含归档后）；共同追踪过程仅只读，不可在查看页修改 */
+/**
+ * 共同追踪过程是否可修正：
+ * - 未开共同追踪：参与方可改
+ * - 已开共同追踪：须已授权，且当前为三级以上参与方，或授权列表中的四/五级参与方
+ */
+function canEditJointTrackingHistoryContent(row: any) {
+  if (!row) return false
+  if (!isJointTrackingEnabled(row)) return true
+  if (!hasJointTrackingEditGrant(row)) return false
+  if (!canOperateRecommendTrack(row) && !isSuperAdmin()) return false
+  if (isLevel3OrAboveRole()) return true
+  return parseJointTrackingEditRoles(row).includes(currentRole())
+}
+
+/** 详情中修正追踪过程：已接受且有历史；共同追踪须已授权且当前用户在开放范围内 */
 function canEditRecommendTrackingHistory(row: any) {
   if (!row || !isRecommendAccepted(row)) return false
-  if (Number(row.jointTracking) === 1) return false
   if (!parseTrackingHistory(row.trackingHistoryJson).length) return false
-  return canOperateRecommendTrack(row) || isSuperAdmin()
+  if (!canOperateRecommendTrack(row) && !isSuperAdmin()) return false
+  return canEditJointTrackingHistoryContent(row)
 }
 
 /** 未开启时可点「共同追踪」：发起方 / 接收方 / 四级 / 超管 */
@@ -126,6 +167,12 @@ function canEnableRecommendJointTracking(row: any) {
   if (isSuperAdmin()) return true
   if (isLevel4Role()) return true
   return isReceiver(row) || isCreator(row)
+}
+
+/** 已开共同追踪时，三级以上（role=1~4）且列表可见的用户可「同意编辑共同追踪」 */
+function canGrantJointTrackingEdit(row: any) {
+  if (!row || !isRecommendAccepted(row) || !isJointTrackingEnabled(row)) return false
+  return isLevel3OrAboveRole()
 }
 
 function canShowRecommendTrackButton(row: any) {
@@ -628,10 +675,16 @@ const editForm = reactive({
 })
 
 const canEditDiagnosis = computed(() => Boolean(editRow.value?.diagnosisResult))
-/** 有追踪过程即可展示；共同追踪在编辑页也只读（与查看页一致） */
+/** 有追踪过程即可展示；共同追踪须授权后才可编辑 */
 const showEditTrackingHistory = computed(() => editTrackingHistory.value.length > 0)
 const canEditTrackingHistory = computed(() =>
-  showEditTrackingHistory.value && Number(editRow.value?.jointTracking) !== 1
+  showEditTrackingHistory.value && canEditJointTrackingHistoryContent(editRow.value)
+)
+/** 编辑弹窗内：共同追踪且当前不可编辑时显示只读提示 */
+const showJointTrackingReadonlyTip = computed(() =>
+  showEditTrackingHistory.value
+  && isJointTrackingEnabled(editRow.value)
+  && !canEditTrackingHistory.value
 )
 
 /** 编辑诊断：兼容历史「确诊患者 / 其他」 */
@@ -643,6 +696,15 @@ const editDiagnosisOptions = computed(() => {
   }
   return opts
 })
+
+/** 诊断结果支持反选：再次点击已选项则清空 */
+function toggleEditDiagnosis(value: string) {
+  if (editForm.diagnosisResult === value) {
+    nextTick(() => {
+      editForm.diagnosisResult = ""
+    })
+  }
+}
 
 const editFormRules = {
   recommendReason: [{ required: true, message: "请填写推介原因", trigger: "blur" }]
@@ -720,10 +782,6 @@ async function handleEditSave() {
     return
   }
   if (canEditDiagnosis.value) {
-    if (!editForm.diagnosisResult) {
-      ElMessage.warning("请选择诊断结果")
-      return
-    }
     if (editForm.diagnosisResult === "其他" && !editForm.diagnosisRemark.trim()) {
       ElMessage.warning("选择其他时请填写诊断备注")
       return
@@ -828,6 +886,76 @@ async function handleEnableRecommendJointTracking(row: any) {
   await enableJointTrackingApi(row.id)
   ElMessage.success("已开启共同追踪，三/四/五级用户均可参与")
   fetchList()
+}
+
+const JOINT_TRACKING_EDIT_ROLE_OPTIONS = [
+  { label: "四级", value: 5 },
+  { label: "五级", value: 6 }
+] as const
+
+const grantEditDialogVisible = ref(false)
+const grantEditRow = ref<any>(null)
+const grantEditRoles = ref<number[]>([5, 6])
+const grantEditSubmitting = ref(false)
+
+/** 打开「同意编辑共同追踪」勾选弹窗 */
+function openGrantJointTrackingEditDialog(row: any) {
+  if (!row?.id) return
+  grantEditRow.value = row
+  const initial = parseJointTrackingEditRoles(row)
+  grantEditRoles.value = initial.length ? [...initial] : [5, 6]
+  grantEditDialogVisible.value = true
+}
+
+/** 确认授权：二次确认后调用接口 */
+async function confirmGrantJointTrackingEdit() {
+  const row = grantEditRow.value
+  const roles = [...grantEditRoles.value].filter(n => n === 5 || n === 6).sort()
+  if (!row?.id) return
+  if (!roles.length) {
+    ElMessage.warning("请至少选择四级或五级")
+    return
+  }
+  const labelText = formatJointTrackingEditRoleLabels(roles)
+  try {
+    await ElMessageBox.confirm(
+      `是否向参与管理的${labelText}权限用户开放编辑权限？`,
+      "确认开放编辑",
+      { type: "warning", confirmButtonText: "确认开放", cancelButtonText: "取消" }
+    )
+  } catch {
+    return
+  }
+  grantEditSubmitting.value = true
+  try {
+    await enableJointTrackingEditApi(String(row.id), roles)
+    ElMessage.success(`已向参与管理的${labelText}用户开放共同追踪编辑权限`)
+    grantEditDialogVisible.value = false
+    const rolesCsv = roles.join(",")
+    const nowIso = new Date().toISOString()
+    if (editRow.value && String(editRow.value.id) === String(row.id)) {
+      editRow.value = {
+        ...editRow.value,
+        jointTrackingEditRoles: rolesCsv,
+        jointTrackingEditTime: nowIso
+      }
+    }
+    if (viewDetail.value && String(viewDetail.value.id) === String(row.id)) {
+      viewDetail.value = {
+        ...viewDetail.value,
+        jointTrackingEditRoles: rolesCsv,
+        jointTrackingEditTime: nowIso
+      }
+    }
+    fetchList()
+  } finally {
+    grantEditSubmitting.value = false
+  }
+}
+
+/** 同意编辑共同追踪（列表/编辑弹窗共用入口） */
+function handleGrantJointTrackingEdit(row: any) {
+  openGrantJointTrackingEditDialog(row)
 }
 
 /** 四级用户记录未到位后，询问是否开启共同追踪 */
@@ -1310,6 +1438,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               @click="handleEnableRecommendJointTracking(row)"
             >
               共同追踪
+            </el-button>
+            <el-button
+              v-if="canGrantJointTrackingEdit(row)"
+              type="primary" link size="small"
+              @click="handleGrantJointTrackingEdit(row)"
+            >
+              同意编辑共同追踪
             </el-button>
             <!-- 已确认推介：待追踪/未到位（未满 4 次）显示追踪；到位后显示录入 -->
             <el-button
@@ -1939,12 +2074,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               </el-divider>
             </el-col>
             <el-col :span="24">
-              <el-form-item label="诊断结果" required>
+              <el-form-item label="诊断结果">
                 <el-radio-group v-model="editForm.diagnosisResult">
                   <el-radio
                     v-for="item in editDiagnosisOptions"
                     :key="item.value"
                     :value="item.value"
+                    @click="toggleEditDiagnosis(item.value)"
                   >
                     {{ item.label }}
                   </el-radio>
@@ -1977,6 +2113,16 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-col :span="24">
               <el-divider content-position="left">
                 追踪过程
+                <el-button
+                  v-if="canGrantJointTrackingEdit(editRow)"
+                  type="primary"
+                  link
+                  size="small"
+                  style="margin-left: 8px"
+                  @click="handleGrantJointTrackingEdit(editRow)"
+                >
+                  同意编辑共同追踪
+                </el-button>
               </el-divider>
             </el-col>
             <el-col
@@ -2010,7 +2156,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
                 />
               </el-form-item>
             </el-col>
-            <el-col v-if="!canEditTrackingHistory" :span="24">
+            <el-col v-if="showJointTrackingReadonlyTip" :span="24">
               <el-alert
                 title="共同追踪过程仅可查看，不可在此修改"
                 type="info"
@@ -2045,6 +2191,30 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         </el-button>
         <el-button type="danger" @click="handleReject">
           确认拒绝
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 同意编辑共同追踪 -->
+    <el-dialog v-model="grantEditDialogVisible" title="同意编辑共同追踪" width="420px">
+      <p style="margin: 0 0 12px; line-height: 1.6">
+        请选择向「{{ grantEditRow?.name || "" }}」参与管理的哪些权限用户开放编辑：
+      </p>
+      <el-checkbox-group v-model="grantEditRoles">
+        <el-checkbox
+          v-for="opt in JOINT_TRACKING_EDIT_ROLE_OPTIONS"
+          :key="opt.value"
+          :value="opt.value"
+        >
+          {{ opt.label }}
+        </el-checkbox>
+      </el-checkbox-group>
+      <template #footer>
+        <el-button @click="grantEditDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="grantEditSubmitting" @click="confirmGrantJointTrackingEdit">
+          确认
         </el-button>
       </template>
     </el-dialog>

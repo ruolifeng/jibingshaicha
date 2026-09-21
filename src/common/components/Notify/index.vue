@@ -26,6 +26,7 @@ const TYPE_CONFIG: Record<string, { label: string, status: NotifyItem["status"] 
   referral_tracking_confirmed: { label: "推介已接收", status: "success" },
   referral_tracking_rejected: { label: "推介已被拒绝", status: "danger" },
   referral_tracking_joint: { label: "共同追踪已开启", status: "success" },
+  referral_tracking_joint_edit: { label: "共同追踪编辑已开放", status: "success" },
   epidemic_cross_town_receive: { label: "待确认跨镇导入", status: "warning" },
   epidemic_cross_town_confirmed: { label: "跨镇导入已确认", status: "success" },
   epidemic_cross_town_rejected: { label: "跨镇导入已拒绝", status: "danger" },

@@ -156,6 +156,12 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 接收方/发起方/四级开启共同追踪（开启后同辖区三/四/五级均可追踪，次数合并计算） */
     void enableJointTracking(Long id);
 
+    /**
+     * 三级以上向参与管理的四/五级开放共同追踪过程编辑权限。
+     * @param roles 允许编辑的角色列表，仅可为 5（四级）和/或 6（五级）
+     */
+    void enableJointTrackingEdit(Long id, List<Integer> roles);
+
     /** 追踪操作（更新 trackingStatus，处理未到位次数上限） */
     void track(Long id, Integer status, String remark, LocalDate actualArrivalDate);
 

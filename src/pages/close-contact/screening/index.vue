@@ -344,7 +344,8 @@ function getEmptyEditForm() {
     hasPreventiveTreatment: "",
     preventivePlan: "",
     treatmentCompleted: "",
-    remark: ""
+    remark: "",
+    sourcePatientReportCardNo: ""
   }
 }
 
@@ -834,6 +835,7 @@ async function handleThreeMonthSubmit() {
               <span v-else class="text-gray-400">—</span>
             </template>
           </el-table-column>
+          <el-table-column prop="sourcePatientReportCardNo" label="患者传报卡编号" min-width="160" show-overflow-tooltip />
           <el-table-column label="流程状态" min-width="110" show-overflow-tooltip>
             <template #default="{ row }">
               <el-tag v-if="CC_STATUS_MAP[row.ccStatus]" :type="tagType(CC_STATUS_MAP[row.ccStatus].type)" size="small">
@@ -1162,6 +1164,11 @@ async function handleThreeMonthSubmit() {
                   <el-input v-model="editForm.remark" type="textarea" :rows="2" />
                 </el-form-item>
               </el-col>
+              <el-col :span="12">
+                <el-form-item label="患者传报卡编号">
+                  <el-input v-model="editForm.sourcePatientReportCardNo" placeholder="选填" />
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
         </el-tab-pane>
@@ -1328,6 +1335,9 @@ async function handleThreeMonthSubmit() {
             </el-descriptions-item>
             <el-descriptions-item label="备注">
               {{ detailRow.remark }}
+            </el-descriptions-item>
+            <el-descriptions-item label="患者传报卡编号">
+              {{ detailRow.sourcePatientReportCardNo || "-" }}
             </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>

@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import cn.hutool.core.util.StrUtil;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -204,6 +205,41 @@ public class ReferralTrackingController {
     public ResultResponse<Void> enableJointTracking(@PathVariable Long id) {
         referralTrackingService.enableJointTracking(id);
         return ResultRes.success(null);
+    }
+
+    @OperationLog(type = "update", module = "referral", action = "同意编辑共同追踪")
+    @Operation(summary = "三级以上向参与管理的四/五级开放共同追踪过程编辑权限")
+    @PostMapping("/{id}/joint-tracking-edit")
+    public ResultResponse<Void> enableJointTrackingEdit(@PathVariable Long id,
+                                                         @RequestBody Map<String, Object> body) {
+        List<Integer> roles = parseRoleList(body != null ? body.get("roles") : null);
+        referralTrackingService.enableJointTrackingEdit(id, roles);
+        return ResultRes.success(null);
+    }
+
+    private List<Integer> parseRoleList(Object rolesObj) {
+        if (rolesObj == null) {
+            return List.of();
+        }
+        if (rolesObj instanceof List<?> list) {
+            List<Integer> result = new ArrayList<>();
+            for (Object item : list) {
+                if (item == null) {
+                    continue;
+                }
+                if (item instanceof Number number) {
+                    result.add(number.intValue());
+                } else {
+                    try {
+                        result.add(Integer.parseInt(item.toString().trim()));
+                    } catch (Exception ignored) {
+                        // skip invalid
+                    }
+                }
+            }
+            return result;
+        }
+        return List.of();
     }
 
     @OperationLog(type = "update", module = "referral", action = "操作追踪状态")
