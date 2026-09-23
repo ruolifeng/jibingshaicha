@@ -4472,3 +4472,46 @@ PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 -- end V128
+
+-- ==================== V132：系统消息拆出「消息列表」叶子权限 ====================
+INSERT INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`)
+SELECT 525, 'message:list', '消息列表', 1, parent.id, 1
+FROM `permission` parent
+WHERE parent.`code` = 'message'
+  AND NOT EXISTS (SELECT 1 FROM `permission` x WHERE x.`code` = 'message:list');
+
+UPDATE `permission`
+SET `sort` = 2
+WHERE `code` = 'message:reminderConfig'
+  AND (`sort` IS NULL OR `sort` <> 2);
+
+SET @v132_rp_id := 132000000;
+INSERT INTO `role_permission` (`id`, `role`, `permission_id`)
+SELECT (@v132_rp_id := @v132_rp_id + 1), src.role, list_perm.id
+FROM (
+    SELECT DISTINCT rp.role
+    FROM `role_permission` rp
+             INNER JOIN `permission` p ON p.id = rp.permission_id AND p.`code` = 'message'
+) src
+         CROSS JOIN `permission` list_perm
+WHERE list_perm.`code` = 'message:list'
+  AND NOT EXISTS (
+        SELECT 1 FROM `role_permission` x
+        WHERE x.`role` = src.role AND x.`permission_id` = list_perm.id
+    );
+
+SET @v132_up_id := 132100000;
+INSERT INTO `user_permission` (`id`, `user_id`, `permission_id`)
+SELECT (@v132_up_id := @v132_up_id + 1), src.user_id, list_perm.id
+FROM (
+    SELECT DISTINCT up.user_id
+    FROM `user_permission` up
+             INNER JOIN `permission` p ON p.id = up.permission_id AND p.`code` = 'message'
+) src
+         CROSS JOIN `permission` list_perm
+WHERE list_perm.`code` = 'message:list'
+  AND NOT EXISTS (
+        SELECT 1 FROM `user_permission` x
+        WHERE x.`user_id` = src.user_id AND x.`permission_id` = list_perm.id
+    );
+-- end V132

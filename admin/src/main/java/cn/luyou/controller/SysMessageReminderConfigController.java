@@ -4,6 +4,7 @@ import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.SysMessageReminderConfig;
 import cn.luyou.service.SysMessageReminderConfigService;
+import cn.luyou.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,10 +25,12 @@ import java.util.Map;
 public class SysMessageReminderConfigController {
 
     private final SysMessageReminderConfigService reminderConfigService;
+    private final UserService userService;
 
     @Operation(summary = "提醒配置列表")
     @GetMapping
     public ResultResponse<List<SysMessageReminderConfig>> list() {
+        userService.checkPermissionCode("message:reminderConfig");
         return ResultRes.success(reminderConfigService.listAll());
     }
 
@@ -35,6 +38,7 @@ public class SysMessageReminderConfigController {
     @PutMapping("/{code}/enabled")
     public ResultResponse<Void> updateEnabled(@PathVariable String code,
                                               @RequestBody Map<String, Object> body) {
+        userService.checkPermissionCode("message:reminderConfig");
         Object raw = body == null ? null : body.get("enabled");
         boolean enabled = raw instanceof Boolean b ? b
                 : raw != null && ("1".equals(raw.toString()) || "true".equalsIgnoreCase(raw.toString()));
