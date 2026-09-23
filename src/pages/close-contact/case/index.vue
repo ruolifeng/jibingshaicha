@@ -9,6 +9,7 @@ import {
   applyFinalScreeningResult,
   CASE_IMAGING_METHOD_OPTIONS,
   CASE_IMAGING_RESULT_OPTIONS,
+  CASE_NO_TREATMENT_REASON_OPTIONS,
   CASE_SPUTUM_METHOD_OPTIONS,
   CLOSE_CONTACT_CASE_COLUMNS,
   CLOSE_CONTACT_CASE_DATE_FIELDS,
@@ -378,7 +379,6 @@ const EDIT_TEXTAREA_FIELDS = new Set([
   "remark",
   "contraindicationRemark",
   "preventivePlanRemark",
-  "noTreatmentReason",
   "incompleteReason",
   "householdAddress",
   "currentAddress",
@@ -400,6 +400,8 @@ const imagingResultSelectOptions = computed(() =>
   selectOptionsWithLegacy(CASE_IMAGING_RESULT_OPTIONS, editForm.value.imagingResult))
 const sputumMethodSelectOptions = computed(() =>
   selectOptionsWithLegacy(CASE_SPUTUM_METHOD_OPTIONS, editForm.value.sputumCheckMethod))
+const noTreatmentReasonSelectOptions = computed(() =>
+  selectOptionsWithLegacy(CASE_NO_TREATMENT_REASON_OPTIONS, editForm.value.noTreatmentReason))
 
 function getEmptyEditForm() {
   const form: Record<string, any> = {}
@@ -955,6 +957,21 @@ onMounted(() => {
                       style="margin-top: 8px"
                     />
                   </template>
+                  <el-select
+                    v-else-if="field === 'noTreatmentReason'"
+                    v-model="editForm.noTreatmentReason"
+                    clearable
+                    filterable
+                    placeholder="请选择"
+                    style="width:100%"
+                  >
+                    <el-option
+                      v-for="opt in noTreatmentReasonSelectOptions"
+                      :key="opt"
+                      :label="opt"
+                      :value="opt"
+                    />
+                  </el-select>
                   <el-select
                     v-else-if="field === 'hasPreventiveTreatment'"
                     v-model="editForm.hasPreventiveTreatment"

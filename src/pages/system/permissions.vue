@@ -159,6 +159,7 @@ function getTypeColor(type: number): "primary" | "warning" {
         <el-tab-pane label="按角色分配" name="role">
           <el-alert type="info" :closable="false" class="mb-4">
             选择角色后在权限树中勾选菜单与操作，保存后为该角色默认权限。超级管理员不受此限制。
+            「消息列表」与「消息提醒配置」为两个独立菜单权限，可单独开关。保存后请让对应用户重新登录或刷新页面以加载最新权限。
           </el-alert>
           <div class="flex flex-wrap items-center gap-4 mb-4">
             <span class="font-bold">角色：</span>

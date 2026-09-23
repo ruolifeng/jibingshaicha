@@ -29,8 +29,8 @@ export const CASE_IMAGING_METHOD_OPTIONS = [
 /** 个案编辑 — 影像结果 */
 export const CASE_IMAGING_RESULT_OPTIONS = [
   "未见异常",
-  "疑似活动性结核病变",
-  "非活动性结核病变",
+  "异常（疑似活动性结核病变）",
+  "异常（非活动性结核病变）",
   "其他（含未查需注明）"
 ] as const
 
@@ -106,6 +106,13 @@ export const REPORT_QUARTER_OPTIONS = [
 export const HAS_PREVENTIVE_TREATMENT_OPTIONS = [
   { label: "开展", value: "开展" },
   { label: "未开展", value: "未开展" }
+] as const
+
+/** 个案编辑 — 不接受预防性治疗的原因（与 Excel 模板下拉一致） */
+export const CASE_NO_TREATMENT_REASON_OPTIONS = [
+  "医生判定不符合",
+  "拒绝",
+  "其他（请备注）"
 ] as const
 
 /**

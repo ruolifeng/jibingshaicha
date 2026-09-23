@@ -348,13 +348,24 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: "/message",
     component: Layouts,
-    meta: { permission: "message", title: "系统消息", elIcon: "Bell" },
+    meta: {
+      title: "系统消息",
+      elIcon: "Bell",
+      // 父级：有任一子菜单即可展示分组（勿把 message 当成提醒配置权限）
+      anyPermission: ["message", "message:list", "message:reminderConfig"]
+    },
     children: [
       {
         path: "",
         component: () => import("@/pages/message/index.vue"),
         name: "Message",
-        meta: { title: "消息列表", elIcon: "Bell", permission: "message", unreadBadge: true }
+        meta: {
+          title: "消息列表",
+          elIcon: "Bell",
+          // message:list 为叶子权限；兼容迁移前仅有 message 的会话
+          anyPermission: ["message:list", "message"],
+          unreadBadge: true
+        }
       },
       {
         path: "reminders",
@@ -363,7 +374,8 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: {
           title: "消息提醒配置",
           elIcon: "Setting",
-          anyPermission: ["message:reminderConfig", "message"]
+          // 仅受 message:reminderConfig 控制，不再被 message（消息列表）连带放行
+          permission: "message:reminderConfig"
         }
       }
     ]

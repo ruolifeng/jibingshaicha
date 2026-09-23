@@ -697,12 +697,17 @@ const editDiagnosisOptions = computed(() => {
   return opts
 })
 
-/** 诊断结果支持反选：再次点击已选项则清空 */
+/**
+ * 诊断结果支持反选：再次点击已选项则清空。
+ * 必须用 click.capture.prevent：el-radio 内部 input 有 @click.stop，冒泡阶段点圆点收不到事件；
+ * prevent 后由本函数接管选中态，避免组件把同值再次写回。
+ */
 function toggleEditDiagnosis(value: string) {
   if (editForm.diagnosisResult === value) {
-    nextTick(() => {
-      editForm.diagnosisResult = ""
-    })
+    editForm.diagnosisResult = ""
+    editForm.diagnosisRemark = ""
+  } else {
+    editForm.diagnosisResult = value
   }
 }
 
@@ -2075,12 +2080,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-col>
             <el-col :span="24">
               <el-form-item label="诊断结果">
-                <el-radio-group v-model="editForm.diagnosisResult">
+                <el-radio-group :model-value="editForm.diagnosisResult">
                   <el-radio
                     v-for="item in editDiagnosisOptions"
                     :key="item.value"
                     :value="item.value"
-                    @click="toggleEditDiagnosis(item.value)"
+                    @click.capture.prevent="toggleEditDiagnosis(item.value)"
                   >
                     {{ item.label }}
                   </el-radio>
