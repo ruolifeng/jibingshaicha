@@ -30,7 +30,7 @@ function close() {
 async function handleSave() {
   if (!props.recordId || saving.value) return
   if (!diagnosisResult.value) {
-    ElMessage.warning("请选择诊断结果")
+    ElMessage.warning("请选择最终诊断结果")
     return
   }
 
@@ -39,8 +39,8 @@ async function handleSave() {
     await saveDiagnosisApi(props.recordId, diagnosisResult.value)
     ElMessage.success(
       isReferralConfirmedDiagnosis(diagnosisResult.value)
-        ? "诊断结果已保存，该记录已标红结案"
-        : "诊断结果已保存"
+        ? "最终诊断结果已保存，该记录已标红结案"
+        : "最终诊断结果已保存"
     )
     close()
     emit("success")
@@ -53,13 +53,13 @@ async function handleSave() {
 <template>
   <el-dialog
     :model-value="visible"
-    title="录入诊断结果"
+    title="录入最终诊断结果"
     width="560px"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
-    <el-form label-width="100px">
-      <el-form-item label="诊断结果">
+    <el-form label-width="120px">
+      <el-form-item label="最终诊断结果">
         <el-radio-group v-model="diagnosisResult">
           <el-radio
             v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"

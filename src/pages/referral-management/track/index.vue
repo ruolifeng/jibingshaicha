@@ -94,13 +94,14 @@ function canOperateTrack(row: any) {
   return userStore.userRole >= 2 && userStore.userRole <= 6
 }
 
-/** 推介确认后可开启共同追踪：发起方 / 接收方 / 四级 / 超管 */
+/** 推介确认后可开启共同追踪：发起方 / 接收方 / 三级 / 四级 / 超管 */
 function canEnableJointTracking(row: any) {
   if (isTrackingFlowClosed(row) || Number(row.recommendStatus) !== 2 || isJointTrackingEnabled(row)) {
     return false
   }
   if (userStore.userRole === 1) return true
-  if (userStore.userRole === 5) return true
+  // role=4 三级、role=5 四级：即使不是推介接收人也可开启
+  if (userStore.userRole === 4 || userStore.userRole === 5) return true
   const uid = String(userStore.userId)
   return uid === String(row.receiverUserId) || uid === String(row.creatorId)
 }

@@ -92,6 +92,11 @@ function isLevel345Role(role: number = currentRole()) {
   return role === 4 || role === 5 || role === 6
 }
 
+/** 三级：role=4 */
+function isLevel3Role(role: number = currentRole()) {
+  return role === 4
+}
+
 /** 四级：role=5 */
 function isLevel4Role(role: number = currentRole()) {
   return role === 5
@@ -159,13 +164,13 @@ function canEditRecommendTrackingHistory(row: any) {
   return canEditJointTrackingHistoryContent(row)
 }
 
-/** 未开启时可点「共同追踪」：发起方 / 接收方 / 四级 / 超管 */
+/** 未开启时可点「共同追踪」：发起方 / 接收方 / 三级 / 四级 / 超管（三级不必是推介接收人） */
 function canEnableRecommendJointTracking(row: any) {
   if (!isRecommendAccepted(row) || isJointTrackingEnabled(row)) return false
   // 强制结束不可再开
   if (toTrackingStatus(row.trackingStatus) === 4) return false
   if (isSuperAdmin()) return true
-  if (isLevel4Role()) return true
+  if (isLevel3Role() || isLevel4Role()) return true
   return isReceiver(row) || isCreator(row)
 }
 
@@ -437,7 +442,7 @@ const createFormRules = {
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
-  recommendReason: [{ required: true, message: "请填写推介原因", trigger: "blur" }],
+  recommendReason: [{ required: true, message: "请填写诊断结果", trigger: "blur" }],
   receiverUserId: [{ required: true, message: "请选择推介接收人", trigger: "change" }]
 }
 
@@ -712,7 +717,7 @@ function toggleEditDiagnosis(value: string) {
 }
 
 const editFormRules = {
-  recommendReason: [{ required: true, message: "请填写推介原因", trigger: "blur" }]
+  recommendReason: [{ required: true, message: "请填写诊断结果", trigger: "blur" }]
 }
 
 async function openEditDialog(row: any) {
@@ -1192,7 +1197,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         type="info"
         :closable="false"
         class="mb-3"
-        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后可在本页追踪；四级用户选择「未到位」时会询问是否开启共同追踪，也可点击「共同追踪」手动开启。开启后三/四/五级均可参与（次数合并，4 次未到位自动结束；到位后可分别录入诊断、感染检测与胸片）。"
+        title="待接收的推介通知单会显示在下方，也可在「系统消息」中确认。接收方确认后可在本页追踪；三级、四级用户可点击「共同追踪」开启（即使推介未发给三级也可开启）；四级用户选择「未到位」时也会询问是否开启。开启后三/四/五级均可参与（次数合并，4 次未到位自动结束；到位后可分别录入诊断、感染检测与胸片）。"
       />
       <div class="toolbar-wrapper" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap">
         <el-button v-if="canCreateRecommend" type="primary" @click="openCreateDialog">
@@ -1311,7 +1316,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </template>
         </el-table-column>
         <el-table-column prop="crowdCategory" label="人群分类" />
-        <el-table-column prop="recommendReason" label="推介原因" show-overflow-tooltip />
+        <el-table-column prop="recommendReason" label="诊断结果" show-overflow-tooltip />
         <el-table-column prop="recommendUnitName" label="推介单位" min-width="140" show-overflow-tooltip />
         <el-table-column prop="receiverUnitName" label="推介接收单位" min-width="140" show-overflow-tooltip />
         <el-table-column prop="receiverUserName" label="推介接收人" min-width="140" show-overflow-tooltip />
@@ -1339,7 +1344,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         <el-table-column prop="diagnosisResult" min-width="160" show-overflow-tooltip>
           <template #header>
             <TableHeaderFilter
-              label="诊断结果"
+              label="最终诊断结果"
               type="select"
               :options="diagnosisFilterOptions"
               :model-value="columnFilters.diagnosisResult"
@@ -1464,7 +1469,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               type="success" link size="small"
               @click="openDiagnosisDialog(row)"
             >
-              录入诊断
+              录入最终诊断结果
             </el-button>
             <el-button
               v-if="canShowRecommendFollowupButtons(row)"
@@ -1656,7 +1661,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="诊断结果">
+            <el-form-item label="最终诊断结果">
               <el-radio-group v-model="createForm.diagnosisResult">
                 <el-radio
                   v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
@@ -1679,12 +1684,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="推介原因" prop="recommendReason">
+            <el-form-item label="诊断结果" prop="recommendReason">
               <el-input
                 v-model="createForm.recommendReason"
                 type="textarea"
                 :rows="3"
-                placeholder="请填写推介原因"
+                placeholder="请填写诊断结果"
               />
             </el-form-item>
           </el-col>
@@ -1762,7 +1767,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item label="填写用户名称">
               {{ viewDetail.fillUserName || "-" }}
             </el-descriptions-item>
-            <el-descriptions-item label="推介原因" :span="2">
+            <el-descriptions-item label="诊断结果" :span="2">
               {{ viewDetail.recommendReason || "-" }}
             </el-descriptions-item>
             <el-descriptions-item label="推介接收单位">
@@ -1816,7 +1821,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             <el-descriptions-item label="到位时间">
               {{ formatArrivalDisplay(viewDetail) }}
             </el-descriptions-item>
-            <el-descriptions-item label="诊断结果">
+            <el-descriptions-item label="最终诊断结果">
               <el-tag
                 v-if="viewDetail.diagnosisResult"
                 :type="viewDetail.archived && isConfirmedPatientDiagnosis(viewDetail) ? 'danger' : 'info'"
@@ -2068,18 +2073,18 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="推介原因" prop="recommendReason">
+            <el-form-item label="诊断结果" prop="recommendReason">
               <el-input v-model="editForm.recommendReason" type="textarea" :rows="3" />
             </el-form-item>
           </el-col>
           <template v-if="canEditDiagnosis">
             <el-col :span="24">
               <el-divider content-position="left">
-                诊断结果
+                最终诊断结果
               </el-divider>
             </el-col>
             <el-col :span="24">
-              <el-form-item label="诊断结果">
+              <el-form-item label="最终诊断结果">
                 <el-radio-group :model-value="editForm.diagnosisResult">
                   <el-radio
                     v-for="item in editDiagnosisOptions"
@@ -2100,13 +2105,13 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
                   :rows="2"
                   maxlength="500"
                   show-word-limit
-                  placeholder="请输入其他诊断结果说明"
+                  placeholder="请输入其他最终诊断结果说明"
                 />
               </el-form-item>
             </el-col>
             <el-col :span="24">
               <el-alert
-                title="修改诊断结果仅更新本页展示，不会重新触发分流（如创建潜伏感染者）"
+                title="修改最终诊断结果仅更新本页展示，不会重新触发分流（如创建潜伏感染者）"
                 type="info"
                 :closable="false"
                 show-icon

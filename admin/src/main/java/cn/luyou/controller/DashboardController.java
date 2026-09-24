@@ -3,6 +3,7 @@ package cn.luyou.controller;
 import cn.luyou.common.result.ResultRes;
 import cn.luyou.common.result.ResultResponse;
 import cn.luyou.model.*;
+import cn.luyou.model.vo.SentNoticeVO;
 import cn.luyou.service.*;
 import cn.luyou.utils.DataScopeHelper;
 import cn.luyou.utils.DepartmentFilterSupport;
@@ -65,6 +66,14 @@ public class DashboardController {
         data.put("upcomingReview", closeContactService.count(reviewWrapper));
 
         return ResultRes.success(data);
+    }
+
+    @Operation(summary = "待确认通知单明细（与 summary.pendingNotice 口径一致）")
+    @GetMapping("/pending-notices")
+    public ResultResponse<List<SentNoticeVO>> pendingNotices(
+            @RequestParam(required = false) String departmentIds) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(noticeService.listPendingForDashboard(filterDeptIds));
     }
 
     @Operation(summary = "获取所有上传批次（任务）列表")

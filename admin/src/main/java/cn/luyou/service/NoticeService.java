@@ -25,6 +25,11 @@ public interface NoticeService extends IService<Notice> {
     /** 查询当前用户已发送的通知单（分页，含发送者/接收者名称） */
     IPage<SentNoticeVO> sentPage(Long senderId, int pageNum, int size);
 
+    /**
+     * 首页「待确认通知单」明细：status=1，权限与部门筛选口径与 dashboard/summary 的 pendingNotice 一致。
+     */
+    List<SentNoticeVO> listPendingForDashboard(List<Long> filterDeptIds);
+
     /** 手动催促接收方接收通知单 */
     void remind(Long id);
 

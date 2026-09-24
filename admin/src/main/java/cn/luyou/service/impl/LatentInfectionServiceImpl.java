@@ -172,7 +172,8 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                                              String referralResult, String diagnosisFirst,
                                              String phone, String dateFrom, String dateTo,
                                              String dateFilterBy, String creatorName, String crowdCategory,
-                                             List<Long> filterDepartmentIds, String columnFilters, String formatIssue) {
+                                             List<Long> filterDepartmentIds, String columnFilters, String formatIssue,
+                                             Boolean noticeSent) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         boolean noticeFillFilter = "noticeFill".equals(dateFilterBy);
@@ -202,6 +203,20 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 filterBizIds = creatorBizIds;
             } else {
                 filterBizIds.retainAll(creatorBizIds);
+                if (filterBizIds.isEmpty()) {
+                    return new Page<>(page, size);
+                }
+            }
+        }
+        if (Boolean.TRUE.equals(noticeSent)) {
+            Set<Long> noticeSentBizIds = resolveNoticeSentBizIds(populationType);
+            if (noticeSentBizIds.isEmpty()) {
+                return new Page<>(page, size);
+            }
+            if (filterBizIds == null) {
+                filterBizIds = noticeSentBizIds;
+            } else {
+                filterBizIds.retainAll(noticeSentBizIds);
                 if (filterBizIds.isEmpty()) {
                     return new Page<>(page, size);
                 }
@@ -259,6 +274,12 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
         } else if (!hasSpecialDateRange) {
             wrapper.ge(createFrom != null, LatentInfection::getCreateTime, createFrom)
                     .le(createTo != null, LatentInfection::getCreateTime, createTo);
+        }
+        if (Boolean.FALSE.equals(noticeSent)) {
+            Set<Long> noticeSentBizIds = resolveNoticeSentBizIds(populationType);
+            if (!noticeSentBizIds.isEmpty()) {
+                wrapper.notIn(LatentInfection::getId, noticeSentBizIds);
+            }
         }
         applyColumnFilters(wrapper, columnFilters);
         IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
@@ -670,6 +691,19 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
                 .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType)
                 .ge(noticeFrom != null, Notice::getCreateTime, noticeFrom)
                 .le(noticeTo != null, Notice::getCreateTime, noticeTo);
+        return noticeMapper.selectList(noticeWrapper.select(Notice::getBizId)).stream()
+                .map(Notice::getBizId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** 通知单已发送（status≥1，含待确认与已确认）的潜伏感染业务 ID */
+    private Set<Long> resolveNoticeSentBizIds(String populationType) {
+        LambdaQueryWrapper<Notice> noticeWrapper = new LambdaQueryWrapper<>();
+        noticeWrapper.eq(Notice::getNoticeType, "latent")
+                .eq(StrUtil.isNotBlank(populationType), Notice::getPopulationType, populationType)
+                .ge(Notice::getStatus, 1)
+                .isNotNull(Notice::getBizId);
         return noticeMapper.selectList(noticeWrapper.select(Notice::getBizId)).stream()
                 .map(Notice::getBizId)
                 .filter(Objects::nonNull)

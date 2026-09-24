@@ -681,6 +681,7 @@ export const PATIENT_NOTICE_STATUS_FILTER_OPTIONS = [
   { label: "未发送", value: "none" },
   { label: "草稿", value: "0" },
   { label: "已发送", value: "1" },
+  { label: "待确认通知单", value: "pendingConfirm" },
   { label: "已确认", value: "2" }
 ] as const
 

@@ -53,7 +53,7 @@ const formRules = {
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
-  recommendReason: [{ required: true, message: "请填写推介原因", trigger: "blur" }],
+  recommendReason: [{ required: true, message: "请填写诊断结果", trigger: "blur" }],
   receiverUserId: [{ required: true, message: "请选择推介接收人", trigger: "change" }]
 }
 
@@ -397,7 +397,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="诊断结果">
+          <el-form-item label="最终诊断结果">
             <el-radio-group v-model="form.diagnosisResult">
               <el-radio
                 v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
@@ -420,12 +420,12 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="推介原因" prop="recommendReason">
+          <el-form-item label="诊断结果" prop="recommendReason">
             <el-input
               v-model="form.recommendReason"
               type="textarea"
               :rows="3"
-              placeholder="请填写推介原因"
+              placeholder="请填写诊断结果"
             />
           </el-form-item>
         </el-col>

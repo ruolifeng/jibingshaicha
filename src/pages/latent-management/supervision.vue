@@ -59,7 +59,7 @@ async function fetchData() {
       size: paginationData.pageSize,
       archived: 0,
       referralResult: "latent",
-      trackingStatus: 1,
+      noticeSent: true,
       dateFilterBy: "supervisionFill",
       ...rest,
       ...extractDateRangeParams(dateRange),
@@ -135,7 +135,7 @@ function buildListQueryParams() {
     populationType: searchForm.populationType || undefined,
     archived: 0,
     referralResult: "latent",
-    trackingStatus: 1,
+    noticeSent: true,
     dateFilterBy: "supervisionFill",
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)

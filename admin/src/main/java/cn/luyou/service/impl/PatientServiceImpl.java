@@ -1113,11 +1113,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                         .apply("((population_type = 'specialDisease' OR source = 'specialDisease') AND (diagnosis_result IS NULL OR diagnosis_result = ''))"));
     }
 
-    /** 通知单状态：none=未发送；0草稿/1已发送/2已确认（按最新一条通知单） */
+    /** 通知单状态：none=未发送；0草稿/1已发送(待确认)/2已确认（按最新一条通知单） */
     private void applyNoticeStatusFilter(LambdaQueryWrapper<Patient> wrapper, String value) {
         Set<String> statuses = new LinkedHashSet<>(ColumnFilterSupport.splitValues(value));
         if (statuses.isEmpty()) {
             return;
+        }
+        // 「待确认通知单」与 status=1（已发送待确认）同口径
+        if (statuses.contains("pendingConfirm")
+                || statuses.contains("待确认")
+                || statuses.contains("待确认通知单")) {
+            statuses.add("1");
         }
         List<Notice> notices = noticeMapper.selectList(new LambdaQueryWrapper<Notice>()
                 .eq(Notice::getNoticeType, "patient")
@@ -1137,7 +1143,10 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             String key = st == null ? "" : String.valueOf(st);
             if (statuses.contains(key)
                     || (st != null && st == 0 && statuses.contains("草稿"))
-                    || (st != null && st == 1 && statuses.contains("已发送"))
+                    || (st != null && st == 1 && (statuses.contains("已发送")
+                    || statuses.contains("待确认")
+                    || statuses.contains("待确认通知单")
+                    || statuses.contains("pendingConfirm")))
                     || (st != null && st == 2 && statuses.contains("已确认"))) {
                 matched.add(e.getKey());
             }

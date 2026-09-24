@@ -129,3 +129,26 @@ export function getUpcomingVisitSupervisionApi(departmentIds?: string[]) {
     params: withDepartmentIds({}, departmentIds)
   })
 }
+
+export interface PendingNoticeItem {
+  id: string
+  bizId?: string
+  noticeType: string
+  populationType?: string
+  patientName: string
+  senderName?: string
+  senderOrgName?: string
+  receiverName?: string
+  receiverOrgName?: string
+  status: number
+  sentTime?: string
+}
+
+/** 首页待确认通知单明细（与 summary.pendingNotice 口径一致） */
+export function getDashboardPendingNoticesApi(departmentIds?: string[]) {
+  return request<ApiResponseData<PendingNoticeItem[]>>({
+    url: "dashboard/pending-notices",
+    method: "get",
+    params: withDepartmentIds({}, departmentIds)
+  })
+}

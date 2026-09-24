@@ -159,6 +159,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         List<SentNoticeVO> voList = noticePage.getRecords().stream().map(n -> {
             SentNoticeVO vo = new SentNoticeVO();
             vo.setId(n.getId());
+            vo.setBizId(n.getBizId());
             vo.setNoticeType(n.getNoticeType());
             vo.setPopulationType(n.getPopulationType());
             vo.setPatientName(n.getPatientName());
@@ -177,6 +178,39 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         IPage<SentNoticeVO> result = new Page<>(noticePage.getCurrent(), noticePage.getSize(), noticePage.getTotal());
         result.setRecords(voList);
         return result;
+    }
+
+    @Override
+    public List<SentNoticeVO> listPendingForDashboard(List<Long> filterDeptIds) {
+        LambdaQueryWrapper<Notice> wrapper = new LambdaQueryWrapper<Notice>()
+                .eq(Notice::getStatus, 1)
+                .orderByDesc(Notice::getSentTime)
+                .last("LIMIT 200");
+        dataScopeHelper.applyNoticeScope(wrapper);
+        dataScopeHelper.applyNoticeBizDepartmentFilter(wrapper, filterDeptIds);
+        List<Notice> notices = list(wrapper);
+        if (notices.isEmpty()) {
+            return List.of();
+        }
+        noticePartyFillSupport.fillPartyNames(notices);
+        return notices.stream().map(n -> {
+            SentNoticeVO vo = new SentNoticeVO();
+            vo.setId(n.getId());
+            vo.setBizId(n.getBizId());
+            vo.setNoticeType(n.getNoticeType());
+            vo.setPopulationType(n.getPopulationType());
+            vo.setPatientName(n.getPatientName());
+            vo.setSenderId(n.getSenderId());
+            vo.setReceiverOrgId(n.getReceiverOrgId());
+            vo.setStatus(n.getStatus());
+            vo.setSentTime(n.getSentTime());
+            vo.setConfirmedTime(n.getConfirmedTime());
+            vo.setSenderName(n.getSenderName());
+            vo.setSenderOrgName(n.getSenderOrgName());
+            vo.setReceiverName(n.getReceiverName());
+            vo.setReceiverOrgName(n.getReceiverOrgName());
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     @Override
