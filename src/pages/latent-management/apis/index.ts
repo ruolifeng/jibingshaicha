@@ -197,7 +197,7 @@ export function getSupervisionListApi(latentInfectionId: string) {
   return request<ApiResponseData<any[]>>({ url: `supervision/list/${latentInfectionId}`, method: "get" })
 }
 
-/** 导出督导表（ids 勾选；否则按当前筛选） */
+/** 导出督导表（ids 勾选；否则按当前筛选；默认仅通知单已发送） */
 export function exportLatentSupervisionFormsApi(params: Record<string, any>) {
   const { ids, ...rest } = params
   return request<Blob>({
@@ -206,7 +206,7 @@ export function exportLatentSupervisionFormsApi(params: Record<string, any>) {
     params: {
       archived: 0,
       referralResult: "latent",
-      trackingStatus: 1,
+      noticeSent: true,
       dateFilterBy: "supervisionFill",
       ...rest,
       ...(Array.isArray(ids) && ids.length ? { ids: ids.join(",") } : {})

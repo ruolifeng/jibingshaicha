@@ -4,8 +4,10 @@ import { extractDateRangeParams, mergeColumnFilter } from "@@/utils/searchParams
 import { getLatentAggregateListApi } from "../apis"
 
 export interface LatentOverviewListOptions {
-  /** 固定追踪状态筛选（如督导表/服药管理仅显示到位=1） */
+  /** 固定筛选（如服药管理仅显示到位=1；督导表请用 noticeSent） */
   trackingStatus?: number
+  /** 固定通知单发送状态（督导表仅显示已发送） */
+  noticeSent?: boolean
 }
 
 /** 在管潜伏感染者总览列表（含手动/导入密接，排除密接筛查同步数据） */
@@ -73,13 +75,15 @@ export function useLatentOverviewList(options: LatentOverviewListOptions = {}) {
           : {}),
         ...(formatIssue ? { formatIssue } : {}),
         ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
-        ...(options.trackingStatus != null ? { trackingStatus: options.trackingStatus } : {})
+        ...(options.trackingStatus != null ? { trackingStatus: options.trackingStatus } : {}),
+        ...(options.noticeSent != null ? { noticeSent: options.noticeSent } : {})
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone
       if (!params.creatorName) delete params.creatorName
       if (!params.medicationManagementUnit) delete params.medicationManagementUnit
       if (params.trackingStatus == null) delete params.trackingStatus
+      if (params.noticeSent == null) delete params.noticeSent
       const { data } = await getLatentAggregateListApi(params)
       allRecords.value = data.records ?? []
       applySortAndPage()

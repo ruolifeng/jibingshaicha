@@ -55,9 +55,8 @@ public class OperationLogController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        // 一/二级用户可查看，普通业务用户不可（由前端菜单权限控制）；
-        // 服务端兜底：要求角色 <= 3（即 admin/一级/二级）。
-        userService.checkPermission(3);
+        // 按权限管理分配的权限码校验（不再写死角色等级，三级勾选后可查看）
+        userService.checkAnyPermissionCode("system:operationLog", "operationLog:filter");
         return ResultRes.success(operationLogService.queryPage(
                 page, size, opType, opModule, userName, keyword, startTime, endTime));
     }
@@ -74,8 +73,8 @@ public class OperationLogController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) throws IOException {
-        // 导出需要超管或一级用户
-        userService.checkPermission(2);
+        // 按权限管理分配的导出权限码校验
+        userService.checkPermissionCode("operationLog:export");
         String fileName = "操作日志_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".xlsx";
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("UTF-8");

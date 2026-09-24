@@ -3,7 +3,9 @@ package cn.luyou.service.impl;
 import cn.hutool.core.util.StrUtil;
 import cn.luyou.mapper.OperationLogMapper;
 import cn.luyou.model.OperationLog;
+import cn.luyou.service.DepartmentService;
 import cn.luyou.service.OperationLogService;
+import cn.luyou.utils.BaseContext;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -33,6 +35,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, OperationLog>
         implements OperationLogService {
+
+    private final DepartmentService departmentService;
 
     /** 操作类型 → 中文映射（仅用于导出列） */
     private static final Map<String, String> OP_TYPE_LABEL = Map.of(
@@ -69,16 +73,8 @@ public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, Ope
                                          String opType, String opModule,
                                          String userName, String keyword,
                                          LocalDateTime startTime, LocalDateTime endTime) {
-        LambdaQueryWrapper<OperationLog> w = new LambdaQueryWrapper<>();
-        w.eq(StrUtil.isNotBlank(opType), OperationLog::getOpType, opType)
-         .eq(StrUtil.isNotBlank(opModule), OperationLog::getOpModule, opModule)
-         .like(StrUtil.isNotBlank(userName), OperationLog::getUserName, userName)
-         .and(StrUtil.isNotBlank(keyword), q -> q
-                 .like(OperationLog::getOpAction, keyword).or()
-                 .like(OperationLog::getRequestUrl, keyword))
-         .ge(startTime != null, OperationLog::getCreateTime, startTime)
-         .le(endTime != null, OperationLog::getCreateTime, endTime)
-         .orderByDesc(OperationLog::getCreateTime);
+        LambdaQueryWrapper<OperationLog> w = buildQueryWrapper(
+                opType, opModule, userName, keyword, startTime, endTime);
         return page(new Page<>(page, size), w);
     }
 
@@ -87,16 +83,8 @@ public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, Ope
                            String userName, String keyword,
                            LocalDateTime startTime, LocalDateTime endTime,
                            OutputStream outputStream) {
-        LambdaQueryWrapper<OperationLog> w = new LambdaQueryWrapper<>();
-        w.eq(StrUtil.isNotBlank(opType), OperationLog::getOpType, opType)
-         .eq(StrUtil.isNotBlank(opModule), OperationLog::getOpModule, opModule)
-         .like(StrUtil.isNotBlank(userName), OperationLog::getUserName, userName)
-         .and(StrUtil.isNotBlank(keyword), q -> q
-                 .like(OperationLog::getOpAction, keyword).or()
-                 .like(OperationLog::getRequestUrl, keyword))
-         .ge(startTime != null, OperationLog::getCreateTime, startTime)
-         .le(endTime != null, OperationLog::getCreateTime, endTime)
-         .orderByDesc(OperationLog::getCreateTime);
+        LambdaQueryWrapper<OperationLog> w = buildQueryWrapper(
+                opType, opModule, userName, keyword, startTime, endTime);
         List<OperationLog> records = list(w);
 
         // 转为简单 List<List<Object>> 写出，避免给实体加 Excel 注解
@@ -131,5 +119,57 @@ public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, Ope
                 .head(head)
                 .sheet("操作日志")
                 .doWrite(rows);
+    }
+
+    private LambdaQueryWrapper<OperationLog> buildQueryWrapper(
+            String opType, String opModule,
+            String userName, String keyword,
+            LocalDateTime startTime, LocalDateTime endTime) {
+        LambdaQueryWrapper<OperationLog> w = new LambdaQueryWrapper<>();
+        w.eq(StrUtil.isNotBlank(opType), OperationLog::getOpType, opType)
+                .eq(StrUtil.isNotBlank(opModule), OperationLog::getOpModule, opModule)
+                .like(StrUtil.isNotBlank(userName), OperationLog::getUserName, userName)
+                .and(StrUtil.isNotBlank(keyword), q -> q
+                        .like(OperationLog::getOpAction, keyword).or()
+                        .like(OperationLog::getRequestUrl, keyword))
+                .ge(startTime != null, OperationLog::getCreateTime, startTime)
+                .le(endTime != null, OperationLog::getCreateTime, endTime);
+        applyViewerScope(w);
+        w.orderByDesc(OperationLog::getCreateTime);
+        return w;
+    }
+
+    /**
+     * 非超管仅可看本部门及下级部门操作日志（含本人）；超管不限制。
+     */
+    private void applyViewerScope(LambdaQueryWrapper<OperationLog> w) {
+        if (BaseContext.isSuperAdmin()) {
+            return;
+        }
+        Long userId = BaseContext.getCurrentId();
+        Long deptId = BaseContext.getCurrentDepartmentId();
+        if (deptId == null) {
+            if (userId != null) {
+                w.eq(OperationLog::getUserId, userId);
+            } else {
+                w.apply("1 = 0");
+            }
+            return;
+        }
+        List<Long> deptIds = departmentService.getDescendantIds(deptId);
+        if (deptIds == null || deptIds.isEmpty()) {
+            if (userId != null) {
+                w.eq(OperationLog::getUserId, userId);
+            } else {
+                w.apply("1 = 0");
+            }
+            return;
+        }
+        w.and(q -> {
+            q.in(OperationLog::getDepartmentId, deptIds);
+            if (userId != null) {
+                q.or().eq(OperationLog::getUserId, userId);
+            }
+        });
     }
 }

@@ -101,7 +101,7 @@ function val(key: string) {
             <td>{{ val("fillUserName") }}</td>
           </tr>
           <tr>
-            <th>推介原因</th>
+            <th>诊断结果</th>
             <td colspan="3">
               {{ val("recommendReason") }}
             </td>

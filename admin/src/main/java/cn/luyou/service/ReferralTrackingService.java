@@ -153,7 +153,7 @@ public interface ReferralTrackingService extends IService<ReferralTracking> {
     /** 接收方拒绝推介（recommendStatus: 1→3，归档） */
     void rejectRecommend(Long id, String reason);
 
-    /** 接收方/发起方/四级开启共同追踪（开启后同辖区三/四/五级均可追踪，次数合并计算） */
+    /** 发起方/接收方/同辖区三或四级开启共同追踪（开启后同辖区三/四/五级均可追踪，次数合并计算） */
     void enableJointTracking(Long id);
 
     /**

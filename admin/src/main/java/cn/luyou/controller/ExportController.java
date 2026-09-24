@@ -1188,18 +1188,21 @@ public class ExportController {
             @RequestParam(required = false) String creatorName,
             @RequestParam(required = false) Integer archived,
             @RequestParam(required = false) Integer trackingStatus,
+            @RequestParam(required = false) Boolean noticeSent,
             @RequestParam(required = false) String referralResult,
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String departmentIds,
             HttpServletResponse response) throws IOException {
+        // 督导表默认按「通知单已发送」展示（不再默认按追踪到位）
+        Boolean effectiveNoticeSent = noticeSent != null ? noticeSent : Boolean.TRUE;
         List<LatentInfection> latents = loadLatentsForSupervisionExport(
                 ids, populationType, name, idNumber, phone, dateFrom, dateTo,
                 StrUtil.blankToDefault(dateFilterBy, "supervisionFill"),
-                creatorName, archived, trackingStatus != null ? trackingStatus : 1,
+                creatorName, archived, trackingStatus,
                 StrUtil.blankToDefault(referralResult, "latent"),
-                crowdCategory, columnFilters, formatIssue, departmentIds);
+                crowdCategory, columnFilters, formatIssue, departmentIds, effectiveNoticeSent);
         if (latents.isEmpty()) {
             writeExcel(response, "督导表", List.of(), SUPERVISION_FORM_EXPORT_HEADERS);
             return;
@@ -1383,6 +1386,17 @@ public class ExportController {
             String dateFrom, String dateTo, String dateFilterBy, String creatorName,
             Integer archived, Integer trackingStatus, String referralResult,
             String crowdCategory, String columnFilters, String formatIssue, String departmentIds) {
+        return loadLatentsForSupervisionExport(ids, populationType, name, idNumber, phone,
+                dateFrom, dateTo, dateFilterBy, creatorName, archived, trackingStatus, referralResult,
+                crowdCategory, columnFilters, formatIssue, departmentIds, null);
+    }
+
+    private List<LatentInfection> loadLatentsForSupervisionExport(
+            String ids, String populationType, String name, String idNumber, String phone,
+            String dateFrom, String dateTo, String dateFilterBy, String creatorName,
+            Integer archived, Integer trackingStatus, String referralResult,
+            String crowdCategory, String columnFilters, String formatIssue, String departmentIds,
+            Boolean noticeSent) {
         List<Long> idList = parseIdList(ids);
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         if (!idList.isEmpty()) {
@@ -1405,7 +1419,8 @@ public class ExportController {
             var page = latentInfectionService.queryPage(
                     pageNum, pageSize, populationType, name, idNumber, trackingStatus,
                     archived != null ? archived : 0, referralResult, null, phone, dateFrom, dateTo,
-                    dateFilterBy, creatorName, crowdCategory, filterDeptIds, columnFilters, formatIssue);
+                    dateFilterBy, creatorName, crowdCategory, filterDeptIds, columnFilters, formatIssue,
+                    noticeSent);
             if (page.getRecords() == null || page.getRecords().isEmpty()) {
                 break;
             }

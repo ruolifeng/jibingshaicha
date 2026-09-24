@@ -20,6 +20,7 @@ import {
   getDashboardSummaryApi,
   getDashboardTaskStatsApi
 } from "../apis"
+import PendingNoticePanel from "./PendingNoticePanel.vue"
 import PendingTrackingPanel from "./PendingTrackingPanel.vue"
 import UpcomingVisitSupervisionPanel from "./UpcomingVisitSupervisionPanel.vue"
 
@@ -53,6 +54,8 @@ const messageStats = ref<MessageStatsData>({
 
 /** 待追踪卡片是否展开下方明细 */
 const pendingTrackingExpanded = ref(false)
+/** 待确认通知单卡片是否展开下方明细 */
+const pendingNoticeExpanded = ref(false)
 
 async function fetchYearSummary() {
   yearStatsLoading.value = true
@@ -66,6 +69,7 @@ async function fetchYearSummary() {
 
 const reminderPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 const pendingTrackingPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
+const pendingNoticePanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
 async function fetchAll() {
   summaryLoading.value = true
@@ -82,7 +86,8 @@ async function fetchAll() {
   await Promise.all([
     fetchTaskStats(),
     reminderPanelRef.value?.refresh(),
-    pendingTrackingPanelRef.value?.refresh()
+    pendingTrackingPanelRef.value?.refresh(),
+    pendingNoticePanelRef.value?.refresh()
   ])
 }
 
@@ -127,8 +132,20 @@ function getStatCardLabel(key: string, label: string) {
 }
 
 function onStatCardClick(key: string) {
-  if (key !== "pendingTracking") return
-  pendingTrackingExpanded.value = !pendingTrackingExpanded.value
+  if (key === "pendingTracking") {
+    pendingTrackingExpanded.value = !pendingTrackingExpanded.value
+    if (pendingTrackingExpanded.value) pendingNoticeExpanded.value = false
+    return
+  }
+  if (key === "pendingNotice") {
+    pendingNoticeExpanded.value = !pendingNoticeExpanded.value
+    if (pendingNoticeExpanded.value) pendingTrackingExpanded.value = false
+  }
+}
+
+async function onPendingNoticeConfirmed() {
+  await fetchYearSummary()
+  await pendingNoticePanelRef.value?.refresh()
 }
 
 const pathogenPositiveRateText = computed(() => {
@@ -231,8 +248,9 @@ const noticeMaxSent = computed(() =>
         <div
           class="stat-card"
           :class="{
-            clickable: card.key === 'pendingTracking',
-            active: card.key === 'pendingTracking' && pendingTrackingExpanded,
+            clickable: card.key === 'pendingTracking' || card.key === 'pendingNotice',
+            active: (card.key === 'pendingTracking' && pendingTrackingExpanded)
+              || (card.key === 'pendingNotice' && pendingNoticeExpanded),
           }"
           :style="{ '--card-color': card.color, 'backgroundColor': card.bg }"
           @click="onStatCardClick(card.key)"
@@ -259,6 +277,13 @@ const noticeMaxSent = computed(() =>
       ref="pendingTrackingPanelRef"
       :expanded="pendingTrackingExpanded"
       :department-ids="selectedDepartmentIds"
+    />
+
+    <PendingNoticePanel
+      ref="pendingNoticePanelRef"
+      :expanded="pendingNoticeExpanded"
+      :department-ids="selectedDepartmentIds"
+      @confirmed="onPendingNoticeConfirmed"
     />
 
     <UpcomingVisitSupervisionPanel ref="reminderPanelRef" :department-ids="selectedDepartmentIds" />

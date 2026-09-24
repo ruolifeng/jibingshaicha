@@ -5,6 +5,7 @@ import { DASHBOARD_ADMIN_TITLE, DASHBOARD_EDITOR_WELCOME } from "@@/constants/ap
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import { Bell, Calendar, FirstAidKit, Refresh, Search } from "@element-plus/icons-vue"
 import { getDashboardSummaryApi } from "../apis"
+import PendingNoticePanel from "./PendingNoticePanel.vue"
 import PendingTrackingPanel from "./PendingTrackingPanel.vue"
 import UpcomingVisitSupervisionPanel from "./UpcomingVisitSupervisionPanel.vue"
 
@@ -21,9 +22,12 @@ const summary = ref<DashboardSummaryData>({
 
 /** 待追踪卡片是否展开下方明细 */
 const pendingTrackingExpanded = ref(false)
+/** 待确认通知单卡片是否展开下方明细 */
+const pendingNoticeExpanded = ref(false)
 
 const reminderPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 const pendingTrackingPanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
+const pendingNoticePanelRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
 async function fetchSummary() {
   summaryLoading.value = true
@@ -35,13 +39,25 @@ async function fetchSummary() {
   }
   await Promise.all([
     reminderPanelRef.value?.refresh(),
-    pendingTrackingPanelRef.value?.refresh()
+    pendingTrackingPanelRef.value?.refresh(),
+    pendingNoticePanelRef.value?.refresh()
   ])
 }
 
 function onStatCardClick(key: string) {
-  if (key !== "pendingTracking") return
-  pendingTrackingExpanded.value = !pendingTrackingExpanded.value
+  if (key === "pendingTracking") {
+    pendingTrackingExpanded.value = !pendingTrackingExpanded.value
+    if (pendingTrackingExpanded.value) pendingNoticeExpanded.value = false
+    return
+  }
+  if (key === "pendingNotice") {
+    pendingNoticeExpanded.value = !pendingNoticeExpanded.value
+    if (pendingNoticeExpanded.value) pendingTrackingExpanded.value = false
+  }
+}
+
+async function onPendingNoticeConfirmed() {
+  await fetchSummary()
 }
 
 onMounted(() => {
@@ -140,8 +156,9 @@ const trackingPeriodText = computed(() => {
         <div
           class="stat-card"
           :class="{
-            clickable: card.key === 'pendingTracking',
-            active: card.key === 'pendingTracking' && pendingTrackingExpanded,
+            clickable: card.key === 'pendingTracking' || card.key === 'pendingNotice',
+            active: (card.key === 'pendingTracking' && pendingTrackingExpanded)
+              || (card.key === 'pendingNotice' && pendingNoticeExpanded),
           }"
           :style="{ '--card-color': card.color, 'backgroundColor': card.bg }"
           @click="onStatCardClick(card.key)"
@@ -168,6 +185,13 @@ const trackingPeriodText = computed(() => {
       ref="pendingTrackingPanelRef"
       :expanded="pendingTrackingExpanded"
       :department-ids="selectedDepartmentIds"
+    />
+
+    <PendingNoticePanel
+      ref="pendingNoticePanelRef"
+      :expanded="pendingNoticeExpanded"
+      :department-ids="selectedDepartmentIds"
+      @confirmed="onPendingNoticeConfirmed"
     />
 
     <UpcomingVisitSupervisionPanel ref="reminderPanelRef" :department-ids="selectedDepartmentIds" />

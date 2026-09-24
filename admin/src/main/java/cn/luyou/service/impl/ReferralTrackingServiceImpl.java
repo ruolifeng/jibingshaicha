@@ -1207,7 +1207,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
         if (record.getCreatorId() != null) {
             String name = StrUtil.blankToDefault(record.getName(), "（未知姓名）");
             sysMessageService.sendMessage(record.getCreatorId(), "推介通知单已确认接收",
-                    String.format("「%s」的推介通知单已被接收方确认。四级用户选择未到位或点击「共同追踪」开启后，三/四/五级可共同追踪。", name),
+                    String.format("「%s」的推介通知单已被接收方确认。三级/四级用户可点击「共同追踪」开启；开启后三/四/五级可共同追踪。", name),
                     "referral_tracking_confirmed", id);
         }
         log.info("推介通知单已确认接收，recordId={}", id);
@@ -1269,7 +1269,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             log.info("共同追踪已开启（幂等），recordId={}", id);
             return;
         }
-        // 发起方 / 接收方 / 四级用户可开启
+        // 发起方 / 接收方 / 三级 / 四级用户可开启
         assertCanEnableJointTracking(record);
 
         lambdaUpdate()
@@ -1795,7 +1795,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                         : "未开启共同追踪前，仅推介发起方或接收方可操作");
     }
 
-    /** 开启共同追踪：超管 / 发起方 / 接收方 / 四级 */
+    /** 开启共同追踪：超管 / 发起方 / 接收方 / 三级 / 四级（三、四级不必是推介接收人，须同辖区可访问） */
     private void assertCanEnableJointTracking(ReferralTracking record) {
         if (BaseContext.isSuperAdmin()) {
             return;
@@ -1808,12 +1808,12 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             return;
         }
         Integer role = BaseContext.getCurrentRole();
-        // role=5 为四级
-        if (Integer.valueOf(5).equals(role) && userId != null
+        // role=4 三级、role=5 四级：同辖区即可开启（即使推介未发给该用户）
+        if ((Integer.valueOf(4).equals(role) || Integer.valueOf(5).equals(role)) && userId != null
                 && canAccessViaDepartmentScope(record, userId)) {
             return;
         }
-        throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介发起方、接收方或四级用户可开启共同追踪");
+        throw new ServiceException(StatusEnum.PARAM_INVALID, "仅推介发起方、接收方或同辖区三/四级用户可开启共同追踪");
     }
 
     /**

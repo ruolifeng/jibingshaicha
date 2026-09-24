@@ -10,6 +10,9 @@ public class SentNoticeVO {
 
     private Long id;
 
+    /** 关联业务ID（患者/潜伏感染） */
+    private Long bizId;
+
     /** 通知单类型：latent / patient */
     private String noticeType;
 
