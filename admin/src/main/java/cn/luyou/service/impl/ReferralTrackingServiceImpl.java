@@ -100,6 +100,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 .infectionResult(getStr(params, "infectionResult"))
                 .chestXrayDate(parseDate(params.get("chestXrayDate")))
                 .chestXrayResult(getStr(params, "chestXrayResult"))
+                .epidemicRemark(getStr(params, "epidemicRemark"))
                 .trackingStatus(0)
                 .notInPlaceCount(0)
                 .archived(0)
@@ -2487,7 +2488,7 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择人群分类");
         }
         if (StrUtil.isBlank(getStr(params, "recommendReason"))) {
-            throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写推介原因");
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择或录入诊断结果");
         }
         if (getLong(params, "receiverUserId") == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择推介接收人");

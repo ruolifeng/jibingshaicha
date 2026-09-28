@@ -405,6 +405,8 @@ async function handleBatchDelete() {
 }
 
 // ===== 新增推介 =====
+/** 推介「诊断结果」预设选项，仍可通过 allow-create 手动录入 */
+const RECOMMEND_REASON_OPTIONS = ["疑似结核", "确诊结核"] as const
 const createDialogVisible = ref(false)
 const level34Users = ref<any[]>([])
 const createForm = reactive({
@@ -425,10 +427,10 @@ const createForm = reactive({
   chestXrayDate: "",
   chestXrayResult: "",
   chestXrayRemark: "",
-  diagnosisResult: "",
   recommendUnitName: "",
   fillUserName: "",
   recommendReason: "",
+  epidemicRemark: "",
   receiverUserId: undefined as string | undefined
 })
 const createFormRef = ref()
@@ -442,7 +444,7 @@ const createFormRules = {
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
-  recommendReason: [{ required: true, message: "请填写诊断结果", trigger: "blur" }],
+  recommendReason: [{ required: true, message: "请选择或录入诊断结果", trigger: "change" }],
   receiverUserId: [{ required: true, message: "请选择推介接收人", trigger: "change" }]
 }
 
@@ -469,10 +471,10 @@ async function openCreateDialog() {
     chestXrayDate: "",
     chestXrayResult: "",
     chestXrayRemark: "",
-    diagnosisResult: "",
     recommendUnitName: resolveRecommendUnitName(),
     fillUserName: resolveFillUserName(),
     recommendReason: "",
+    epidemicRemark: "",
     receiverUserId: undefined
   })
   createDialogVisible.value = true
@@ -675,6 +677,7 @@ const editForm = reactive({
   chestXrayResult: "",
   chestXrayRemark: "",
   recommendReason: "",
+  epidemicRemark: "",
   diagnosisResult: "",
   diagnosisRemark: ""
 })
@@ -717,7 +720,7 @@ function toggleEditDiagnosis(value: string) {
 }
 
 const editFormRules = {
-  recommendReason: [{ required: true, message: "请填写诊断结果", trigger: "blur" }]
+  recommendReason: [{ required: true, message: "请选择或录入诊断结果", trigger: "change" }]
 }
 
 async function openEditDialog(row: any) {
@@ -741,6 +744,7 @@ async function openEditDialog(row: any) {
     chestXrayResult: "",
     chestXrayRemark: "",
     recommendReason: row.recommendReason ?? "",
+    epidemicRemark: row.epidemicRemark ?? "",
     diagnosisResult: row.diagnosisResult ?? "",
     diagnosisRemark: row.diagnosisRemark ?? ""
   })
@@ -775,6 +779,7 @@ async function openEditDialog(row: any) {
       if (detail.chestXrayDate != null) editForm.chestXrayDate = detail.chestXrayDate ?? ""
       if (detail.chestXrayResult != null) applyReferralChestXrayResult(editForm, detail.chestXrayResult)
       if (detail.recommendReason != null) editForm.recommendReason = detail.recommendReason ?? ""
+      if (detail.epidemicRemark != null) editForm.epidemicRemark = detail.epidemicRemark ?? ""
     }
   } catch {
     /* 详情失败时仍可用列表数据编辑筛查/推介原因 */
@@ -813,7 +818,8 @@ async function handleEditSave() {
       infectionResult: editForm.infectionResult,
       chestXrayDate: editForm.chestXrayDate,
       chestXrayResult: resolveReferralChestXrayResultForSave(editForm.chestXrayResult, editForm.chestXrayRemark),
-      recommendReason: editForm.recommendReason
+      recommendReason: editForm.recommendReason,
+      epidemicRemark: editForm.epidemicRemark
     }
     if (canEditDiagnosis.value) {
       payload.diagnosisResult = editForm.diagnosisResult
@@ -1317,6 +1323,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
         </el-table-column>
         <el-table-column prop="crowdCategory" label="人群分类" />
         <el-table-column prop="recommendReason" label="诊断结果" show-overflow-tooltip />
+        <el-table-column prop="epidemicRemark" label="备注" min-width="120" show-overflow-tooltip />
         <el-table-column prop="recommendUnitName" label="推介单位" min-width="140" show-overflow-tooltip />
         <el-table-column prop="receiverUnitName" label="推介接收单位" min-width="140" show-overflow-tooltip />
         <el-table-column prop="receiverUserName" label="推介接收人" min-width="140" show-overflow-tooltip />
@@ -1660,19 +1667,6 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
               <el-input v-model="createForm.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
             </el-form-item>
           </el-col>
-          <el-col :span="24">
-            <el-form-item label="最终诊断结果">
-              <el-radio-group v-model="createForm.diagnosisResult">
-                <el-radio
-                  v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
-                  :key="item.value"
-                  :value="item.value"
-                >
-                  {{ item.label }}
-                </el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
           <el-col :span="12">
             <el-form-item label="推介单位名称">
               <el-input v-model="createForm.recommendUnitName" readonly placeholder="系统自动生成" />
@@ -1685,11 +1679,31 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="24">
             <el-form-item label="诊断结果" prop="recommendReason">
-              <el-input
+              <el-select
                 v-model="createForm.recommendReason"
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                placeholder="请选择或手动录入诊断结果"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in RECOMMEND_REASON_OPTIONS"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="备注">
+              <el-input
+                v-model="createForm.epidemicRemark"
                 type="textarea"
-                :rows="3"
-                placeholder="请填写诊断结果"
+                :rows="2"
+                placeholder="请填写备注（选填）"
               />
             </el-form-item>
           </el-col>
@@ -1769,6 +1783,9 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-descriptions-item>
             <el-descriptions-item label="诊断结果" :span="2">
               {{ viewDetail.recommendReason || "-" }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="viewDetail.epidemicRemark" label="备注" :span="2">
+              {{ viewDetail.epidemicRemark }}
             </el-descriptions-item>
             <el-descriptions-item label="推介接收单位">
               {{ viewDetail.receiverUnitName || "-" }}
@@ -2074,7 +2091,32 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="24">
             <el-form-item label="诊断结果" prop="recommendReason">
-              <el-input v-model="editForm.recommendReason" type="textarea" :rows="3" />
+              <el-select
+                v-model="editForm.recommendReason"
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                placeholder="请选择或手动录入诊断结果"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in RECOMMEND_REASON_OPTIONS"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="备注">
+              <el-input
+                v-model="editForm.epidemicRemark"
+                type="textarea"
+                :rows="2"
+                placeholder="请填写备注（选填）"
+              />
             </el-form-item>
           </el-col>
           <template v-if="canEditDiagnosis">

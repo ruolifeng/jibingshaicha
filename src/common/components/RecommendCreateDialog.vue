@@ -3,7 +3,7 @@
  * 筛查管理 → 推介：抓取行基本信息预填后发送推介通知单
  */
 import PrintRecommend from "@@/components/PrintRecommend.vue"
-import { REFERRAL_CROWD_CATEGORY_OPTIONS, REFERRAL_TRACKING_DIAGNOSIS_OPTIONS } from "@@/constants/disease"
+import { REFERRAL_CROWD_CATEGORY_OPTIONS } from "@@/constants/disease"
 import {
   applyReferralChestXrayResult,
   isReferralChestXrayOther,
@@ -38,6 +38,9 @@ const emit = defineEmits<{
   (e: "success"): void
 }>()
 
+/** 推介「诊断结果」预设选项，仍可通过 allow-create 手动录入 */
+const RECOMMEND_REASON_OPTIONS = ["疑似结核", "确诊结核"] as const
+
 const userStore = useUserStore()
 const formRef = ref()
 const level34Users = ref<any[]>([])
@@ -53,7 +56,7 @@ const formRules = {
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
   crowdCategory: [{ required: true, message: "请选择人群分类", trigger: "change" }],
-  recommendReason: [{ required: true, message: "请填写诊断结果", trigger: "blur" }],
+  recommendReason: [{ required: true, message: "请选择或录入诊断结果", trigger: "change" }],
   receiverUserId: [{ required: true, message: "请选择推介接收人", trigger: "change" }]
 }
 
@@ -76,10 +79,10 @@ function createEmptyForm() {
     chestXrayDate: "",
     chestXrayResult: "",
     chestXrayRemark: "",
-    diagnosisResult: "",
     recommendUnitName: "",
     fillUserName: "",
     recommendReason: "",
+    epidemicRemark: "",
     receiverUserId: undefined as string | undefined
   }
 }
@@ -151,10 +154,10 @@ function mapSourceToForm(source: Record<string, any>, defaultCrowdCategory?: str
     chestXrayDate: toDateStr(source.chestXrayDate),
     chestXrayResult: "",
     chestXrayRemark: "",
-    diagnosisResult: source.diagnosisResult || "",
     recommendUnitName: userStore.orgName || "",
     fillUserName: userStore.realName || userStore.username || "",
     recommendReason: "",
+    epidemicRemark: "",
     receiverUserId: undefined as string | undefined
   }
   applyReferralChestXrayResult(mapped, source.chestXrayResult)
@@ -396,19 +399,6 @@ async function handleSubmit() {
             <el-input v-model="form.chestXrayRemark" type="textarea" :rows="2" placeholder="请填写其他胸片检查结果" />
           </el-form-item>
         </el-col>
-        <el-col :span="24">
-          <el-form-item label="最终诊断结果">
-            <el-radio-group v-model="form.diagnosisResult">
-              <el-radio
-                v-for="item in REFERRAL_TRACKING_DIAGNOSIS_OPTIONS"
-                :key="item.value"
-                :value="item.value"
-              >
-                {{ item.label }}
-              </el-radio>
-            </el-radio-group>
-          </el-form-item>
-        </el-col>
         <el-col :span="12">
           <el-form-item label="推介单位名称">
             <el-input v-model="form.recommendUnitName" readonly placeholder="系统自动生成" />
@@ -421,11 +411,31 @@ async function handleSubmit() {
         </el-col>
         <el-col :span="24">
           <el-form-item label="诊断结果" prop="recommendReason">
-            <el-input
+            <el-select
               v-model="form.recommendReason"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              placeholder="请选择或手动录入诊断结果"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in RECOMMEND_REASON_OPTIONS"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="备注">
+            <el-input
+              v-model="form.epidemicRemark"
               type="textarea"
-              :rows="3"
-              placeholder="请填写诊断结果"
+              :rows="2"
+              placeholder="请填写备注（选填）"
             />
           </el-form-item>
         </el-col>

@@ -10,6 +10,7 @@ import cn.luyou.service.CloseContactCaseService;
 import cn.luyou.service.ScreeningCloseContactService;
 import cn.luyou.service.SysMessageReminderConfigService;
 import cn.luyou.service.SysMessageService;
+import cn.luyou.utils.CloseContactCaseFollowupReminderSupport;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,8 @@ import java.util.Map;
 
 /**
  * 密接随访/复查提醒：
- * - 密接个案表：按 6/12/24 月随访日期提醒；用两个开关分别控制「未开展 / 已开展」预防性治疗人群
+ * - 密接个案表：仅最终筛查结果为潜伏感染者时，按 6/12/24 月随访日期提醒；
+ *   用两个开关分别控制「未开展 / 已开展」预防性治疗（其余人员不发送）
  * - 密接筛查表：保留 6/12 月窗口提醒，接收人改为录入者（不再广播四级）
  */
 @Slf4j
@@ -140,15 +142,16 @@ public class CloseContactReminderTask {
         Map<String, Long> usernameCache = new HashMap<>();
         int sent = 0;
         for (CloseContactCase record : list) {
-            Boolean withPreventive = classifyPreventiveTreatment(record.getHasPreventiveTreatment());
-            if (withPreventive == null) {
+            if (!CloseContactCaseFollowupReminderSupport.shouldSendCaseFollowupReminder(
+                    record.getFinalScreeningResult(),
+                    record.getHasPreventiveTreatment(),
+                    remindNoPreventive,
+                    remindWithPreventive)) {
                 continue;
             }
-            if (withPreventive) {
-                if (!remindWithPreventive) {
-                    continue;
-                }
-            } else if (!remindNoPreventive) {
+            Boolean withPreventive = CloseContactCaseFollowupReminderSupport
+                    .classifyPreventiveTreatment(record.getHasPreventiveTreatment());
+            if (withPreventive == null) {
                 continue;
             }
 
@@ -173,24 +176,6 @@ public class CloseContactReminderTask {
             sent++;
         }
         return sent;
-    }
-
-    /**
-     * @return true=已开展，false=未开展，null=无法归类（跳过）
-     */
-    private Boolean classifyPreventiveTreatment(String raw) {
-        if (StrUtil.isBlank(raw)) {
-            // 空值按未开展，便于提醒补录随访
-            return false;
-        }
-        String value = raw.trim();
-        if ("开展".equals(value) || "是".equals(value)) {
-            return true;
-        }
-        if ("未开展".equals(value) || "否".equals(value) || "不服药".equals(value)) {
-            return false;
-        }
-        return null;
     }
 
     private int sendScreeningReminders(List<ScreeningCloseContact> list, String title,
