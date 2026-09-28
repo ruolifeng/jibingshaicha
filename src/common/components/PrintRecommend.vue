@@ -106,6 +106,12 @@ function val(key: string) {
               {{ val("recommendReason") }}
             </td>
           </tr>
+          <tr>
+            <th>备注</th>
+            <td colspan="3">
+              {{ val("epidemicRemark") }}
+            </td>
+          </tr>
           <tr v-if="data?.recommendSentTime || data?.createTime">
             <th>推介时间</th>
             <td colspan="3">

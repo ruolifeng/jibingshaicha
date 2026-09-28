@@ -67,7 +67,7 @@ public class ReferralTracking extends BaseEntity {
     private String reportUnit;
     /** 报告卡录入时间 */
     private LocalDateTime reportCardTime;
-    /** 大疫情备注 */
+    /** 大疫情备注；手动新增推介/追踪时也可作通用备注 */
     private String epidemicRemark;
     /** 导入批次号 */
     private String uploadBatch;

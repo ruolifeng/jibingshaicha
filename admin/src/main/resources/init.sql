@@ -4284,14 +4284,14 @@ CREATE TABLE IF NOT EXISTS `sys_message_reminder_config` (
 
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
-SELECT 127000001, 'close_contact_case_followup_no_preventive', '密接个案-未开展预防性治疗随访提醒',
-       '密接个案表 6/12/24 月随访到期时，对「未开展」预防性治疗的人群提醒录入者', '每天 08:00', 1, 10
+SELECT 127000001, 'close_contact_case_followup_no_preventive', '密接个案-潜伏感染未开展预防性治疗随访提醒',
+       '仅最终筛查结果为潜伏感染者、且未开展预防性治疗时，在 6/12/24 月随访到期窗口提醒录入者；非潜伏感染者不发送', '每天 08:00', 1, 10
 WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_no_preventive');
 
 INSERT INTO `sys_message_reminder_config`
 (`id`, `code`, `name`, `description`, `schedule_hint`, `enabled`, `sort`)
 SELECT 127000002, 'close_contact_case_followup_with_preventive', '密接个案-已开展预防性治疗随访提醒',
-       '密接个案表 6/12/24 月随访到期时，对「开展」预防性治疗的人群提醒录入者', '每天 08:00', 1, 15
+       '仅最终筛查结果为潜伏感染者且已开展预防性治疗时提醒。当前政策默认关闭，非潜伏感染者不会发送', '每天 08:00', 0, 15
 WHERE NOT EXISTS (SELECT 1 FROM `sys_message_reminder_config` WHERE `code` = 'close_contact_case_followup_with_preventive');
 
 INSERT INTO `sys_message_reminder_config`
