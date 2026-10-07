@@ -111,12 +111,13 @@ public class PatientController {
             @RequestParam(required = false) String sortOrder,
             @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sputumCulture,
-            @RequestParam(required = false) String drugResistance) {
+            @RequestParam(required = false) String drugResistance,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeTransferredOut) {
         return ResultRes.success(patientService.queryPage(
                 page, size, populationType, name, idNumber, phone, currentAddress, diagnosisResult, 0,
                 dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
                 creatorUsername, columnFilters, sortField, sortOrder, formatIssue,
-                sputumCulture, drugResistance));
+                sputumCulture, drugResistance, includeTransferredOut));
     }
 
     @Operation(summary = "历史患者列表")
@@ -443,7 +444,8 @@ public class PatientController {
     public ResultResponse<Void> saveMedicationPickup(@RequestBody MedicationPickup pickup) {
         userService.checkAnyPermissionCode(MEDICATION_PICKUP_WRITE_PERMISSIONS);
         if (pickup.getPatientId() != null) {
-            patientService.assertPatientOperable(pickup.getPatientId());
+            // 已转出源记录：转出前区县仅可编辑领药
+            patientService.assertPatientPickupWritable(pickup.getPatientId());
         }
         medicationPickupService.savePickup(pickup);
         return ResultRes.success(null);
@@ -522,6 +524,11 @@ public class PatientController {
         }
         followUpVisit.setStatus(0);
         followUpVisit.setVisitSeq(null);
+        if ("是".equals(followUpVisit.getStopTreatment())) {
+            followUpVisit.setNextVisitDate(null);
+        }
+        // 备注栏已下线：更新草稿时保留库中已有备注，避免被空值覆盖
+        preserveHistoricalFollowUpRemarks(followUpVisit, existingDraft);
         followUpVisitService.saveOrUpdate(followUpVisit);
         return ResultRes.success(null);
     }
@@ -563,6 +570,8 @@ public class PatientController {
                 } else {
                     followUpVisit.setVisitSeq(existing.getVisitSeq());
                 }
+                // 备注栏已下线：编辑保存时保留历史备注
+                preserveHistoricalFollowUpRemarks(followUpVisit, existing);
                 followUpVisitService.updateById(followUpVisit);
                 handleStopTreatmentAfterSave(followUpVisit);
                 return ResultRes.success(null);
@@ -601,10 +610,24 @@ public class PatientController {
         }
     }
 
+    /**
+     * 备注栏已从填写页移除：请求体未带备注时，沿用库中历史备注，避免被空串覆盖。
+     */
+    private void preserveHistoricalFollowUpRemarks(FollowUpVisit incoming, FollowUpVisit existing) {
+        if (incoming == null || existing == null) {
+            return;
+        }
+        if (StrUtil.isBlank(incoming.getRemarks()) && StrUtil.isNotBlank(existing.getRemarks())) {
+            incoming.setRemarks(existing.getRemarks());
+        }
+    }
+
     private void validateStopTreatmentOnSave(FollowUpVisit followUpVisit) {
         if (!"是".equals(followUpVisit.getStopTreatment())) {
             return;
         }
+        // 停止治疗为「是」时不再保留下次随访时间
+        followUpVisit.setNextVisitDate(null);
         if (followUpVisit.getStopTreatmentDate() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请选择停止治疗时间");
         }

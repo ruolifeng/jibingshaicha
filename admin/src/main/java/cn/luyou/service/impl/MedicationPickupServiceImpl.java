@@ -46,7 +46,9 @@ public class MedicationPickupServiceImpl extends ServiceImpl<MedicationPickupMap
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者记录不存在");
         }
-        if (Integer.valueOf(1).equals(patient.getArchived()) && pickup.getId() == null) {
+        // 已转出源记录允许原区县继续新增领药；其他归档状态禁止新增
+        if (Integer.valueOf(1).equals(patient.getArchived()) && pickup.getId() == null
+                && !PatientService.isTransferredOut(patient)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者已归档，无法新增领药记录");
         }
 

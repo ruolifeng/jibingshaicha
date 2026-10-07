@@ -19,6 +19,11 @@ export interface PatientListOptions {
   followUpSearch?: boolean
   /** 服药管理：服药管理单位筛选 */
   medicationSearch?: boolean
+  /**
+   * 是否附带跨区「已转出」源记录（转出前区县可查阅）。
+   * 在管总览 / 通知单管理 / 服药管理开启；首次/后续随访不开启。
+   */
+  includeTransferredOut?: boolean
 }
 
 function hasMedicationUnitSearch(options?: PatientListOptions) {
@@ -85,6 +90,9 @@ export function usePatientList(defaultArchived?: number, options?: PatientListOp
         params.dateFilterBy = "firstVisitFill"
       } else if (options?.followUpSearch) {
         params.dateFilterBy = "followUpFill"
+      }
+      if (options?.includeTransferredOut) {
+        params.includeTransferredOut = true
       }
       if (!params.populationType) delete params.populationType
       if (!params.phone) delete params.phone

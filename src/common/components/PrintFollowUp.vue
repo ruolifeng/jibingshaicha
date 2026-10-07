@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 /** 肺结核患者随访服务记录表 — 打印 / 保存 PDF */
 import PrintAttachmentImages from "@@/components/PrintAttachmentImages.vue"
+import { resolveFollowUpDisplayNextVisitDate } from "@@/utils/followUpVisit"
 import {
   followUpFormatters,
   formatFollowUpSupervisor,
@@ -44,7 +45,7 @@ const display = computed(() => {
     referralReason: d.referralReason || "-",
     referralTwoWeekResult: d.referralTwoWeekResult || "-",
     handlingOpinion: d.handlingOpinion || "-",
-    nextVisitDate: d.nextVisitDate || "-",
+    nextVisitDate: resolveFollowUpDisplayNextVisitDate(d) || "-",
     doctorSignature: d.doctorSignature || "-",
     stopTreatmentDate: d.stopTreatmentDate || "-",
     stopTreatment: d.stopTreatment || (d.stopTreatmentDate || d.stopTreatmentReason ? "是" : "否"),
@@ -243,17 +244,19 @@ function handlePrint() {
             <th>评估医生签名</th>
             <td>{{ display.evaluatorSignature }}</td>
           </tr>
-          <tr class="section-header">
-            <td colspan="6">
-              备注
-            </td>
-          </tr>
-          <tr>
-            <th>备注</th>
-            <td colspan="5">
-              {{ display.remarks }}
-            </td>
-          </tr>
+          <template v-if="visitData?.remarks">
+            <tr class="section-header">
+              <td colspan="6">
+                备注
+              </td>
+            </tr>
+            <tr>
+              <th>备注</th>
+              <td colspan="5">
+                {{ display.remarks }}
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
       <PrintAttachmentImages :urls="visitData?.attachmentUrls" title="附件照片" />

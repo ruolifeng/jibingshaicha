@@ -9,6 +9,7 @@ import {
   getPatientTransferStatusLabel,
   isNoticeReceiveOverdue,
   isPatientTransferLocked,
+  isPatientTransferredOut,
   resolveMedicationManagementUnit,
   resolveNoticeConfirmedDisplayTime,
   resolveNoticeSentDisplayTime,
@@ -35,7 +36,7 @@ const {
   fetchData,
   handleSearch,
   handleReset
-} = usePatientList(0, { noticeSearch: true })
+} = usePatientList(0, { noticeSearch: true, includeTransferredOut: true })
 
 const {
   genderFilterOptions,
@@ -71,7 +72,7 @@ function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
 
-function buildListQueryParams() {
+function buildListQueryParams(options?: { includeTransferredOut?: boolean }) {
   const columnFiltersParam = toQueryParam()
   return {
     name: searchForm.name || undefined,
@@ -81,6 +82,7 @@ function buildListQueryParams() {
     populationType: searchForm.populationType || undefined,
     medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
     dateFilterBy: "noticeFill",
+    ...(options?.includeTransferredOut ? { includeTransferredOut: true } : {}),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)
   }
@@ -96,7 +98,9 @@ async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: st
       type: "warning"
     })
     exporting.value = true
-    const blob = await exportPatientNoticesApi(isSelected ? { ids } : buildListQueryParams())
+    const blob = await exportPatientNoticesApi(
+      isSelected ? { ids } : buildListQueryParams({ includeTransferredOut: true })
+    )
     downloadBlob(blob as unknown as Blob, "患者通知单.xlsx")
     ElMessage.success("导出成功")
   } catch (err: any) {
@@ -418,7 +422,21 @@ function getNoticeRowClass({ row }: { row: any }) {
         </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <template v-if="!isPatientTransferLocked(row)">
+            <template v-if="isPatientTransferLocked(row)">
+              <el-button
+                v-if="isPatientTransferredOut(row) && (row.noticeStatus === 1 || row.noticeStatus === 2)"
+                type="primary"
+                link
+                size="small"
+                @click="viewNotice(row)"
+              >
+                查看
+              </el-button>
+              <el-tag :type="isPatientTransferredOut(row) ? 'info' : 'warning'" size="small">
+                {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+              </el-tag>
+            </template>
+            <template v-else>
               <template v-if="row.noticeStatus == null || row.noticeStatus === 0">
                 <el-button
                   v-permission="'patientManagement:notice:fill'"
@@ -448,9 +466,6 @@ function getNoticeRowClass({ row }: { row: any }) {
                 删除
               </el-button>
             </template>
-            <el-tag v-else :type="row.archiveRemark === '已转出' ? 'info' : 'warning'" size="small">
-              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
-            </el-tag>
           </template>
         </el-table-column>
       </el-table>

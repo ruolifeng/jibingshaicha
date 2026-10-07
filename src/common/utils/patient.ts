@@ -329,6 +329,21 @@ export function isPatientTransferPending(row: Record<string, any> | null | undef
   return row?.archiveRemark === PATIENT_TRANSFER_PENDING
 }
 
+/** 患者是否已跨区转出（源记录；原区县可查阅，仅领药可编辑） */
+export function isPatientTransferredOut(row: Record<string, any> | null | undefined): boolean {
+  return row?.archiveRemark === PATIENT_TRANSFERRED_OUT
+}
+
+/**
+ * 已转出源记录是否允许编辑领药（转出待确认仍禁止）。
+ * 其他业务编辑请继续用 isPatientTransferLocked。
+ */
+export function canEditTransferredPatientPickup(row: Record<string, any> | null | undefined): boolean {
+  if (!row) return false
+  if (isPatientTransferPending(row)) return false
+  return true
+}
+
 /** 转出状态展示文案 */
 export function getPatientTransferStatusLabel(archiveRemark?: string | null): string {
   if (archiveRemark === PATIENT_TRANSFERRED_OUT) return PATIENT_TRANSFERRED_OUT

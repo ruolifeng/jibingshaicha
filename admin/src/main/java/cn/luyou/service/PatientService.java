@@ -26,6 +26,16 @@ public interface PatientService extends IService<Patient> {
                 || ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark());
     }
 
+    /** 是否已跨区转出（源记录；原区县可查阅，仅领药可编辑） */
+    static boolean isTransferredOut(Patient patient) {
+        return patient != null && ARCHIVE_REMARK_TRANSFERRED_OUT.equals(patient.getArchiveRemark());
+    }
+
+    /** 是否转出待确认（全面锁定） */
+    static boolean isTransferPending(Patient patient) {
+        return patient != null && ARCHIVE_REMARK_TRANSFER_PENDING.equals(patient.getArchiveRemark());
+    }
+
     /** 停止治疗归档备注前缀（后接具体原因） */
     String ARCHIVE_REMARK_STOP_TREATMENT_PREFIX = "停止治疗：";
 
@@ -50,7 +60,20 @@ public interface PatientService extends IService<Patient> {
                               String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                               String dateFilterBy, String medicationManagementUnit, String crowdCategory,
                               String creatorUsername, String columnFilters, String sortField, String sortOrder,
-                              String formatIssue, String sputumCulture, String drugResistance);
+                              String formatIssue, String sputumCulture, String drugResistance,
+                              Boolean includeTransferredOut);
+
+    default IPage<Patient> queryPage(int page, int size, String populationType,
+                                     String name, String idNumber, String phone, String currentAddress,
+                                     String diagnosisResult, Integer archived, String dateFrom, String dateTo,
+                                     String dateFilterBy, String medicationManagementUnit, String crowdCategory,
+                                     String creatorUsername, String columnFilters, String sortField, String sortOrder,
+                                     String formatIssue, String sputumCulture, String drugResistance) {
+        return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
+                diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
+                creatorUsername, columnFilters, sortField, sortOrder, formatIssue, sputumCulture, drugResistance,
+                Boolean.FALSE);
+    }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
                                      String name, String idNumber, String phone, String currentAddress,
@@ -70,7 +93,7 @@ public interface PatientService extends IService<Patient> {
                                      String creatorUsername, String columnFilters, String sortField, String sortOrder) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters, sortField, sortOrder, null, null, null);
+                creatorUsername, columnFilters, sortField, sortOrder, null);
     }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
@@ -80,7 +103,7 @@ public interface PatientService extends IService<Patient> {
                                      String creatorUsername, String columnFilters) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                creatorUsername, columnFilters, null, null, null);
+                creatorUsername, columnFilters, null, null);
     }
 
     default IPage<Patient> queryPage(int page, int size, String populationType,
@@ -89,7 +112,7 @@ public interface PatientService extends IService<Patient> {
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory) {
         return queryPage(page, size, populationType, name, idNumber, phone, currentAddress,
                 diagnosisResult, archived, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                null, null, null, null, null);
+                null, null);
     }
 
     /** 手动新增在管患者（在管总览） */
@@ -121,7 +144,19 @@ public interface PatientService extends IService<Patient> {
                                  Integer archived, String dateFrom, String dateTo,
                                  String startTime, String endTime,
                                  String dateFilterBy, String medicationManagementUnit,
-                                 String crowdCategory, String formatIssue);
+                                 String crowdCategory, String formatIssue,
+                                 Boolean includeTransferredOut);
+
+    default List<Patient> listForExport(String populationType, String name, String idNumber,
+                                        String phone, String currentAddress, String diagnosisResult,
+                                        Integer archived, String dateFrom, String dateTo,
+                                        String startTime, String endTime,
+                                        String dateFilterBy, String medicationManagementUnit,
+                                        String crowdCategory, String formatIssue) {
+        return listForExport(populationType, name, idNumber, phone, currentAddress, diagnosisResult,
+                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit,
+                crowdCategory, formatIssue, Boolean.FALSE);
+    }
 
     default List<Patient> listForExport(String populationType, String name, String idNumber,
                                         String phone, String currentAddress, String diagnosisResult,
@@ -149,7 +184,10 @@ public interface PatientService extends IService<Patient> {
     /** 发起转出：标记为转出待确认（保留在在管列表） */
     void markTransferPending(Long id);
 
-    /** 转出确认后：标记原记录为已转出并归档退出在管（全系统在管仅保留接收方一条） */
+    /**
+     * 转出确认后：标记原记录为已转出并归档。
+     * 接收方在管仅保留副本；转出前所属区县仍可在总览/通知单/服药管理中查阅源记录，仅领药可编辑。
+     */
     void markTransferredOut(Long id);
 
     /**
@@ -189,7 +227,13 @@ public interface PatientService extends IService<Patient> {
     /** 校验当前用户可操作该患者（数据权限 + 非转出锁定） */
     void assertPatientOperable(Long id);
 
-    /** 校验当前用户可查阅该患者（数据权限；已转出源记录对转出单位不可见） */
+    /**
+     * 校验当前用户可编辑该患者的领药记录。
+     * 已转出源记录对转出前所属区县放行；转出待确认仍禁止。
+     */
+    void assertPatientPickupWritable(Long id);
+
+    /** 校验当前用户可查阅该患者（数据权限；已转出源记录对转出前所属区县可见） */
     void assertPatientAccessible(Long id);
 
     /** 将通知单中的联系电话、现居住地址、户籍地址同步到患者主表 */

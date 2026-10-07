@@ -718,6 +718,7 @@ public class ExportController {
             @RequestParam(required = false) String crowdCategory,
             @RequestParam(required = false) String departmentIds,
             @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeTransferredOut,
             HttpServletResponse response) throws IOException {
 
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
@@ -729,7 +730,7 @@ public class ExportController {
             patientList = patientService.listForExport(
                     populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                     archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit,
-                    crowdCategory, formatIssue);
+                    crowdCategory, formatIssue, includeTransferredOut);
         }
         if (departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
             Set<Long> allowed = new HashSet<>(filterDeptIds);
@@ -1108,12 +1109,13 @@ public class ExportController {
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeTransferredOut,
             HttpServletResponse response) throws IOException {
         List<Patient> patients = loadPatientsForVisitExport(
                 ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                 dateFrom, dateTo, StrUtil.blankToDefault(dateFilterBy, "noticeFill"),
                 medicationManagementUnit, crowdCategory, creatorUsername, columnFilters, formatIssue,
-                null, null);
+                null, null, includeTransferredOut);
         if (patients.isEmpty()) {
             writeExcel(response, "患者通知单", List.of(), PATIENT_NOTICE_EXPORT_HEADERS);
             return;
@@ -1259,11 +1261,12 @@ public class ExportController {
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeTransferredOut,
             HttpServletResponse response) throws IOException {
         List<Patient> patients = loadPatientsForVisitExport(
                 ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                 dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory, creatorUsername,
-                columnFilters, formatIssue, null, null);
+                columnFilters, formatIssue, null, null, includeTransferredOut);
         if (patients.isEmpty()) {
             writeExcel(response, "患者服药管理", List.of(), PATIENT_MEDICATION_EXPORT_HEADERS);
             return;
@@ -1346,6 +1349,19 @@ public class ExportController {
             String medicationManagementUnit, String crowdCategory,
             String creatorUsername, String columnFilters, String formatIssue,
             String sputumCulture, String drugResistance) {
+        return loadPatientsForVisitExport(ids, archived, populationType, name, idNumber, phone,
+                currentAddress, diagnosisResult, dateFrom, dateTo, dateFilterBy, medicationManagementUnit,
+                crowdCategory, creatorUsername, columnFilters, formatIssue, sputumCulture, drugResistance, false);
+    }
+
+    private List<Patient> loadPatientsForVisitExport(
+            String ids, Integer archived,
+            String populationType, String name, String idNumber, String phone,
+            String currentAddress, String diagnosisResult,
+            String dateFrom, String dateTo, String dateFilterBy,
+            String medicationManagementUnit, String crowdCategory,
+            String creatorUsername, String columnFilters, String formatIssue,
+            String sputumCulture, String drugResistance, Boolean includeTransferredOut) {
         List<Long> idList = parseIdList(ids);
         if (!idList.isEmpty()) {
             idList.forEach(dataScopeHelper::assertPatientAccessible);
@@ -1368,7 +1384,8 @@ public class ExportController {
             var page = patientService.queryPage(
                     pageNum, pageSize, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                     archivedVal, dateFrom, dateTo, dateFilterBy, medicationManagementUnit, crowdCategory,
-                    creatorUsername, columnFilters, null, null, formatIssue, sputumCulture, drugResistance);
+                    creatorUsername, columnFilters, null, null, formatIssue, sputumCulture, drugResistance,
+                    includeTransferredOut);
             if (page.getRecords() == null || page.getRecords().isEmpty()) {
                 break;
             }
@@ -1875,7 +1892,8 @@ public class ExportController {
         row.put("转诊原因", nullToEmpty(v.getReferralReason()));
         row.put("2周内随访结果", nullToEmpty(v.getReferralTwoWeekResult()));
         row.put("处理意见", nullToEmpty(v.getHandlingOpinion()));
-        row.put("下次随访时间", formatDate(v.getNextVisitDate()));
+        // 停止治疗为「是」时不再导出下次随访时间
+        row.put("下次随访时间", "是".equals(resolveStopTreatment(v)) ? "" : formatDate(v.getNextVisitDate()));
         row.put("随访医生签名", nullToEmpty(v.getDoctorSignature()));
         row.put("是否停止治疗", resolveStopTreatment(v));
         row.put("停止治疗时间", formatDate(v.getStopTreatmentDate()));

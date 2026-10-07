@@ -211,10 +211,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                      String diagnosisResult, Integer archived, String dateFrom, String dateTo,
                                      String dateFilterBy, String medicationManagementUnit, String crowdCategory,
                                      String creatorUsername, String columnFilters, String sortField, String sortOrder,
-                                     String formatIssue, String sputumCulture, String drugResistance) {
+                                     String formatIssue, String sputumCulture, String drugResistance,
+                                     Boolean includeTransferredOut) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult, archived,
-                dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory);
+                dateFrom, dateTo, null, null, dateFilterBy, medicationManagementUnit, crowdCategory,
+                includeTransferredOut);
         applyFirstVisitFieldFilter(wrapper, sputumCulture, drugResistance);
         applyCreatorUsernameFilter(wrapper, creatorUsername);
         applyColumnFilters(wrapper, columnFilters);
@@ -238,8 +240,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             return List.of();
         }
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
-                .in(Patient::getId, ids)
-                .eq(archived != null, Patient::getArchived, archived);
+                .in(Patient::getId, ids);
+        // 按 ID 导出时：在管筛选需兼容「已转出」源记录（archived=1）
+        if (Integer.valueOf(0).equals(archived)) {
+            wrapper.and(w -> w.eq(Patient::getArchived, 0)
+                    .or()
+                    .eq(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+        } else {
+            wrapper.eq(archived != null, Patient::getArchived, archived);
+        }
         applyPatientScopeFilter(wrapper);
         List<Patient> patients = list(wrapper);
         fillEpidemicExtraFields(patients);
@@ -252,10 +261,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                         Integer archived, String dateFrom, String dateTo,
                                         String startTime, String endTime,
                                         String dateFilterBy, String medicationManagementUnit,
-                                        String crowdCategory, String formatIssue) {
+                                        String crowdCategory, String formatIssue,
+                                        Boolean includeTransferredOut) {
         LambdaQueryWrapper<Patient> wrapper = buildPatientQueryWrapper(
                 populationType, name, idNumber, phone, currentAddress, diagnosisResult,
-                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit, crowdCategory);
+                archived, dateFrom, dateTo, startTime, endTime, dateFilterBy, medicationManagementUnit, crowdCategory,
+                includeTransferredOut);
         IdentityFormatFilterSupport.apply(wrapper, formatIssue, "id_number", "phone");
         if (Integer.valueOf(1).equals(archived)) {
             wrapper.orderByAsc(Patient::getPopulationType).orderByDesc(Patient::getArchivedTime);
@@ -345,7 +356,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                                                                   String startTime, String endTime,
                                                                   String dateFilterBy,
                                                                   String medicationManagementUnit,
-                                                                  String crowdCategory) {
+                                                                  String crowdCategory,
+                                                                  Boolean includeTransferredOut) {
         LocalDateTime createFrom = QueryDateRangeUtil.parseDateTimeFrom(dateFrom);
         LocalDateTime createTo = QueryDateRangeUtil.parseDateTimeTo(dateTo);
         boolean registrationDateFilter = "registrationDate".equals(dateFilterBy);
@@ -360,23 +372,39 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
                 && (createFrom != null || createTo != null);
         boolean hasFollowUpFillDateRange = followUpFillFilter
                 && (createFrom != null || createTo != null);
+        boolean includeTransferred = Boolean.TRUE.equals(includeTransferredOut)
+                && (archived == null || Integer.valueOf(0).equals(archived));
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
-                .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress)
-                .eq(archived != null, Patient::getArchived, archived);
-        // 在管列表排除「已转出」（兼容历史误留在 archived=0 的数据）
-        // 同时排除 referral 已确认接收的源记录，避免转出单位在管总览/随访仍可见
-        if (archived == null || Integer.valueOf(0).equals(archived)) {
-            wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
-                    .or()
-                    .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
-            wrapper.notInSql(Patient::getId,
-                    "SELECT r.biz_id FROM referral r WHERE r.module_type = 'patient'"
-                            + " AND r.status = 2 AND r.deleted = 0"
-                            + " AND r.biz_id IS NOT NULL AND r.target_biz_id IS NOT NULL");
+                .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress);
+        // 在管总览/通知单/服药管理：可附带「已转出」源记录供转出前区县查阅
+        if (includeTransferred) {
+            wrapper.and(w -> w
+                    .and(active -> active.eq(Patient::getArchived, 0)
+                            .and(r -> r.isNull(Patient::getArchiveRemark)
+                                    .or()
+                                    .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT))
+                            .notInSql(Patient::getId,
+                                    "SELECT r.biz_id FROM referral r WHERE r.module_type = 'patient'"
+                                            + " AND r.status = 2 AND r.deleted = 0"
+                                            + " AND r.biz_id IS NOT NULL AND r.target_biz_id IS NOT NULL"))
+                    .or(transferred -> transferred.eq(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT)
+                            .isNull(Patient::getSourcePatientId)));
+        } else {
+            wrapper.eq(archived != null, Patient::getArchived, archived);
+            // 在管列表排除「已转出」（兼容历史误留在 archived=0 的数据）
+            if (archived == null || Integer.valueOf(0).equals(archived)) {
+                wrapper.and(w -> w.isNull(Patient::getArchiveRemark)
+                        .or()
+                        .ne(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT));
+                wrapper.notInSql(Patient::getId,
+                        "SELECT r.biz_id FROM referral r WHERE r.module_type = 'patient'"
+                                + " AND r.status = 2 AND r.deleted = 0"
+                                + " AND r.biz_id IS NOT NULL AND r.target_biz_id IS NOT NULL");
+            }
         }
         applyDiagnosisResultFilter(wrapper, diagnosisResult);
         if (hasFirstVisitFillDateRange) {
@@ -1852,7 +1880,8 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (patient == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
-        // 转出确认后原记录退出在管，保证全系统在管仅保留接收方一条
+        // 转出确认后原记录 archived=1；接收方在管保留副本。
+        // 转出前区县仍可按 includeTransferredOut 在总览/通知/服药中查阅源记录。
         boolean updated = lambdaUpdate()
                 .eq(Patient::getId, id)
                 .set(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT)
@@ -2010,6 +2039,19 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
         assertPatientNotTransferLocked(patient);
+    }
+
+    @Override
+    public void assertPatientPickupWritable(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        // 已转出：原区县仅可编辑领药；转出待确认仍全面锁定
+        if (PatientService.isTransferPending(patient)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该患者转出待确认，不可操作");
+        }
     }
 
     @Override

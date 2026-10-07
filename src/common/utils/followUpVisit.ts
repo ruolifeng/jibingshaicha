@@ -78,6 +78,24 @@ export const STOP_TREATMENT_REASON_MDR = "转入耐多药治疗"
 /** 停止治疗归档备注前缀 */
 export const ARCHIVE_REMARK_STOP_TREATMENT_PREFIX = "停止治疗："
 
+/** 是否停止治疗为「是」（兼容仅填了停止治疗时间/原因的历史数据） */
+export function isFollowUpStopTreatmentYes(row: Record<string, any> | null | undefined): boolean {
+  if (!row) return false
+  if (row.stopTreatment === "是") return true
+  if (row.stopTreatment === "否") return false
+  return !!(row.stopTreatmentDate || row.stopTreatmentReason)
+}
+
+/**
+ * 展示用「下次随访时间」：停止治疗为「是」时不再显示/生成。
+ */
+export function resolveFollowUpDisplayNextVisitDate(
+  row: Record<string, any> | null | undefined
+): string {
+  if (!row || isFollowUpStopTreatmentYes(row)) return ""
+  return String(row.nextVisitDate || "").trim()
+}
+
 /** 停止治疗是否应归档（完成疗程/死亡/丢失/其它，不含转入耐多药治疗） */
 export function shouldArchiveOnStopTreatment(stopTreatment: string, reason: string): boolean {
   return stopTreatment === "是" && !!reason && reason !== STOP_TREATMENT_REASON_MDR
@@ -150,7 +168,8 @@ export function buildFollowUpHistoryDisplayList(
       // 临时占位，合并后按列表顺序重编号
       visitSeq: 0,
       visitDate: String(item.visitDate || "").trim(),
-      nextVisitDate: String(item.nextVisitDate || "").trim(),
+      // 停止治疗为「是」时不再展示下次随访时间
+      nextVisitDate: resolveFollowUpDisplayNextVisitDate(item),
       treatmentMonth: item.treatmentMonth ?? "-",
       visitMethodLabel: followUpFormatters.visitMethod(item.visitMethod, item.visitMethodOther),
       missedDoses: item.missedDoses ?? "-",

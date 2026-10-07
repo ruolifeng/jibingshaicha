@@ -46,7 +46,7 @@ const {
   fetchData,
   handleSearch,
   handleReset
-} = usePatientList(0, { overviewSearch: true })
+} = usePatientList(0, { overviewSearch: true, includeTransferredOut: true })
 
 const genderFilterOptions = [
   { text: "男", value: "男" },
@@ -113,7 +113,7 @@ function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
 
-function buildListQueryParams() {
+function buildListQueryParams(options?: { includeTransferredOut?: boolean }) {
   const columnFiltersParam = toQueryParam()
   return {
     name: searchForm.name || undefined,
@@ -129,6 +129,8 @@ function buildListQueryParams() {
       : undefined,
     formatIssue: searchForm.formatIssue || undefined,
     dateFilterBy: "registrationDate",
+    // 导出可含已转出源记录；删除筛选绝不可带，避免误删
+    ...(options?.includeTransferredOut ? { includeTransferredOut: true } : {}),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)
   }
@@ -192,7 +194,9 @@ async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: st
       type: "warning"
     })
     exporting.value = true
-    const blob = await exportAllPatientsApi(isSelected ? { ids } : buildListQueryParams())
+    const blob = await exportAllPatientsApi(
+      isSelected ? { ids } : buildListQueryParams({ includeTransferredOut: true })
+    )
     downloadBlob(blob as unknown as Blob, "在管患者信息总表.xlsx")
     ElMessage.success("导出成功")
   } catch (err: any) {
