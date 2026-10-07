@@ -231,7 +231,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
         if (notice == null) {
             return null;
         }
-        // 仅校验查阅权限：已转出源记录对转出单位不可见；转出待确认仍可查看
+        // 仅校验查阅权限：已转出源记录对转出前区县仍可查看；写操作另走 assertPatientOperable
         if ("patient".equals(notice.getNoticeType())) {
             dataScopeHelper.assertPatientAccessible(notice.getBizId());
         } else if ("latent".equals(notice.getNoticeType())) {

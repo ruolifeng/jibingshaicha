@@ -23,7 +23,6 @@ import {
   FOLLOW_UP_VISIT_METHOD_OTHER,
   FOLLOW_UP_YES_NO_HAVE_OPTIONS,
   isPatientOtherSensitivePlan,
-  PATIENT_OTHER_SENSITIVE_PLAN,
   resolvePatientTreatmentPlanForSave,
   STOP_TREATMENT_REASON_OPTIONS,
   STOP_TREATMENT_YES_NO_OPTIONS,
@@ -184,6 +183,10 @@ function parseDraftData(data: Record<string, any>) {
       ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean)
       : []
   })
+  // 停止治疗为「是」时不保留下次随访时间
+  if (stopTreatment === "是") {
+    form.nextVisitDate = ""
+  }
   draftId.value = data.id ?? null
   normalizeFollowUpChemotherapyFields(form)
 }
@@ -211,11 +214,13 @@ async function refreshCaseClosureStats() {
 watch(
   () => form.stopTreatment,
   (val) => {
-    if (val !== "是") {
-      clearStopTreatmentFields()
+    if (val === "是") {
+      // 停止治疗为「是」时不再生成下次随访时间
+      form.nextVisitDate = ""
+      refreshCaseClosureStats()
       return
     }
-    refreshCaseClosureStats()
+    clearStopTreatmentFields()
   }
 )
 
@@ -255,7 +260,8 @@ async function applyFirstVisitLinkage() {
       patientRow: props.patientRow
     })
 
-    if (isEditMode.value || form.nextVisitDate) return
+    // 停止治疗为「是」时不预填下次随访时间
+    if (form.stopTreatment === "是" || isEditMode.value || form.nextVisitDate) return
     const linked = resolveFollowUpFormDefaultNextVisitDate(
       completedList,
       firstVisit?.nextVisitDate || ""
@@ -320,8 +326,12 @@ function buildPayload() {
     payload.stopTreatmentDate = null
     payload.stopTreatmentReason = null
     payload.stopTreatmentReasonOther = null
-  } else if (form.stopTreatmentReason !== "其它") {
-    payload.stopTreatmentReasonOther = null
+  } else {
+    // 停止治疗为「是」时清空下次随访时间，避免落库后仍展示
+    payload.nextVisitDate = null
+    if (form.stopTreatmentReason !== "其它") {
+      payload.stopTreatmentReasonOther = null
+    }
   }
   if (form.visitMethod !== FOLLOW_UP_VISIT_METHOD_OTHER) {
     payload.visitMethodOther = null
@@ -611,7 +621,7 @@ async function handleSave() {
         <el-input v-model="form.handlingOpinion" type="textarea" :rows="2" placeholder="请填写" />
       </el-form-item>
       <el-row :gutter="16">
-        <el-col :span="12">
+        <el-col v-if="form.stopTreatment !== '是'" :span="12">
           <el-form-item label="下次随访时间">
             <el-date-picker
               v-model="form.nextVisitDate"
@@ -622,7 +632,7 @@ async function handleSave() {
             />
           </el-form-item>
         </el-col>
-        <el-col :span="12">
+        <el-col :span="form.stopTreatment === '是' ? 24 : 12">
           <el-form-item label="随访医生签名">
             <el-input v-model="form.doctorSignature" placeholder="请填写" />
           </el-form-item>
@@ -757,14 +767,20 @@ async function handleSave() {
         </el-col>
       </el-row>
 
-      <!-- 备注 & 附件 -->
+      <!-- 附件（备注栏已下线；历史已填备注只读保留） -->
       <el-divider content-position="left">
-        备注与附件
+        附件
       </el-divider>
-      <el-form-item label="备注">
-        <el-input v-model="form.remarks" type="textarea" :rows="2" placeholder="请填写" />
+      <el-form-item v-if="form.remarks?.trim()" label="备注">
+        <el-input
+          :model-value="form.remarks"
+          type="textarea"
+          :rows="2"
+          readonly
+          disabled
+        />
       </el-form-item>
-      <el-form-item label="上传10张">
+      <el-form-item label="上传附件">
         <ImageUploader v-model="form.attachmentUrls" :disabled="formLocked" />
       </el-form-item>
     </el-form>

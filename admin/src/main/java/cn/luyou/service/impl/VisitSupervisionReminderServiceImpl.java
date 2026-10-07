@@ -378,7 +378,21 @@ public class VisitSupervisionReminderServiceImpl implements VisitSupervisionRemi
             LocalDate visitDate = fu.getVisitDate() != null ? fu.getVisitDate() : LocalDate.MIN;
             LatestVisit cur = latest.get(fu.getPatientId());
             if (cur == null || !visitDate.isBefore(cur.visitDate())) {
-                latest.put(fu.getPatientId(), new LatestVisit(visitDate, fu.getNextVisitDate(), fu.getId(), fu.getFilledBy()));
+                // 停止治疗为「是」时不再按下次随访时间提醒（兼容历史脏数据）
+                boolean stopYes;
+                if ("否".equals(fu.getStopTreatment())) {
+                    stopYes = false;
+                } else if ("是".equals(fu.getStopTreatment())) {
+                    stopYes = true;
+                } else {
+                    stopYes = fu.getStopTreatmentDate() != null
+                            || StrUtil.isNotBlank(fu.getStopTreatmentReason());
+                }
+                latest.put(fu.getPatientId(), new LatestVisit(
+                        visitDate,
+                        stopYes ? null : fu.getNextVisitDate(),
+                        fu.getId(),
+                        fu.getFilledBy()));
             }
         }
 

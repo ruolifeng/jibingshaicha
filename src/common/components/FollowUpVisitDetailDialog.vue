@@ -2,6 +2,7 @@
 import AttachmentPreviewList from "@@/components/AttachmentPreviewList.vue"
 /** 后续随访记录 — 完整详情查看 */
 import PrintFollowUp from "@@/components/PrintFollowUp.vue"
+import { resolveFollowUpDisplayNextVisitDate } from "@@/utils/followUpVisit"
 import {
   followUpFormatters,
   formatFollowUpSupervisor,
@@ -25,7 +26,7 @@ const d = computed(() => props.visitData)
 
 const displayNextVisitDate = computed(() => {
   if (!d.value) return "-"
-  return d.value.nextVisitDate || "-"
+  return resolveFollowUpDisplayNextVisitDate(d.value) || "-"
 })
 </script>
 
@@ -186,8 +187,8 @@ const displayNextVisitDate = computed(() => {
         其他
       </el-divider>
       <el-descriptions :column="2" border size="small">
-        <el-descriptions-item label="备注" :span="2">
-          {{ d.remarks || "-" }}
+        <el-descriptions-item v-if="d.remarks" label="备注" :span="2">
+          {{ d.remarks }}
         </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <AttachmentPreviewList :urls="d.attachmentUrls" />

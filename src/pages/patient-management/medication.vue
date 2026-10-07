@@ -15,7 +15,7 @@ import {
   PATIENT_MEDICATION_PICKUP_PERMISSIONS,
   PATIENT_MEDICATION_PICKUP_VIEW_PERMISSIONS
 } from "@@/utils/medicationPickup"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
+import { canEditTransferredPatientPickup, getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferredOut, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import { batchDeletePatientsApi, deletePatientsByFilterApi, exportPatientMedicationsApi, getMedicationPickupListApi } from "./apis"
@@ -55,7 +55,7 @@ const {
   fetchData,
   handleSearch,
   handleReset
-} = usePatientList(0, { medicationSearch: true })
+} = usePatientList(0, { medicationSearch: true, includeTransferredOut: true })
 
 const {
   genderFilterOptions,
@@ -71,6 +71,7 @@ const {
 
 const medicationDialogVisible = ref(false)
 const medicationRow = ref<any>(null)
+const medicationReadOnly = ref(false)
 
 const selectedRows = ref<any[]>([])
 const exporting = ref(false)
@@ -80,7 +81,7 @@ function handleSelectionChange(rows: any[]) {
   selectedRows.value = rows
 }
 
-function buildListQueryParams() {
+function buildListQueryParams(options?: { includeTransferredOut?: boolean }) {
   const columnFiltersParam = toQueryParam()
   return {
     name: searchForm.name || undefined,
@@ -89,6 +90,8 @@ function buildListQueryParams() {
     diagnosisResult: searchForm.diagnosisResult || undefined,
     populationType: searchForm.populationType || undefined,
     medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
+    // 导出可含已转出源记录；删除筛选绝不可带，避免误删
+    ...(options?.includeTransferredOut ? { includeTransferredOut: true } : {}),
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)
   }
@@ -104,7 +107,9 @@ async function handleExport(mode: "filtered" | "selected" = "filtered", ids?: st
       type: "warning"
     })
     exporting.value = true
-    const blob = await exportPatientMedicationsApi(isSelected ? { ids } : buildListQueryParams())
+    const blob = await exportPatientMedicationsApi(
+      isSelected ? { ids } : buildListQueryParams({ includeTransferredOut: true })
+    )
     downloadBlob(blob as unknown as Blob, "患者服药管理.xlsx")
     ElMessage.success("导出成功")
   } catch (err: any) {
@@ -187,8 +192,9 @@ const historyDialogTitle = computed(() => `${historyPatientName.value} - 领药�
 const detailVisible = ref(false)
 const detailRecord = ref<Record<string, any> | null>(null)
 
-function openMedication(row: any) {
+function openMedication(row: any, readOnly = false) {
   medicationRow.value = row
+  medicationReadOnly.value = readOnly
   medicationDialogVisible.value = true
 }
 
@@ -197,7 +203,10 @@ function hasPickupData(row: Record<string, any>) {
 }
 
 function canAddPickup(row: Record<string, any>) {
-  return row.archived !== 1 && !isPatientTransferLocked(row)
+  // 已转出源记录：原区县仍可填写领药；转出待确认/其他归档禁止
+  if (!canEditTransferredPatientPickup(row)) return false
+  if (isPatientTransferredOut(row)) return true
+  return row.archived !== 1
 }
 
 function openPickup(row: any) {
@@ -486,27 +495,38 @@ function viewDetail(record: Record<string, any>) {
             {{ row.medicationEntryPerson || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" :width="canViewPickup ? 100 : 120">
+        <el-table-column label="操作" fixed="right" :width="canViewPickup ? 140 : 120">
           <template #default="{ row }">
-            <template v-if="!isPatientTransferLocked(row)">
+            <template v-if="isPatientTransferredOut(row)">
               <el-button
                 v-permission="[...PATIENT_MEDICATION_PAGE_PERMISSIONS]"
                 type="primary"
                 link
                 size="small"
-                :disabled="row.archived === 1"
-                @click="openMedication(row)"
+                @click="openMedication(row, true)"
               >
-                服药管理
+                查看
               </el-button>
+              <el-tag type="info" size="small">
+                已转出
+              </el-tag>
             </template>
-            <el-tag
+            <template v-else-if="isPatientTransferLocked(row)">
+              <el-tag type="warning" size="small">
+                {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+              </el-tag>
+            </template>
+            <el-button
               v-else
-              :type="row.archiveRemark === '已转出' ? 'info' : 'warning'"
+              v-permission="[...PATIENT_MEDICATION_PAGE_PERMISSIONS]"
+              type="primary"
+              link
               size="small"
+              :disabled="row.archived === 1"
+              @click="openMedication(row)"
             >
-              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
-            </el-tag>
+              服药管理
+            </el-button>
           </template>
         </el-table-column>
         <el-table-column v-if="canViewPickup" label="领药情况" min-width="260" fixed="right">
@@ -565,6 +585,7 @@ function viewDetail(record: Record<string, any>) {
     <PatientMedicationDialog
       v-model:visible="medicationDialogVisible"
       :patient-row="medicationRow"
+      :read-only="medicationReadOnly"
       @success="fetchData"
     />
 
@@ -613,7 +634,7 @@ function viewDetail(record: Record<string, any>) {
               查看详情
             </el-button>
             <el-button
-              v-if="canEditMedicationPickup(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
+              v-if="canEditMedicationPickup(userStore.userRole, row) && canEditTransferredPatientPickup(historyPatient)"
               v-permission="[...PATIENT_MEDICATION_PICKUP_PERMISSIONS]"
               type="warning"
               link

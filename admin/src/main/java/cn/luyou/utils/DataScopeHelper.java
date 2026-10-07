@@ -24,10 +24,10 @@ import java.util.stream.Collectors;
  * 同一乡镇/街道（最小部门）下的不同机构互不可见，转出也按机构隔离，不能按整乡镇共享。
  * <p>
  * 转出副本（source_patient_id / source_latent_id 非空）不通过「旧通知单」扩权可见，
- * 避免跨区转出后原辖区三级/五级仍能在在管列表中看到该患者。
+ * 避免跨区转出后原辖区三级/五级仍能把接收方副本当成在管患者。
  * <p>
- * 接收方确认转出后，原记录对转出机构不可见（在管总览、随访记录、详情）；
- * 接收机构只看副本。区县等上级仍可按辖区看见接收方副本。
+ * 患者跨区转出确认后：源记录对转出前所属区县（按部门/录入人范围）仍可查阅（只读，领药可写）；
+ * 接收机构只看副本。潜伏感染者仍按「转出后源记录不可见」处理。
  */
 @Component
 @RequiredArgsConstructor
@@ -227,8 +227,11 @@ public class DataScopeHelper {
         if (BaseContext.isSuperAdmin()) {
             return;
         }
-        // 接收确认后：转出机构不可再查阅原记录（在管总览、随访记录、详情等）
-        excludeTransferredOutSources(wrapper, idColumn, noticeType);
+        // 潜伏感染：转出确认后源记录对转出方不可见。
+        // 患者：源记录保留给转出前所属区县查阅（列表是否展示由业务查询控制）。
+        if (!"patient".equals(noticeType)) {
+            excludeTransferredOutSources(wrapper, idColumn, noticeType);
+        }
 
         Integer role = BaseContext.getCurrentRole();
         if (role != null && role == 6) {

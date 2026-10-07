@@ -1,5 +1,6 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
@@ -66,7 +67,8 @@ public class FollowUpVisit extends BaseEntity {
     private String referralTwoWeekResult;
     /** 处理意见 —— V15 */
     private String handlingOpinion;
-    /** 下次随访时间 —— V15 */
+    /** 下次随访时间 —— V15；停止治疗为「是」时可清空 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate nextVisitDate;
     /** 随访医生签名 —— V15 */
     private String doctorSignature;

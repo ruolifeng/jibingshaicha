@@ -441,7 +441,7 @@ public class ReferralServiceImpl extends ServiceImpl<ReferralMapper, Referral>
         updateById(referral);
     }
 
-    /** 确认接收后源记录必须标记已转出，转出单位在管总览/随访不再可见 */
+    /** 确认接收后源记录必须标记已转出（随访等仍排除；总览/通知/服药对原区县只读可见） */
     private void ensureSourceMarkedTransferred(Referral referral) {
         if (referral == null || referral.getBizId() == null) {
             return;
