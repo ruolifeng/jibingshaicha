@@ -233,7 +233,13 @@ public interface PatientService extends IService<Patient> {
      */
     void assertPatientPickupWritable(Long id);
 
-    /** 校验当前用户可查阅该患者（数据权限；已转出源记录对转出前所属区县可见） */
+    /**
+     * 校验当前用户可填写/修改该患者的首次随访或后续随访。
+     * 已转出源记录仅转出前辖区的三级及以上可改；转出待确认仍禁止。
+     */
+    void assertPatientVisitWritable(Long id);
+
+    /** 校验当前用户可查阅该患者（数据权限；已转出源记录仅三级及以上可见） */
     void assertPatientAccessible(Long id);
 
     /** 将通知单中的联系电话、现居住地址、户籍地址同步到患者主表 */

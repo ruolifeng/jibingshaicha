@@ -373,14 +373,15 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         boolean hasFollowUpFillDateRange = followUpFillFilter
                 && (createFrom != null || createTo != null);
         boolean includeTransferred = Boolean.TRUE.equals(includeTransferredOut)
-                && (archived == null || Integer.valueOf(0).equals(archived));
+                && (archived == null || Integer.valueOf(0).equals(archived))
+                && BaseContext.isLevel3OrAbove();
         LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(populationType), Patient::getPopulationType, populationType)
                 .like(StrUtil.isNotBlank(name), Patient::getName, name)
                 .eq(StrUtil.isNotBlank(idNumber), Patient::getIdNumber, idNumber)
                 .like(StrUtil.isNotBlank(phone), Patient::getPhone, phone)
                 .like(StrUtil.isNotBlank(currentAddress), Patient::getCurrentAddress, currentAddress);
-        // 在管总览/通知单/服药管理：可附带「已转出」源记录供转出前区县查阅
+        // 在管总览/通知单/服药/首次随访/后续随访：三级及以上可附带「已转出」源记录
         if (includeTransferred) {
             wrapper.and(w -> w
                     .and(active -> active.eq(Patient::getArchived, 0)
@@ -1881,7 +1882,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
         }
         // 转出确认后原记录 archived=1；接收方在管保留副本。
-        // 转出前区县仍可按 includeTransferredOut 在总览/通知/服药中查阅源记录。
+        // 转出前区县三级及以上仍可按 includeTransferredOut 在总览/通知/服药/随访中查阅源记录。
         boolean updated = lambdaUpdate()
                 .eq(Patient::getId, id)
                 .set(Patient::getArchiveRemark, ARCHIVE_REMARK_TRANSFERRED_OUT)
@@ -2052,6 +2053,25 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         if (PatientService.isTransferPending(patient)) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "该患者转出待确认，不可操作");
         }
+    }
+
+    @Override
+    public void assertPatientVisitWritable(Long id) {
+        dataScopeHelper.assertPatientAccessible(id);
+        Patient patient = getById(id);
+        if (patient == null) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "患者不存在");
+        }
+        if (PatientService.isTransferPending(patient)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID, "该患者转出待确认，不可操作");
+        }
+        if (PatientService.isTransferredOut(patient)) {
+            if (!BaseContext.isLevel3OrAbove()) {
+                throw new ServiceException(StatusEnum.FORBIDDEN, "仅三级及以上用户可查看或修改跨区转出患者的随访");
+            }
+            return;
+        }
+        assertPatientNotTransferLocked(patient);
     }
 
     @Override

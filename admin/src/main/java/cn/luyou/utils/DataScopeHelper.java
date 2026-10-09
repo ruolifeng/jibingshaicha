@@ -26,7 +26,8 @@ import java.util.stream.Collectors;
  * 转出副本（source_patient_id / source_latent_id 非空）不通过「旧通知单」扩权可见，
  * 避免跨区转出后原辖区三级/五级仍能把接收方副本当成在管患者。
  * <p>
- * 患者跨区转出确认后：源记录对转出前所属区县（按部门/录入人范围）仍可查阅（只读，领药可写）；
+ * 患者跨区转出确认后：源记录对转出前所属区县的三级及以上用户仍可查阅，
+ * 并可在首次随访/后续随访中查看与修改；四级、五级不可见源记录。
  * 接收机构只看副本。潜伏感染者仍按「转出后源记录不可见」处理。
  */
 @Component
@@ -228,8 +229,8 @@ public class DataScopeHelper {
             return;
         }
         // 潜伏感染：转出确认后源记录对转出方不可见。
-        // 患者：源记录保留给转出前所属区县查阅（列表是否展示由业务查询控制）。
-        if (!"patient".equals(noticeType)) {
+        // 患者：源记录仅对转出前辖区的三级及以上可见；四级/五级排除源记录。
+        if (!"patient".equals(noticeType) || !BaseContext.isLevel3OrAbove()) {
             excludeTransferredOutSources(wrapper, idColumn, noticeType);
         }
 

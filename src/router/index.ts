@@ -85,7 +85,11 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: {
           title: "重点人群",
           keepAlive: true,
-          anyPermission: ["keyPopulation:screening", "keyPopulation:suspected"]
+          anyPermission: [
+            "keyPopulation:screening",
+            "keyPopulation:suspected",
+            "keyPopulation:tbSymptomReferral"
+          ]
         }
       },
       {
@@ -324,7 +328,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       title: "统计分析",
       elIcon: "DataAnalysis",
       alwaysShow: true,
-      anyPermission: ["statistics", "statistics:keyPopulationTbSymptomReferral"]
+      permission: "statistics"
     },
     children: [
       {
@@ -333,13 +337,18 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "StatisticsOverview",
         meta: { title: "综合统计", permission: "statistics" }
       },
+      // 旧书签兼容：已迁至筛查管理 → 重点人群 → 结核症状筛查推介
       {
         path: "key-population-tb-symptom-referral",
         component: () => import("@/pages/statistics/key-population-tb-symptom-referral/index.vue"),
         name: "StatisticsKeyPopulationTbSymptomReferral",
         meta: {
+          hidden: true,
           title: "重点人群结核症状筛查推介",
-          permission: "statistics:keyPopulationTbSymptomReferral"
+          anyPermission: [
+            "keyPopulation:tbSymptomReferral",
+            "statistics:keyPopulationTbSymptomReferral"
+          ]
         }
       }
     ]

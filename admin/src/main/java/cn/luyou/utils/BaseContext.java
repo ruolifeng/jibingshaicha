@@ -38,6 +38,15 @@ public class BaseContext {
         return Integer.valueOf(1).equals(roleLocal.get());
     }
 
+    /**
+     * 三级及以上：超管 / 一级 / 二级 / 三级（role 1–4）。
+     * 四级、五级不可使用跨区转出源记录的查阅与随访修改。
+     */
+    public static boolean isLevel3OrAbove() {
+        Integer role = roleLocal.get();
+        return role != null && role >= 1 && role <= 4;
+    }
+
     public static void remove() {
         userIdLocal.remove();
         roleLocal.remove();

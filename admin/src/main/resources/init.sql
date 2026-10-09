@@ -2379,19 +2379,23 @@ FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
          CROSS JOIN `permission` p
 WHERE p.`code` = 'statistics:questionnaire';
 
--- 2.1）统计分析 — 重点人群结核症状筛查推介报表
+-- 2.1）重点人群 — 结核症状筛查推介报表（原挂统计分析，V134 迁入重点人群）
 INSERT IGNORE INTO `permission` (`id`, `code`, `name`, `type`, `parent_id`, `sort`) VALUES
-(132, 'statistics:keyPopulationTbSymptomReferral', '重点人群结核症状筛查推介', 2, 4, 3);
+(132, 'keyPopulation:tbSymptomReferral', '重点人群结核症状筛查推介', 1, 2, 6);
 
 UPDATE `permission`
-SET `parent_id` = 4, `sort` = 3, `name` = '重点人群结核症状筛查推介', `type` = 2
-WHERE `code` = 'statistics:keyPopulationTbSymptomReferral';
+SET `code` = 'keyPopulation:tbSymptomReferral',
+    `parent_id` = 2,
+    `sort` = 6,
+    `name` = '重点人群结核症状筛查推介',
+    `type` = 1
+WHERE `code` IN ('keyPopulation:tbSymptomReferral', 'statistics:keyPopulationTbSymptomReferral');
 
 INSERT IGNORE INTO `role_permission` (`id`, `role`, `permission_id`)
 SELECT (@_seed_rp_id := @_seed_rp_id + 1), r.role, p.id
-FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) r
+FROM (SELECT 1 AS role UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) r
          CROSS JOIN `permission` p
-WHERE p.`code` = 'statistics:keyPopulationTbSymptomReferral';
+WHERE p.`code` = 'keyPopulation:tbSymptomReferral';
 
 -- 3）清理角色权限表中已废弃权限的关联（含其全部子权限）
 DELETE rp FROM `role_permission` rp
@@ -3166,7 +3170,7 @@ WHERE p.`code` = 'screening'
   AND old.`code` IN (
       'school', 'keyPopulation',
       'school:screening', 'school:suspected',
-      'keyPopulation:screening', 'keyPopulation:suspected'
+      'keyPopulation:screening', 'keyPopulation:suspected', 'keyPopulation:tbSymptomReferral'
   );
 
 -- ==================== V68：推介追踪共同追踪（见 migration/V68_referral_joint_tracking.sql） ====================

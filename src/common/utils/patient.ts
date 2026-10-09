@@ -329,9 +329,15 @@ export function isPatientTransferPending(row: Record<string, any> | null | undef
   return row?.archiveRemark === PATIENT_TRANSFER_PENDING
 }
 
-/** 患者是否已跨区转出（源记录；原区县可查阅，仅领药可编辑） */
+/** 患者是否已跨区转出（源记录；原区县三级及以上可查阅/改随访） */
 export function isPatientTransferredOut(row: Record<string, any> | null | undefined): boolean {
   return row?.archiveRemark === PATIENT_TRANSFERRED_OUT
+}
+
+/** 三级及以上：超管 / 一级 / 二级 / 三级（role 1–4） */
+export function isLevel3OrAboveRole(role?: number | null): boolean {
+  const value = Number(role)
+  return value >= 1 && value <= 4
 }
 
 /**
@@ -342,6 +348,20 @@ export function canEditTransferredPatientPickup(row: Record<string, any> | null 
   if (!row) return false
   if (isPatientTransferPending(row)) return false
   return true
+}
+
+/**
+ * 跨区已转出源记录：仅三级及以上可填写/修改首次随访、后续随访。
+ * 转出待确认仍禁止；非转出患者沿用原锁定规则。
+ */
+export function canEditTransferredOutVisit(
+  row: Record<string, any> | null | undefined,
+  role?: number | null
+): boolean {
+  if (!row) return false
+  if (isPatientTransferPending(row)) return false
+  if (isPatientTransferredOut(row)) return isLevel3OrAboveRole(role)
+  return !isPatientTransferLocked(row)
 }
 
 /** 转出状态展示文案 */

@@ -20,8 +20,8 @@ export interface PatientListOptions {
   /** 服药管理：服药管理单位筛选 */
   medicationSearch?: boolean
   /**
-   * 是否附带跨区「已转出」源记录（转出前区县可查阅）。
-   * 在管总览 / 通知单管理 / 服药管理开启；首次/后续随访不开启。
+   * 是否附带跨区「已转出」源记录（转出前区县三级及以上可查阅）。
+   * 在管总览 / 通知单 / 服药 / 首次随访 / 后续随访开启；后端对四级、五级会忽略。
    */
   includeTransferredOut?: boolean
 }
