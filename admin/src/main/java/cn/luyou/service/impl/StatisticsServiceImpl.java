@@ -174,6 +174,9 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     @Override
     public List<String> getKeyPopulationRegionOptions(List<Long> filterDeptIds) {
+        GeoNameResolver geo = new GeoNameResolver();
+        // 三/四级：本区县及下属；五级：仅所在卫生院（与前端部门筛选取交集）
+        List<Long> accessDeptIds = resolveKeyPopulationReportAccessDeptIds(filterDeptIds);
         LinkedHashMap<String, Boolean> regions = new LinkedHashMap<>();
         LambdaQueryWrapper<ScreeningKeyPopulation> districtWrapper = Wrappers.<ScreeningKeyPopulation>lambdaQuery()
                 .select(ScreeningKeyPopulation::getDistrict)
@@ -181,11 +184,11 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .isNotNull(ScreeningKeyPopulation::getDistrict)
                 .groupBy(ScreeningKeyPopulation::getDistrict)
                 .orderByAsc(ScreeningKeyPopulation::getDistrict);
-        applyKeyPopulationReportAccess(districtWrapper, filterDeptIds);
+        applyKeyPopulationReportAccess(districtWrapper, accessDeptIds);
         screeningKeyPopulationMapper.selectList(districtWrapper).stream()
                 .map(ScreeningKeyPopulation::getDistrict)
                 .filter(StrUtil::isNotBlank)
-                .forEach(d -> regions.put(canonicalGeoDisplayName(d), Boolean.TRUE));
+                .forEach(d -> regions.put(geo.canonical(d), Boolean.TRUE));
 
         LambdaQueryWrapper<ScreeningKeyPopulation> townshipWrapper = Wrappers.<ScreeningKeyPopulation>lambdaQuery()
                 .select(ScreeningKeyPopulation::getTownshipCommunity)
@@ -193,11 +196,11 @@ public class StatisticsServiceImpl implements StatisticsService {
                 .isNotNull(ScreeningKeyPopulation::getTownshipCommunity)
                 .groupBy(ScreeningKeyPopulation::getTownshipCommunity)
                 .orderByAsc(ScreeningKeyPopulation::getTownshipCommunity);
-        applyKeyPopulationReportAccess(townshipWrapper, filterDeptIds);
+        applyKeyPopulationReportAccess(townshipWrapper, accessDeptIds);
         screeningKeyPopulationMapper.selectList(townshipWrapper).stream()
                 .map(ScreeningKeyPopulation::getTownshipCommunity)
                 .filter(StrUtil::isNotBlank)
-                .forEach(t -> regions.put(canonicalGeoDisplayName(t), Boolean.TRUE));
+                .forEach(t -> regions.put(geo.canonical(t), Boolean.TRUE));
 
         List<String> result = new ArrayList<>(regions.keySet());
         result.sort(String::compareTo);
@@ -207,37 +210,41 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Override
     public List<KeyPopulationTbSymptomReferralStatisticsVO> getKeyPopulationTbSymptomReferralStatistics(
             String year, String region, List<Long> filterDeptIds, List<Long> selectedDeptIds) {
-        List<ScreeningKeyPopulation> records = queryKeyPopulationRecords(year, region, filterDeptIds);
+        // 一次请求内复用部门树与地区名缓存，避免每条筛查记录都 listAll() 查库导致一直加载
+        GeoNameResolver geo = new GeoNameResolver();
+        // 数据范围：三/四级看本区县及下属，五级仅所在卫生院；分行仍按用户勾选部门
+        List<Long> accessDeptIds = resolveKeyPopulationReportAccessDeptIds(filterDeptIds);
         // 推介到位只查一次，避免老年人/糖尿病各扫一遍全表
-        ReferralArrivedByDistrict arrived = countReferralArrivedByDistrict(year, filterDeptIds);
+        ReferralArrivedByDistrict arrived = countReferralArrivedByDistrict(year, accessDeptIds, geo);
         Map<String, Long> elderArrivedByDistrict = arrived.elder();
         Map<String, Long> diabetesArrivedByDistrict = arrived.diabetes();
         List<Long> groupingDeptIds = (selectedDeptIds != null && !selectedDeptIds.isEmpty())
                 ? selectedDeptIds : filterDeptIds;
-        KeyPopulationGroupMode groupMode = resolveKeyPopulationGroupMode(filterDeptIds, groupingDeptIds, region);
-        Set<String> selectedTownshipNames = resolveSelectedTownshipNames(groupingDeptIds, groupMode);
+        KeyPopulationGroupMode groupMode = resolveKeyPopulationGroupMode(filterDeptIds, groupingDeptIds, region, geo);
+        Set<String> selectedTownshipNames = resolveSelectedTownshipNames(groupingDeptIds, groupMode, geo);
 
-        // 按地区单次累加指标，避免先按区堆列表再多次 stream 过滤
+        // 流式累加：不把全表装进 List，降低大表内存与耗时
         Map<String, KeyPopulationStatAccumulator> grouped = new LinkedHashMap<>();
-        if (StrUtil.isNotBlank(region)) {
-            String regionKey = canonicalGeoDisplayName(region);
-            KeyPopulationStatAccumulator acc = grouped.computeIfAbsent(regionKey, k -> new KeyPopulationStatAccumulator());
-            for (ScreeningKeyPopulation r : records) {
-                acc.accept(r);
+        String regionKey = StrUtil.isNotBlank(region) ? geo.canonical(region) : null;
+        LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = buildKeyPopulationRecordsWrapper(year, region, accessDeptIds);
+        screeningKeyPopulationMapper.selectList(wrapper, context -> {
+            ScreeningKeyPopulation r = context.getResultObject();
+            if (r == null) {
+                return;
             }
-        } else {
-            for (ScreeningKeyPopulation r : records) {
-                String key = resolveKeyPopulationGroupKey(r, groupMode, selectedTownshipNames);
-                grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator()).accept(r);
+            String key = regionKey != null
+                    ? regionKey
+                    : resolveKeyPopulationGroupKey(r, groupMode, selectedTownshipNames, geo);
+            grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator()).accept(r);
+        });
+        if (regionKey == null
+                && !departmentFilterSupport.hasActiveFilter(filterDeptIds)
+                && groupMode == KeyPopulationGroupMode.DISTRICT) {
+            for (String key : elderArrivedByDistrict.keySet()) {
+                grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator());
             }
-            if (!departmentFilterSupport.hasActiveFilter(filterDeptIds)
-                    && groupMode == KeyPopulationGroupMode.DISTRICT) {
-                for (String key : elderArrivedByDistrict.keySet()) {
-                    grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator());
-                }
-                for (String key : diabetesArrivedByDistrict.keySet()) {
-                    grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator());
-                }
+            for (String key : diabetesArrivedByDistrict.keySet()) {
+                grouped.computeIfAbsent(key, k -> new KeyPopulationStatAccumulator());
             }
         }
 
@@ -264,7 +271,7 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     private KeyPopulationGroupMode resolveKeyPopulationGroupMode(
-            List<Long> filterDeptIds, List<Long> selectedDeptIds, String region) {
+            List<Long> filterDeptIds, List<Long> selectedDeptIds, String region, GeoNameResolver geo) {
         if (StrUtil.isNotBlank(region) || !departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
             return KeyPopulationGroupMode.DISTRICT;
         }
@@ -272,7 +279,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                 && Objects.equals(filterDeptIds.get(0), DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)) {
             return KeyPopulationGroupMode.DISTRICT;
         }
-        List<Department> selectedDepts = listDepartmentsByIds(selectedDeptIds);
+        List<Department> selectedDepts = listDepartmentsByIds(selectedDeptIds, geo);
         if (selectedDepts.isEmpty()) {
             return KeyPopulationGroupMode.DISTRICT;
         }
@@ -291,22 +298,23 @@ public class StatisticsServiceImpl implements StatisticsService {
         return dept != null && dept.getLevel() != null && dept.getLevel() >= 3;
     }
 
-    private List<Department> listDepartmentsByIds(List<Long> ids) {
+    private List<Department> listDepartmentsByIds(List<Long> ids, GeoNameResolver geo) {
         if (ids == null || ids.isEmpty()) {
             return List.of();
         }
         Set<Long> idSet = new HashSet<>(ids);
-        return departmentService.listAll().stream()
+        return geo.all().stream()
                 .filter(d -> d.getId() != null && idSet.contains(d.getId()))
                 .toList();
     }
 
-    private Set<String> resolveSelectedTownshipNames(List<Long> selectedDeptIds, KeyPopulationGroupMode mode) {
+    private Set<String> resolveSelectedTownshipNames(
+            List<Long> selectedDeptIds, KeyPopulationGroupMode mode, GeoNameResolver geo) {
         if (mode == KeyPopulationGroupMode.DISTRICT) {
             return Set.of();
         }
         LinkedHashSet<String> names = new LinkedHashSet<>();
-        for (Department dept : listDepartmentsByIds(selectedDeptIds)) {
+        for (Department dept : listDepartmentsByIds(selectedDeptIds, geo)) {
             if (!isTownshipDepartment(dept) || StrUtil.isBlank(dept.getName())) {
                 continue;
             }
@@ -316,45 +324,44 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     private String resolveKeyPopulationGroupKey(
-            ScreeningKeyPopulation row, KeyPopulationGroupMode mode, Set<String> selectedTownshipNames) {
+            ScreeningKeyPopulation row, KeyPopulationGroupMode mode, Set<String> selectedTownshipNames,
+            GeoNameResolver geo) {
         if (mode == KeyPopulationGroupMode.TOWNSHIP) {
             if (StrUtil.isNotBlank(row.getTownshipCommunity())) {
-                return canonicalGeoDisplayName(row.getTownshipCommunity());
+                return geo.canonical(row.getTownshipCommunity());
             }
-            String matched = matchSelectedTownshipName(row, selectedTownshipNames);
+            String matched = matchSelectedTownshipName(row, selectedTownshipNames, geo);
             if (matched != null) {
                 return matched;
             }
-            return canonicalGeoDisplayName(row.getDistrict());
+            return geo.canonical(row.getDistrict());
         }
         if (mode == KeyPopulationGroupMode.MIXED) {
-            String matched = matchSelectedTownshipName(row, selectedTownshipNames);
+            String matched = matchSelectedTownshipName(row, selectedTownshipNames, geo);
             if (matched != null) {
                 return matched;
             }
             if (StrUtil.isNotBlank(row.getTownshipCommunity())
                     && nameMatchesAny(row.getTownshipCommunity(), selectedTownshipNames)) {
-                return canonicalGeoDisplayName(row.getTownshipCommunity());
+                return geo.canonical(row.getTownshipCommunity());
             }
         }
-        return canonicalGeoDisplayName(row.getDistrict());
+        return geo.canonical(row.getDistrict());
     }
 
-    private String matchSelectedTownshipName(ScreeningKeyPopulation row, Set<String> selectedTownshipNames) {
+    private String matchSelectedTownshipName(
+            ScreeningKeyPopulation row, Set<String> selectedTownshipNames, GeoNameResolver geo) {
         if (selectedTownshipNames == null || selectedTownshipNames.isEmpty()) {
             return null;
         }
         if (StrUtil.isNotBlank(row.getTownshipCommunity())
                 && nameMatchesAny(row.getTownshipCommunity(), selectedTownshipNames)) {
-            return canonicalGeoDisplayName(row.getTownshipCommunity());
+            return geo.canonical(row.getTownshipCommunity());
         }
         if (row.getDepartmentId() != null) {
-            Department dept = departmentService.listAll().stream()
-                    .filter(d -> row.getDepartmentId().equals(d.getId()))
-                    .findFirst()
-                    .orElse(null);
+            Department dept = geo.byId(row.getDepartmentId());
             if (isTownshipDepartment(dept) && nameMatchesAny(dept.getName(), selectedTownshipNames)) {
-                return canonicalGeoDisplayName(dept.getName());
+                return geo.canonical(dept.getName());
             }
         }
         return null;
@@ -376,37 +383,74 @@ public class StatisticsServiceImpl implements StatisticsService {
         return false;
     }
 
-    /** 将「富顺/富顺县」等别名规范为部门树中的正式名称，避免报表拆成两行 */
-    private String canonicalGeoDisplayName(String raw) {
-        if (StrUtil.isBlank(raw)) {
-            return "未知";
+    /**
+     * 一次请求内复用部门列表与地区名规范化结果。
+     * 原实现每条筛查记录都 departmentService.listAll()，大数据量时接口会一直转圈。
+     */
+    private final class GeoNameResolver {
+        private final List<Department> all;
+        private final Map<Long, Department> byId;
+        private final Map<String, String> cache = new HashMap<>();
+
+        GeoNameResolver() {
+            this.all = departmentService.listAll();
+            this.byId = all.stream()
+                    .filter(d -> d.getId() != null)
+                    .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
         }
-        String trimmed = raw.trim();
-        List<Department> all = departmentService.listAll();
-        for (Department dept : all) {
-            if (StrUtil.isNotBlank(dept.getName()) && trimmed.equals(dept.getName().trim())) {
-                return dept.getName().trim();
-            }
+
+        List<Department> all() {
+            return all;
         }
-        boolean looksTownship = endsWithTownshipSuffix(trimmed);
-        String best = null;
-        Integer bestLevelScore = null;
-        for (Department dept : all) {
-            if (StrUtil.isBlank(dept.getName()) || !geoNamesMatch(trimmed, dept.getName())) {
-                continue;
-            }
-            int level = dept.getLevel() == null ? 0 : dept.getLevel();
-            int score = looksTownship
-                    ? (level >= 3 ? 2 : 1)
-                    : (level == 2 ? 2 : 1);
-            String deptName = dept.getName().trim();
-            if (best == null || score > bestLevelScore
-                    || (score == bestLevelScore && deptName.length() > best.length())) {
-                best = deptName;
-                bestLevelScore = score;
-            }
+
+        Department byId(Long id) {
+            return id == null ? null : byId.get(id);
         }
-        return best != null ? best : trimmed;
+
+        Map<Long, Department> byIdMap() {
+            return byId;
+        }
+
+        String canonical(String raw) {
+            if (StrUtil.isBlank(raw)) {
+                return "未知";
+            }
+            String trimmed = raw.trim();
+            String cached = cache.get(trimmed);
+            if (cached != null) {
+                return cached;
+            }
+            String resolved = resolveCanonical(trimmed);
+            cache.put(trimmed, resolved);
+            return resolved;
+        }
+
+        private String resolveCanonical(String trimmed) {
+            for (Department dept : all) {
+                if (StrUtil.isNotBlank(dept.getName()) && trimmed.equals(dept.getName().trim())) {
+                    return dept.getName().trim();
+                }
+            }
+            boolean looksTownship = endsWithTownshipSuffix(trimmed);
+            String best = null;
+            Integer bestLevelScore = null;
+            for (Department dept : all) {
+                if (StrUtil.isBlank(dept.getName()) || !geoNamesMatch(trimmed, dept.getName())) {
+                    continue;
+                }
+                int level = dept.getLevel() == null ? 0 : dept.getLevel();
+                int score = looksTownship
+                        ? (level >= 3 ? 2 : 1)
+                        : (level == 2 ? 2 : 1);
+                String deptName = dept.getName().trim();
+                if (best == null || score > bestLevelScore
+                        || (score == bestLevelScore && deptName.length() > best.length())) {
+                    best = deptName;
+                    bestLevelScore = score;
+                }
+            }
+            return best != null ? best : trimmed;
+        }
     }
 
     private boolean endsWithTownshipSuffix(String name) {
@@ -439,8 +483,11 @@ public class StatisticsServiceImpl implements StatisticsService {
         return screeningSchoolMapper.selectList(wrapper);
     }
 
-    private List<ScreeningKeyPopulation> queryKeyPopulationRecords(String year, String region,
-                                                                  List<Long> filterDeptIds) {
+    /**
+     * 报表明细查询条件：只拉老年人/糖尿病人群相关行（其余人群分类在累加时也会被跳过）。
+     */
+    private LambdaQueryWrapper<ScreeningKeyPopulation> buildKeyPopulationRecordsWrapper(
+            String year, String region, List<Long> filterDeptIds) {
         // 仅查报表统计所需字段，避免实体字段与库表短暂不一致时全字段查询失败
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(
@@ -465,7 +512,11 @@ public class StatisticsServiceImpl implements StatisticsService {
                         ScreeningKeyPopulation::getInfectionResult,
                         ScreeningKeyPopulation::getDiagnosisFirst)
                 .eq(ScreeningKeyPopulation::getSourceType, "keyPopulation")
-                .eq(StrUtil.isNotBlank(year), ScreeningKeyPopulation::getYear, year);
+                .eq(StrUtil.isNotBlank(year), ScreeningKeyPopulation::getYear, year)
+                // 报表只统计老年人（含老年人+糖尿病）与单一糖尿病，先在 SQL 收窄扫描量
+                .and(w -> w.eq(ScreeningKeyPopulation::getCrowdCategoryElder, "是")
+                        .or()
+                        .eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是"));
         if (StrUtil.isNotBlank(region)) {
             String regionValue = region.trim();
             // 区县或乡镇/社区均可筛选（此前仅 district 精确匹配，选乡镇无数据）
@@ -478,10 +529,66 @@ public class StatisticsServiceImpl implements StatisticsService {
         // 筛查记录常挂在区县 department_id，选乡镇时硬过滤会把名称本可匹配的数据全部滤空。
         // resolveFilterDepartmentIds 已与用户辖区取交集，这里按部门 ID + 地理名称匹配即可。
         applyKeyPopulationReportAccess(wrapper, filterDeptIds);
-        return screeningKeyPopulationMapper.selectList(wrapper);
+        return wrapper;
     }
 
-    /** 重点人群报表统一数据范围：有部门筛选用地理匹配，否则用常规辖区隔离 */
+    /**
+     * 本报表查看范围（与前端部门筛选取交集）：
+     * <ul>
+     *   <li>超管 / 一、二级：前端筛选或全市/本辖区树</li>
+     *   <li>三级、四级：本区县及其下属单位</li>
+     *   <li>五级：仅所在卫生院</li>
+     * </ul>
+     */
+    private List<Long> resolveKeyPopulationReportAccessDeptIds(List<Long> filterDeptIds) {
+        List<Long> roleScope = resolveKeyPopulationReportRoleScopeDeptIds();
+        if (roleScope == null) {
+            return filterDeptIds;
+        }
+        if (!departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
+            return roleScope;
+        }
+        if (filterDeptIds.size() == 1
+                && Objects.equals(filterDeptIds.get(0), DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)) {
+            return filterDeptIds;
+        }
+        Set<Long> allowed = new HashSet<>(roleScope);
+        List<Long> intersected = filterDeptIds.stream()
+                .filter(allowed::contains)
+                .distinct()
+                .toList();
+        return intersected.isEmpty()
+                ? List.of(DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID)
+                : intersected;
+    }
+
+    /** @return null 表示不额外收窄（超管）；否则为角色可见部门 ID 列表 */
+    private List<Long> resolveKeyPopulationReportRoleScopeDeptIds() {
+        if (BaseContext.isSuperAdmin()) {
+            return null;
+        }
+        Long deptId = BaseContext.getCurrentDepartmentId();
+        if (deptId == null) {
+            return List.of(DepartmentFilterSupport.NO_MATCH_DEPARTMENT_ID);
+        }
+        Integer role = BaseContext.getCurrentRole();
+        // 五级：仅所在卫生院
+        if (role != null && role == 6) {
+            return List.of(deptId);
+        }
+        // 三级、四级：本区县及其下属（挂在乡镇时上溯到区县）
+        if (role != null && (role == 4 || role == 5)) {
+            Long districtId = departmentService.resolveDistrictId(deptId);
+            if (districtId != null) {
+                return departmentService.getDescendantIds(districtId);
+            }
+            return departmentService.getDescendantIds(deptId);
+        }
+        // 一、二级等：本辖区部门树
+        return departmentService.getDescendantIds(deptId);
+    }
+
+    /** 重点人群报表统一数据范围：有部门范围时用地理匹配，否则用常规辖区隔离 */
     private void applyKeyPopulationReportAccess(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper,
                                                 List<Long> filterDeptIds) {
         if (departmentFilterSupport.hasActiveFilter(filterDeptIds)) {
@@ -576,7 +683,8 @@ public class StatisticsServiceImpl implements StatisticsService {
      * 推介模块追踪到位人数，按部门归属区县汇总。
      * 一次查询同时累计老年人/老年人+糖尿病与单一糖尿病。
      */
-    private ReferralArrivedByDistrict countReferralArrivedByDistrict(String year, List<Long> filterDeptIds) {
+    private ReferralArrivedByDistrict countReferralArrivedByDistrict(
+            String year, List<Long> filterDeptIds, GeoNameResolver geo) {
         // 仅查统计所需字段，避免实体新增列（如 recommend_unit_name）尚未迁移到库时全字段查询报错
         LambdaQueryWrapper<ReferralTracking> wrapper = Wrappers.<ReferralTracking>lambdaQuery()
                 .select(
@@ -592,7 +700,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         }
         applyReferralDepartmentScope(wrapper, filterDeptIds);
         List<ReferralTracking> list = referralTrackingMapper.selectList(wrapper);
-        Map<Long, String> deptDistrictMap = buildDepartmentDistrictMap();
+        Map<Long, String> deptDistrictMap = buildDepartmentDistrictMap(geo);
 
         Map<String, Long> elder = new HashMap<>();
         Map<String, Long> diabetes = new HashMap<>();
@@ -606,7 +714,7 @@ public class StatisticsServiceImpl implements StatisticsService {
             if (StrUtil.isBlank(districtName)) {
                 districtName = "未知";
             } else {
-                districtName = canonicalGeoDisplayName(districtName);
+                districtName = geo.canonical(districtName);
             }
             if (isElder) {
                 elder.merge(districtName, 1L, Long::sum);
@@ -683,11 +791,9 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     /** 部门 ID → 所属区县名称（二级部门名；三级取上级区县名） */
-    private Map<Long, String> buildDepartmentDistrictMap() {
-        List<Department> all = departmentService.listAll();
-        Map<Long, Department> byId = all.stream()
-                .filter(d -> d.getId() != null)
-                .collect(Collectors.toMap(Department::getId, d -> d, (a, b) -> a));
+    private Map<Long, String> buildDepartmentDistrictMap(GeoNameResolver geo) {
+        List<Department> all = geo.all();
+        Map<Long, Department> byId = geo.byIdMap();
         Map<Long, String> result = new HashMap<>();
         for (Department dept : all) {
             if (dept.getId() == null || dept.getLevel() == null) {

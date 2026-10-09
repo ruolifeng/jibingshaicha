@@ -3,7 +3,7 @@ import { useUserStore } from "@/pinia/stores/user"
 
 const SCREENING_ENTRIES = [
   { path: "/screening/student", perms: ["school:screening", "school:suspected"] },
-  { path: "/screening/key-population", perms: ["keyPopulation:screening", "keyPopulation:suspected"] },
+  { path: "/screening/key-population", perms: ["keyPopulation:screening", "keyPopulation:suspected", "keyPopulation:tbSymptomReferral"] },
   { path: "/screening/regular", perms: ["regular:screening", "regular:suspected"] }
 ] as const
 
@@ -43,7 +43,7 @@ export function resolvePopulationLegacyRedirect(to: RouteLocationGeneric) {
   const source = to.query.source as string
   const view = to.query.view as string
   const path = SOURCE_PATH_MAP[source] ?? resolveScreeningDefaultPath()
-  if (view === "screening" || view === "suspected") {
+  if (view === "screening" || view === "suspected" || view === "tbSymptomReferral") {
     return { path, query: { view } }
   }
   return path

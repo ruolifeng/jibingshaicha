@@ -963,12 +963,13 @@ public class ExportController {
             @RequestParam(required = false) String formatIssue,
             @RequestParam(required = false) String sputumCulture,
             @RequestParam(required = false) String drugResistance,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeTransferredOut,
             HttpServletResponse response) throws IOException {
         List<Patient> patients = loadPatientsForVisitExport(
                 ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                 dateFrom, dateTo, StrUtil.blankToDefault(dateFilterBy, "firstVisitFill"),
                 medicationManagementUnit, crowdCategory, creatorUsername, columnFilters, formatIssue,
-                sputumCulture, drugResistance);
+                sputumCulture, drugResistance, includeTransferredOut);
         if (patients.isEmpty()) {
             writeExcel(response, "首次入户随访", List.of(), FIRST_VISIT_EXPORT_HEADERS);
             return;
@@ -1046,12 +1047,13 @@ public class ExportController {
             @RequestParam(required = false) String creatorUsername,
             @RequestParam(required = false) String columnFilters,
             @RequestParam(required = false) String formatIssue,
+            @RequestParam(required = false, defaultValue = "false") Boolean includeTransferredOut,
             HttpServletResponse response) throws IOException {
         List<Patient> patients = loadPatientsForVisitExport(
                 ids, archived, populationType, name, idNumber, phone, currentAddress, diagnosisResult,
                 dateFrom, dateTo, StrUtil.blankToDefault(dateFilterBy, "followUpFill"),
                 medicationManagementUnit, crowdCategory, creatorUsername, columnFilters, formatIssue,
-                null, null);
+                null, null, includeTransferredOut);
         if (patients.isEmpty()) {
             writeExcel(response, "后续随访", List.of(), FOLLOW_UP_VISIT_EXPORT_HEADERS);
             return;

@@ -271,7 +271,7 @@ public class PatientController {
         if (firstVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
-        patientService.assertPatientOperable(firstVisit.getPatientId());
+        patientService.assertPatientVisitWritable(firstVisit.getPatientId());
         mergeExistingFirstVisitId(firstVisit);
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
@@ -293,7 +293,7 @@ public class PatientController {
         if (firstVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
-        patientService.assertPatientOperable(firstVisit.getPatientId());
+        patientService.assertPatientVisitWritable(firstVisit.getPatientId());
         mergeExistingFirstVisitId(firstVisit);
         FirstVisit existing = firstVisit.getId() != null
                 ? firstVisitService.getById(firstVisit.getId())
@@ -510,7 +510,7 @@ public class PatientController {
         if (followUpVisit.getPatientId() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "缺少患者ID");
         }
-        patientService.assertPatientOperable(followUpVisit.getPatientId());
+        patientService.assertPatientVisitWritable(followUpVisit.getPatientId());
         userService.checkPermissionCode("patientManagement:followUp:fill");
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
         FollowUpVisit existingDraft = followUpVisitService.lambdaQuery()
@@ -543,7 +543,7 @@ public class PatientController {
         if (followUpVisit.getVisitDate() == null) {
             throw new ServiceException(StatusEnum.PARAM_INVALID, "请填写随访时间");
         }
-        patientService.assertPatientOperable(followUpVisit.getPatientId());
+        patientService.assertPatientVisitWritable(followUpVisit.getPatientId());
         assertPatientNotArchivedForNewFollowUp(followUpVisit);
         validateFollowUpVisitMethod(followUpVisit);
         validateStopTreatmentOnSave(followUpVisit);
@@ -596,6 +596,9 @@ public class PatientController {
         }
         Patient patient = patientService.getById(followUpVisit.getPatientId());
         if (patient != null && Integer.valueOf(1).equals(patient.getArchived())) {
+            if (PatientService.isTransferredOut(patient) && BaseContext.isLevel3OrAbove()) {
+                return;
+            }
             throw new ServiceException(StatusEnum.PARAM_INVALID, "患者已归档，无法填写后续随访");
         }
     }

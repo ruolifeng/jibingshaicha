@@ -13,7 +13,7 @@ import {
   canEditFollowUpVisit,
   toFollowUpHistoryViewData
 } from "@@/utils/followUpVisit"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
+import { canEditTransferredOutVisit, getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferredOut, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { useUserStore } from "@/pinia/stores/user"
 import { deleteFollowUpVisitApi, exportPatientFollowUpVisitsApi, getFirstVisitDetailApi, getFollowUpVisitListApi } from "./apis"
@@ -22,6 +22,10 @@ import { usePatientTableHeaderFilters } from "./composables/usePatientTableHeade
 
 const userStore = useUserStore()
 const route = useRoute()
+
+function canEditVisit(row: Record<string, any> | null | undefined) {
+  return canEditTransferredOutVisit(row, userStore.userRole)
+}
 
 const {
   paginationData,
@@ -41,7 +45,7 @@ const {
   handleSearch,
   handleReset,
   applyRouteQuery
-} = usePatientList(0, { followUpSearch: true })
+} = usePatientList(0, { followUpSearch: true, includeTransferredOut: true })
 
 function syncNameFromRoute() {
   applyRouteQuery(route.query as Record<string, unknown>)
@@ -80,6 +84,7 @@ function buildListQueryParams() {
     populationType: searchForm.populationType || undefined,
     medicationManagementUnit: searchForm.medicationManagementUnit || undefined,
     dateFilterBy: "followUpFill",
+    includeTransferredOut: true,
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)
   }
@@ -425,10 +430,10 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
         </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <template v-if="!isPatientTransferLocked(row)">
+            <template v-if="canEditVisit(row)">
               <el-button
                 v-permission="'patientManagement:followUp:fill'" type="primary" link size="small"
-                :disabled="row.archived === 1"
+                :disabled="row.archived === 1 && !isPatientTransferredOut(row)"
                 @click="openFollowUp(row)"
               >
                 填写后续随访
@@ -506,7 +511,7 @@ async function handleDelete(record: FollowUpHistoryDisplayRow) {
               查看详情
             </el-button>
             <el-button
-              v-if="row.recordType === 'followUp' && canEditFollowUpVisit(userStore.userRole, row) && !isPatientTransferLocked(historyPatient)"
+              v-if="row.recordType === 'followUp' && canEditFollowUpVisit(userStore.userRole, row) && canEditVisit(historyPatient)"
               v-permission="'patientManagement:followUp:edit'"
               type="warning"
               link

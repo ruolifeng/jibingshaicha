@@ -5,7 +5,7 @@ import PrintFirstVisit from "@@/components/PrintFirstVisit.vue"
 import TableHeaderFilter from "@@/components/TableHeaderFilter.vue"
 import { DRUG_RESISTANCE_OPTIONS, getPopulationTypeLabel, getPopulationTypeTagType, PATHOGEN_RESULT_FILTER_OPTIONS, SPUTUM_CULTURE_OPTIONS } from "@@/constants/disease"
 import { downloadBlob } from "@@/utils/download"
-import { getPatientTransferStatusLabel, isPatientTransferLocked, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
+import { canEditTransferredOutVisit, getPatientTransferStatusLabel, isPatientTransferLocked, isPatientTransferredOut, resolveMedicationManagementUnit, resolvePatientDiagnosisResult, resolvePatientPathogenResult, resolveRegistrationNo } from "@@/utils/patient"
 import { extractDateRangeParams } from "@@/utils/searchParams"
 import { WarningFilled } from "@element-plus/icons-vue"
 import { useUserStore } from "@/pinia/stores/user"
@@ -15,6 +15,15 @@ import { usePatientTableHeaderFilters } from "./composables/usePatientTableHeade
 
 const userStore = useUserStore()
 const canEditFirstVisitPerm = computed(() => userStore.hasPermission("patientManagement:firstVisit:edit"))
+
+function canEditVisit(row: Record<string, any>) {
+  return canEditTransferredOutVisit(row, userStore.userRole)
+}
+
+function isVisitActionDisabled(row: Record<string, any>) {
+  if (isPatientTransferredOut(row) && canEditVisit(row)) return false
+  return row.archived === 1
+}
 
 const {
   paginationData,
@@ -33,7 +42,7 @@ const {
   fetchData,
   handleSearch,
   handleReset
-} = usePatientList(0, { firstVisitSearch: true })
+} = usePatientList(0, { firstVisitSearch: true, includeTransferredOut: true })
 
 const {
   genderFilterOptions,
@@ -66,6 +75,7 @@ function buildListQueryParams() {
     sputumCulture: searchForm.sputumCulture || undefined,
     drugResistance: searchForm.drugResistance || undefined,
     dateFilterBy: "firstVisitFill",
+    includeTransferredOut: true,
     ...(columnFiltersParam ? { columnFilters: columnFiltersParam } : {}),
     ...extractDateRangeParams(searchForm.dateRange)
   }
@@ -396,14 +406,14 @@ async function openPrintFirstVisit(row: any) {
         </el-table-column>
         <el-table-column label="操作" fixed="right">
           <template #default="{ row }">
-            <template v-if="!isPatientTransferLocked(row)">
+            <template v-if="canEditVisit(row)">
               <el-button
                 v-if="!row.hasFirstVisit"
                 v-permission="'patientManagement:firstVisit:fill'"
                 type="primary"
                 link
                 size="small"
-                :disabled="row.archived === 1"
+                :disabled="isVisitActionDisabled(row)"
                 @click="openFirstVisit(row)"
               >
                 填写首次随访
@@ -413,7 +423,7 @@ async function openPrintFirstVisit(row: any) {
                 type="primary"
                 link
                 size="small"
-                :disabled="row.archived === 1"
+                :disabled="isVisitActionDisabled(row)"
                 @click="openFirstVisit(row)"
               >
                 修改首次随访
@@ -440,10 +450,18 @@ async function openPrintFirstVisit(row: any) {
               <el-button v-if="row.hasFirstVisit" type="info" link size="small" @click="viewFirstVisit(row)">
                 查看
               </el-button>
-              <el-tag :type="row.archiveRemark === '已转出' ? 'info' : 'warning'" size="small">
+              <el-tag v-if="isPatientTransferLocked(row)" :type="row.archiveRemark === '已转出' ? 'info' : 'warning'" size="small">
                 {{ getPatientTransferStatusLabel(row.archiveRemark) }}
               </el-tag>
             </template>
+            <el-tag
+              v-if="isPatientTransferredOut(row) && canEditVisit(row)"
+              type="info"
+              size="small"
+              class="ml-1"
+            >
+              {{ getPatientTransferStatusLabel(row.archiveRemark) }}
+            </el-tag>
           </template>
         </el-table-column>
       </el-table>
