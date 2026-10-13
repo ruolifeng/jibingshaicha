@@ -47,7 +47,7 @@ public class FollowUpVisit extends BaseEntity {
     private String chemotherapyPlan;
     /** 用法（1每日/2间歇）—— V15 */
     private String medicationUsage;
-    /** 药品剂型（1固定剂量/2散装/3板式/4注射）—— V15 */
+    /** 药品剂型（1固定剂量/2散装/3板式/4注射，多选逗号分隔）—— V15 */
     private String drugForm;
     /** 漏服药次数 —— V15 */
     private Integer missedDoses;

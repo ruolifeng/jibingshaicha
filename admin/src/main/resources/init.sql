@@ -1540,7 +1540,7 @@ BEGIN
     ALTER TABLE `follow_up_visit` ADD COLUMN `drinking_amount`           VARCHAR(16)  DEFAULT NULL COMMENT 'V15 饮酒（两/天）'                         AFTER `smoking_amount`;
     ALTER TABLE `follow_up_visit` ADD COLUMN `chemotherapy_plan`         VARCHAR(256) DEFAULT NULL COMMENT 'V15 化疗方案'                              AFTER `drinking_amount`;
     ALTER TABLE `follow_up_visit` ADD COLUMN `medication_usage`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 用法 1每日/2间歇'                       AFTER `chemotherapy_plan`;
-    ALTER TABLE `follow_up_visit` ADD COLUMN `drug_form`                 VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药品剂型 1固定剂量/2散装/3板式/4注射'   AFTER `medication_usage`;
+    ALTER TABLE `follow_up_visit` ADD COLUMN `drug_form`                 VARCHAR(64)  DEFAULT NULL COMMENT 'V15 药品剂型 1固定剂量/2散装/3板式/4注射，多选逗号分隔'   AFTER `medication_usage`;
     ALTER TABLE `follow_up_visit` ADD COLUMN `missed_doses`              INT          DEFAULT NULL COMMENT 'V15 漏服药次数'                             AFTER `drug_form`;
     ALTER TABLE `follow_up_visit` ADD COLUMN `adverse_reaction`          VARCHAR(16)  DEFAULT NULL COMMENT 'V15 药物不良反应 1无/2有'                   AFTER `missed_doses`;
     ALTER TABLE `follow_up_visit` ADD COLUMN `adverse_reaction_detail`   VARCHAR(256) DEFAULT NULL COMMENT 'V15 不良反应详情'                          AFTER `adverse_reaction`;

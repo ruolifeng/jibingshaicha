@@ -103,7 +103,7 @@ interface FollowUpForm {
   chemotherapyPlan: string
   chemotherapyPlanDetail: string
   medicationUsage: string
-  drugForm: string
+  drugForm: string[]
   missedDoses: number | null
   adverseReaction: string
   adverseReactionDetail: string
@@ -146,7 +146,7 @@ function createEmptyForm(): FollowUpForm {
     chemotherapyPlan: "",
     chemotherapyPlanDetail: "",
     medicationUsage: "",
-    drugForm: "",
+    drugForm: [],
     missedDoses: null,
     adverseReaction: "",
     adverseReactionDetail: "",
@@ -181,6 +181,9 @@ function parseDraftData(data: Record<string, any>) {
     stopTreatment,
     symptoms: data.symptoms
       ? String(data.symptoms).split(",").map((s: string) => s.trim()).filter(Boolean)
+      : [],
+    drugForm: data.drugForm
+      ? String(data.drugForm).split(",").map((s: string) => s.trim()).filter(Boolean)
       : []
   })
   // 停止治疗为「是」时不保留下次随访时间
@@ -319,7 +322,8 @@ function buildPayload() {
     patientId: props.patientId,
     populationType: props.populationType,
     chemotherapyPlan: resolvePatientTreatmentPlanForSave(form.chemotherapyPlan, form.chemotherapyPlanDetail),
-    symptoms: form.symptoms.join(",")
+    symptoms: form.symptoms.join(","),
+    drugForm: form.drugForm.join(",")
   }
   delete payload.chemotherapyPlanDetail
   if (form.stopTreatment !== "是") {
@@ -535,23 +539,25 @@ async function handleSave() {
             />
           </el-form-item>
         </el-col>
-        <el-col :span="8">
+        <el-col :span="12">
           <el-form-item label="用法">
             <el-select v-model="form.medicationUsage" placeholder="请选择" style="width: 100%">
               <el-option v-for="o in FOLLOW_UP_MEDICATION_USAGE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
           </el-form-item>
         </el-col>
-        <el-col :span="8">
-          <el-form-item label="药品剂型">
-            <el-select v-model="form.drugForm" placeholder="请选择" style="width: 100%">
-              <el-option v-for="o in FOLLOW_UP_DRUG_FORM_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-            </el-select>
-          </el-form-item>
-        </el-col>
-        <el-col :span="8">
+        <el-col :span="12">
           <el-form-item label="漏服药次数">
             <el-input-number v-model="form.missedDoses" :min="0" placeholder="次" style="width: 100%" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="药品剂型">
+            <el-checkbox-group v-model="form.drugForm">
+              <el-checkbox v-for="o in FOLLOW_UP_DRUG_FORM_OPTIONS" :key="o.value" :value="o.value">
+                {{ o.label }}
+              </el-checkbox>
+            </el-checkbox-group>
           </el-form-item>
         </el-col>
       </el-row>
