@@ -1286,7 +1286,7 @@ export const FOLLOW_UP_MEDICATION_USAGE_OPTIONS = [
   { value: "2", label: "间歇" }
 ]
 
-/** 药品剂型 */
+/** 药品剂型（多选，存库逗号分隔） */
 export const FOLLOW_UP_DRUG_FORM_OPTIONS = [
   { value: "1", label: "固定剂量复合制剂" },
   { value: "2", label: "散装药" },

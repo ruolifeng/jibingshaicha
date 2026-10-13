@@ -16,14 +16,22 @@ export function optionLabel(options: Option[], value?: string | null) {
   return options.find(o => o.value === value)?.label ?? value
 }
 
-export function formatFollowUpSymptoms(raw?: string | null) {
+function formatMultiOptionLabels(options: Option[], raw?: string | null) {
   if (!raw) return "-"
-  const map = Object.fromEntries(FOLLOW_UP_SYMPTOM_OPTIONS.map(o => [o.value, o.label]))
+  const map = Object.fromEntries(options.map(o => [o.value, o.label]))
   return raw
     .split(",")
     .map(s => map[s.trim()] ?? s.trim())
     .filter(Boolean)
     .join("、") || "-"
+}
+
+export function formatFollowUpSymptoms(raw?: string | null) {
+  return formatMultiOptionLabels(FOLLOW_UP_SYMPTOM_OPTIONS, raw)
+}
+
+export function formatFollowUpDrugForm(raw?: string | null) {
+  return formatMultiOptionLabels(FOLLOW_UP_DRUG_FORM_OPTIONS, raw)
 }
 
 export function formatFollowUpSupervisor(value?: string | null, other?: string | null) {
@@ -53,6 +61,6 @@ export function formatFollowUpVisitMethod(value?: string | null, other?: string 
 export const followUpFormatters = {
   visitMethod: (v?: string | null, other?: string | null) => formatFollowUpVisitMethod(v, other),
   medicationUsage: (v?: string | null) => optionLabel(FOLLOW_UP_MEDICATION_USAGE_OPTIONS, v),
-  drugForm: (v?: string | null) => optionLabel(FOLLOW_UP_DRUG_FORM_OPTIONS, v),
+  drugForm: (v?: string | null) => formatFollowUpDrugForm(v),
   stopTreatmentReason: (v?: string | null, other?: string | null) => formatStopTreatmentReason(v, other)
 }

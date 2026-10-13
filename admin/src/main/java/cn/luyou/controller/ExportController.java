@@ -1881,8 +1881,7 @@ public class ExportController {
         row.put("化疗方案", nullToEmpty(v.getChemotherapyPlan()));
         row.put("用法", FOLLOW_UP_MEDICATION_USAGE_LABEL.getOrDefault(
                 nullToEmpty(v.getMedicationUsage()), nullToEmpty(v.getMedicationUsage())));
-        row.put("药品剂型", FOLLOW_UP_DRUG_FORM_LABEL.getOrDefault(
-                nullToEmpty(v.getDrugForm()), nullToEmpty(v.getDrugForm())));
+        row.put("药品剂型", formatSymptomCodes(v.getDrugForm(), FOLLOW_UP_DRUG_FORM_LABEL));
         row.put("漏服药次数", v.getMissedDoses() != null ? v.getMissedDoses() : "");
         row.put("药物不良反应", YES_NO_LABEL.getOrDefault(
                 nullToEmpty(v.getAdverseReaction()), nullToEmpty(v.getAdverseReaction())));
