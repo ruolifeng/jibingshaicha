@@ -95,24 +95,37 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
     private static final Set<String> COLUMN_FILTER_WHITELIST = Set.of(
             "name", "year", "city", "district", "gender", "idNumber", "phone", "ethnicity",
             "townshipCommunity", "currentAddress", "screenMethod", "infectionResult",
-            "diagnosisFirst", "hasChestXray", "chestXrayResult", "remark", "creatorUsername",
+            "diagnosisFirst", "diagnosisHalfYear", "diagnosisOneYear",
+            "hasChestXray", "chestXrayDate", "chestXrayResult", "remark", "creatorUsername",
             "householdAddress", "idType", "crowdCategoryClose", "crowdCategoryStudent",
             "crowdCategoryTeacher", "crowdCategoryElder", "crowdCategoryDiabetes",
             "crowdCategoryDual", "crowdCategoryTbHist", "crowdCategoryNormal",
-            "hasSuspiciousSymptoms", "screenResult"
+            "hasSuspiciousSymptoms", "cough", "hemoptysis", "fever", "chestPain",
+            "nightSweats", "appetiteLoss", "fatigue", "weightLoss",
+            "hasInfectionScreen", "screenDate", "screenResult"
     );
     private static final Set<String> COLUMN_FILTER_EQ_FIELDS = Set.of(
-            "gender", "diagnosisFirst", "infectionResult", "hasChestXray", "chestXrayResult",
+            "gender", "diagnosisFirst", "diagnosisHalfYear", "diagnosisOneYear",
+            "infectionResult", "hasChestXray", "chestXrayDate", "chestXrayResult",
             "screenMethod", "year", "city", "district", "ethnicity", "idType", "townshipCommunity",
             "crowdCategoryClose", "crowdCategoryStudent", "crowdCategoryTeacher",
             "crowdCategoryElder", "crowdCategoryDiabetes", "crowdCategoryDual",
-            "crowdCategoryTbHist", "crowdCategoryNormal", "hasSuspiciousSymptoms", "screenResult"
+            "crowdCategoryTbHist", "crowdCategoryNormal", "hasSuspiciousSymptoms",
+            "cough", "hemoptysis", "fever", "chestPain", "nightSweats", "appetiteLoss",
+            "fatigue", "weightLoss", "hasInfectionScreen", "screenDate", "screenResult"
     );
     /** 表头 Excel 式下拉：仅枚举/导入内容类字段 */
     private static final Set<String> COLUMN_DISTINCT_FIELDS = Set.of(
             "gender", "district", "city", "year", "ethnicity", "idType", "screenMethod",
-            "infectionResult", "diagnosisFirst", "hasChestXray", "chestXrayResult", "townshipCommunity",
-            "creatorUsername", "entryUnit"
+            "infectionResult", "diagnosisFirst", "diagnosisHalfYear", "diagnosisOneYear",
+            "hasChestXray", "chestXrayDate", "chestXrayResult", "townshipCommunity",
+            "creatorUsername", "entryUnit",
+            "crowdCategoryClose", "crowdCategoryStudent", "crowdCategoryTeacher",
+            "crowdCategoryElder", "crowdCategoryDiabetes", "crowdCategoryDual",
+            "crowdCategoryTbHist", "crowdCategoryNormal",
+            "hasSuspiciousSymptoms", "cough", "hemoptysis", "fever", "chestPain",
+            "nightSweats", "appetiteLoss", "fatigue", "weightLoss",
+            "hasInfectionScreen", "screenDate", "screenResult"
     );
 
     private static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
@@ -681,7 +694,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 case "infectionResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getInfectionResult, value);
                 case "diagnosisFirst" -> ScreeningDiagnosisSupport.applyScreeningDiagnosisColumnFilter(
                         wrapper, ScreeningKeyPopulation::getIsLatent, ScreeningKeyPopulation::getDiagnosisFirst, value);
+                case "diagnosisHalfYear" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getDiagnosisHalfYear, value);
+                case "diagnosisOneYear" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getDiagnosisOneYear, value);
                 case "hasChestXray" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getHasChestXray, value);
+                case "chestXrayDate" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getChestXrayDate, value);
                 case "chestXrayResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getChestXrayResult, value);
                 case "remark" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getRemark, value);
                 case "creatorUsername" -> ColumnFilterSupport.like(wrapper, ScreeningKeyPopulation::getCreatorUsername, value);
@@ -694,6 +710,16 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 case "crowdCategoryTbHist" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryTbHist, value);
                 case "crowdCategoryNormal" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryNormal, value);
                 case "hasSuspiciousSymptoms" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getHasSuspiciousSymptoms, value);
+                case "cough" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCough, value);
+                case "hemoptysis" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getHemoptysis, value);
+                case "fever" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getFever, value);
+                case "chestPain" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getChestPain, value);
+                case "nightSweats" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getNightSweats, value);
+                case "appetiteLoss" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getAppetiteLoss, value);
+                case "fatigue" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getFatigue, value);
+                case "weightLoss" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getWeightLoss, value);
+                case "hasInfectionScreen" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getHasInfectionScreen, value);
+                case "screenDate" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getScreenDate, value);
                 case "screenResult" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getScreenResult, value);
                 default -> { }
             }
@@ -1062,12 +1088,81 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             case "diagnosisFirst" -> wrapper.select(ScreeningKeyPopulation::getDiagnosisFirst)
                     .isNotNull(ScreeningKeyPopulation::getDiagnosisFirst).ne(ScreeningKeyPopulation::getDiagnosisFirst, "")
                     .groupBy(ScreeningKeyPopulation::getDiagnosisFirst);
+            case "diagnosisHalfYear" -> wrapper.select(ScreeningKeyPopulation::getDiagnosisHalfYear)
+                    .isNotNull(ScreeningKeyPopulation::getDiagnosisHalfYear).ne(ScreeningKeyPopulation::getDiagnosisHalfYear, "")
+                    .groupBy(ScreeningKeyPopulation::getDiagnosisHalfYear);
+            case "diagnosisOneYear" -> wrapper.select(ScreeningKeyPopulation::getDiagnosisOneYear)
+                    .isNotNull(ScreeningKeyPopulation::getDiagnosisOneYear).ne(ScreeningKeyPopulation::getDiagnosisOneYear, "")
+                    .groupBy(ScreeningKeyPopulation::getDiagnosisOneYear);
             case "hasChestXray" -> wrapper.select(ScreeningKeyPopulation::getHasChestXray)
                     .isNotNull(ScreeningKeyPopulation::getHasChestXray).ne(ScreeningKeyPopulation::getHasChestXray, "")
                     .groupBy(ScreeningKeyPopulation::getHasChestXray);
+            case "chestXrayDate" -> wrapper.select(ScreeningKeyPopulation::getChestXrayDate)
+                    .isNotNull(ScreeningKeyPopulation::getChestXrayDate)
+                    .groupBy(ScreeningKeyPopulation::getChestXrayDate);
             case "chestXrayResult" -> wrapper.select(ScreeningKeyPopulation::getChestXrayResult)
                     .isNotNull(ScreeningKeyPopulation::getChestXrayResult).ne(ScreeningKeyPopulation::getChestXrayResult, "")
                     .groupBy(ScreeningKeyPopulation::getChestXrayResult);
+            case "crowdCategoryClose" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryClose)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryClose).ne(ScreeningKeyPopulation::getCrowdCategoryClose, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryClose);
+            case "crowdCategoryStudent" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryStudent)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryStudent).ne(ScreeningKeyPopulation::getCrowdCategoryStudent, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryStudent);
+            case "crowdCategoryTeacher" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryTeacher)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryTeacher).ne(ScreeningKeyPopulation::getCrowdCategoryTeacher, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryTeacher);
+            case "crowdCategoryElder" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryElder)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryElder).ne(ScreeningKeyPopulation::getCrowdCategoryElder, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryElder);
+            case "crowdCategoryDiabetes" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryDiabetes)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryDiabetes).ne(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryDiabetes);
+            case "crowdCategoryDual" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryDual)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryDual).ne(ScreeningKeyPopulation::getCrowdCategoryDual, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryDual);
+            case "crowdCategoryTbHist" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryTbHist)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryTbHist).ne(ScreeningKeyPopulation::getCrowdCategoryTbHist, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryTbHist);
+            case "crowdCategoryNormal" -> wrapper.select(ScreeningKeyPopulation::getCrowdCategoryNormal)
+                    .isNotNull(ScreeningKeyPopulation::getCrowdCategoryNormal).ne(ScreeningKeyPopulation::getCrowdCategoryNormal, "")
+                    .groupBy(ScreeningKeyPopulation::getCrowdCategoryNormal);
+            case "hasSuspiciousSymptoms" -> wrapper.select(ScreeningKeyPopulation::getHasSuspiciousSymptoms)
+                    .isNotNull(ScreeningKeyPopulation::getHasSuspiciousSymptoms).ne(ScreeningKeyPopulation::getHasSuspiciousSymptoms, "")
+                    .groupBy(ScreeningKeyPopulation::getHasSuspiciousSymptoms);
+            case "cough" -> wrapper.select(ScreeningKeyPopulation::getCough)
+                    .isNotNull(ScreeningKeyPopulation::getCough).ne(ScreeningKeyPopulation::getCough, "")
+                    .groupBy(ScreeningKeyPopulation::getCough);
+            case "hemoptysis" -> wrapper.select(ScreeningKeyPopulation::getHemoptysis)
+                    .isNotNull(ScreeningKeyPopulation::getHemoptysis).ne(ScreeningKeyPopulation::getHemoptysis, "")
+                    .groupBy(ScreeningKeyPopulation::getHemoptysis);
+            case "fever" -> wrapper.select(ScreeningKeyPopulation::getFever)
+                    .isNotNull(ScreeningKeyPopulation::getFever).ne(ScreeningKeyPopulation::getFever, "")
+                    .groupBy(ScreeningKeyPopulation::getFever);
+            case "chestPain" -> wrapper.select(ScreeningKeyPopulation::getChestPain)
+                    .isNotNull(ScreeningKeyPopulation::getChestPain).ne(ScreeningKeyPopulation::getChestPain, "")
+                    .groupBy(ScreeningKeyPopulation::getChestPain);
+            case "nightSweats" -> wrapper.select(ScreeningKeyPopulation::getNightSweats)
+                    .isNotNull(ScreeningKeyPopulation::getNightSweats).ne(ScreeningKeyPopulation::getNightSweats, "")
+                    .groupBy(ScreeningKeyPopulation::getNightSweats);
+            case "appetiteLoss" -> wrapper.select(ScreeningKeyPopulation::getAppetiteLoss)
+                    .isNotNull(ScreeningKeyPopulation::getAppetiteLoss).ne(ScreeningKeyPopulation::getAppetiteLoss, "")
+                    .groupBy(ScreeningKeyPopulation::getAppetiteLoss);
+            case "fatigue" -> wrapper.select(ScreeningKeyPopulation::getFatigue)
+                    .isNotNull(ScreeningKeyPopulation::getFatigue).ne(ScreeningKeyPopulation::getFatigue, "")
+                    .groupBy(ScreeningKeyPopulation::getFatigue);
+            case "weightLoss" -> wrapper.select(ScreeningKeyPopulation::getWeightLoss)
+                    .isNotNull(ScreeningKeyPopulation::getWeightLoss).ne(ScreeningKeyPopulation::getWeightLoss, "")
+                    .groupBy(ScreeningKeyPopulation::getWeightLoss);
+            case "hasInfectionScreen" -> wrapper.select(ScreeningKeyPopulation::getHasInfectionScreen)
+                    .isNotNull(ScreeningKeyPopulation::getHasInfectionScreen).ne(ScreeningKeyPopulation::getHasInfectionScreen, "")
+                    .groupBy(ScreeningKeyPopulation::getHasInfectionScreen);
+            case "screenDate" -> wrapper.select(ScreeningKeyPopulation::getScreenDate)
+                    .isNotNull(ScreeningKeyPopulation::getScreenDate)
+                    .groupBy(ScreeningKeyPopulation::getScreenDate);
+            case "screenResult" -> wrapper.select(ScreeningKeyPopulation::getScreenResult)
+                    .isNotNull(ScreeningKeyPopulation::getScreenResult).ne(ScreeningKeyPopulation::getScreenResult, "")
+                    .groupBy(ScreeningKeyPopulation::getScreenResult);
             case "townshipCommunity" -> wrapper.select(ScreeningKeyPopulation::getTownshipCommunity)
                     .isNotNull(ScreeningKeyPopulation::getTownshipCommunity).ne(ScreeningKeyPopulation::getTownshipCommunity, "")
                     .groupBy(ScreeningKeyPopulation::getTownshipCommunity);
@@ -1089,8 +1184,31 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             case "screenMethod" -> row.getScreenMethod();
             case "infectionResult" -> row.getInfectionResult();
             case "diagnosisFirst" -> row.getDiagnosisFirst();
+            case "diagnosisHalfYear" -> row.getDiagnosisHalfYear();
+            case "diagnosisOneYear" -> row.getDiagnosisOneYear();
             case "hasChestXray" -> row.getHasChestXray();
+            case "chestXrayDate" -> row.getChestXrayDate() == null ? null : row.getChestXrayDate().toString();
             case "chestXrayResult" -> row.getChestXrayResult();
+            case "crowdCategoryClose" -> row.getCrowdCategoryClose();
+            case "crowdCategoryStudent" -> row.getCrowdCategoryStudent();
+            case "crowdCategoryTeacher" -> row.getCrowdCategoryTeacher();
+            case "crowdCategoryElder" -> row.getCrowdCategoryElder();
+            case "crowdCategoryDiabetes" -> row.getCrowdCategoryDiabetes();
+            case "crowdCategoryDual" -> row.getCrowdCategoryDual();
+            case "crowdCategoryTbHist" -> row.getCrowdCategoryTbHist();
+            case "crowdCategoryNormal" -> row.getCrowdCategoryNormal();
+            case "hasSuspiciousSymptoms" -> row.getHasSuspiciousSymptoms();
+            case "cough" -> row.getCough();
+            case "hemoptysis" -> row.getHemoptysis();
+            case "fever" -> row.getFever();
+            case "chestPain" -> row.getChestPain();
+            case "nightSweats" -> row.getNightSweats();
+            case "appetiteLoss" -> row.getAppetiteLoss();
+            case "fatigue" -> row.getFatigue();
+            case "weightLoss" -> row.getWeightLoss();
+            case "hasInfectionScreen" -> row.getHasInfectionScreen();
+            case "screenDate" -> row.getScreenDate() == null ? null : row.getScreenDate().toString();
+            case "screenResult" -> row.getScreenResult();
             case "townshipCommunity" -> row.getTownshipCommunity();
             case "creatorUsername" -> row.getCreatorUsername();
             default -> null;
