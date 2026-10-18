@@ -1,7 +1,9 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,6 +39,9 @@ public class SupervisionForm extends BaseEntity {
     private Integer age;
     /** 电话号码 */
     private String phone;
+    @JsonIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer phoneFmt;
     /** 电话备注（非本人电话时说明） */
     private String phoneRemark;
     /** 现住址 */
@@ -45,6 +50,9 @@ public class SupervisionForm extends BaseEntity {
     private String householdAddress;
     /** 身份证号（V18新增） */
     private String idNumber;
+    @JsonIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer idNumberFmt;
     /** 出生日期（V18新增） */
     private String birthDate;
     /** 民族（V18新增） */

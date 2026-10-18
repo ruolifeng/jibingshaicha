@@ -63,6 +63,11 @@ app:
     datacenter-id: 1
   # 仅停机迁移存量自增 ID → 雪花 ID 时设为 true，跑完必须改回 false
   migrate-snowflake-ids: false
+  crypto:
+    # 生产用环境变量 DATA_ENCRYPT_KEY 注入；留空则写入 key-file，丢失后无法解密
+    key: ${DATA_ENCRYPT_KEY:}
+    key-file: ./data/field-encrypt.key
+    migrate-existing: true
 
 # Redis 配置（按需启用）
 #  data:

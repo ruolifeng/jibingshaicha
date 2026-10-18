@@ -1,7 +1,9 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,6 +35,14 @@ public class Patient extends BaseEntity {
     private String phone;
     private String householdAddress;
     private String currentAddress;
+    /** 证件号格式：1正确 0异常。加密后供「格式问题」筛选，不返回前端 */
+    @JsonIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer idNumberFmt;
+    /** 手机号格式：1正确 0异常 */
+    @JsonIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer phoneFmt;
     private String diagnosisResult;
     /** 来源：confirmed=转诊确诊 epidemic=大疫情导入 */
     private String source;
