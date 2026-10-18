@@ -36,3 +36,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### 字段加密密钥，丢失后已加密数据无法恢复，禁止提交
+data/field-encrypt.key

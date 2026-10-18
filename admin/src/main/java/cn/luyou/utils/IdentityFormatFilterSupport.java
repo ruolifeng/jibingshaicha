@@ -66,11 +66,17 @@ public final class IdentityFormatFilterSupport {
         if (issues.isEmpty()) {
             return;
         }
-        String idSql = "(" + idNumberColumn + " IS NOT NULL AND TRIM(" + idNumberColumn + ") <> ''"
+        String idFmt = idNumberColumn + "_fmt";
+        String phoneFmt = phoneColumn + "_fmt";
+        String idSql = "(" + idFmt + " = 0 OR (" + idFmt + " IS NULL AND "
+                + idNumberColumn + " IS NOT NULL AND TRIM(" + idNumberColumn + ") <> ''"
+                + " AND " + idNumberColumn + " NOT LIKE 'encv1:%'"
                 + " AND " + idNumberColumn + " NOT IN ('无','无证件号','无身份证','无身份证号','-','/','——','—')"
-                + " AND " + idNumberColumn + " NOT REGEXP {0})";
-        String phoneSql = "(" + phoneColumn + " IS NOT NULL AND TRIM(" + phoneColumn + ") <> ''"
-                + " AND " + phoneColumn + " NOT REGEXP {0})";
+                + " AND " + idNumberColumn + " NOT REGEXP {0}))";
+        String phoneSql = "(" + phoneFmt + " = 0 OR (" + phoneFmt + " IS NULL AND "
+                + phoneColumn + " IS NOT NULL AND TRIM(" + phoneColumn + ") <> ''"
+                + " AND " + phoneColumn + " NOT LIKE 'encv1:%'"
+                + " AND " + phoneColumn + " NOT REGEXP {0}))";
         String missingIdSql = "(" + idNumberColumn + " IS NULL OR TRIM(" + idNumberColumn + ") = ''"
                 + " OR " + idNumberColumn + " IN ('无','无证件号','无身份证','无身份证号','-','/','——','—'))";
         if (issues.size() == 1) {

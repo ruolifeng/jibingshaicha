@@ -1,6 +1,7 @@
 package cn.luyou.model;
 
 import com.alibaba.excel.annotation.ExcelIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -228,4 +229,14 @@ public class ScreeningSchool extends BaseEntity {
     /** 录入用户名 */
     @ExcelIgnore
     private String creatorUsername;
+
+    @JsonIgnore
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer idNumberFmt;
+
+    @JsonIgnore
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer phoneFmt;
 }

@@ -1,7 +1,9 @@
 package cn.luyou.model;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,9 +31,15 @@ public class LatentInfection extends BaseEntity {
     private String crowdCategory;
     private String name;
     private String idNumber;
+    @JsonIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer idNumberFmt;
     private String gender;
     private Integer age;
     private String phone;
+    @JsonIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer phoneFmt;
     /** 登记号（来自通知单同步） */
     private String registrationNo;
     /** 户籍地址（手动新增/导入持久化；有筛查关联时由筛查表回填展示） */

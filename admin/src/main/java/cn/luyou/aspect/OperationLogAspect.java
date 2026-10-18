@@ -19,8 +19,12 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -41,7 +45,10 @@ public class OperationLogAspect {
     private final UserMapper userMapper;
 
     /** 敏感字段（不写入请求参数日志） */
-    private static final String[] SENSITIVE_KEYS = {"password", "pwd", "newPassword", "oldPassword"};
+    private static final String[] SENSITIVE_KEYS = {
+            "password", "pwd", "newpassword", "oldpassword",
+            "idnumber", "phone", "secret", "address", "idcard"
+    };
 
     @Around("@annotation(cn.luyou.common.annotation.OperationLog)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
@@ -144,17 +151,37 @@ public class OperationLogAspect {
                 }
                 map.put(key, v);
             }
-            String json = JSONUtil.toJsonStr(map);
-            return truncate(json, 8192);
+            JSONObject obj = JSONUtil.parseObj(JSONUtil.toJsonStr(map));
+            redact(obj);
+            return truncate(obj.toString(), 8192);
         } catch (Exception e) {
             return null;
         }
     }
 
+    private void redact(Object node) {
+        if (node instanceof JSONObject obj) {
+            for (String key : new java.util.ArrayList<>(obj.keySet())) {
+                if (isSensitiveKey(key)) {
+                    obj.set(key, "***");
+                } else {
+                    redact(obj.get(key));
+                }
+            }
+            return;
+        }
+        if (node instanceof JSONArray array) {
+            for (Object item : array) {
+                redact(item);
+            }
+        }
+    }
+
     private boolean isSensitiveKey(String key) {
         if (key == null) return false;
+        String normalized = key.toLowerCase(Locale.ROOT).replace("_", "");
         for (String s : SENSITIVE_KEYS) {
-            if (s.equalsIgnoreCase(key)) return true;
+            if (normalized.contains(s)) return true;
         }
         return false;
     }

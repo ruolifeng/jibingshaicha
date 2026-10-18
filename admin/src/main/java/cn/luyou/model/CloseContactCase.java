@@ -5,6 +5,7 @@ import cn.luyou.utils.FlexibleIntegerConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
 import com.alibaba.excel.annotation.ExcelIgnore;
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -373,4 +374,14 @@ public class CloseContactCase extends BaseEntity {
     @ExcelIgnore
     @TableField(exist = false)
     private Boolean preventiveSyncedFromSupervision;
+
+    @JsonIgnore
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer idNumberFmt;
+
+    @JsonIgnore
+    @ExcelIgnore
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer phoneFmt;
 }
