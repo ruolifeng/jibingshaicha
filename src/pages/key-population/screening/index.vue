@@ -6,7 +6,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, KEY_INFECTION_JUDGE_RESULT_OPTIONS, KEY_INFECTION_SCREEN_METHOD_OPTIONS, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS } from "@@/constants/disease"
+import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, KEY_INFECTION_JUDGE_RESULT_OPTIONS, KEY_INFECTION_SCREEN_METHOD_OPTIONS, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { formatDateTime } from "@@/utils/datetime"
@@ -28,6 +28,29 @@ const genderFilterOptions = [
 const diagnosisFilterOptions = SCREENING_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ text: item.label, value: item.value }))
 const screenMethodFilterOptions = KEY_INFECTION_SCREEN_METHOD_OPTIONS.map(item => ({ text: item, value: item }))
 const infectionResultFilterOptions = KEY_INFECTION_JUDGE_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const yesNoFilterOptions = YES_NO_OPTIONS.map(item => ({ text: item, value: item }))
+const yesNoHaveFilterOptions = YES_NO_HAVE_OPTIONS.map(item => ({ text: item, value: item }))
+const chestXrayResultFilterOptions = CHEST_XRAY_RESULT_OPTIONS.map(item => ({ text: item, value: item }))
+const crowdCategoryColumns = [
+  { prop: "crowdCategoryClose", label: "密接", minWidth: 90 },
+  { prop: "crowdCategoryStudent", label: "学生", minWidth: 90 },
+  { prop: "crowdCategoryTeacher", label: "教职工", minWidth: 100 },
+  { prop: "crowdCategoryElder", label: "老年人", minWidth: 100 },
+  { prop: "crowdCategoryDiabetes", label: "糖尿病", minWidth: 100 },
+  { prop: "crowdCategoryDual", label: "双感", minWidth: 90 },
+  { prop: "crowdCategoryTbHist", label: "既往结核史", minWidth: 120 },
+  { prop: "crowdCategoryNormal", label: "非重点人群", minWidth: 120 }
+]
+const symptomColumns = [
+  { prop: "cough", label: "咳嗽咳痰", minWidth: 110 },
+  { prop: "hemoptysis", label: "咯血或血痰", minWidth: 120 },
+  { prop: "fever", label: "发热", minWidth: 90 },
+  { prop: "chestPain", label: "胸痛", minWidth: 90 },
+  { prop: "nightSweats", label: "夜间盗汗", minWidth: 110 },
+  { prop: "appetiteLoss", label: "食欲不振", minWidth: 110 },
+  { prop: "fatigue", label: "乏力", minWidth: 90 },
+  { prop: "weightLoss", label: "体重减轻", minWidth: 110 }
+]
 
 const { load: loadDistinct, sourceValues: distinctValues } = useColumnDistinct(async (field) => {
   const { data } = await getScreeningKeyPopulationColumnDistinctApi(field)
@@ -753,7 +776,18 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="ethnicity" label="民族" />
+        <el-table-column prop="ethnicity" min-width="100">
+          <template #header>
+            <TableHeaderFilter
+              label="民族"
+              type="select"
+              :source-values="distinctValues('ethnicity').value"
+              :load-options="() => loadDistinct('ethnicity')"
+              :model-value="columnFilters.ethnicity"
+              @change="(v) => { setFilter('ethnicity', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="phone" min-width="120">
           <template #header>
             <TableHeaderFilter
@@ -763,7 +797,15 @@ watch(
             />
           </template>
         </el-table-column>
-        <el-table-column prop="householdAddress" label="户籍地址" show-overflow-tooltip />
+        <el-table-column prop="householdAddress" min-width="140" show-overflow-tooltip>
+          <template #header>
+            <TableHeaderFilter
+              label="户籍地址"
+              :model-value="columnFilters.householdAddress"
+              @change="(v) => { setFilter('householdAddress', v); handleSearch() }"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="townshipCommunity" min-width="110">
           <template #header>
             <TableHeaderFilter
@@ -779,31 +821,86 @@ watch(
         <el-table-column prop="currentAddress" label="现住址" show-overflow-tooltip />
         <!-- 人群分类：与模板「人群分类（可多选）」分组一致 -->
         <el-table-column label="人群分类（可多选）">
-          <el-table-column prop="crowdCategoryClose" label="密接" width="60" />
-          <el-table-column prop="crowdCategoryStudent" label="学生" width="60" />
-          <el-table-column prop="crowdCategoryTeacher" label="教职工" width="70" />
-          <el-table-column prop="crowdCategoryElder" label="老年人" width="70" />
-          <el-table-column prop="crowdCategoryDiabetes" label="糖尿病" width="70" />
-          <el-table-column prop="crowdCategoryDual" label="双感" width="60" />
-          <el-table-column prop="crowdCategoryTbHist" label="既往结核史" min-width="90" />
-          <el-table-column prop="crowdCategoryNormal" label="非重点人群" min-width="90" />
+          <el-table-column
+            v-for="col in crowdCategoryColumns"
+            :key="col.prop"
+            :prop="col.prop"
+            :min-width="col.minWidth"
+          >
+            <template #header>
+              <TableHeaderFilter
+                :label="col.label"
+                type="select"
+                :options="yesNoFilterOptions"
+                :source-values="distinctValues(col.prop).value"
+                :load-options="() => loadDistinct(col.prop)"
+                :model-value="columnFilters[col.prop]"
+                @change="(v) => { setFilter(col.prop, v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="症状筛查">
           <el-table-column label="可疑症状">
-            <el-table-column prop="hasSuspiciousSymptoms" label="是否有可疑症状" min-width="110" />
-            <el-table-column prop="cough" label="咳嗽咳痰" min-width="80" />
-            <el-table-column prop="hemoptysis" label="咯血或血痰" min-width="90" />
-            <el-table-column prop="fever" label="发热" width="60" />
-            <el-table-column prop="chestPain" label="胸痛" width="60" />
-            <el-table-column prop="nightSweats" label="夜间盗汗" min-width="80" />
-            <el-table-column prop="appetiteLoss" label="食欲不振" min-width="80" />
-            <el-table-column prop="fatigue" label="乏力" width="60" />
-            <el-table-column prop="weightLoss" label="体重减轻" min-width="80" />
+            <el-table-column prop="hasSuspiciousSymptoms" min-width="140">
+              <template #header>
+                <TableHeaderFilter
+                  label="是否有可疑症状"
+                  type="select"
+                  :options="yesNoHaveFilterOptions"
+                  :source-values="distinctValues('hasSuspiciousSymptoms').value"
+                  :load-options="() => loadDistinct('hasSuspiciousSymptoms')"
+                  :model-value="columnFilters.hasSuspiciousSymptoms"
+                  @change="(v) => { setFilter('hasSuspiciousSymptoms', v); handleSearch() }"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-for="col in symptomColumns"
+              :key="col.prop"
+              :prop="col.prop"
+              :min-width="col.minWidth"
+            >
+              <template #header>
+                <TableHeaderFilter
+                  :label="col.label"
+                  type="select"
+                  :options="yesNoFilterOptions"
+                  :source-values="distinctValues(col.prop).value"
+                  :load-options="() => loadDistinct(col.prop)"
+                  :model-value="columnFilters[col.prop]"
+                  @change="(v) => { setFilter(col.prop, v); handleSearch() }"
+                />
+              </template>
+            </el-table-column>
           </el-table-column>
         </el-table-column>
         <el-table-column label="重点人群感染筛查情况">
-          <el-table-column prop="hasInfectionScreen" label="是否进行感染筛" min-width="100" />
-          <el-table-column prop="screenDate" label="感染筛查日期" min-width="110" sortable="custom" />
+          <el-table-column prop="hasInfectionScreen" min-width="140">
+            <template #header>
+              <TableHeaderFilter
+                label="是否进行感染筛"
+                type="select"
+                :options="yesNoFilterOptions"
+                :source-values="distinctValues('hasInfectionScreen').value"
+                :load-options="() => loadDistinct('hasInfectionScreen')"
+                :model-value="columnFilters.hasInfectionScreen"
+                @change="(v) => { setFilter('hasInfectionScreen', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="screenDate" min-width="140" sortable="custom">
+            <template #header>
+              <TableHeaderFilter
+                label="感染筛查日期"
+                type="select"
+                :source-values="distinctValues('screenDate').value"
+                :load-options="() => loadDistinct('screenDate')"
+                :model-value="columnFilters.screenDate"
+                @change="(v) => { setFilter('screenDate', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
           <el-table-column prop="screenMethod" min-width="110">
             <template #header>
               <TableHeaderFilter
@@ -817,7 +914,17 @@ watch(
               />
             </template>
           </el-table-column>
-          <el-table-column label="结果（PPD：mmXmm；EC及IGRA：阳性/阴性）" min-width="140" show-overflow-tooltip>
+          <el-table-column min-width="180" show-overflow-tooltip>
+            <template #header>
+              <TableHeaderFilter
+                label="结果（PPD：mmXmm；EC及IGRA：阳性/阴性）"
+                type="select"
+                :source-values="distinctValues('screenResult').value"
+                :load-options="() => loadDistinct('screenResult')"
+                :model-value="columnFilters.screenResult"
+                @change="(v) => { setFilter('screenResult', v); handleSearch() }"
+              />
+            </template>
             <template #default="{ row }">
               {{ formatScreenResultDisplay(row.screenResult, row.screenMethod) || "-" }}
             </template>
@@ -837,9 +944,44 @@ watch(
           </el-table-column>
         </el-table-column>
         <el-table-column label="重点人群胸片检查">
-          <el-table-column prop="hasChestXray" label="是否进行胸片检查" min-width="120" />
-          <el-table-column prop="chestXrayDate" label="胸片检查日期" min-width="110" />
-          <el-table-column prop="chestXrayResult" label="胸片结果" min-width="90" />
+          <el-table-column prop="hasChestXray" min-width="150">
+            <template #header>
+              <TableHeaderFilter
+                label="是否进行胸片检查"
+                type="select"
+                :options="yesNoFilterOptions"
+                :source-values="distinctValues('hasChestXray').value"
+                :load-options="() => loadDistinct('hasChestXray')"
+                :model-value="columnFilters.hasChestXray"
+                @change="(v) => { setFilter('hasChestXray', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="chestXrayDate" min-width="140">
+            <template #header>
+              <TableHeaderFilter
+                label="胸片检查日期"
+                type="select"
+                :source-values="distinctValues('chestXrayDate').value"
+                :load-options="() => loadDistinct('chestXrayDate')"
+                :model-value="columnFilters.chestXrayDate"
+                @change="(v) => { setFilter('chestXrayDate', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="chestXrayResult" min-width="120">
+            <template #header>
+              <TableHeaderFilter
+                label="胸片结果"
+                type="select"
+                :options="chestXrayResultFilterOptions"
+                :source-values="distinctValues('chestXrayResult').value"
+                :load-options="() => loadDistinct('chestXrayResult')"
+                :model-value="columnFilters.chestXrayResult"
+                @change="(v) => { setFilter('chestXrayResult', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="诊断结果">
           <el-table-column prop="diagnosisFirst" min-width="110">
@@ -855,8 +997,32 @@ watch(
               />
             </template>
           </el-table-column>
-          <el-table-column prop="diagnosisHalfYear" label="半年后" min-width="90" />
-          <el-table-column prop="diagnosisOneYear" label="一年后" min-width="90" />
+          <el-table-column prop="diagnosisHalfYear" min-width="110">
+            <template #header>
+              <TableHeaderFilter
+                label="半年后"
+                type="select"
+                :options="diagnosisFilterOptions"
+                :source-values="distinctValues('diagnosisHalfYear').value"
+                :load-options="() => loadDistinct('diagnosisHalfYear')"
+                :model-value="columnFilters.diagnosisHalfYear"
+                @change="(v) => { setFilter('diagnosisHalfYear', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="diagnosisOneYear" min-width="110">
+            <template #header>
+              <TableHeaderFilter
+                label="一年后"
+                type="select"
+                :options="diagnosisFilterOptions"
+                :source-values="distinctValues('diagnosisOneYear').value"
+                :load-options="() => loadDistinct('diagnosisOneYear')"
+                :model-value="columnFilters.diagnosisOneYear"
+                @change="(v) => { setFilter('diagnosisOneYear', v); handleSearch() }"
+              />
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="潜伏感染者管理情况">
           <el-table-column prop="hasPreventiveTreatment" label="是否进行预防性治疗" min-width="130" />
