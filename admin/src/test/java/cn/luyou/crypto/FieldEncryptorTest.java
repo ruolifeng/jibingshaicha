@@ -1,8 +1,11 @@
 package cn.luyou.crypto;
 
+import org.apache.ibatis.reflection.MetaObject;
+import org.apache.ibatis.reflection.SystemMetaObject;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,6 +65,90 @@ class FieldEncryptorTest {
         String rewritten = SensitiveSqlRewriter.rewrite(sql, new MapAccess(param), encryptor);
         assertEquals("SELECT id FROM patient WHERE id_number = #{ew.paramNameValuePairs.MPGENVAL1}", rewritten);
         assertEquals(encryptor.encrypt("510101199001011234"), pairs.get("MPGENVAL1"));
+    }
+
+    @Test
+    void rewritesJdbcPlaceholdersLikeBoundSql() {
+        Map<String, Object> pairs = new HashMap<>();
+        pairs.put("MPGENVAL1", "keyPopulation");
+        pairs.put("MPGENVAL2", "342623195412255011");
+        pairs.put("MPGENVAL3", "%15542844458%");
+        Map<String, Object> ew = new HashMap<>();
+        ew.put("paramNameValuePairs", pairs);
+        Map<String, Object> param = new HashMap<>();
+        param.put("ew", ew);
+
+        String sql = "SELECT id FROM screening_key_population WHERE (source_type = ? AND id_number = ? AND phone LIKE ?)";
+        List<String> properties = List.of(
+                "ew.paramNameValuePairs.MPGENVAL1",
+                "ew.paramNameValuePairs.MPGENVAL2",
+                "ew.paramNameValuePairs.MPGENVAL3"
+        );
+        String rewritten = SensitiveSqlRewriter.rewrite(sql, properties, new MapAccess(param), encryptor);
+        assertEquals(
+                "SELECT id FROM screening_key_population WHERE (source_type = ? AND id_number = ? AND phone = ?)",
+                rewritten);
+        assertEquals("keyPopulation", pairs.get("MPGENVAL1"));
+        assertEquals(encryptor.encrypt("342623195412255011"), pairs.get("MPGENVAL2"));
+        assertEquals(encryptor.encrypt("15542844458"), pairs.get("MPGENVAL3"));
+    }
+
+    @Test
+    void rewritesJdbcInListAndUpdateViaMetaObject() {
+        Map<String, Object> pairs = new HashMap<>();
+        pairs.put("MPGENVAL1", "342623195412255011");
+        pairs.put("MPGENVAL2", "510101199001011234");
+        pairs.put("MPGENVAL3", "keyPopulation");
+        Map<String, Object> ew = new HashMap<>();
+        ew.put("paramNameValuePairs", pairs);
+        Map<String, Object> param = new HashMap<>();
+        param.put("ew", ew);
+        MetaObject meta = SystemMetaObject.forObject(param);
+        SensitiveSqlRewriter.ValueAccess access = new SensitiveSqlRewriter.ValueAccess() {
+            @Override
+            public Object get(String path) {
+                return meta.getValue(path);
+            }
+
+            @Override
+            public void set(String path, Object value) {
+                meta.setValue(path, value);
+            }
+        };
+
+        String selectSql = "SELECT id FROM screening_key_population WHERE id_number IN (?, ?) AND source_type = ?";
+        List<String> selectProps = List.of(
+                "ew.paramNameValuePairs.MPGENVAL1",
+                "ew.paramNameValuePairs.MPGENVAL2",
+                "ew.paramNameValuePairs.MPGENVAL3"
+        );
+        String selectRewritten = SensitiveSqlRewriter.rewrite(selectSql, selectProps, access, encryptor);
+        assertEquals(selectSql, selectRewritten);
+        assertEquals(encryptor.encrypt("342623195412255011"), pairs.get("MPGENVAL1"));
+        assertEquals(encryptor.encrypt("510101199001011234"), pairs.get("MPGENVAL2"));
+        assertEquals("keyPopulation", pairs.get("MPGENVAL3"));
+
+        pairs.put("MPGENVAL1", "15542844458");
+        pairs.put("MPGENVAL2", "1");
+        String updateSql = "UPDATE screening_key_population SET phone = ? WHERE id = ?";
+        List<String> updateProps = List.of(
+                "ew.paramNameValuePairs.MPGENVAL1",
+                "ew.paramNameValuePairs.MPGENVAL2"
+        );
+        String updateRewritten = SensitiveSqlRewriter.rewrite(updateSql, updateProps, access, encryptor);
+        assertEquals(
+                "UPDATE screening_key_population SET phone = ?, phone_fmt=1 WHERE id = ?",
+                updateRewritten);
+        assertEquals(encryptor.encrypt("15542844458"), pairs.get("MPGENVAL1"));
+        assertEquals("1", pairs.get("MPGENVAL2"));
+    }
+
+    @Test
+    void jdbcPlaceholderIndexMatchesParameterMappings() {
+        String sql = "WHERE source_type = ? AND id_number = ? AND phone LIKE ?";
+        assertEquals(0, SensitiveSqlRewriter.countJdbcPlaceholders(sql, sql.indexOf('?')));
+        assertEquals(1, SensitiveSqlRewriter.countJdbcPlaceholders(sql, sql.indexOf("id_number") + "id_number = ?".length() - 1));
+        assertEquals(2, SensitiveSqlRewriter.countJdbcPlaceholders(sql, sql.lastIndexOf('?')));
     }
 
     @Test
