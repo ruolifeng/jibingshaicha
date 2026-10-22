@@ -49,8 +49,8 @@ export function isTrackingFlowClosed(
   return Number(row.archived) === 1 && hasDiagnosis
 }
 
-/** 原生追踪（大疫情等）未到位强制结束次数 */
-export const TRACK_FORCE_END_THRESHOLD = 3
+/** 原生追踪未到位强制结束次数（与后端一致） */
+export const TRACK_FORCE_END_THRESHOLD = 4
 
 /**
  * 是否显示「追踪」按钮：

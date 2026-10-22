@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   notInPlaceCount: 0,
   loading: false,
-  forceEndThreshold: 3
+  forceEndThreshold: 4
 })
 
 const emit = defineEmits<{

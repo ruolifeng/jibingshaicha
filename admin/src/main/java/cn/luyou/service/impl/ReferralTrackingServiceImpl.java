@@ -1484,9 +1484,8 @@ public class ReferralTrackingServiceImpl extends ServiceImpl<ReferralTrackingMap
                 log.info("推介追踪到位，recordId={}", id);
             }
             case 2 -> {
-                // 未到位：累计次数；已确认推介 / 推介业务 4 次强制结束，原生追踪 3 次
-                int forceEndThreshold = (isConfirmedReceivedRecommend(record)
-                        || "recommend".equals(record.getBizMode())) ? 4 : 3;
+                // 未到位：累计次数；推介与原生追踪均为 4 次强制结束
+                int forceEndThreshold = 4;
                 int newCount = (record.getNotInPlaceCount() == null ? 0 : record.getNotInPlaceCount()) + 1;
 
                 Map<String, Object> entry = newTrackingHistoryEntry(history.size() + 1, 2, now, remark, operatorId, operatorName);
