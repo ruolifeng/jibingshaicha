@@ -35,7 +35,7 @@ import cn.luyou.utils.IdentityFormatFilterSupport;
 import cn.luyou.utils.ImportDuplicateIdSupport;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.ImportRowOrderSupport;
-import cn.luyou.utils.InfectionScreenFieldSupport;
+import cn.luyou.utils.KeyPopulationImportFieldSupport;
 import cn.luyou.utils.ListSortSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
 import cn.luyou.utils.UploadBatchSupport;
@@ -212,6 +212,11 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         }
 
         if (dataList.isEmpty()) {
+            // 全部行因字段不匹配被跳过时，把错误明细返回给前端，便于用户改表重传
+            if (result.hasErrors()) {
+                result.setSuccessCount(0);
+                return result;
+            }
             throw new ServiceException(StatusEnum.PARAM_INVALID, "Excel文件中无有效数据");
         }
 
@@ -327,35 +332,14 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                     }
                     data.setIdNumber(ImportIdentitySupport.normalizeIdNumber(data.getIdNumber()));
                     if (StrUtil.isNotBlank(data.getIdNumber()) && !isValidIdCard(data.getIdNumber())) {
-                        result.addError(row, data.getName(), "身份证号格式不正确");
-                    }
-                    if (StrUtil.isNotBlank(data.getPhone()) && !isValidPhone(data.getPhone())) {
-                        result.addError(row, data.getName(), "手机号格式不正确");
-                    }
-                    if (!InfectionScreenFieldSupport.isValidMethod(data.getScreenMethod())) {
                         result.addError(row, data.getName(),
-                                "感染筛查方法仅支持：结核菌素皮肤试验_PPD/结核抗原皮肤试验_EC/γ干扰素释放试验_IGRA/未做（兼容PPD/EC/IGRA/未查）");
+                                "「证件号」填写错误，仅支持18位身份证号；请修改后重新上传");
                         return;
                     }
-                    if (!InfectionScreenFieldSupport.isValidResult(data.getInfectionResult())) {
-                        result.addError(row, data.getName(),
-                                "感染筛查结果仅支持：一般阳性/中度阳性/强阳性/阳性/阴性/未判读");
+                    // 与编辑页字段口径一致：不匹配则跳过该行并提示具体字段
+                    if (!KeyPopulationImportFieldSupport.validateAndNormalize(data, row, result)) {
                         return;
                     }
-                    if (!ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisFirst())
-                            || !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisHalfYear())
-                            || !ScreeningDiagnosisSupport.isValidKeyPopulationDiagnosis(data.getDiagnosisOneYear())) {
-                        result.addError(row, data.getName(),
-                                "诊断结果仅支持：排除/正常/疑似结核/确诊结核/潜伏感染者/在治患者");
-                        return;
-                    }
-                    InfectionScreenFieldSupport.applyNormalized(
-                            data::setScreenMethod, data.getScreenMethod(),
-                            data::setInfectionResult, data.getInfectionResult());
-                    ScreeningDiagnosisSupport.applyNormalizedKeyPopulationDiagnosis(
-                            data::setDiagnosisFirst, data.getDiagnosisFirst(),
-                            data::setDiagnosisHalfYear, data.getDiagnosisHalfYear(),
-                            data::setDiagnosisOneYear, data.getDiagnosisOneYear());
                     if (StrUtil.isNotBlank(batchId)) {
                         data.setUploadBatch(batchId);
                     }
@@ -704,8 +688,10 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 case "crowdCategoryClose" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryClose, value);
                 case "crowdCategoryStudent" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryStudent, value);
                 case "crowdCategoryTeacher" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryTeacher, value);
-                case "crowdCategoryElder" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryElder, value);
-                case "crowdCategoryDiabetes" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryDiabetes, value);
+                case "crowdCategoryElder" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryElder,
+                        ScreeningCrowdCategoryFilterSupport.expandYesFilterValue(value));
+                case "crowdCategoryDiabetes" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryDiabetes,
+                        ScreeningCrowdCategoryFilterSupport.expandYesFilterValue(value));
                 case "crowdCategoryDual" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryDual, value);
                 case "crowdCategoryTbHist" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryTbHist, value);
                 case "crowdCategoryNormal" -> ColumnFilterSupport.eqOrIn(wrapper, ScreeningKeyPopulation::getCrowdCategoryNormal, value);
@@ -760,6 +746,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
                 data::setDiagnosisFirst, data.getDiagnosisFirst(),
                 data::setDiagnosisHalfYear, data.getDiagnosisHalfYear(),
                 data::setDiagnosisOneYear, data.getDiagnosisOneYear());
+        normalizeElderDiabetesYesMarks(data);
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         data.setDepartmentId(screeningScopeHelper.resolveUploadDepartmentId());
         CreatorUserSupport.fillCurrentCreator(userMapper, data::setCreatorId, data::setCreatorUsername);
@@ -827,8 +814,9 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         return id != null && id.length() == 18 && id.matches("\\d{17}[\\dXx]");
     }
 
+    /** 允许标准手机号，或「无」等无号码占位（编辑/导入均可保存） */
     private boolean isValidPhone(String phone) {
-        return phone != null && phone.matches("^1[3-9]\\d{9}$");
+        return ImportIdentitySupport.isValidPhoneOrPlaceholder(phone);
     }
 
     @Override
@@ -884,6 +872,7 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
         if (StrUtil.isBlank(data.getScreenResult())) {
             data.setScreenResult(null);
         }
+        normalizeElderDiabetesYesMarks(data);
         data.setIsLatent(shouldMarkLatent(data) ? 1 : 0);
         if (StrUtil.isBlank(data.getSourceType())) {
             data.setSourceType(existing.getSourceType());
@@ -1054,9 +1043,23 @@ public class ScreeningKeyPopulationServiceImpl extends ServiceImpl<ScreeningKeyP
             );
         }
         applyDistinctSelect(wrapper, field);
-        return ColumnDistinctSupport.normalize(list(wrapper).stream()
+        List<String> values = list(wrapper).stream()
                 .map(row -> extractDistinctValue(row, field))
-                .toList());
+                .toList();
+        // 老年人/糖尿病：勾选符号与「是」合并展示，避免表头筛出独立的「√」
+        if ("crowdCategoryElder".equals(field) || "crowdCategoryDiabetes".equals(field)) {
+            return ScreeningCrowdCategoryFilterSupport.mergeYesDistinctValues(values);
+        }
+        return ColumnDistinctSupport.normalize(values);
+    }
+
+    /** 老年人、糖尿病患者：历史 Excel「√」等勾选符号统一归为「是」 */
+    private static void normalizeElderDiabetesYesMarks(ScreeningKeyPopulation data) {
+        if (data == null) {
+            return;
+        }
+        data.setCrowdCategoryElder(ScreeningCrowdCategoryFilterSupport.normalizeYesMark(data.getCrowdCategoryElder()));
+        data.setCrowdCategoryDiabetes(ScreeningCrowdCategoryFilterSupport.normalizeYesMark(data.getCrowdCategoryDiabetes()));
     }
 
     private void applyDistinctSelect(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String field) {

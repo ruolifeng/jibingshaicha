@@ -37,6 +37,7 @@ import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.NoticePartyFillSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import cn.luyou.utils.ScreeningScopeHelper;
 import cn.luyou.utils.ScreeningMethodSupport;
 import com.alibaba.excel.EasyExcel;
@@ -436,8 +437,8 @@ public class ExportController {
                     row.put("密接", s != null ? s.getCrowdCategoryClose() : "");
                     row.put("学生", s != null ? s.getCrowdCategoryStudent() : "");
                     row.put("教职工", s != null ? s.getCrowdCategoryTeacher() : "");
-                    row.put("老年人", s != null ? s.getCrowdCategoryElder() : "");
-                    row.put("糖尿病", s != null ? s.getCrowdCategoryDiabetes() : "");
+                    row.put("老年人", s != null ? ScreeningCrowdCategoryFilterSupport.normalizeYesMark(s.getCrowdCategoryElder()) : "");
+                    row.put("糖尿病", s != null ? ScreeningCrowdCategoryFilterSupport.normalizeYesMark(s.getCrowdCategoryDiabetes()) : "");
                     row.put("双感", s != null ? s.getCrowdCategoryDual() : "");
                     row.put("既往结核史", s != null ? s.getCrowdCategoryTbHist() : "");
                     row.put("非重点人群", s != null ? s.getCrowdCategoryNormal() : "");
@@ -650,8 +651,8 @@ public class ExportController {
                     row.put("密接", s != null ? s.getCrowdCategoryClose() : "");
                     row.put("学生", s != null ? s.getCrowdCategoryStudent() : "");
                     row.put("教职工", s != null ? s.getCrowdCategoryTeacher() : "");
-                    row.put("老年人", s != null ? s.getCrowdCategoryElder() : "");
-                    row.put("糖尿病", s != null ? s.getCrowdCategoryDiabetes() : "");
+                    row.put("老年人", s != null ? ScreeningCrowdCategoryFilterSupport.normalizeYesMark(s.getCrowdCategoryElder()) : "");
+                    row.put("糖尿病", s != null ? ScreeningCrowdCategoryFilterSupport.normalizeYesMark(s.getCrowdCategoryDiabetes()) : "");
                     row.put("双感", s != null ? s.getCrowdCategoryDual() : "");
                     row.put("既往结核史", s != null ? s.getCrowdCategoryTbHist() : "");
                     row.put("非重点人群", s != null ? s.getCrowdCategoryNormal() : "");
@@ -2336,14 +2337,14 @@ public class ExportController {
     /** 将重点人群多个分类字段拼接为可读字符串 */
     private String buildCrowdCategory(ScreeningKeyPopulation s) {
         List<String> cats = new ArrayList<>();
-        if ("是".equals(s.getCrowdCategoryClose()))    cats.add("密接");
-        if ("是".equals(s.getCrowdCategoryStudent()))  cats.add("学生");
-        if ("是".equals(s.getCrowdCategoryTeacher()))  cats.add("教职工");
-        if ("是".equals(s.getCrowdCategoryElder()))    cats.add("老年人");
-        if ("是".equals(s.getCrowdCategoryDiabetes())) cats.add("糖尿病");
-        if ("是".equals(s.getCrowdCategoryDual()))     cats.add("双感");
-        if ("是".equals(s.getCrowdCategoryTbHist()))   cats.add("既往结核史");
-        if ("是".equals(s.getCrowdCategoryNormal()))   cats.add("非重点人群");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryClose())) cats.add("密接");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryStudent())) cats.add("学生");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryTeacher())) cats.add("教职工");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryElder())) cats.add("老年人");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryDiabetes())) cats.add("糖尿病");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryDual())) cats.add("双感");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryTbHist())) cats.add("既往结核史");
+        if (ScreeningCrowdCategoryFilterSupport.isYes(s.getCrowdCategoryNormal())) cats.add("非重点人群");
         return String.join("、", cats);
     }
 

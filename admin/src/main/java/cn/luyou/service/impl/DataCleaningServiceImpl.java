@@ -12,6 +12,7 @@ import cn.luyou.utils.CloseContactCaseExcelSupport;
 import cn.luyou.utils.FlexibleDateParseUtil;
 import cn.luyou.utils.ImportIdentitySupport;
 import cn.luyou.utils.InfectionScreenFieldSupport;
+import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.read.listener.PageReadListener;
@@ -335,8 +336,13 @@ public class DataCleaningServiceImpl implements DataCleaningService {
             validateKeyPopulationDiagnosisCell(result, excelRowIndex, name, row, 42, "一年诊断结果");
             for (int idx = 15; idx <= 22; idx++) {
                 String value = getCellString(row, idx);
-                if (StrUtil.isNotBlank(value) && !isInOptions(value, "是", "否")) {
-                    result.add(err(excelRowIndex, name, idx, "人群分类列仅支持：是/否"));
+                if (StrUtil.isBlank(value)) {
+                    continue;
+                }
+                String trimmed = value.trim();
+                // 老年人(18)/糖尿病(19)等列：历史勾选「√」视为「是」
+                if (!"否".equals(trimmed) && !ScreeningCrowdCategoryFilterSupport.isYes(trimmed)) {
+                    result.add(err(excelRowIndex, name, idx, "人群分类列仅支持：是/否（勾选√视为是）"));
                 }
             }
         } else {
@@ -461,7 +467,7 @@ public class DataCleaningServiceImpl implements DataCleaningService {
     }
 
     private boolean isValidPhone(String phone) {
-        return phone != null && phone.matches("^1[3-9]\\d{9}$");
+        return ImportIdentitySupport.isValidPhoneOrPlaceholder(phone);
     }
 
     private String getCellString(List<Object> row, int index) {

@@ -4,7 +4,7 @@
  * 支持学校人群（school）、重点人群（keyPopulation）、密接人群（closeContact）三种类型
  */
 import { ACTIVE_ROUND_MAP, formatSchoolChestResultDisplay, formatSchoolDiagnosisDisplay, formatSchoolInfectionJudgeDisplay, formatSchoolScreenMethodDisplay, formatSchoolTypeDisplay } from "@@/constants/disease"
-import { formatScreenResultDisplay } from "@@/utils/screening"
+import { formatScreenResultDisplay, isCrowdCategoryYes } from "@@/utils/screening"
 
 const props = defineProps<{
   visible: boolean
@@ -175,14 +175,14 @@ const dialogTitle = computed(() => {
             {{ data.phone }}
           </el-descriptions-item>
           <el-descriptions-item label="人群分类" :span="3">
-            <span v-if="data.crowdCategoryClose === '是'">密接 </span>
-            <span v-if="data.crowdCategoryStudent === '是'">学生 </span>
-            <span v-if="data.crowdCategoryTeacher === '是'">教职工 </span>
-            <span v-if="data.crowdCategoryElder === '是'">老年人 </span>
-            <span v-if="data.crowdCategoryDiabetes === '是'">糖尿病 </span>
-            <span v-if="data.crowdCategoryDual === '是'">双感 </span>
-            <span v-if="data.crowdCategoryTbHist === '是'">既往结核史 </span>
-            <span v-if="data.crowdCategoryNormal === '是'">非重点人群 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryClose)">密接 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryStudent)">学生 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryTeacher)">教职工 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryElder)">老年人 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryDiabetes)">糖尿病 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryDual)">双感 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryTbHist)">既往结核史 </span>
+            <span v-if="isCrowdCategoryYes(data.crowdCategoryNormal)">非重点人群 </span>
           </el-descriptions-item>
           <el-descriptions-item label="可疑症状">
             {{ data.hasSuspiciousSymptoms }}

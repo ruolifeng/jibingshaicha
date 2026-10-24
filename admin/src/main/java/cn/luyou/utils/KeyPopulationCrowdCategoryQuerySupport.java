@@ -121,9 +121,12 @@ public final class KeyPopulationCrowdCategoryQuerySupport {
         LambdaQueryWrapper<ScreeningKeyPopulation> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(ScreeningKeyPopulation::getId);
         switch (category) {
-            case "老年人" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryElder, "是");
-            case "糖尿病" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是");
-            case "双感" -> wrapper.eq(ScreeningKeyPopulation::getCrowdCategoryDual, "是");
+            case "老年人" -> ScreeningCrowdCategoryFilterSupport.applyYesEquals(
+                    wrapper, ScreeningKeyPopulation::getCrowdCategoryElder);
+            case "糖尿病" -> ScreeningCrowdCategoryFilterSupport.applyYesEquals(
+                    wrapper, ScreeningKeyPopulation::getCrowdCategoryDiabetes);
+            case "双感" -> ScreeningCrowdCategoryFilterSupport.applyYesEquals(
+                    wrapper, ScreeningKeyPopulation::getCrowdCategoryDual);
             default -> {
                 return Collections.emptySet();
             }

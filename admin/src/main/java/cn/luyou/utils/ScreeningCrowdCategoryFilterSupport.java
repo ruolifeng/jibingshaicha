@@ -6,9 +6,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 重点人群/疫情筛查「人群分类」筛选：
@@ -16,8 +19,14 @@ import java.util.Map;
  *   <li>单选：仅显示该分类为「是」且其余分类均不为「是」的记录（单纯分类人员）</li>
  *   <li>多选：所选分类均为「是」（AND，可命中合并分类人员）</li>
  * </ul>
+ * <p>「√ / ✓ / ✔」与「是」等价（历史 Excel 勾选写入）。</p>
  */
 public final class ScreeningCrowdCategoryFilterSupport {
+
+    /** 人群分类「是」及历史勾选符号 */
+    public static final List<String> YES_EQUIVALENTS = List.of("是", "√", "✓", "✔");
+
+    private static final Set<String> YES_MARKS = Set.of("√", "✓", "✔");
 
     private static final Map<String, SFunction<ScreeningKeyPopulation, String>> CATEGORY_COLUMNS =
             new LinkedHashMap<>();
@@ -71,7 +80,7 @@ public final class ScreeningCrowdCategoryFilterSupport {
         if (selectedColumn == null) {
             return;
         }
-        wrapper.eq(selectedColumn, "是");
+        applyYesEquals(wrapper, selectedColumn);
         for (Map.Entry<String, SFunction<ScreeningKeyPopulation, String>> entry : CATEGORY_COLUMNS.entrySet()) {
             if (entry.getKey().equals(category)) {
                 continue;
@@ -83,21 +92,70 @@ public final class ScreeningCrowdCategoryFilterSupport {
     private static void applyYesCategory(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper, String category) {
         SFunction<ScreeningKeyPopulation, String> column = CATEGORY_COLUMNS.get(category);
         if (column != null) {
-            wrapper.eq(column, "是");
+            applyYesEquals(wrapper, column);
         }
     }
 
-    /** 非「是」：null、空串、否及其它值均视为未命中该分类 */
+    /** SQL：字段等于「是」或历史勾选符号 */
+    public static <T> void applyYesEquals(LambdaQueryWrapper<T> wrapper, SFunction<T, String> column) {
+        wrapper.in(column, YES_EQUIVALENTS);
+    }
+
+    /** 非「是」：null、空串、否及其它非勾选值均视为未命中该分类 */
     private static void applyNotYes(LambdaQueryWrapper<ScreeningKeyPopulation> wrapper,
                                     SFunction<ScreeningKeyPopulation, String> column) {
         wrapper.and(w -> w.isNull(column)
                 .or()
                 .eq(column, "")
                 .or()
-                .ne(column, "是"));
+                .notIn(column, YES_EQUIVALENTS));
     }
 
+    /** 是否视为「是」（含 √ 等勾选符号） */
     public static boolean isYes(String value) {
-        return "是".equals(StrUtil.trim(value));
+        String t = StrUtil.trim(value);
+        if (StrUtil.isBlank(t)) {
+            return false;
+        }
+        return "是".equals(t) || YES_MARKS.contains(t);
+    }
+
+    /** 勾选符号归一为「是」；其它值 trim 后原样返回 */
+    public static String normalizeYesMark(String value) {
+        if (value == null) {
+            return null;
+        }
+        String t = value.trim();
+        if (t.isEmpty()) {
+            return t;
+        }
+        if (isYes(t)) {
+            return "是";
+        }
+        return t;
+    }
+
+    /**
+     * 表头筛选：勾选「是」或「√」时互相命中，统一归入「是」。
+     */
+    public static String expandYesFilterValue(String value) {
+        Collection<String> values = ColumnFilterSupport.splitValues(value);
+        if (values.isEmpty()) {
+            return value;
+        }
+        boolean hasYes = values.stream().anyMatch(ScreeningCrowdCategoryFilterSupport::isYes);
+        if (!hasYes) {
+            return value;
+        }
+        LinkedHashSet<String> expanded = new LinkedHashSet<>(values);
+        expanded.addAll(YES_EQUIVALENTS);
+        return String.join(",", expanded);
+    }
+
+    /** 去重选项：将勾选符号合并展示为「是」 */
+    public static List<String> mergeYesDistinctValues(Collection<String> values) {
+        return ColumnDistinctSupport.normalize(values.stream()
+                .map(ScreeningCrowdCategoryFilterSupport::normalizeYesMark)
+                .toList());
     }
 }

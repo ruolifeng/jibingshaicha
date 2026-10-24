@@ -1,9 +1,38 @@
 const SCREEN_RESULT_UNIT = "mm*mm"
-const PPD_DIMENSION_PATTERN = /\d+\s*[*×xX]\s*\d+/
+const PPD_DIMENSION_PATTERN = /\d+\s*[*×x]\s*\d+/i
+/** 人群分类「是」及历史 Excel 勾选符号 */
+const CROWD_CATEGORY_YES_MARKS = new Set(["是", "√", "✓", "✔"])
+
+/** 人群分类是否视为「是」（含历史勾选 √） */
+export function isCrowdCategoryYes(value: unknown): boolean {
+  if (value == null) return false
+  const text = String(value).trim()
+  return CROWD_CATEGORY_YES_MARKS.has(text)
+}
+
+/** 老年人/糖尿病等勾选符号展示为「是」 */
+export function formatCrowdCategoryYesDisplay(value: unknown): string {
+  if (value == null || value === "") return ""
+  const text = String(value).trim()
+  if (!text) return ""
+  return isCrowdCategoryYes(text) ? "是" : text
+}
+
+/** 编辑回填：老年人/糖尿病勾选符号归一为「是」，避免下拉无匹配项 */
+export function normalizeCrowdCategoryYesFields(row: Record<string, any>): Record<string, any> {
+  const next = { ...row }
+  if (isCrowdCategoryYes(next.crowdCategoryElder)) {
+    next.crowdCategoryElder = "是"
+  }
+  if (isCrowdCategoryYes(next.crowdCategoryDiabetes)) {
+    next.crowdCategoryDiabetes = "是"
+  }
+  return next
+}
 
 /** 是否已包含 mm*mm / mm×mm 等单位 */
 function hasScreenResultUnit(text: string): boolean {
-  return /mm\s*[*×xX]\s*mm/i.test(text)
+  return /mm\s*[*×x]\s*mm/i.test(text)
 }
 
 /** PPD 斑痕测量值（如 3*6、PPD: 3*6）展示时补充 mm*mm 单位 */

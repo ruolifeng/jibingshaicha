@@ -36,6 +36,36 @@ public final class ImportIdentitySupport {
                 || "—".equals(v);
     }
 
+    /**
+     * 手机号占位：无真实号码时允许填「无」等（与证件号占位同类业务口径）。
+     * 空串不算占位（由调用方按「可空」自行判断）。
+     */
+    public static boolean isPhonePlaceholder(String phone) {
+        if (StrUtil.isBlank(phone)) {
+            return false;
+        }
+        String v = phone.trim();
+        return "无".equals(v)
+                || "无电话".equals(v)
+                || "暂无".equals(v)
+                || "-".equals(v)
+                || "/".equals(v)
+                || "——".equals(v)
+                || "—".equals(v);
+    }
+
+    /** 合法 11 位手机号，或「无」等占位。 */
+    public static boolean isValidPhoneOrPlaceholder(String phone) {
+        if (StrUtil.isBlank(phone)) {
+            return false;
+        }
+        String v = phone.trim();
+        if (isPhonePlaceholder(v)) {
+            return true;
+        }
+        return v.matches("^1[3-9]\\d{9}$");
+    }
+
     /** 规范化证件号：去空白、Excel 文本前缀引号；占位符转为空字符串，便于入库与去重。 */
     public static String normalizeIdNumber(String idNumber) {
         if (isBlankOrPlaceholder(idNumber)) {

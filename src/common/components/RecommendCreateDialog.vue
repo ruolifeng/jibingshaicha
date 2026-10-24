@@ -114,7 +114,8 @@ function resolveCrowdCategoryFromFlags(source: Record<string, any>): string {
     ["crowdCategoryNormal", "非重点人群"]
   ]
   for (const [key, label] of pairs) {
-    if (source[key] === "是") return label
+    const raw = String(source[key] ?? "").trim()
+    if (raw === "是" || raw === "√" || raw === "✓" || raw === "✔") return label
   }
   return ""
 }

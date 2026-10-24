@@ -59,6 +59,7 @@ import cn.luyou.utils.KeyPopulationCrowdCategoryQuerySupport;
 import cn.luyou.utils.LatentScreeningLinkSupport;
 import cn.luyou.utils.NoticePartyFillSupport;
 import cn.luyou.utils.QueryDateRangeUtil;
+import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import cn.luyou.utils.ScreeningDiagnosisSupport;
 import cn.luyou.utils.ScreeningMethodSupport;
 import com.alibaba.excel.EasyExcel;
@@ -1137,15 +1138,15 @@ public class LatentInfectionServiceImpl extends ServiceImpl<LatentInfectionMappe
     }
 
     private String resolveKeyPopulationCrowdCategory(ScreeningKeyPopulation k) {
-        if ("是".equals(k.getCrowdCategoryClose())) return "密接";
-        if ("是".equals(k.getCrowdCategoryStudent())) return "学生";
-        if ("是".equals(k.getCrowdCategoryTeacher())) return "教职工";
-        if ("是".equals(k.getCrowdCategoryElder())) return "老年人";
-        if ("是".equals(k.getCrowdCategoryDiabetes())) return "糖尿病";
-        if ("是".equals(k.getCrowdCategoryDual())) return "双感";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryClose())) return "密接";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryStudent())) return "学生";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryTeacher())) return "教职工";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryElder())) return "老年人";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryDiabetes())) return "糖尿病";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryDual())) return "双感";
         // 与推介人群分类选项「既往结核史」保持一致
-        if ("是".equals(k.getCrowdCategoryTbHist())) return "既往结核史";
-        if ("是".equals(k.getCrowdCategoryNormal())) return "非重点人群";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryTbHist())) return "既往结核史";
+        if (ScreeningCrowdCategoryFilterSupport.isYes(k.getCrowdCategoryNormal())) return "非重点人群";
         return "";
     }
 
