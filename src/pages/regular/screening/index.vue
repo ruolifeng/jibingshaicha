@@ -10,7 +10,7 @@ import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningL
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
-import { formatScreenResultDisplay } from "@@/utils/screening"
+import { formatCrowdCategoryYesDisplay, formatScreenResultDisplay, isCrowdCategoryYes, normalizeCrowdCategoryYesFields } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningRegularApi, createScreeningRegularApi, deleteAllScreeningRegularApi, deleteScreeningRegularApi, deleteScreeningRegularByFilterApi, exportScreeningRegularApi, getScreeningRegularColumnDistinctApi, getScreeningRegularListApi, updateScreeningRegularApi, uploadScreeningRegularApi } from "./apis"
 
@@ -350,7 +350,7 @@ function handleCreate() {
 
 function handleEdit(row: any) {
   editMode.value = "edit"
-  editForm.value = { ...row }
+  editForm.value = normalizeCrowdCategoryYesFields(row)
   editVisible.value = true
 }
 
@@ -740,8 +740,16 @@ watch(
           <el-table-column prop="crowdCategoryClose" label="密接" width="60" />
           <el-table-column prop="crowdCategoryStudent" label="学生" width="60" />
           <el-table-column prop="crowdCategoryTeacher" label="教职工" width="70" />
-          <el-table-column prop="crowdCategoryElder" label="老年人" width="70" />
-          <el-table-column prop="crowdCategoryDiabetes" label="糖尿病" width="70" />
+          <el-table-column prop="crowdCategoryElder" label="老年人" width="70">
+            <template #default="{ row }">
+              {{ formatCrowdCategoryYesDisplay(row.crowdCategoryElder) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="crowdCategoryDiabetes" label="糖尿病" width="70">
+            <template #default="{ row }">
+              {{ formatCrowdCategoryYesDisplay(row.crowdCategoryDiabetes) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="crowdCategoryDual" label="双感" width="60" />
           <el-table-column prop="crowdCategoryTbHist" label="既往结核史" min-width="90" />
           <el-table-column prop="crowdCategoryNormal" label="非重点人群" min-width="90" />
@@ -1142,14 +1150,14 @@ watch(
           {{ detailRow.phone }}
         </el-descriptions-item>
         <el-descriptions-item label="人群分类" :span="3">
-          <span v-if="detailRow.crowdCategoryClose === '是'">密接 </span>
-          <span v-if="detailRow.crowdCategoryStudent === '是'">学生 </span>
-          <span v-if="detailRow.crowdCategoryTeacher === '是'">教职工 </span>
-          <span v-if="detailRow.crowdCategoryElder === '是'">老年人 </span>
-          <span v-if="detailRow.crowdCategoryDiabetes === '是'">糖尿病 </span>
-          <span v-if="detailRow.crowdCategoryDual === '是'">双感 </span>
-          <span v-if="detailRow.crowdCategoryTbHist === '是'">既往结核史 </span>
-          <span v-if="detailRow.crowdCategoryNormal === '是'">非重点人群 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryClose)">密接 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryStudent)">学生 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryTeacher)">教职工 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryElder)">老年人 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryDiabetes)">糖尿病 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryDual)">双感 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryTbHist)">既往结核史 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryNormal)">非重点人群 </span>
         </el-descriptions-item>
         <el-descriptions-item label="可疑症状">
           {{ detailRow.hasSuspiciousSymptoms }}

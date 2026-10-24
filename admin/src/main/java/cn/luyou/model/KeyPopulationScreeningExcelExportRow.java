@@ -3,6 +3,7 @@ package cn.luyou.model;
 import cn.luyou.utils.ExcelTextStringConverter;
 import cn.luyou.utils.FlexibleIntegerConverter;
 import cn.luyou.utils.FlexibleLocalDateConverter;
+import cn.luyou.utils.ScreeningCrowdCategoryFilterSupport;
 import com.alibaba.excel.annotation.ExcelProperty;
 import lombok.Data;
 
@@ -191,8 +192,8 @@ public class KeyPopulationScreeningExcelExportRow {
         row.setCrowdCategoryClose(source.getCrowdCategoryClose());
         row.setCrowdCategoryStudent(source.getCrowdCategoryStudent());
         row.setCrowdCategoryTeacher(source.getCrowdCategoryTeacher());
-        row.setCrowdCategoryElder(source.getCrowdCategoryElder());
-        row.setCrowdCategoryDiabetes(source.getCrowdCategoryDiabetes());
+        row.setCrowdCategoryElder(ScreeningCrowdCategoryFilterSupport.normalizeYesMark(source.getCrowdCategoryElder()));
+        row.setCrowdCategoryDiabetes(ScreeningCrowdCategoryFilterSupport.normalizeYesMark(source.getCrowdCategoryDiabetes()));
         row.setCrowdCategoryDual(source.getCrowdCategoryDual());
         row.setCrowdCategoryTbHist(source.getCrowdCategoryTbHist());
         row.setCrowdCategoryNormal(source.getCrowdCategoryNormal());

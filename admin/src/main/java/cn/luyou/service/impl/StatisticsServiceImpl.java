@@ -513,10 +513,12 @@ public class StatisticsServiceImpl implements StatisticsService {
                         ScreeningKeyPopulation::getDiagnosisFirst)
                 .eq(ScreeningKeyPopulation::getSourceType, "keyPopulation")
                 .eq(StrUtil.isNotBlank(year), ScreeningKeyPopulation::getYear, year)
-                // 报表只统计老年人（含老年人+糖尿病）与单一糖尿病，先在 SQL 收窄扫描量
-                .and(w -> w.eq(ScreeningKeyPopulation::getCrowdCategoryElder, "是")
+                // 报表只统计老年人（含老年人+糖尿病）与单一糖尿病，先在 SQL 收窄扫描量（含历史勾选√）
+                .and(w -> w.in(ScreeningKeyPopulation::getCrowdCategoryElder,
+                                ScreeningCrowdCategoryFilterSupport.YES_EQUIVALENTS)
                         .or()
-                        .eq(ScreeningKeyPopulation::getCrowdCategoryDiabetes, "是"));
+                        .in(ScreeningKeyPopulation::getCrowdCategoryDiabetes,
+                                ScreeningCrowdCategoryFilterSupport.YES_EQUIVALENTS));
         if (StrUtil.isNotBlank(region)) {
             String regionValue = region.trim();
             // 区县或乡镇/社区均可筛选（此前仅 district 精确匹配，选乡镇无数据）

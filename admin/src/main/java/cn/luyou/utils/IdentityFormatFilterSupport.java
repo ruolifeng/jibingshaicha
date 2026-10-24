@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
  * 列表「格式问题」筛选：证件号 / 手机号格式异常，以及未填写证件号。
  * <ul>
  *   <li>证件号格式异常：有值且不符合 18 位 {@code \d{17}[\dXx]}</li>
- *   <li>手机号格式异常：有值且不符合 {@code ^1[3-9]\d{9}$}</li>
+ *   <li>手机号格式异常：有值且不符合 {@code ^1[3-9]\d{9}$}（「无」等占位不算异常）</li>
  *   <li>未填写证件号：空值或「无」等占位</li>
  *   <li>空值不算证件号/手机号「格式」异常</li>
  * </ul>
@@ -73,10 +73,12 @@ public final class IdentityFormatFilterSupport {
                 + " AND " + idNumberColumn + " NOT LIKE 'encv1:%'"
                 + " AND " + idNumberColumn + " NOT IN ('无','无证件号','无身份证','无身份证号','-','/','——','—')"
                 + " AND " + idNumberColumn + " NOT REGEXP {0}))";
-        String phoneSql = "(" + phoneFmt + " = 0 OR (" + phoneFmt + " IS NULL AND "
-                + phoneColumn + " IS NOT NULL AND TRIM(" + phoneColumn + ") <> ''"
+        // 「无」等占位允许保存，不算手机号格式异常（含历史 phone_fmt=0）
+        String phoneSql = "(" + phoneColumn + " IS NOT NULL AND TRIM(" + phoneColumn + ") <> ''"
+                + " AND " + phoneColumn + " NOT IN ('无','无电话','暂无','-','/','——','—')"
+                + " AND (" + phoneFmt + " = 0 OR (" + phoneFmt + " IS NULL"
                 + " AND " + phoneColumn + " NOT LIKE 'encv1:%'"
-                + " AND " + phoneColumn + " NOT REGEXP {0}))";
+                + " AND " + phoneColumn + " NOT REGEXP {0})))";
         String missingIdSql = "(" + idNumberColumn + " IS NULL OR TRIM(" + idNumberColumn + ") = ''"
                 + " OR " + idNumberColumn + " IN ('无','无证件号','无身份证','无身份证号','-','/','——','—'))";
         if (issues.size() == 1) {

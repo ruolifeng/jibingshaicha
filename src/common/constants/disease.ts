@@ -1104,6 +1104,24 @@ export function formatSchoolDiagnosisDisplay(value?: string | null): string {
 export const YES_NO_HAVE_OPTIONS = ["有", "无"]
 export const YES_NO_OPTIONS = ["是", "否"]
 
+/**
+ * 重点人群筛查 — Excel 填写说明（与页面「编辑筛查记录」下拉口径一致）
+ */
+export const KEY_POPULATION_SCREENING_FILL_INSTRUCTIONS = [
+  { field: "性别", hint: "填写：男 / 女" },
+  { field: "证件号", hint: "填写18位身份证号；无证件可留空或填「无」" },
+  { field: "联系电话", hint: "填写11位手机号；无号码可填「无」" },
+  { field: "人群分类（密接/学生/教职工/老年人/糖尿病/双感/既往结核史/非重点人群）", hint: "填写：是 / 否（勾选√视为是）" },
+  { field: "是否有可疑症状", hint: "填写：有 / 无" },
+  { field: "咳嗽咳痰、咯血或血痰、发热、胸痛、夜间盗汗、食欲不振、乏力、体重减轻", hint: "填写：是 / 否" },
+  { field: "是否进行感染筛", hint: "填写：是 / 否（与编辑页一致，请勿填有/无）" },
+  { field: "感染筛查方法", hint: "填写：结核菌素皮肤试验_PPD / 结核抗原皮肤试验_EC / γ干扰素释放试验_IGRA / 未做（兼容 PPD、EC、IGRA、未查）" },
+  { field: "感染筛查结果", hint: "填写：一般阳性 / 中度阳性 / 强阳性 / 阳性 / 阴性 / 未判读" },
+  { field: "是否进行胸片检查", hint: "填写：是 / 否（与编辑页一致，请勿填有/无）" },
+  { field: "胸片结果", hint: "填写：正常 / 异常 / 未查" },
+  { field: "首次/半年后/一年后诊断结果", hint: "填写：排除 / 正常 / 疑似结核 / 确诊结核 / 潜伏感染者 / 在治患者" }
+] as const
+
 /** 密接人群阳性轮次 */
 export const ACTIVE_ROUND_MAP: Record<number, string> = {
   1: "首次",

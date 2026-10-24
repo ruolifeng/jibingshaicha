@@ -6,12 +6,12 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, KEY_INFECTION_JUDGE_RESULT_OPTIONS, KEY_INFECTION_SCREEN_METHOD_OPTIONS, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
+import { CHEST_XRAY_RESULT_OPTIONS, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, KEY_INFECTION_JUDGE_RESULT_OPTIONS, KEY_INFECTION_SCREEN_METHOD_OPTIONS, KEY_POPULATION_SCREENING_FILL_INSTRUCTIONS, SCREENING_CROWD_CATEGORY_SEARCH_OPTIONS, SCREENING_DIAGNOSIS_EDIT_OPTIONS, SCREENING_DIAGNOSIS_SEARCH_OPTIONS, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { formatDateTime } from "@@/utils/datetime"
 import { confirmDangerDelete, confirmEditChange, triggerBlobDownload } from "@@/utils/listToolbar"
-import { formatScreenResultDisplay } from "@@/utils/screening"
+import { formatCrowdCategoryYesDisplay, formatScreenResultDisplay, isCrowdCategoryYes, normalizeCrowdCategoryYesFields } from "@@/utils/screening"
 import { extractCreateTimeRangeParams, extractDateRangeParams } from "@@/utils/searchParams"
 import { batchDeleteScreeningKeyPopulationApi, createScreeningKeyPopulationApi, deleteAllScreeningKeyPopulationApi, deleteScreeningKeyPopulationApi, deleteScreeningKeyPopulationByFilterApi, exportScreeningKeyPopulationApi, getScreeningKeyPopulationColumnDistinctApi, getScreeningKeyPopulationListApi, previewScreeningKeyPopulationUploadApi, updateScreeningKeyPopulationApi, uploadScreeningKeyPopulationApi } from "./apis"
 
@@ -170,6 +170,7 @@ function openTierCare(row: any) {
 /** Excel 上传 */
 const uploadRef = ref()
 const importResultVisible = ref(false)
+const fillGuideVisible = ref(false)
 const importResult = ref<{ successCount: number, insertCount?: number, updateCount?: number, skippedCount?: number, missingIdCount?: number, errors: string[] }>({ successCount: 0, errors: [] })
 const selectedRows = ref<any[]>([])
 
@@ -180,6 +181,19 @@ const importResultMessage = computed(() => {
   if (updateCount > 0) parts.push(`覆盖更新 ${updateCount} 条`)
   if (skippedCount > 0) parts.push(`跳过重复 ${skippedCount} 条`)
   return parts.join("，")
+})
+
+/** 字段填写错误（需修改后重传）条数提示 */
+const importFieldErrorAlert = computed(() => {
+  const errors = importResult.value.errors || []
+  const fieldErrors = errors.filter(e => String(e).includes("填写错误") || String(e).includes("请修改后重新上传"))
+  if (fieldErrors.length === 0) {
+    if (importResult.value.missingIdCount) {
+      return `其中 ${importResult.value.missingIdCount} 条未填写身份证号已导入，其余问题见下表`
+    }
+    return errors.length > 0 ? `发现 ${errors.length} 条问题（详见下表）` : ""
+  }
+  return `发现 ${fieldErrors.length} 条字段填写错误，这些行未导入。请对照填写说明修改 Excel 后重新上传`
 })
 
 async function handleUpload(uploadFile: any) {
@@ -415,7 +429,7 @@ function handleCreate() {
 
 function handleEdit(row: any) {
   editMode.value = "edit"
-  editForm.value = { ...row }
+  editForm.value = normalizeCrowdCategoryYesFields(row)
   editVisible.value = true
 }
 
@@ -680,6 +694,9 @@ watch(
             <el-button v-permission="'keyPopulation:screening:delete'" type="danger" :loading="batchDeleting" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
               删除勾选
             </el-button>
+            <el-button @click="fillGuideVisible = true">
+              填写说明
+            </el-button>
             <el-upload
               ref="uploadRef"
               :auto-upload="false"
@@ -837,6 +854,12 @@ watch(
                 :model-value="columnFilters[col.prop]"
                 @change="(v) => { setFilter(col.prop, v); handleSearch() }"
               />
+            </template>
+            <template
+              v-if="col.prop === 'crowdCategoryElder' || col.prop === 'crowdCategoryDiabetes'"
+              #default="{ row }"
+            >
+              {{ formatCrowdCategoryYesDisplay(row[col.prop]) }}
             </template>
           </el-table-column>
         </el-table-column>
@@ -1355,14 +1378,14 @@ watch(
           {{ detailRow.phone }}
         </el-descriptions-item>
         <el-descriptions-item label="人群分类" :span="3">
-          <span v-if="detailRow.crowdCategoryClose === '是'">密接 </span>
-          <span v-if="detailRow.crowdCategoryStudent === '是'">学生 </span>
-          <span v-if="detailRow.crowdCategoryTeacher === '是'">教职工 </span>
-          <span v-if="detailRow.crowdCategoryElder === '是'">老年人 </span>
-          <span v-if="detailRow.crowdCategoryDiabetes === '是'">糖尿病 </span>
-          <span v-if="detailRow.crowdCategoryDual === '是'">双感 </span>
-          <span v-if="detailRow.crowdCategoryTbHist === '是'">既往结核史 </span>
-          <span v-if="detailRow.crowdCategoryNormal === '是'">非重点人群 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryClose)">密接 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryStudent)">学生 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryTeacher)">教职工 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryElder)">老年人 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryDiabetes)">糖尿病 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryDual)">双感 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryTbHist)">既往结核史 </span>
+          <span v-if="isCrowdCategoryYes(detailRow.crowdCategoryNormal)">非重点人群 </span>
         </el-descriptions-item>
         <el-descriptions-item label="可疑症状">
           {{ detailRow.hasSuspiciousSymptoms }}
@@ -1444,17 +1467,52 @@ watch(
       :source="tierCareRow"
     />
 
+    <!-- 填写说明：与编辑页字段口径一致 -->
+    <el-dialog v-model="fillGuideVisible" title="填写说明 — 重点人群筛查 Excel" width="720px">
+      <el-alert
+        title="上传 Excel 须与下方口径一致（同「编辑筛查记录」下拉选项）。填写错误的行不会导入，请修改后重新上传。"
+        type="info"
+        :closable="false"
+        class="mb-3"
+      />
+      <el-table :data="[...KEY_POPULATION_SCREENING_FILL_INSTRUCTIONS]" border stripe max-height="480">
+        <el-table-column prop="field" label="字段" min-width="220" />
+        <el-table-column prop="hint" label="填写说明" min-width="400" />
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="fillGuideVisible = false">
+          知道了
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 导入结果弹窗 -->
-    <el-dialog v-model="importResultVisible" title="导入结果" width="560px">
-      <el-alert :title="importResultMessage" type="success" :closable="false" class="mb-3" />
+    <el-dialog v-model="importResultVisible" title="导入结果" width="640px">
+      <el-alert
+        v-if="importResult.successCount > 0"
+        :title="importResultMessage"
+        type="success"
+        :closable="false"
+        class="mb-3"
+      />
+      <el-alert
+        v-else-if="importResult.errors.length > 0"
+        title="没有成功导入的数据，请按下方错误修改 Excel 后重新上传"
+        type="error"
+        :closable="false"
+        class="mb-3"
+      />
       <template v-if="importResult.errors.length > 0">
-        <el-alert :title="importResult.missingIdCount ? `其中 ${importResult.missingIdCount} 条未填写身份证号已导入，其余问题见下表` : `发现 ${importResult.errors.length} 条数据存在格式问题（已照常导入，请核查）`" type="warning" :closable="false" class="mb-3" />
+        <el-alert :title="importFieldErrorAlert" type="warning" :closable="false" class="mb-3" />
         <el-table :data="importResult.errors.map((e, i) => ({ index: i + 1, msg: e }))" border max-height="300">
-          <el-table-column prop="index" label="#" />
-          <el-table-column prop="msg" label="错误信息" />
+          <el-table-column prop="index" label="#" width="50" />
+          <el-table-column prop="msg" label="错误信息（请按提示修改后重新上传）" min-width="400" />
         </el-table>
       </template>
       <template #footer>
+        <el-button @click="fillGuideVisible = true">
+          查看填写说明
+        </el-button>
         <el-button type="primary" @click="importResultVisible = false">
           确定
         </el-button>
