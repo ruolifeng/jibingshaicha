@@ -1,5 +1,5 @@
 import { parsePatientTreatmentPlan, SPUTUM_STATUS_OPTIONS } from "@@/constants/disease"
-import { resolveFirstTreatmentPlan, resolveImportFields } from "@@/utils/patient"
+import { isLevel3OrAboveRole, resolveFirstTreatmentPlan, resolveImportFields } from "@@/utils/patient"
 
 /** 首次随访编号：8位数字 */
 export const FIRST_VISIT_FORM_NO_PATTERN = /^\d{8}$/
@@ -100,12 +100,60 @@ function normalizeSputumStatusOption(raw: string): string {
   return ""
 }
 
-/** 首次随访已完成记录可随时修改（仍受权限控制） */
+/** 普通用户修改已完成首次随访的时限（月） */
+export const FIRST_VISIT_EDIT_MONTHS_NORMAL = 1
+
+function startOfLocalDay(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+/** 解析日期/时间；纯日期按本地日历日解析，避免 UTC 日界偏移 */
+function parseVisitAnchorDate(value?: string | null): Date | null {
+  if (!value) return null
+  const text = String(value).trim()
+  const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+  }
+  const parsed = new Date(text.replace(" ", "T"))
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
+}
+
+/**
+ * 已完成首次随访是否可修改：
+ * 三级及以上（role 1–4）不限；
+ * 普通用户自随访时间（visitDate，缺省回退 createTime）起 1 个月内可改。
+ * 后端 firstVisitEditable / editable 优先。
+ */
 export function canEditFirstVisit(
-  _userRole: number,
-  _visit: { status?: number, createTime?: string | null } | null | undefined
+  userRole: number,
+  visit: {
+    status?: number | string
+    visitDate?: string | null
+    createTime?: string | null
+    editable?: boolean | null
+  } | null | undefined
 ): boolean {
-  return true
+  if (!visit) return false
+  if (visit.editable != null) return visit.editable
+  if (Number(visit.status) !== 1) return true
+  if (isLevel3OrAboveRole(userRole)) return true
+
+  const visitDate = parseVisitAnchorDate(visit.visitDate)
+  if (visitDate) {
+    const deadline = startOfLocalDay(visitDate)
+    deadline.setMonth(deadline.getMonth() + FIRST_VISIT_EDIT_MONTHS_NORMAL)
+    return startOfLocalDay(new Date()).getTime() <= deadline.getTime()
+  }
+
+  const created = parseVisitAnchorDate(visit.createTime)
+  if (!created) return true
+  const deadline = new Date(created)
+  deadline.setMonth(deadline.getMonth() + FIRST_VISIT_EDIT_MONTHS_NORMAL)
+  return Date.now() <= deadline.getTime()
 }
 
 /** 首次随访方式展示（含「其他」手工录入） */

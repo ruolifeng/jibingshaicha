@@ -83,7 +83,7 @@ public class Patient extends BaseEntity {
     @TableField(exist = false)
     private Integer firstVisitStatus;
 
-    /** 当前用户是否可编辑已完成首次随访（非数据库字段，五级用户 10 天限制） */
+    /** 当前用户是否可编辑已完成首次随访（非数据库字段：普通用户自随访时间起 1 个月；三级及以上不限） */
     @TableField(exist = false)
     private Boolean firstVisitEditable;
 

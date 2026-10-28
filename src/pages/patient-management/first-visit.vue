@@ -418,26 +418,17 @@ async function openPrintFirstVisit(row: any) {
               >
                 填写首次随访
               </el-button>
-              <el-button
-                v-else-if="row.firstVisitEditable !== false && canEditFirstVisitPerm"
-                type="primary"
-                link
-                size="small"
-                :disabled="isVisitActionDisabled(row)"
-                @click="openFirstVisit(row)"
-              >
-                修改首次随访
-              </el-button>
-              <el-button
-                v-else
-                type="primary"
-                link
-                size="small"
-                @click="viewFirstVisit(row)"
-              >
-                查看首次随访
-              </el-button>
-              <template v-if="row.hasFirstVisit">
+              <template v-else>
+                <el-button
+                  v-if="row.firstVisitEditable !== false && canEditFirstVisitPerm"
+                  type="primary"
+                  link
+                  size="small"
+                  :disabled="isVisitActionDisabled(row)"
+                  @click="openFirstVisit(row)"
+                >
+                  修改首次随访
+                </el-button>
                 <el-button type="info" link size="small" @click="viewFirstVisit(row)">
                   查看
                 </el-button>

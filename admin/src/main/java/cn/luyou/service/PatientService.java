@@ -1,5 +1,6 @@
 package cn.luyou.service;
 
+import cn.luyou.model.FirstVisit;
 import cn.luyou.model.ImportResult;
 import cn.luyou.model.Patient;
 import cn.luyou.model.vo.PatientDistributionHeatmapVO;
@@ -7,6 +8,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -53,6 +56,32 @@ public interface PatientService extends IService<Patient> {
     /** 是否为停止治疗导致的归档 */
     static boolean isStopTreatmentArchiveRemark(String archiveRemark) {
         return archiveRemark != null && archiveRemark.startsWith(ARCHIVE_REMARK_STOP_TREATMENT_PREFIX);
+    }
+
+    /** 普通用户（四级/五级）修改已完成首次随访的时限（月） */
+    int FIRST_VISIT_EDIT_MONTHS_NORMAL = 1;
+
+    /**
+     * 已完成首次随访是否可修改：
+     * 三级及以上（role 1–4）不限；
+     * 普通用户自首次随访时间（visitDate，缺省回退 createTime）起 1 个月内可改。
+     */
+    static boolean isFirstVisitEditable(Integer role, FirstVisit visit) {
+        if (visit == null || !Integer.valueOf(1).equals(visit.getStatus())) {
+            return true;
+        }
+        if (role != null && role >= 1 && role <= 4) {
+            return true;
+        }
+        if (visit.getVisitDate() != null) {
+            return !visit.getVisitDate().plusMonths(FIRST_VISIT_EDIT_MONTHS_NORMAL)
+                    .isBefore(LocalDate.now());
+        }
+        if (visit.getCreateTime() == null) {
+            return true;
+        }
+        return !visit.getCreateTime().plusMonths(FIRST_VISIT_EDIT_MONTHS_NORMAL)
+                .isBefore(LocalDateTime.now());
     }
 
     IPage<Patient> queryPage(int page, int size, String populationType,
