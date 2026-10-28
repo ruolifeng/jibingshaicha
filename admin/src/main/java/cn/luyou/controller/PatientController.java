@@ -249,12 +249,20 @@ public class PatientController {
 
     // ==================== 首次随访 ====================
 
-    /** 已完成首次随访可随时修改（仍校验 edit 权限） */
+    /**
+     * 已完成首次随访修改校验：
+     * 需具备 edit 权限；普通用户自随访时间起满 1 个月后不可改，三级及以上不限。
+     */
     private void assertFirstVisitEditable(FirstVisit existing) {
         if (existing == null || !Integer.valueOf(1).equals(existing.getStatus())) {
             return;
         }
         assertFirstVisitEditPermission(existing);
+        if (!PatientService.isFirstVisitEditable(BaseContext.getCurrentRole(), existing)) {
+            throw new ServiceException(StatusEnum.PARAM_INVALID,
+                    "首次随访已超过 " + PatientService.FIRST_VISIT_EDIT_MONTHS_NORMAL
+                            + " 个月修改期限，请联系三级及以上管理员");
+        }
     }
 
     /** 修改已完成的首次随访需具备 patientManagement:firstVisit:edit 权限 */

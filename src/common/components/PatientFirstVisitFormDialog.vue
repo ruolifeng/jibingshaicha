@@ -8,7 +8,6 @@ import {
   FIRST_VISIT_SUPERVISOR_OPTIONS,
   isPatientOtherSensitivePlan,
   MEDICATION_USAGE_OPTIONS,
-  PATIENT_OTHER_SENSITIVE_PLAN,
   resolvePatientTreatmentPlanForSave,
   SPUTUM_CULTURE_NOT_DONE,
   SPUTUM_CULTURE_OPTIONS,
@@ -19,7 +18,7 @@ import {
   VISIT_METHOD_OPTIONS,
   VISIT_METHOD_OTHER
 } from "@@/constants/disease"
-import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_FORM_NO_RULES, normalizeFirstVisitChemotherapyFields, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
+import { applyFirstVisitChemotherapyDefault, applyFirstVisitSputumStatusDefault, canEditFirstVisit, FIRST_VISIT_EDIT_MONTHS_NORMAL, FIRST_VISIT_FORM_NO_RULES, normalizeFirstVisitChemotherapyFields, sanitizeFirstVisitFormNo } from "@@/utils/firstVisit"
 import { confirmEditChange } from "@@/utils/listToolbar"
 import { getFirstVisitDetailApi, saveFirstVisitApi, saveFirstVisitDraftApi } from "@/pages/patient-management/apis"
 import { useUserStore } from "@/pinia/stores/user"
@@ -76,6 +75,8 @@ const saving = ref(false)
 const draftSaving = ref(false)
 const firstVisitCompleted = ref(false)
 const visitCreateTime = ref<string | null>(null)
+/** 已加载记录的原始随访时间（锁定判断用，避免用户改表单日期影响可编辑性） */
+const visitAnchorDate = ref<string | null>(null)
 /** 当前弹窗对应的首次随访记录 ID（与表单字段隔离，避免串到其他患者） */
 const editingVisitId = ref<string | number | undefined>(undefined)
 /** 异步加载序号，防止快速切换患者时旧请求回写表单 */
@@ -84,8 +85,18 @@ const userStore = useUserStore()
 
 const formLocked = computed(() =>
   firstVisitCompleted.value
-  && !canEditFirstVisit(userStore.userRole, { status: 1, createTime: visitCreateTime.value })
+  && !canEditFirstVisit(userStore.userRole, {
+    status: 1,
+    visitDate: visitAnchorDate.value,
+    createTime: visitCreateTime.value
+  })
 )
+
+const dialogTitle = computed(() => {
+  if (formLocked.value) return "查看肺结核患者第一次入户随访记录"
+  if (firstVisitCompleted.value) return "修改肺结核患者第一次入户随访记录"
+  return "肺结核患者第一次入户随访记录"
+})
 
 const rules: FormRules = {
   formNo: FIRST_VISIT_FORM_NO_RULES,
@@ -199,6 +210,7 @@ async function loadExisting() {
   const patientId = props.patientRow.id
   firstVisitCompleted.value = false
   visitCreateTime.value = null
+  visitAnchorDate.value = null
   editingVisitId.value = undefined
   Object.assign(firstVisitForm, createEmptyForm())
   try {
@@ -211,8 +223,9 @@ async function loadExisting() {
       }
       parseLoadedData(data)
       editingVisitId.value = data.id
-      firstVisitCompleted.value = data.status === 1
+      firstVisitCompleted.value = Number(data.status) === 1
       visitCreateTime.value = data.createTime ?? null
+      visitAnchorDate.value = data.visitDate ?? null
     }
   } catch { /* 首次填写 */ }
   if (seq !== loadSeq || props.patientRow?.id !== patientId) return
@@ -286,7 +299,7 @@ function buildPayload() {
 }
 
 async function handleSaveDraft() {
-  if (!props.patientRow || draftSaving.value) return
+  if (!props.patientRow || formLocked.value || draftSaving.value) return
   draftSaving.value = true
   try {
     await saveFirstVisitDraftApi(buildPayload())
@@ -299,7 +312,7 @@ async function handleSaveDraft() {
 }
 
 async function handleSave() {
-  if (!props.patientRow || saving.value) return
+  if (!props.patientRow || formLocked.value || saving.value) return
   if (!formRef.value) return
   try {
     await formRef.value.validate()
@@ -338,12 +351,20 @@ async function handleSave() {
 <template>
   <el-dialog
     :model-value="visible"
-    title="肺结核患者第一次入户随访记录"
+    :title="dialogTitle"
     width="920px"
     top="5vh"
     append-to-body
     @update:model-value="emit('update:visible', $event)"
   >
+    <el-alert
+      v-if="formLocked"
+      type="warning"
+      :closable="false"
+      show-icon
+      :title="`首次随访已超过 ${FIRST_VISIT_EDIT_MONTHS_NORMAL} 个月修改期限，仅可查看。如需修改请联系三级及以上管理员。`"
+      style="margin-bottom: 16px"
+    />
     <el-form ref="formRef" :model="firstVisitForm" :rules="rules" label-width="110px" size="default" :disabled="formLocked">
       <el-row justify="end" class="form-no-row">
         <el-col :span="8">

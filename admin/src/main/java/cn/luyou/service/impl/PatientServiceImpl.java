@@ -1468,9 +1468,9 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
         List<Long> patientIds = patients.stream().map(Patient::getId).collect(Collectors.toList());
         LambdaQueryWrapper<FirstVisit> fw = new LambdaQueryWrapper<>();
         fw.in(FirstVisit::getPatientId, patientIds)
-                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getCreateTime,
-                        FirstVisit::getSputumCulture, FirstVisit::getSputumCultureSupplementStatus,
-                        FirstVisit::getDrugResistance);
+                .select(FirstVisit::getPatientId, FirstVisit::getStatus, FirstVisit::getVisitDate,
+                        FirstVisit::getCreateTime, FirstVisit::getSputumCulture,
+                        FirstVisit::getSputumCultureSupplementStatus, FirstVisit::getDrugResistance);
         Map<Long, FirstVisit> visitMap = firstVisitMapper.selectList(fw).stream()
                 .collect(Collectors.toMap(FirstVisit::getPatientId, v -> v, (a, b) -> a));
         patients.forEach(p -> {
@@ -1487,7 +1487,7 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient>
             boolean completed = Integer.valueOf(1).equals(visit.getStatus());
             p.setHasFirstVisit(completed);
             p.setFirstVisitStatus(visit.getStatus());
-            p.setFirstVisitEditable(true);
+            p.setFirstVisitEditable(PatientService.isFirstVisitEditable(BaseContext.getCurrentRole(), visit));
             p.setFirstVisitSputumCulture(visit.getSputumCulture());
             p.setFirstVisitDrugResistance(visit.getDrugResistance());
             p.setSputumCultureSupplementStatus(visit.getSputumCultureSupplementStatus());
