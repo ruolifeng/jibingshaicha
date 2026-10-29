@@ -30,12 +30,16 @@ export function normalizeCrowdCategoryYesFields(row: Record<string, any>): Recor
   return next
 }
 
-/** 是否已包含 mm*mm / mm×mm 等单位 */
+/**
+ * 是否已包含单位：
+ * - mm*mm / mm×mm（重点人群等）
+ * - (mm) / （mm）（学生筛查官方表常见写法）
+ */
 function hasScreenResultUnit(text: string): boolean {
-  return /mm\s*[*×x]\s*mm/i.test(text)
+  return /mm\s*[*×x]\s*mm/i.test(text) || /[(（]\s*mm\s*[)）]/i.test(text)
 }
 
-/** PPD 斑痕测量值（如 3*6、PPD: 3*6）展示时补充 mm*mm 单位 */
+/** PPD 斑痕测量值（如 3*6、PPD: 3*6）展示时补充 mm*mm 单位；已带 (mm) 等则不再追加 */
 export function formatScreenResultDisplay(
   value: unknown,
   screenMethod?: unknown

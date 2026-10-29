@@ -19,9 +19,8 @@ public final class SchoolScreeningImportValidateSupport {
 
     private static final Set<String> GENDER = Set.of("男", "女");
     private static final Set<String> YES_NO = Set.of("是", "否");
-    private static final Set<String> HAVE_OR_NOT = Set.of("有", "无");
-    /** 可疑症状三列：有/无/未询问（兼容「未问」） */
-    private static final Set<String> SYMPTOM = Set.of("有", "无", "未询问", "未问");
+    /** 既往结核病史/肺结核接触史/可疑症状：有/无/未询问（兼容「未问」） */
+    private static final Set<String> HAVE_OR_NOT_ASKED = Set.of("有", "无", "未询问", "未问");
 
     /** 感染判定：码表 + 历史感染结果文案 */
     private static final Set<String> INFECTION_RESULT_EXTRA = Set.of(
@@ -50,11 +49,11 @@ public final class SchoolScreeningImportValidateSupport {
         }
         check(errors, "性别", data.getGender(), GENDER);
         check(errors, "是否参加筛查", data.getParticipatedScreening(), YES_NO);
-        check(errors, "既往结核病史", data.getTbHistory(), HAVE_OR_NOT);
-        check(errors, "肺结核接触史", data.getCloseContactHistory(), HAVE_OR_NOT);
-        check(errors, "咳嗽咳痰≥两周", data.getSymptomCough(), SYMPTOM);
-        check(errors, "咯血或血痰", data.getSymptomHemoptysis(), SYMPTOM);
-        check(errors, "可疑症状-其他", data.getSymptomOther(), SYMPTOM);
+        check(errors, "既往结核病史", data.getTbHistory(), HAVE_OR_NOT_ASKED);
+        check(errors, "肺结核接触史", data.getCloseContactHistory(), HAVE_OR_NOT_ASKED);
+        check(errors, "咳嗽咳痰≥两周", data.getSymptomCough(), HAVE_OR_NOT_ASKED);
+        check(errors, "咯血或血痰", data.getSymptomHemoptysis(), HAVE_OR_NOT_ASKED);
+        check(errors, "可疑症状-其他", data.getSymptomOther(), HAVE_OR_NOT_ASKED);
 
         checkCodeOrLabel(errors, "类型", data.getSchoolType(), SchoolScreeningCodes.SCHOOL_TYPE);
         checkCodeOrLabel(errors, "是否寄宿制", data.getBoardingType(), SchoolScreeningCodes.BOARDING_TYPE);

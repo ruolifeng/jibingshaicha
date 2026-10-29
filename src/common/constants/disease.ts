@@ -822,8 +822,14 @@ export const SCHOOL_CHEST_RESULT_OPTIONS = [
 /** 学生筛查 — 分子生物学/痰培养 */
 export const SCHOOL_LAB_RESULT_OPTIONS = ["阴性", "阳性", "无法判读", "未查"]
 
+/**
+ * 学生筛查 — 有/无/未询问
+ * （既往结核病史、肺结核接触史、结核病可疑症状共用）
+ */
+export const SCHOOL_HAVE_NOT_ASKED_OPTIONS = ["有", "无", "未询问"]
+
 /** 学生筛查 — 结核病可疑症状（咳嗽/咯血/其他） */
-export const SCHOOL_SYMPTOM_OPTIONS = ["有", "无", "未询问"]
+export const SCHOOL_SYMPTOM_OPTIONS = SCHOOL_HAVE_NOT_ASKED_OPTIONS
 
 export function isSchoolSymptomNotInquired(value?: string | null): boolean {
   const raw = (value || "").trim()
@@ -838,8 +844,8 @@ export const SCHOOL_SCREENING_FIELD_HINTS = {
   schoolType: "填写数字，1=托幼机构，2=小学，3=初中，4=高中阶段教育学校，5=高等教育学校，6=教职工，7=其他（培训学校、特殊教育学校和专门学校等）",
   boardingType: "填写数字，1=寄宿制，2=非寄宿制，3=大学，4=其他",
   participatedScreening: "填写是/否",
-  tbHistory: "填写有/无",
-  closeContactHistory: "填写有/无",
+  tbHistory: "填写有/无/未询问",
+  closeContactHistory: "填写有/无/未询问",
   symptomCough: "填写有/无/未询问",
   symptomHemoptysis: "填写有/无/未询问",
   symptomOther: "填写有/无/未询问",

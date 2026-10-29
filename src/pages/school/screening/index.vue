@@ -7,7 +7,7 @@ import { runImportWithIdentityConfirm } from "@@/composables/useImportIdentityCo
 import { MAX_PAGE_SIZE, usePagination } from "@@/composables/usePagination"
 import { useServerColumnFilters } from "@@/composables/useServerColumnFilters"
 import { useServerTableSort } from "@@/composables/useServerTableSort"
-import { formatSchoolBoardingTypeDisplay, formatSchoolChestMethodDisplay, formatSchoolChestResultDisplay, formatSchoolDiagnosisDisplay, formatSchoolInfectionJudgeDisplay, formatSchoolLabResultDisplay, formatSchoolScreenMethodDisplay, formatSchoolTypeDisplay, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, isSchoolSymptomNotInquired, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_SYMPTOM_OPTIONS, SCHOOL_TYPE_OPTIONS, toSchoolDiagnosisOfficial, YES_NO_HAVE_OPTIONS, YES_NO_OPTIONS } from "@@/constants/disease"
+import { formatSchoolBoardingTypeDisplay, formatSchoolChestMethodDisplay, formatSchoolChestResultDisplay, formatSchoolDiagnosisDisplay, formatSchoolInfectionJudgeDisplay, formatSchoolLabResultDisplay, formatSchoolScreenMethodDisplay, formatSchoolTypeDisplay, getScreeningLatentStatusLabel, getScreeningLatentStatusTagType, isConfirmedPatientDiagnosis, isSchoolSymptomNotInquired, SCHOOL_BOARDING_TYPE_OPTIONS, SCHOOL_CHEST_METHOD_OPTIONS, SCHOOL_CHEST_RESULT_OPTIONS, SCHOOL_DIAGNOSIS_EDIT_OPTIONS, SCHOOL_DIAGNOSIS_SEARCH_OPTIONS, SCHOOL_HAVE_NOT_ASKED_OPTIONS, SCHOOL_INFECTION_JUDGE_OPTIONS, SCHOOL_LAB_RESULT_OPTIONS, SCHOOL_SCREEN_METHOD_OPTIONS, SCHOOL_SCREENING_FIELD_HINTS, SCHOOL_SCREENING_FILL_INSTRUCTIONS, SCHOOL_SYMPTOM_OPTIONS, SCHOOL_TYPE_OPTIONS, toSchoolDiagnosisOfficial, YES_NO_OPTIONS } from "@@/constants/disease"
 import { FORMAT_ISSUE_OPTIONS } from "@@/constants/format-issue"
 import { PAGE_SIZE_OPTIONS } from "@@/constants/pagination"
 import { formatDateTime } from "@@/utils/datetime"
@@ -30,7 +30,7 @@ const diagnosisFilterOptions = SCHOOL_DIAGNOSIS_SEARCH_OPTIONS.map(item => ({ te
 const schoolTypeFilterOptions = SCHOOL_TYPE_OPTIONS.map(item => ({ text: formatSchoolTypeDisplay(item), value: item }))
 const boardingTypeFilterOptions = SCHOOL_BOARDING_TYPE_OPTIONS.map(item => ({ text: formatSchoolBoardingTypeDisplay(item), value: item }))
 const yesNoFilterOptions = YES_NO_OPTIONS.map(item => ({ text: item, value: item }))
-const yesNoHaveFilterOptions = YES_NO_HAVE_OPTIONS.map(item => ({ text: item, value: item }))
+const haveNotAskedFilterOptions = SCHOOL_HAVE_NOT_ASKED_OPTIONS.map(item => ({ text: item, value: item }))
 const symptomFilterOptions = SCHOOL_SYMPTOM_OPTIONS.map(item => ({ text: item, value: item }))
 const screenMethodFilterOptions = SCHOOL_SCREEN_METHOD_OPTIONS.map(item => ({ text: formatSchoolScreenMethodDisplay(item), value: item }))
 const screenResultFilterOptions = ["阳性", "阴性", "无"].map(item => ({ text: item, value: item }))
@@ -784,7 +784,7 @@ watch(
               label="既往结核病史"
               type="select"
               :hint="SCHOOL_SCREENING_FIELD_HINTS.tbHistory"
-              :options="yesNoHaveFilterOptions"
+              :options="haveNotAskedFilterOptions"
               :source-values="distinctValues('tbHistory').value"
               :load-options="loadTbHistoryOptions"
               :model-value="columnFilters.tbHistory"
@@ -801,7 +801,7 @@ watch(
               label="肺结核接触史"
               type="select"
               :hint="SCHOOL_SCREENING_FIELD_HINTS.closeContactHistory"
-              :options="yesNoHaveFilterOptions"
+              :options="haveNotAskedFilterOptions"
               :source-values="distinctValues('closeContactHistory').value"
               :load-options="loadCloseContactHistoryOptions"
               :model-value="columnFilters.closeContactHistory"
@@ -1167,14 +1167,14 @@ watch(
           <el-col :span="8">
             <el-form-item label="既往结核病史">
               <el-select v-model="editForm.tbHistory" style="width:100%" clearable>
-                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_HAVE_NOT_ASKED_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="肺结核接触史">
               <el-select v-model="editForm.closeContactHistory" style="width:100%" clearable>
-                <el-option v-for="item in YES_NO_HAVE_OPTIONS" :key="item" :label="item" :value="item" />
+                <el-option v-for="item in SCHOOL_HAVE_NOT_ASKED_OPTIONS" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
           </el-col>

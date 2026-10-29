@@ -281,8 +281,8 @@ public class DataCleaningServiceImpl implements DataCleaningService {
                     "1", "2", "3", "4",
                     "寄宿制", "非寄宿制", "大学", "其他");
             validateOption(result, excelRowIndex, name, row, 16, "是否参加筛查仅支持：是/否", "是", "否");
-            validateOption(result, excelRowIndex, name, row, 17, "既往结核病史仅支持：有/无", "有", "无");
-            validateOption(result, excelRowIndex, name, row, 18, "肺结核接触史仅支持：有/无", "有", "无");
+            validateOption(result, excelRowIndex, name, row, 17, "既往结核病史仅支持：有/无/未询问", "有", "无", "未询问", "未问");
+            validateOption(result, excelRowIndex, name, row, 18, "肺结核接触史仅支持：有/无/未询问", "有", "无", "未询问", "未问");
             validateOption(result, excelRowIndex, name, row, 19, "咳嗽咳痰≥两周仅支持：有/无/未询问", "有", "无", "未询问", "未问");
             validateOption(result, excelRowIndex, name, row, 20, "咯血或血痰仅支持：有/无/未询问", "有", "无", "未询问", "未问");
             validateOption(result, excelRowIndex, name, row, 21, "可疑症状-其他仅支持：有/无/未询问", "有", "无", "未询问", "未问");

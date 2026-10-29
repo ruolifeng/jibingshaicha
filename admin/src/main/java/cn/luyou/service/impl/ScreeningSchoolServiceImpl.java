@@ -980,8 +980,10 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
         data.setSchoolName(field(row, headerIndex, "学校名称", "学校名称全称"));
         data.setGradeName(field(row, headerIndex, "年级"));
         data.setClassName(field(row, headerIndex, "班级院系", "班级"));
-        data.setTbHistory(field(row, headerIndex, "既往结核病史", "有无既往结核病史"));
-        data.setCloseContactHistory(field(row, headerIndex, "密切接触史", "有无肺结核接触史"));
+        data.setTbHistory(SchoolScreeningCodeSupport.normalizeSymptomValue(
+                field(row, headerIndex, "既往结核病史", "有无既往结核病史")));
+        data.setCloseContactHistory(SchoolScreeningCodeSupport.normalizeSymptomValue(
+                field(row, headerIndex, "密切接触史", "有无肺结核接触史")));
 
         String cough = SchoolScreeningCodeSupport.normalizeSymptomValue(
                 field(row, headerIndex, "咳嗽咳痰", "咳嗽咳痰两周"));
