@@ -2,6 +2,7 @@
 import type { DashboardSummaryData, MessageStatsData, PopulationStat, TaskStatsData } from "../apis"
 import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
 import { DASHBOARD_ADMIN_TITLE, DASHBOARD_ADMIN_WELCOME } from "@@/constants/app"
+import { SURFACE_TONE } from "@@/constants/surface-tones"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
 import {
   Bell,
@@ -118,10 +119,10 @@ const managementYear = computed(() => summary.value.managementYear ?? getCurrent
 
 // ===== 统计卡片配置 =====
 const statCards = [
-  { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search, bg: "#fff5f5" },
-  { label: "年度管理患者数", key: "pendingVisit" as const, color: "#e6a23c", icon: FirstAidKit, bg: "#fffbf0" },
-  { label: "待确认通知单", key: "pendingNotice" as const, color: "#409eff", icon: Bell, bg: "#f0f7ff" },
-  { label: "近期复查(15天)", key: "upcomingReview" as const, color: "#67c23a", icon: Calendar, bg: "#f0fff4" }
+  { label: "待追踪人数", key: "pendingTracking" as const, color: "#f56c6c", icon: Search, bg: SURFACE_TONE.danger },
+  { label: "年度管理患者数", key: "pendingVisit" as const, color: "#e6a23c", icon: FirstAidKit, bg: SURFACE_TONE.warning },
+  { label: "待确认通知单", key: "pendingNotice" as const, color: "#409eff", icon: Bell, bg: SURFACE_TONE.primary },
+  { label: "近期复查(15天)", key: "upcomingReview" as const, color: "#67c23a", icon: Calendar, bg: SURFACE_TONE.success }
 ]
 
 function getStatCardLabel(key: string, label: string) {
@@ -548,10 +549,7 @@ const noticeMaxSent = computed(() =>
 
           <div class="referral-stats">
             <div class="ref-stat-item">
-              <div
-                class="ref-circle"
-                style="border-color: #409eff; color: #409eff; background: #f0f7ff"
-              >
+              <div class="ref-circle ref-circle--primary">
                 {{ messageStats.referralSent }}
               </div>
               <div class="ref-label">
@@ -562,10 +560,7 @@ const noticeMaxSent = computed(() =>
               →
             </div>
             <div class="ref-stat-item">
-              <div
-                class="ref-circle"
-                style="border-color: #67c23a; color: #67c23a; background: #f0fff4"
-              >
+              <div class="ref-circle ref-circle--success">
                 {{ messageStats.referralConfirmed }}
               </div>
               <div class="ref-label">
@@ -576,10 +571,7 @@ const noticeMaxSent = computed(() =>
               ·
             </div>
             <div class="ref-stat-item">
-              <div
-                class="ref-circle"
-                style="border-color: #f56c6c; color: #f56c6c; background: #fff5f5"
-              >
+              <div class="ref-circle ref-circle--danger">
                 {{ messageStats.referralRejected }}
               </div>
               <div class="ref-label">
@@ -784,7 +776,7 @@ const noticeMaxSent = computed(() =>
     width: 52px;
     height: 52px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--v3-stat-icon-wrap-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -823,8 +815,8 @@ const noticeMaxSent = computed(() =>
   margin: 4px 0 28px;
   padding: 18px 24px;
   border-radius: 12px;
-  background: #fffbf0;
-  border: 1px solid #f5dab1;
+  background: var(--v3-tone-warning-surface);
+  border: 1px solid var(--v3-tone-warning-border);
   border-left: 4px solid #e6a23c;
 
   .pathogen-title {
@@ -858,8 +850,8 @@ const noticeMaxSent = computed(() =>
   margin: 4px 0 16px;
   padding: 18px 24px;
   border-radius: 12px;
-  background: #fff5f5;
-  border: 1px solid #fbc4c4;
+  background: var(--v3-tone-danger-surface-soft);
+  border: 1px solid var(--v3-tone-danger-border);
   border-left: 4px solid #f56c6c;
 
   .treatment-title {
@@ -893,8 +885,8 @@ const noticeMaxSent = computed(() =>
   margin: 4px 0 28px;
   padding: 18px 24px;
   border-radius: 12px;
-  background: #f0f7ff;
-  border: 1px solid #b3d8ff;
+  background: var(--v3-tone-primary-surface);
+  border: 1px solid var(--v3-tone-primary-border);
   border-left: 4px solid #409eff;
 
   .referral-title {
@@ -928,8 +920,8 @@ const noticeMaxSent = computed(() =>
   margin: 4px 0 28px;
   padding: 18px 24px;
   border-radius: 12px;
-  background: #f0fff4;
-  border: 1px solid #b3e19d;
+  background: var(--v3-tone-success-surface);
+  border: 1px solid var(--v3-tone-success-border);
   border-left: 4px solid #67c23a;
 
   .tracking-title {
@@ -1261,6 +1253,24 @@ const noticeMaxSent = computed(() =>
   justify-content: center;
   font-size: 24px;
   font-weight: 700;
+
+  &--primary {
+    border-color: #409eff;
+    color: #409eff;
+    background: var(--v3-tone-primary-surface);
+  }
+
+  &--success {
+    border-color: #67c23a;
+    color: #67c23a;
+    background: var(--v3-tone-success-surface);
+  }
+
+  &--danger {
+    border-color: #f56c6c;
+    color: #f56c6c;
+    background: var(--v3-tone-danger-surface-soft);
+  }
 }
 
 .ref-label {
@@ -1301,7 +1311,7 @@ const noticeMaxSent = computed(() =>
   gap: 6px;
   margin-top: 14px;
   padding: 8px 12px;
-  background: #fff8e1;
+  background: var(--v3-tone-warning-pending-surface);
   border-radius: 8px;
   font-size: 13px;
   color: #e6a23c;

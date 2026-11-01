@@ -147,7 +147,7 @@ function cellMark(dateStr: string) {
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
     font-size: 13px;
-    color: #909399;
+    color: var(--el-text-color-secondary);
     margin-bottom: 4px;
   }
 
@@ -163,7 +163,7 @@ function cellMark(dateStr: string) {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    border: 1px solid #e4e7ed;
+    border: 1px solid var(--el-border-color-lighter);
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
@@ -180,7 +180,7 @@ function cellMark(dateStr: string) {
       cursor: default;
 
       &:not(.blank):hover {
-        border-color: #e4e7ed;
+        border-color: var(--el-border-color-lighter);
       }
     }
 
@@ -191,14 +191,14 @@ function cellMark(dateStr: string) {
     .day-num {
       font-size: 11px;
       line-height: 1.2;
-      color: #909399;
+      color: var(--el-text-color-secondary);
     }
 
     .mark-symbol {
       font-size: 18px;
       font-weight: bold;
       line-height: 1;
-      color: #303133;
+      color: var(--el-text-color-primary);
     }
 
     &.mark-circled .mark-symbol {
@@ -206,8 +206,8 @@ function cellMark(dateStr: string) {
     }
 
     &.mark-stop {
-      background: #fdf6ec;
-      border-color: #f5dab1;
+      background: var(--v3-tone-warning-surface);
+      border-color: var(--v3-tone-warning-border);
     }
 
     .mark-stop-text {
@@ -222,13 +222,13 @@ function cellMark(dateStr: string) {
     margin-top: 8px;
     text-align: center;
     font-size: 14px;
-    color: #606266;
+    color: var(--el-text-color-regular);
   }
 
   &-hint {
     margin-left: 8px;
     font-size: 12px;
-    color: #909399;
+    color: var(--el-text-color-secondary);
   }
 }
 </style>

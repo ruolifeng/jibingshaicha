@@ -300,7 +300,7 @@ watch(
 .param-text {
   white-space: pre-wrap;
   word-break: break-all;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   padding: 8px 10px;
   border-radius: 4px;
   font-size: 12px;

@@ -1264,13 +1264,13 @@ async function handleThreeMonthSubmit() {
           <el-timeline>
             <!-- 3月复查（针对初次筛查阴性/未做的记录） -->
             <el-timeline-item
-              :color="detailRow.threeMonthCheckDate ? '#67c23a' : '#909399'"
+              :color="detailRow.threeMonthCheckDate ? '#67c23a' : 'var(--el-text-color-secondary)'"
             >
               <template #dot>
                 <el-icon v-if="detailRow.threeMonthCheckDate" color="#67c23a">
                   <CircleCheck />
                 </el-icon>
-                <el-icon v-else color="#909399">
+                <el-icon v-else color="var(--el-text-color-secondary)">
                   <Clock />
                 </el-icon>
               </template>
@@ -1290,13 +1290,13 @@ async function handleThreeMonthSubmit() {
             </el-timeline-item>
             <el-timeline-item
               v-for="month in [6, 12, 24]" :key="month"
-              :color="hasFollowupData(detailRow, month) ? '#67c23a' : '#909399'"
+              :color="hasFollowupData(detailRow, month) ? '#67c23a' : 'var(--el-text-color-secondary)'"
             >
               <template #dot>
                 <el-icon v-if="hasFollowupData(detailRow, month)" color="#67c23a">
                   <CircleCheck />
                 </el-icon>
-                <el-icon v-else color="#909399">
+                <el-icon v-else color="var(--el-text-color-secondary)">
                   <Clock />
                 </el-icon>
               </template>

@@ -2487,15 +2487,3 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
   gap: 8px;
 }
 </style>
-
-<style lang="scss">
-.el-table .confirmed-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
-}
-
-.el-table .recommend-settled-row td.el-table__cell {
-  background-color: var(--el-fill-color-light) !important;
-  color: var(--el-text-color-secondary);
-}
-</style>

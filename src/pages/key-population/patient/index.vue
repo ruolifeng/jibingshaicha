@@ -29,7 +29,6 @@ import {
   NOTICE_STATUS_MAP,
   PATHOGEN_RESULT_OPTIONS,
   PATIENT_MANAGEMENT_METHOD_OPTIONS,
-  PATIENT_OTHER_SENSITIVE_PLAN,
   PATIENT_TYPE_OPTIONS,
   resolvePatientTreatmentPlanForSave,
   SPUTUM_CULTURE_NOT_DONE,
@@ -1595,12 +1594,5 @@ watch(
   align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
-}
-</style>
-
-<style lang="scss">
-.el-table .overdue-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
 }
 </style>

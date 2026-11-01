@@ -129,13 +129,13 @@ function removeRow(index: number) {
 
 .order-stop-label {
   flex-shrink: 0;
-  color: #606266;
+  color: var(--el-text-color-regular);
   font-size: 14px;
   white-space: nowrap;
 }
 
 .order-stop-empty {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
 }
 </style>

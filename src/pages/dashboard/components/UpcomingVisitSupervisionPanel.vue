@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { UpcomingVisitSupervisionItem } from "../apis"
+import { SURFACE_TONE } from "@@/constants/surface-tones"
 import { Calendar, FirstAidKit } from "@element-plus/icons-vue"
 import { getUpcomingVisitSupervisionApi } from "../apis"
 
@@ -30,7 +31,7 @@ const summaryCards = computed(() => [
     count: followUpCount.value,
     color: "#e6a23c",
     icon: FirstAidKit,
-    bg: "#fffbf0"
+    bg: SURFACE_TONE.warning
   },
   {
     type: "supervision" as const,
@@ -38,7 +39,7 @@ const summaryCards = computed(() => [
     count: supervisionCount.value,
     color: "#67c23a",
     icon: Calendar,
-    bg: "#f0fff4"
+    bg: SURFACE_TONE.success
   }
 ])
 
@@ -236,7 +237,7 @@ defineExpose({ refresh: fetchData })
     width: 52px;
     height: 52px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--v3-stat-icon-wrap-bg);
     display: flex;
     align-items: center;
     justify-content: center;

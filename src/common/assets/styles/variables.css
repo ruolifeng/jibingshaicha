@@ -45,6 +45,34 @@
   --v3-hamburger-text-color: var(--el-text-color-primary);
   /* RightPanel 组件  */
   --v3-rightpanel-button-bg-color: #001428;
+
+  /* 语义色块（仪表盘卡片、表格高亮、信息条等） */
+  --v3-tone-danger-surface: #fff2f0;
+  --v3-tone-danger-surface-soft: #fff5f5;
+  --v3-tone-danger-border: #fbc4c4;
+  --v3-tone-warning-surface: #fffbf0;
+  --v3-tone-warning-border: #f5dab1;
+  --v3-tone-warning-pending-surface: #fff8e1;
+  --v3-tone-primary-surface: #f0f7ff;
+  --v3-tone-primary-border: #b3d8ff;
+  --v3-tone-success-surface: #f0fff4;
+  --v3-tone-success-border: #b3e19d;
+  --v3-stat-icon-wrap-bg: rgba(255, 255, 255, 0.8);
+}
+
+html.dark,
+html.dark-blue {
+  --v3-tone-danger-surface: rgba(245, 108, 108, 0.16);
+  --v3-tone-danger-surface-soft: rgba(245, 108, 108, 0.12);
+  --v3-tone-danger-border: rgba(245, 108, 108, 0.35);
+  --v3-tone-warning-surface: rgba(230, 162, 60, 0.14);
+  --v3-tone-warning-border: rgba(230, 162, 60, 0.35);
+  --v3-tone-warning-pending-surface: rgba(230, 162, 60, 0.12);
+  --v3-tone-primary-surface: rgba(64, 158, 255, 0.14);
+  --v3-tone-primary-border: rgba(64, 158, 255, 0.35);
+  --v3-tone-success-surface: rgba(103, 194, 58, 0.14);
+  --v3-tone-success-border: rgba(103, 194, 58, 0.35);
+  --v3-stat-icon-wrap-bg: rgba(0, 0, 0, 0.22);
 }
 
 /* 内容区放大时，将不需要的组件隐藏 */

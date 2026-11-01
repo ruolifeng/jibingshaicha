@@ -281,8 +281,8 @@ defineExpose({
     display: inline-block;
     padding: 20px 28px;
     border-radius: 12px;
-    background: #fffbf0;
-    border: 1px solid #f5dab1;
+    background: var(--v3-tone-warning-surface);
+    border: 1px solid var(--v3-tone-warning-border);
     border-left: 4px solid #e6a23c;
 
     .stat-value {
@@ -332,8 +332,8 @@ defineExpose({
   }
 
   .pathogen-panel {
-    background: #fffbf0;
-    border: 1px solid #f5dab1;
+    background: var(--v3-tone-warning-surface);
+    border: 1px solid var(--v3-tone-warning-border);
     border-left: 4px solid #e6a23c;
 
     .panel-title,
@@ -343,8 +343,8 @@ defineExpose({
   }
 
   .treatment-panel {
-    background: #fff5f5;
-    border: 1px solid #fbc4c4;
+    background: var(--v3-tone-danger-surface-soft);
+    border: 1px solid var(--v3-tone-danger-border);
     border-left: 4px solid #f56c6c;
 
     .panel-title,
@@ -354,8 +354,8 @@ defineExpose({
   }
 
   .referral-panel {
-    background: #f0f7ff;
-    border: 1px solid #b3d8ff;
+    background: var(--v3-tone-primary-surface);
+    border: 1px solid var(--v3-tone-primary-border);
     border-left: 4px solid #409eff;
 
     .panel-title,
@@ -365,8 +365,8 @@ defineExpose({
   }
 
   .tracking-panel {
-    background: #f0fff4;
-    border: 1px solid #b3e19d;
+    background: var(--v3-tone-success-surface);
+    border: 1px solid var(--v3-tone-success-border);
     border-left: 4px solid #67c23a;
 
     .panel-title,

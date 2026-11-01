@@ -1,0 +1,131 @@
+/**
+ * 暗黑模式适配：表格行高亮、业务色块等（依赖 variables.css 中的 --v3-tone-*）
+ */
+
+// 表格行：确诊 / 超期 / 再治疗 / 通知单超期
+.el-table {
+  .confirmed-row td.el-table__cell,
+  .overdue-row td.el-table__cell,
+  tr.notice-overdue-row td.el-table__cell,
+  tr.retreatment-row td.el-table__cell {
+    background-color: var(--v3-tone-danger-surface) !important;
+    color: var(--el-color-danger);
+  }
+
+  .recommend-settled-row td.el-table__cell {
+    background-color: var(--el-fill-color-light) !important;
+    color: var(--el-text-color-secondary);
+  }
+
+  .confirmed-row td.el-table__cell .el-button.is-link,
+  .overdue-row td.el-table__cell .el-button.is-link,
+  tr.notice-overdue-row td.el-table__cell .el-button.is-link,
+  tr.retreatment-row td.el-table__cell .el-button.is-link,
+  .recommend-settled-row td.el-table__cell .el-button.is-link {
+    color: var(--el-color-primary);
+  }
+
+  .confirmed-row td.el-table__cell .el-button.is-link.el-button--danger,
+  .overdue-row td.el-table__cell .el-button.is-link.el-button--danger {
+    color: var(--el-color-danger);
+  }
+
+  // 固定列与行高亮底色一致（否则暗黑下易出现白块）
+  .confirmed-row td.el-table-fixed-column--left,
+  .confirmed-row td.el-table-fixed-column--right,
+  .overdue-row td.el-table-fixed-column--left,
+  .overdue-row td.el-table-fixed-column--right,
+  tr.notice-overdue-row td.el-table-fixed-column--left,
+  tr.notice-overdue-row td.el-table-fixed-column--right,
+  tr.retreatment-row td.el-table-fixed-column--left,
+  tr.retreatment-row td.el-table-fixed-column--right {
+    background-color: var(--v3-tone-danger-surface) !important;
+  }
+
+  .recommend-settled-row td.el-table-fixed-column--left,
+  .recommend-settled-row td.el-table-fixed-column--right {
+    background-color: var(--el-fill-color-light) !important;
+  }
+}
+
+html.dark,
+html.dark-blue {
+  .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+    background: var(--el-fill-color-lighter);
+  }
+
+  .el-table--striped .el-table__body tr.el-table__row--striped td.el-table-fixed-column--left,
+  .el-table--striped .el-table__body tr.el-table__row--striped td.el-table-fixed-column--right {
+    background: var(--el-fill-color-lighter);
+  }
+
+  .el-table--striped .el-table__body tr:not(.el-table__row--striped) td.el-table-fixed-column--left,
+  .el-table--striped .el-table__body tr:not(.el-table__row--striped) td.el-table-fixed-column--right {
+    background: var(--el-bg-color);
+  }
+
+  .el-table__body tr.hover-row > td.el-table__cell,
+  .el-table__body tr.el-table__row:hover > td.el-table__cell {
+    background-color: var(--el-fill-color-light);
+  }
+
+  // 高亮行保留底色，正文改用常规字色以提升可读性
+  .el-table .confirmed-row td.el-table__cell,
+  .el-table .overdue-row td.el-table__cell,
+  .el-table tr.notice-overdue-row td.el-table__cell,
+  .el-table tr.retreatment-row td.el-table__cell {
+    color: var(--el-text-color-primary);
+  }
+
+  .el-table__body tr.confirmed-row:hover > td.el-table__cell,
+  .el-table__body tr.overdue-row:hover > td.el-table__cell,
+  .el-table__body tr.notice-overdue-row:hover > td.el-table__cell,
+  .el-table__body tr.retreatment-row:hover > td.el-table__cell,
+  .el-table__body tr.confirmed-row:hover > td.el-table-fixed-column--left,
+  .el-table__body tr.confirmed-row:hover > td.el-table-fixed-column--right,
+  .el-table__body tr.overdue-row:hover > td.el-table-fixed-column--left,
+  .el-table__body tr.overdue-row:hover > td.el-table-fixed-column--right,
+  .el-table__body tr.notice-overdue-row:hover > td.el-table-fixed-column--left,
+  .el-table__body tr.notice-overdue-row:hover > td.el-table-fixed-column--right,
+  .el-table__body tr.retreatment-row:hover > td.el-table-fixed-column--left,
+  .el-table__body tr.retreatment-row:hover > td.el-table-fixed-column--right {
+    background-color: var(--v3-tone-danger-surface) !important;
+  }
+
+  .el-table__body tr.recommend-settled-row:hover > td.el-table__cell,
+  .el-table__body tr.recommend-settled-row:hover > td.el-table-fixed-column--left,
+  .el-table__body tr.recommend-settled-row:hover > td.el-table-fixed-column--right {
+    background-color: var(--el-fill-color-light) !important;
+  }
+
+  // 固定列在暗黑下偶发仍用浅底
+  .el-table__body tr td.el-table-fixed-column--left,
+  .el-table__body tr td.el-table-fixed-column--right {
+    background: inherit;
+  }
+
+  // 分页区下拉与跳转输入框
+  .el-pagination {
+    .el-select .el-select__wrapper,
+    .el-select .el-input__wrapper,
+    .el-pagination__editor.el-input .el-input__wrapper {
+      background-color: var(--el-fill-color-blank);
+      box-shadow: 0 0 0 1px var(--el-border-color) inset;
+    }
+  }
+
+  .el-table .el-select .el-select__wrapper,
+  .el-table .el-select .el-input__wrapper {
+    background-color: var(--el-fill-color-blank);
+  }
+
+  // 列表页搜索区（与分页一致，避免浅底输入框）
+  .app-container .search-wrapper,
+  .el-dialog {
+    .el-input__wrapper,
+    .el-select__wrapper,
+    .el-textarea__inner {
+      background-color: var(--el-fill-color-blank);
+    }
+  }
+}

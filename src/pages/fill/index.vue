@@ -641,7 +641,7 @@ initWithDraft()
 
       <div class="fill-footer">
         <div v-if="hasMultiplePages" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
-          <span style="color: #909399; font-size: 13px">第 {{ currentPage + 1 }} / {{ totalPages }} 页</span>
+          <span style="color: var(--el-text-color-secondary); font-size: 13px">第 {{ currentPage + 1 }} / {{ totalPages }} 页</span>
         </div>
         <div style="display: flex; gap: 12px">
           <el-button v-if="hasMultiplePages && currentPage > 0" size="large" style="flex: 1" @click="prevPage">
@@ -665,7 +665,7 @@ initWithDraft()
   margin: 0 auto;
   padding: 20px 16px;
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--el-bg-color-page);
 }
 .fill-loading,
 .fill-error,
@@ -675,10 +675,10 @@ initWithDraft()
   align-items: center;
   justify-content: center;
   min-height: 60vh;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 .fill-header {
-  background: #fff;
+  background: var(--el-bg-color);
   border-radius: 12px;
   padding: 24px 20px;
   margin-bottom: 16px;
@@ -694,24 +694,24 @@ initWithDraft()
 .fill-header h2 {
   margin: 0;
   font-size: 20px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   flex: 1;
 }
 .fill-timer {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
   white-space: nowrap;
   padding: 4px 10px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 20px;
   flex-shrink: 0;
 }
 .fill-header p {
   margin: 0 0 4px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
 }
 .fill-questions {
@@ -723,7 +723,7 @@ initWithDraft()
   padding: 0 8px;
 }
 .fill-question {
-  background: #fff;
+  background: var(--el-bg-color);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
@@ -731,7 +731,7 @@ initWithDraft()
 .fill-question-title {
   font-size: 15px;
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
   margin-bottom: 12px;
 }
 .fill-question-num {
@@ -744,7 +744,7 @@ initWithDraft()
   margin-left: 2px;
 }
 .fill-question-desc {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
   margin-bottom: 8px;
 }

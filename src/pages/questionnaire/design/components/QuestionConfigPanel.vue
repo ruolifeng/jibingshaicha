@@ -830,7 +830,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
                 </el-button>
               </template>
               <div>
-                <div style="font-size: 12px; color: #606266; margin-bottom: 6px">
+                <div style="font-size: 12px; color: var(--el-text-color-regular); margin-bottom: 6px">
                   每行一个选项，点击确认后追加到已有选项末尾
                 </div>
                 <el-input
@@ -894,12 +894,12 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
               style="margin-bottom: 10px; padding: 8px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px"
             >
               <div style="display: flex; gap: 6px; margin-bottom: 6px; align-items: center">
-                <span style="font-size: 12px; color: #909399; white-space: nowrap">字段名</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap">字段名</span>
                 <el-input :model-value="opt.label" size="small" placeholder="字段名" @update:model-value="(v) => updateOptionLabel(oi, String(v))" />
                 <el-button :icon="Delete" size="small" type="danger" plain @click="removeOption(oi)" />
               </div>
               <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px">
-                <span style="font-size: 12px; color: #909399; white-space: nowrap; min-width: 48px">内容限制</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap; min-width: 48px">内容限制</span>
                 <el-select
                   :model-value="opt.contentLimit || 'none'"
                   size="small"
@@ -953,7 +953,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
               <!-- 下拉单选：设置选项 -->
               <template v-if="opt.contentLimit === 'dropdown_select'">
                 <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px">
-                  <span style="font-size: 12px; color: #909399; white-space: nowrap; min-width: 48px">下拉设置</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap; min-width: 48px">下拉设置</span>
                   <el-button size="small" link type="primary" @click="openDropdownSelectDialog('col', oi)">
                     点击设置（{{ (opt.dropdownOptions || []).length }} 个选项）
                   </el-button>
@@ -1005,7 +1005,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
           style="width: 140px"
           @update:model-value="(v) => setV('minSelect', v != null ? v : undefined)"
         />
-        <span style="font-size: 12px; color: #909399; margin-left: 8px">项（不填则不限）</span>
+        <span style="font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px">项（不填则不限）</span>
       </el-form-item>
       <el-form-item label="最多可选">
         <el-input-number
@@ -1016,7 +1016,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
           style="width: 140px"
           @update:model-value="(v) => setV('maxSelect', v != null ? v : undefined)"
         />
-        <span style="font-size: 12px; color: #909399; margin-left: 8px">项（不填则不限）</span>
+        <span style="font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px">项（不填则不限）</span>
       </el-form-item>
     </template>
 
@@ -1076,7 +1076,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
             style="width: 140px"
             @update:model-value="(v) => setV('decimalPlaces', v != null ? v : undefined)"
           />
-          <span style="font-size: 12px; color: #909399; margin-left: 8px">填写时限制小数位数（0～6）</span>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px">填写时限制小数位数（0～6）</span>
         </el-form-item>
       </template>
     </template>
@@ -1127,7 +1127,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
                     </el-button>
                   </template>
                   <div>
-                    <div style="font-size: 12px; color: #606266; margin-bottom: 6px">
+                    <div style="font-size: 12px; color: var(--el-text-color-regular); margin-bottom: 6px">
                       每行一个选项，追加到末尾
                     </div>
                     <el-input
@@ -1152,7 +1152,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
                   导入疾病编码表
                 </el-button>
               </div>
-              <div style="font-size: 11px; color: #909399; margin-top: 6px">
+              <div style="font-size: 11px; color: var(--el-text-color-secondary); margin-top: 6px">
                 共 {{ parseDropdownOptions().length }} 个选项，填写时支持搜索
               </div>
             </div>
@@ -1243,12 +1243,12 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
               style="margin-bottom: 10px; padding: 8px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px"
             >
               <div style="display: flex; gap: 6px; margin-bottom: 6px; align-items: center">
-                <span style="font-size: 12px; color: #909399; white-space: nowrap">列名</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap">列名</span>
                 <el-input :model-value="c.label" size="small" placeholder="列名" @update:model-value="(v) => updateMatrixColLabel(ci, String(v))" />
                 <el-button :icon="Delete" size="small" type="danger" plain @click="removeMatrixCol(ci)" />
               </div>
               <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px">
-                <span style="font-size: 12px; color: #909399; white-space: nowrap; min-width: 48px">内容限制</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap; min-width: 48px">内容限制</span>
                 <el-select
                   :model-value="c.contentLimit || 'none'"
                   size="small"
@@ -1302,7 +1302,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
               <!-- 下拉单选：设置选项 -->
               <template v-if="c.contentLimit === 'dropdown_select'">
                 <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px">
-                  <span style="font-size: 12px; color: #909399; white-space: nowrap; min-width: 48px">下拉设置</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap; min-width: 48px">下拉设置</span>
                   <el-button size="small" link type="primary" @click="openDropdownSelectDialog('matrixCol', ci)">
                     点击设置（{{ (c.dropdownOptions || []).length }} 个选项）
                   </el-button>
@@ -1380,7 +1380,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
             </div>
 
             <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px">
-              <span style="font-size: 12px; color: #909399; min-width: 48px">类型</span>
+              <span style="font-size: 12px; color: var(--el-text-color-secondary); min-width: 48px">类型</span>
               <el-select
                 :model-value="col.type"
                 size="small"
@@ -1396,7 +1396,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 
             <!-- radio/checkbox：选项编辑 -->
             <template v-if="col.type === 'radio' || col.type === 'checkbox'">
-              <div style="font-size: 12px; color: #909399; margin: 4px 0">
+              <div style="font-size: 12px; color: var(--el-text-color-secondary); margin: 4px 0">
                 选项
               </div>
               <div v-for="(opt, oi) in (col.options || [])" :key="`co${oi}`" style="display: flex; gap: 4px; margin-bottom: 4px">
@@ -1422,7 +1422,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 
             <!-- freq：单位编辑 -->
             <template v-if="col.type === 'freq'">
-              <div style="font-size: 12px; color: #909399; margin: 4px 0">
+              <div style="font-size: 12px; color: var(--el-text-color-secondary); margin: 4px 0">
                 频率单位（互斥单选 + 数字填空）
               </div>
               <div v-for="(u, ui) in (col.units || [])" :key="`cu${ui}`" style="display: flex; gap: 4px; margin-bottom: 4px">
@@ -1449,7 +1449,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
             <!-- input：输入类型 + 后缀 -->
             <template v-if="col.type === 'input'">
               <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px">
-                <span style="font-size: 12px; color: #909399; min-width: 48px">内容</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); min-width: 48px">内容</span>
                 <el-select
                   :model-value="col.inputType || 'text'"
                   size="small"
@@ -1464,7 +1464,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
                 </el-select>
               </div>
               <div style="display: flex; gap: 6px; align-items: center">
-                <span style="font-size: 12px; color: #909399; min-width: 48px">后缀</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); min-width: 48px">后缀</span>
                 <el-input
                   :model-value="col.suffix || ''"
                   size="small"
@@ -1487,7 +1487,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
             </div>
             <template v-if="col.showWhen">
               <div style="display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap">
-                <span style="font-size: 12px; color: #909399; line-height: 24px">当</span>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); line-height: 24px">当</span>
                 <el-select
                   :model-value="col.showWhen.column"
                   size="small"
@@ -1557,11 +1557,11 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
       </el-form-item>
       <el-form-item label="列标签">
         <div style="width: 100%">
-          <div style="font-size: 12px; color: #909399; margin-bottom: 6px">
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px">
             可为每列设置自定义显示名称，留空则显示数字
           </div>
           <div v-for="n in scaleRange()" :key="n" style="display: flex; gap: 6px; margin-bottom: 6px; align-items: center">
-            <span style="font-size: 12px; color: #606266; min-width: 28px; text-align: right">{{ n }}</span>
+            <span style="font-size: 12px; color: var(--el-text-color-regular); min-width: 28px; text-align: right">{{ n }}</span>
             <el-input
               :model-value="parseScaleOpts().scaleLabels[String(n)] || ''"
               size="small"
@@ -1581,7 +1581,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
       <el-form-item label="大小限制">
         <div style="display: flex; align-items: center; gap: 8px">
           <el-input-number :model-value="getVNum('maxSize', 10)" :min="1" :max="100" @change="(v) => setV('maxSize', v)" />
-          <span style="color: #909399; font-size: 12px">MB</span>
+          <span style="color: var(--el-text-color-secondary); font-size: 12px">MB</span>
         </div>
       </el-form-item>
       <el-form-item label="最大数量">
@@ -1594,7 +1594,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
       <el-form-item label="大小限制">
         <div style="display: flex; align-items: center; gap: 8px">
           <el-input-number :model-value="getVNum('maxSize', 5)" :min="1" :max="50" @change="(v) => setV('maxSize', v)" />
-          <span style="color: #909399; font-size: 12px">MB</span>
+          <span style="color: var(--el-text-color-secondary); font-size: 12px">MB</span>
         </div>
       </el-form-item>
       <el-form-item label="最大数量">
@@ -1620,7 +1620,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
       <el-form-item label="笔触颜色">
         <div style="display: flex; align-items: center; gap: 8px">
           <el-color-picker :model-value="parseValidation().penColor || '#222222'" @update:model-value="(v) => setV('penColor', v)" />
-          <span style="font-size: 12px; color: #909399">{{ parseValidation().penColor || '#222222' }}</span>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary)">{{ parseValidation().penColor || '#222222' }}</span>
         </div>
       </el-form-item>
       <el-form-item label="笔触粗细">
@@ -1629,7 +1629,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
       <el-form-item label="画板高度">
         <div style="display: flex; align-items: center; gap: 8px">
           <el-input-number :model-value="getVNum('height', 160)" :min="80" :max="400" :step="20" @change="(v) => setV('height', v)" />
-          <span style="font-size: 12px; color: #909399">px</span>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary)">px</span>
         </div>
       </el-form-item>
     </template>
@@ -1715,7 +1715,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 
       <el-form-item label="小数位数">
         <el-input-number :model-value="getVNum('precision', 2)" :min="0" :max="6" @change="(v) => setV('precision', v)" />
-        <span style="font-size: 12px; color: #909399; margin-left: 8px">结果保留几位小数</span>
+        <span style="font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px">结果保留几位小数</span>
       </el-form-item>
 
       <el-form-item label="单位">
@@ -1849,7 +1849,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 }
 .formula-tools-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 .formula-check {
   margin-top: 4px;
@@ -1865,11 +1865,11 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 .formula-hint {
   margin-top: 4px;
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   line-height: 1.6;
 }
 .formula-hint code {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   padding: 0 4px;
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1877,9 +1877,9 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 }
 .formula-empty {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   padding: 8px;
-  background: #fafafa;
+  background: var(--el-fill-color-light);
   border-radius: 4px;
   line-height: 1.6;
 }
@@ -1925,7 +1925,7 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
 }
 .range-limit-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   white-space: nowrap;
   min-width: 48px;
   flex-shrink: 0;
@@ -1945,6 +1945,6 @@ const formulaCheck = computed<{ ok: boolean, msg: string }>(() => {
   border-radius: 6px;
   padding: 8px;
   margin-bottom: 10px;
-  background: #fafafa;
+  background: var(--el-fill-color-light);
 }
 </style>

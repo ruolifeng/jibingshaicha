@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { QuestionItem, QuestionnaireItem } from "../apis/type"
-import { ArrowLeft, CopyDocument, Delete, Document, Loading, Plus, Rank } from "@element-plus/icons-vue"
+import { ArrowLeft, CopyDocument, Delete, Document, Plus, Rank } from "@element-plus/icons-vue"
 import draggable from "vuedraggable"
 import QuestionFillRenderer from "../../fill/components/QuestionFillRenderer.vue"
 import { getQuestionnaireDetailApi, getQuestionsApi, saveQuestionsApi } from "../apis"
@@ -648,7 +648,7 @@ function handleTestSubmit() {
     `<div style="line-height: 1.8">
       <p><b>测试填报完成！</b></p>
       <p>共 ${fillableQuestions.length} 道题，已填写 ${answeredCount} 道</p>
-      <p style="color: #909399; font-size: 13px; margin-top: 8px">注意：这是测试数据，不会保存到数据库</p>
+      <p style="color: var(--el-text-color-secondary); font-size: 13px; margin-top: 8px">注意：这是测试数据，不会保存到数据库</p>
     </div>`,
     "测试提交成功",
     {
@@ -693,7 +693,7 @@ fetchData()
           <span style="font-weight: 600">添加题目</span>
         </template>
         <div v-for="group in typeGroups" :key="group" style="margin-bottom: 12px">
-          <div style="font-size: 12px; color: #909399; margin-bottom: 6px">
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px">
             {{ group }}
           </div>
           <draggable
@@ -751,7 +751,7 @@ fetchData()
               <!-- 布局元素：分割线 / 分页 -->
               <template v-if="isLayoutType(q.type)">
                 <div class="question-header">
-                  <span class="drag-handle" title="拖拽排序" style="cursor: grab; color: #c0c4cc; margin-right: 4px; font-size: 16px">⠿</span>
+                  <span class="drag-handle" title="拖拽排序" style="cursor: grab; color: var(--el-text-color-placeholder); margin-right: 4px; font-size: 16px">⠿</span>
                   <el-tag size="small">
                     {{ typeLabel[q.type] }}
                   </el-tag>
@@ -783,7 +783,7 @@ fetchData()
               <!-- 普通题目 -->
               <template v-else>
                 <div class="question-header">
-                  <span class="drag-handle" title="拖拽排序" style="cursor: grab; color: #c0c4cc; margin-right: 4px; font-size: 16px">⠿</span>
+                  <span class="drag-handle" title="拖拽排序" style="cursor: grab; color: var(--el-text-color-placeholder); margin-right: 4px; font-size: 16px">⠿</span>
                   <span class="question-num">Q{{ questionNumMap[idx] }}</span>
                   <el-tag size="small" type="info">
                     {{ typeLabel[q.type] || q.type }}
@@ -859,7 +859,7 @@ fetchData()
             </el-radio-button>
           </el-radio-group>
           <el-switch v-model="previewTestMode" active-text="测试填报" inactive-text="仅预览" size="small" />
-          <span v-if="previewTotalPages > 1" style="font-size: 13px; color: #909399">
+          <span v-if="previewTotalPages > 1" style="font-size: 13px; color: var(--el-text-color-secondary)">
             第 {{ previewPage }} 页 / 共 {{ previewTotalPages }} 页
           </span>
         </div>
@@ -880,13 +880,13 @@ fetchData()
         />
       </div>
 
-      <div :style="{ maxHeight: '500px', overflowY: 'auto', padding: previewMode === 'mobile' ? '0 4px' : '0 10px', background: previewMode === 'mobile' ? '#f5f7fa' : 'transparent', borderRadius: '8px' }">
+      <div :style="{ maxHeight: '500px', overflowY: 'auto', padding: previewMode === 'mobile' ? '0 4px' : '0 10px', background: previewMode === 'mobile' ? 'var(--el-fill-color-light)' : 'transparent', borderRadius: '8px' }">
         <!-- 仅第一页显示问卷标题 -->
         <template v-if="previewPage === 1">
           <h3 style="text-align: center; margin-bottom: 16px">
             {{ questionnaire?.title }}
           </h3>
-          <p v-if="questionnaire?.description" style="color: #909399; text-align: center; margin-bottom: 20px; font-size: 13px">
+          <p v-if="questionnaire?.description" style="color: var(--el-text-color-secondary); text-align: center; margin-bottom: 20px; font-size: 13px">
             {{ questionnaire.description }}
           </p>
         </template>
@@ -896,22 +896,22 @@ fetchData()
           <div v-if="q.type === 'divider'" style="margin-bottom: 8px">
             <el-divider />
           </div>
-          <div v-else-if="q.type === 'image_display'" :style="{ marginBottom: '16px', padding: previewMode === 'mobile' ? '12px 10px' : '12px', border: '1px solid #ebeef5', borderRadius: '8px', background: '#fff' }">
+          <div v-else-if="q.type === 'image_display'" :style="{ marginBottom: '16px', padding: previewMode === 'mobile' ? '12px 10px' : '12px', border: '1px solid var(--el-border-color-lighter)', borderRadius: '8px', background: 'var(--el-bg-color)' }">
             <div v-if="q.title" style="font-weight: 600; margin-bottom: 8px">
               {{ q.title }}
             </div>
-            <div v-if="q.description" style="color: #909399; font-size: 13px; margin-bottom: 8px">
+            <div v-if="q.description" style="color: var(--el-text-color-secondary); font-size: 13px; margin-bottom: 8px">
               {{ q.description }}
             </div>
             <QuestionDesignRenderer :question="q" :index="qIdx" :questions="questions" />
           </div>
-          <div v-else-if="q.type === 'description'" :style="{ marginBottom: '16px', padding: previewMode === 'mobile' ? '12px 10px' : '12px', border: '1px solid #ebeef5', borderRadius: '8px', background: '#fff' }">
+          <div v-else-if="q.type === 'description'" :style="{ marginBottom: '16px', padding: previewMode === 'mobile' ? '12px 10px' : '12px', border: '1px solid var(--el-border-color-lighter)', borderRadius: '8px', background: 'var(--el-bg-color)' }">
             <div v-if="q.title" style="font-weight: 600; margin-bottom: 8px">
               {{ q.title }}
             </div>
             <QuestionDesignRenderer :question="q" :index="qIdx" :questions="questions" />
           </div>
-          <div v-else :style="{ marginBottom: '16px', padding: previewMode === 'mobile' ? '12px 10px' : '12px', border: '1px solid #ebeef5', borderRadius: '8px', background: '#fff' }">
+          <div v-else :style="{ marginBottom: '16px', padding: previewMode === 'mobile' ? '12px 10px' : '12px', border: '1px solid var(--el-border-color-lighter)', borderRadius: '8px', background: 'var(--el-bg-color)' }">
             <div style="font-weight: 600; margin-bottom: 8px">
               {{ q.title || '(未设置)' }}
               <el-tag v-if="q.required === 1" type="danger" size="small" style="margin-left: 4px">
@@ -921,7 +921,7 @@ fetchData()
                 逻辑
               </el-tag>
             </div>
-            <div v-if="q.description" style="color: #909399; font-size: 13px; margin-bottom: 8px">
+            <div v-if="q.description" style="color: var(--el-text-color-secondary); font-size: 13px; margin-bottom: 8px">
               {{ q.description }}
             </div>
             <QuestionDesignRenderer
@@ -949,7 +949,7 @@ fetchData()
       <template #footer>
         <div style="display: flex; align-items: center; justify-content: space-between">
           <!-- 页码信息 -->
-          <span v-if="previewTotalPages > 1" style="font-size: 13px; color: #606266">
+          <span v-if="previewTotalPages > 1" style="font-size: 13px; color: var(--el-text-color-regular)">
             第 <b>{{ previewPage }}</b> 页，共 <b>{{ previewTotalPages }}</b> 页
           </span>
           <span v-else />
@@ -1001,12 +1001,12 @@ fetchData()
   color: var(--el-color-primary);
 }
 .question-title {
-  color: #606266;
+  color: var(--el-text-color-regular);
   font-size: 14px;
   font-weight: 500;
 }
 .question-desc {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   margin-top: 2px;
   margin-bottom: 2px;
@@ -1014,9 +1014,9 @@ fetchData()
 .question-preview {
   margin-top: 10px;
   padding: 10px 12px;
-  background: #f9fafb;
+  background: var(--el-fill-color-lighter);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--el-border-color-lighter);
   pointer-events: none;
 }
 .layout-item {
@@ -1026,7 +1026,7 @@ fetchData()
   margin-bottom: 10px;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fafafa;
+  background: var(--el-fill-color-light);
 }
 .layout-item:hover {
   border-color: var(--el-color-info-light-3);
@@ -1059,8 +1059,8 @@ fetchData()
   border-radius: 6px;
   cursor: grab;
   font-size: 13px;
-  color: #606266;
-  background: #f5f7fa;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
   border: 1px solid transparent;
   transition: all 0.15s;
   user-select: none;
@@ -1108,11 +1108,11 @@ fetchData()
 .page-break-line {
   flex: 1;
   height: 1px;
-  background: #dcdfe6;
+  background: var(--el-border-color);
 }
 .page-break-end-text {
   font-size: 11px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   white-space: nowrap;
   flex-shrink: 0;
 }
