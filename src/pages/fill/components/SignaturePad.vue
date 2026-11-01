@@ -220,7 +220,7 @@ watch(() => props.modelValue, (v: string, old: string) => {
   justify-content: space-between;
   padding: 6px 10px;
   border-top: 1px solid var(--el-border-color-lighter);
-  background: #fafafa;
+  background: var(--el-fill-color-light);
 }
 
 .sig-hint {

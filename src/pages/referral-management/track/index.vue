@@ -1240,7 +1240,7 @@ function getRowClass({ row }: { row: any }) {
               content="待区县三级确认，确认前不可追踪操作"
               placement="top"
             >
-              <span style="color: #909399; font-size: 12px; margin-left: 4px">待确认</span>
+              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 4px">待确认</span>
             </el-tooltip>
             <el-button
               v-if="canOperateTrack(row)"
@@ -1550,7 +1550,7 @@ function getRowClass({ row }: { row: any }) {
       <div
         v-for="(group, gIdx) in crossTownGroups"
         :key="`${group.township || '_empty'}-${gIdx}`"
-        style="margin-bottom: 20px; padding: 12px; background: #fafafa; border-radius: 6px"
+        style="margin-bottom: 20px; padding: 12px; background: var(--el-fill-color-light); border-radius: 6px"
       >
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap">
           <strong>{{ crossTownGroupLabel(group.township) }}</strong>
@@ -1571,12 +1571,12 @@ function getRowClass({ row }: { row: any }) {
             />
           </el-select>
         </div>
-        <div style="font-size: 13px; color: #606266; line-height: 1.7">
+        <div style="font-size: 13px; color: var(--el-text-color-regular); line-height: 1.7">
           <div v-for="(item, idx) in group.items.slice(0, 8)" :key="`${item.idNumber}-${idx}`">
             {{ item.name }}（{{ item.idNumber }}）
-            <span v-if="item.message" style="color: #909399"> — {{ item.message }}</span>
+            <span v-if="item.message" style="color: var(--el-text-color-secondary)"> — {{ item.message }}</span>
           </div>
-          <div v-if="group.items.length > 8" style="color: #909399">
+          <div v-if="group.items.length > 8" style="color: var(--el-text-color-secondary)">
             ... 等共 {{ group.items.length }} 人
           </div>
         </div>
@@ -1603,7 +1603,7 @@ function getRowClass({ row }: { row: any }) {
           上传大疫情网（报告卡）导出文件（.xlsx / .xls），系统自动提取以下字段并创建追踪记录。
         </template>
         <template #default>
-          <div style="margin-top: 8px; font-size: 13px; line-height: 1.8; color: #606266">
+          <div style="margin-top: 8px; font-size: 13px; line-height: 1.8; color: var(--el-text-color-regular)">
             {{ EPIDEMIC_TRACK_IMPORT_FIELDS.join("、") }}
           </div>
         </template>
@@ -1617,15 +1617,15 @@ function getRowClass({ row }: { row: any }) {
         style="width: 100%"
       >
         <div style="padding: 24px 0">
-          <div style="font-size: 16px; color: #606266">
+          <div style="font-size: 16px; color: var(--el-text-color-regular)">
             拖拽大疫情表文件到此处，或 <span style="color: #409eff">点击上传</span>
           </div>
-          <div style="font-size: 12px; color: #909399; margin-top: 8px">
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px">
             支持 .xlsx / .xls 格式
           </div>
         </div>
       </el-upload>
-      <div v-if="uploading" style="text-align: center; margin-top: 16px; color: #606266">
+      <div v-if="uploading" style="text-align: center; margin-top: 16px; color: var(--el-text-color-regular)">
         正在解析并导入，请稍候...
       </div>
       <el-result
@@ -2176,12 +2176,5 @@ function getRowClass({ row }: { row: any }) {
 .edit-tracking-time {
   font-size: 13px;
   color: var(--el-text-color-secondary);
-}
-</style>
-
-<style lang="scss">
-.el-table .confirmed-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
 }
 </style>

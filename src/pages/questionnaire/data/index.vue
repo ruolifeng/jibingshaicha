@@ -243,7 +243,7 @@ fetchAll()
     <!-- 统计卡片 -->
     <div v-if="stats" class="stats-grid">
       <el-card shadow="never" class="stat-card">
-        <div class="stat-icon-wrap" style="background: #ecf5ff">
+        <div class="stat-icon-wrap" style="background: var(--v3-tone-primary-surface)">
           <el-icon color="#409eff" :size="22">
             <DataAnalysis />
           </el-icon>
@@ -258,7 +258,7 @@ fetchAll()
         </div>
       </el-card>
       <el-card shadow="never" class="stat-card">
-        <div class="stat-icon-wrap" style="background: #f0f9eb">
+        <div class="stat-icon-wrap" style="background: var(--v3-tone-success-surface)">
           <el-icon color="#67c23a" :size="22">
             <CircleCheck />
           </el-icon>
@@ -269,12 +269,12 @@ fetchAll()
           </div>
           <div class="stat-label">
             有效提交
-            <span v-if="stats.badSample > 0" style="font-size: 11px; color: #c0c4cc; margin-left: 4px">（含 {{ stats.badSample }} 不良）</span>
+            <span v-if="stats.badSample > 0" style="font-size: 11px; color: var(--el-text-color-placeholder); margin-left: 4px">（含 {{ stats.badSample }} 不良）</span>
           </div>
         </div>
       </el-card>
       <el-card shadow="never" class="stat-card">
-        <div class="stat-icon-wrap" style="background: #fef0f0">
+        <div class="stat-icon-wrap" style="background: var(--v3-tone-danger-surface)">
           <el-icon color="#f56c6c" :size="22">
             <WarnTriangleFilled />
           </el-icon>
@@ -289,7 +289,7 @@ fetchAll()
         </div>
       </el-card>
       <el-card shadow="never" class="stat-card">
-        <div class="stat-icon-wrap" style="background: #fdf6ec">
+        <div class="stat-icon-wrap" style="background: var(--v3-tone-warning-surface)">
           <el-icon color="#e6a23c" :size="22">
             <Histogram />
           </el-icon>
@@ -389,7 +389,7 @@ fetchAll()
     <el-card shadow="never" style="margin-top: 16px">
       <template #header>
         <div style="display: flex; align-items: center; justify-content: space-between">
-          <span style="font-weight: 600">回收数据 <span style="font-size: 13px; color: #909399; font-weight: 400">（共 {{ total }} 条）</span></span>
+          <span style="font-weight: 600">回收数据 <span style="font-size: 13px; color: var(--el-text-color-secondary); font-weight: 400">（共 {{ total }} 条）</span></span>
           <el-select v-model="statusFilter" placeholder="全部状态" clearable size="small" style="width: 150px" @change="fetchData">
             <el-option v-for="opt in filterOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
@@ -472,7 +472,7 @@ fetchAll()
           </el-descriptions-item>
         </el-descriptions>
         <el-divider content-position="left">
-          <span style="font-size: 13px; color: #606266">答案内容</span>
+          <span style="font-size: 13px; color: var(--el-text-color-regular)">答案内容</span>
         </el-divider>
         <div v-for="(ans, idx) in detailAnswers" :key="idx" class="answer-item">
           <div class="answer-question">
@@ -551,21 +551,21 @@ fetchAll()
   line-height: 1.2;
 }
 .stat-label {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
   margin-top: 4px;
 }
 .answer-item {
   margin-bottom: 10px;
   padding: 10px 14px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 6px;
   border-left: 3px solid var(--el-color-primary-light-5);
 }
 .answer-question {
   font-weight: 600;
   margin-bottom: 6px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -584,7 +584,7 @@ fetchAll()
   flex-shrink: 0;
 }
 .answer-value {
-  color: #606266;
+  color: var(--el-text-color-regular);
   font-size: 13px;
   line-height: 1.6;
   padding-left: 24px;
@@ -627,7 +627,7 @@ fetchAll()
 .q-title-text {
   flex: 1;
   min-width: 120px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   font-size: 14px;
 }
 .choice-table {

@@ -206,7 +206,7 @@ function handleClear(e: MouseEvent) {
   border-radius: 4px;
   border: 1px solid var(--el-border-color-lighter);
   object-fit: contain;
-  background: #f9fafb;
+  background: var(--el-fill-color-lighter);
 }
 
 .img-preview-actions {

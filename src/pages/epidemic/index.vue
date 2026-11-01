@@ -13,7 +13,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-container" style="padding: 48px; text-align: center; color: #909399">
+  <div class="app-container" style="padding: 48px; text-align: center; color: var(--el-text-color-secondary)">
     正在跳转到「推介追踪 → 追踪」…
   </div>
 </template>

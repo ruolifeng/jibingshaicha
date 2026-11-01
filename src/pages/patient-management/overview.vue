@@ -1011,9 +1011,3 @@ async function submitAdminConfirmTransfer(actualReferralDate: string) {
     </el-dialog>
   </div>
 </template>
-
-<style scoped lang="scss">
-:deep(.retreatment-row) {
-  --el-table-tr-bg-color: #fef2f2;
-}
-</style>

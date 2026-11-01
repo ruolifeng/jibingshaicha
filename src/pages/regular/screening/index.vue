@@ -1273,10 +1273,3 @@ watch(
   }
 }
 </style>
-
-<style lang="scss">
-.el-table .confirmed-row td.el-table__cell {
-  background-color: #fff2f0 !important;
-  color: #f56c6c;
-}
-</style>

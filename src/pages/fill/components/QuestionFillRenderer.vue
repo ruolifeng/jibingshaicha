@@ -983,7 +983,7 @@ watch(
         :step="contentLimit === 'integer' ? 1 : 0.1"
         style="width: 100%"
       />
-      <div v-if="rangeMin !== undefined || rangeMax !== undefined || ['number', 'decimal'].includes(contentLimit)" style="font-size: 12px; color: #909399; margin-top: 4px">
+      <div v-if="rangeMin !== undefined || rangeMax !== undefined || ['number', 'decimal'].includes(contentLimit)" style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 4px">
         <span v-if="rangeMin !== undefined || rangeMax !== undefined">
           范围：{{ rangeMin !== undefined ? rangeMin : '不限' }} ～ {{ rangeMax !== undefined ? rangeMax : '不限' }}
         </span>
@@ -1066,7 +1066,7 @@ watch(
         {{ n }}
       </el-button>
     </div>
-    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #909399; margin-top: 6px">
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--el-text-color-secondary); margin-top: 6px">
       <span>极不推荐</span><span>极力推荐</span>
     </div>
   </div>
@@ -1074,7 +1074,7 @@ watch(
   <!-- 多项填空 -->
   <div v-else-if="question.type === 'multi_input'" style="display: flex; flex-direction: column; gap: 10px">
     <div v-for="f in parseOptions()" :key="f.value" style="display: flex; align-items: center; gap: 8px">
-      <span style="font-size: 14px; white-space: nowrap; color: #303133; min-width: 60px">{{ f.label }}：</span>
+      <span style="font-size: 14px; white-space: nowrap; color: var(--el-text-color-primary); min-width: 60px">{{ f.label }}：</span>
       <el-input :model-value="getSubAnswer(f.value)" placeholder="请输入" @update:model-value="(v) => setSubAnswer(f.value, String(v))" />
     </div>
   </div>
@@ -1082,7 +1082,7 @@ watch(
   <!-- 横向填空 -->
   <div v-else-if="question.type === 'inline_input'" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; line-height: 2">
     <template v-for="f in parseOptions()" :key="f.value">
-      <span v-if="f.label" style="font-size: 14px; color: #303133">{{ f.label }}</span>
+      <span v-if="f.label" style="font-size: 14px; color: var(--el-text-color-primary)">{{ f.label }}</span>
       <!-- inputHidden 为 true 时该项为纯文字（后缀），不渲染输入框 -->
       <el-input v-if="!f.inputHidden" :model-value="getSubAnswer(f.value)" placeholder="填写" style="width: 120px" @update:model-value="(v) => setSubAnswer(f.value, String(v))" />
     </template>
@@ -1093,21 +1093,21 @@ watch(
     <table style="width: 100%; border-collapse: collapse; font-size: 14px">
       <thead>
         <tr>
-          <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa" />
-          <th v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; text-align: center">
+          <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)" />
+          <th v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); text-align: center">
             {{ c.label }}
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="r in parseMatrixOpts().rows" :key="r.value">
-          <td style="border: 1px solid #ebeef5; padding: 8px; font-weight: 500">
+          <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; font-weight: 500">
             {{ r.label }}
           </td>
           <td
             v-for="c in parseMatrixOpts().cols"
             :key="c.value"
-            style="border: 1px solid #ebeef5; padding: 8px; text-align: center; cursor: pointer"
+            style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center; cursor: pointer"
             @click="setSubAnswer(r.value, c.value)"
           >
             <span class="fill-radio-dot" :class="{ active: getSubAnswer(r.value) === c.value }" />
@@ -1122,21 +1122,21 @@ watch(
     <table style="width: 100%; border-collapse: collapse; font-size: 14px">
       <thead>
         <tr>
-          <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa" />
-          <th v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; text-align: center">
+          <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)" />
+          <th v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); text-align: center">
             {{ c.label }}
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="r in parseMatrixOpts().rows" :key="r.value">
-          <td style="border: 1px solid #ebeef5; padding: 8px; font-weight: 500">
+          <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; font-weight: 500">
             {{ r.label }}
           </td>
           <td
             v-for="c in parseMatrixOpts().cols"
             :key="c.value"
-            style="border: 1px solid #ebeef5; padding: 8px; text-align: center; cursor: pointer"
+            style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center; cursor: pointer"
             @click="toggleMcbCell(r.value, c.value)"
           >
             <span class="fill-checkbox-box" :class="{ active: getMcbRow(r.value).includes(c.value) }" style="margin: 0 auto">
@@ -1155,18 +1155,18 @@ watch(
     <table style="width: 100%; border-collapse: collapse; font-size: 14px">
       <thead>
         <tr>
-          <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa" />
-          <th v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; text-align: center">
+          <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)" />
+          <th v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); text-align: center">
             {{ c.label }}
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="r in parseMatrixOpts().rows" :key="r.value">
-          <td style="border: 1px solid #ebeef5; padding: 8px; font-weight: 500">
+          <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; font-weight: 500">
             {{ r.label }}
           </td>
-          <td v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid #ebeef5; padding: 8px">
+          <td v-for="c in parseMatrixOpts().cols" :key="c.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px">
             <!-- 省份下拉 -->
             <el-select
               v-if="c.contentLimit === 'province'"
@@ -1372,21 +1372,21 @@ watch(
     <table style="width: 100%; border-collapse: collapse; font-size: 14px">
       <thead>
         <tr>
-          <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa" />
-          <th v-for="n in scaleRange" :key="n" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; text-align: center">
+          <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)" />
+          <th v-for="n in scaleRange" :key="n" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); text-align: center">
             {{ parseScaleOpts().scaleLabels[String(n)] || n }}
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="r in parseScaleOpts().rows" :key="r.value">
-          <td style="border: 1px solid #ebeef5; padding: 8px; font-weight: 500">
+          <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; font-weight: 500">
             {{ r.label }}
           </td>
           <td
             v-for="n in scaleRange"
             :key="n"
-            style="border: 1px solid #ebeef5; padding: 8px; text-align: center; cursor: pointer"
+            style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center; cursor: pointer"
             @click="setSubAnswer(r.value, String(n))"
           >
             <span class="fill-radio-dot" :class="{ active: getSubAnswer(r.value) === String(n) }" />
@@ -1401,23 +1401,23 @@ watch(
     <table style="width: 100%; border-collapse: collapse; font-size: 14px">
       <thead>
         <tr>
-          <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; width: 40px">
+          <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); width: 40px">
             #
           </th>
-          <th v-for="col in parseOptions()" :key="col.value" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa">
+          <th v-for="col in parseOptions()" :key="col.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)">
             {{ col.label }}
           </th>
-          <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; width: 60px">
+          <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); width: 60px">
             操作
           </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="(row, ri) in tableRows" :key="ri">
-          <td style="border: 1px solid #ebeef5; padding: 8px; text-align: center">
+          <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center">
             {{ ri + 1 }}
           </td>
-          <td v-for="col in parseOptions()" :key="col.value" style="border: 1px solid #ebeef5; padding: 8px">
+          <td v-for="col in parseOptions()" :key="col.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px">
             <!-- 省份下拉 -->
             <el-select
               v-if="col.contentLimit === 'province'"
@@ -1488,7 +1488,7 @@ watch(
               </div>
             </div>
           </td>
-          <td style="border: 1px solid #ebeef5; padding: 8px; text-align: center">
+          <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center">
             <el-button size="small" type="danger" plain @click="removeTableRow(ri)">
               删除
             </el-button>
@@ -1511,7 +1511,7 @@ watch(
         </div>
       </template>
     </draggable>
-    <div style="font-size: 12px; color: #909399; margin-top: 6px">
+    <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 6px">
       拖拽排序
     </div>
   </div>
@@ -1570,13 +1570,13 @@ watch(
         <Plus />
       </el-icon>
     </el-upload>
-    <div style="font-size: 12px; color: #909399; margin-top: 4px">
+    <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 4px">
       最多 {{ uploadMaxCount }} 张，每张最大 {{ uploadMaxSize }}MB
     </div>
   </div>
 
   <!-- 文字描述 -->
-  <div v-else-if="question.type === 'description'" style="color: #606266; font-size: 14px; line-height: 1.6; white-space: pre-wrap">
+  <div v-else-if="question.type === 'description'" style="color: var(--el-text-color-regular); font-size: 14px; line-height: 1.6; white-space: pre-wrap">
     {{ question.description || '' }}
   </div>
 
@@ -1640,7 +1640,7 @@ watch(
   transition:
     border-color 0.2s,
     background 0.2s;
-  background: #fff;
+  background: var(--el-bg-color);
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1659,7 +1659,7 @@ watch(
   height: 16px;
   border-radius: 50%;
   border: 2px solid var(--el-border-color);
-  background: #fff;
+  background: var(--el-bg-color);
   transition:
     border-color 0.2s,
     background 0.2s;
@@ -1678,11 +1678,11 @@ watch(
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--el-bg-color);
 }
 .fill-option-label {
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
   line-height: 1.5;
   white-space: normal;
 }
@@ -1694,7 +1694,7 @@ watch(
   height: 16px;
   border-radius: 3px;
   border: 2px solid var(--el-border-color);
-  background: #fff;
+  background: var(--el-bg-color);
   transition:
     border-color 0.2s,
     background 0.2s;
@@ -1720,7 +1720,7 @@ watch(
 /* 可选数量提示 */
 .cb-select-hint {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   margin-top: 6px;
   padding: 0 2px;
 }
@@ -1733,7 +1733,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
+  background: var(--el-bg-color);
   cursor: grab;
   transition: border-color 0.2s;
 }
@@ -1741,7 +1741,7 @@ watch(
   border-color: var(--el-color-primary-light-5);
 }
 .sort-handle {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 16px;
 }
 .sort-ghost {
@@ -1775,17 +1775,17 @@ watch(
 .img-choice-placeholder {
   width: 100%;
   height: 100px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 12px;
 }
 .img-choice-label {
   padding: 6px 8px;
   font-size: 13px;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 /* 内容限制错误提示 */
@@ -1817,11 +1817,11 @@ watch(
   padding: 8px 12px;
   border: 1.5px dashed var(--el-border-color);
   border-radius: 8px;
-  background: #fafbfc;
+  background: var(--el-fill-color-lighter);
   display: flex;
   align-items: center;
   font-size: 16px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   transition:
     border-color 0.2s,
     background 0.2s;
@@ -1851,7 +1851,7 @@ watch(
 }
 .formula-result-unit {
   font-size: 14px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1875,32 +1875,32 @@ watch(
   font-size: 13px;
 }
 .mc-fill-th {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--el-border-color-lighter);
   padding: 8px 10px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   text-align: center;
   font-weight: 600;
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 .mc-fill-th-row {
   text-align: left;
   min-width: 130px;
 }
 .mc-fill-td {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--el-border-color-lighter);
   padding: 8px 10px;
   vertical-align: middle;
 }
 .mc-fill-td-row {
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
   white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .mc-fill-row-code {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   flex-shrink: 0;
 }
@@ -1908,7 +1908,7 @@ watch(
   font-size: 13px;
 }
 .mc-fill-disabled {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 12px;
 }
 
@@ -1928,7 +1928,7 @@ watch(
   border: 1.5px solid var(--el-border-color-lighter);
   cursor: pointer;
   user-select: none;
-  background: #fff;
+  background: var(--el-bg-color);
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -1943,7 +1943,7 @@ watch(
   height: 14px;
   border-radius: 50%;
   border: 2px solid var(--el-border-color);
-  background: #fff;
+  background: var(--el-bg-color);
   position: relative;
   cursor: pointer;
 }
@@ -1960,7 +1960,7 @@ watch(
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--el-bg-color);
 }
 .mc-fill-square {
   flex-shrink: 0;
@@ -1968,7 +1968,7 @@ watch(
   height: 14px;
   border-radius: 3px;
   border: 2px solid var(--el-border-color);
-  background: #fff;
+  background: var(--el-bg-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1983,7 +1983,7 @@ watch(
 }
 .mc-fill-radio-label {
   font-size: 13px;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .mc-fill-freq {
@@ -1999,7 +1999,7 @@ watch(
 }
 .mc-fill-freq-label {
   font-size: 12px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   cursor: pointer;
   min-width: 48px;
   text-align: left;
@@ -2013,7 +2013,7 @@ watch(
 }
 .mc-fill-suffix {
   font-size: 13px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   flex-shrink: 0;
 }
 </style>

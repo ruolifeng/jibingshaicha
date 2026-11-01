@@ -349,7 +349,7 @@ onMounted(() => {
                   大汇总表（三类合并）
                 </el-dropdown-item>
                 <el-dropdown-item divided>
-                  <span style="font-size:12px;color:#909399">分类汇总：</span>
+                  <span style="font-size:12px;color:var(--el-text-color-secondary)">分类汇总：</span>
                 </el-dropdown-item>
                 <el-dropdown-item v-for="opt in categoryPopOptions" :key="opt.value" @click="categoryPopType = opt.value; handleExportCategory()">
                   {{ opt.label }}
@@ -446,7 +446,7 @@ onMounted(() => {
           <el-card shadow="hover" style="margin-bottom: 16px">
             <template #header>
               <span style="font-weight: 600">患者信息总表</span>
-              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 疫情 / 大疫情 / 推介 / 专病网 / 密接</span>
+              <span style="font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px">来源：学生 / 重点 / 疫情 / 大疫情 / 推介 / 专病网 / 密接</span>
             </template>
             <el-form :model="patientFilterForm" inline style="margin-bottom: 12px">
               <el-form-item label="数据来源">
@@ -467,7 +467,7 @@ onMounted(() => {
                 </el-select>
               </el-form-item>
             </el-form>
-            <p style="color: #606266; font-size: 13px; margin-bottom: 12px">
+            <p style="color: var(--el-text-color-regular); font-size: 13px; margin-bottom: 12px">
               包含字段：数据来源、基本信息、诊断结果、通知单状态、首次随访、后续随访次数、服药管理、归档状态、归档时间
             </p>
             <el-button type="primary" @click="handleExportAllPatients">
@@ -479,7 +479,7 @@ onMounted(() => {
           <el-card shadow="hover">
             <template #header>
               <span style="font-weight: 600">潜伏感染者信息总表</span>
-              <span style="font-size: 12px; color: #909399; margin-left: 8px">来源：学生 / 重点 / 疫情 / 大疫情 / 推介（密接潜伏独立管理，不计入此表）</span>
+              <span style="font-size: 12px; color: var(--el-text-color-secondary); margin-left: 8px">来源：学生 / 重点 / 疫情 / 大疫情 / 推介（密接潜伏独立管理，不计入此表）</span>
             </template>
             <el-form :model="latentFilterForm" inline style="margin-bottom: 12px">
               <el-form-item label="数据来源">
@@ -500,7 +500,7 @@ onMounted(() => {
                 </el-select>
               </el-form-item>
             </el-form>
-            <p style="color: #606266; font-size: 13px; margin-bottom: 12px">
+            <p style="color: var(--el-text-color-regular); font-size: 13px; margin-bottom: 12px">
               包含字段：数据来源、基本信息、感染筛查结果、追踪状态、诊断结果、通知单状态、督导表状态、预防性治疗信息、治疗阶段、归档状态
             </p>
             <el-button type="primary" @click="handleExportAllLatent">

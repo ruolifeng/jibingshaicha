@@ -38,13 +38,15 @@ async function handleFileChange(uploadFile: any) {
       <el-alert
         type="info"
         :closable="false"
-          title="上传专病/病案信息表（.xlsx），系统自动提取字段并创建患者记录，提取后可直接进入「填写通知单→首次随访→后续随访→服药管理」流程。"
+        title="上传专病/病案信息表（.xlsx），系统自动提取字段并创建患者记录，提取后可直接进入「填写通知单→首次随访→后续随访→服药管理」流程。"
         style="margin-bottom: 20px"
       />
 
       <el-descriptions :column="2" border style="margin-bottom: 20px">
         <el-descriptions-item label="来源标签">
-          <el-tag type="warning">专病网</el-tag>
+          <el-tag type="warning">
+            专病网
+          </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="提取字段">
           患者姓名、身份证号、性别、出生日期、年龄、联系电话、人群分类（重点人群列）、现详细住址、户籍地址、现管单位、诊断结果（病原学阴/阳性）
@@ -62,11 +64,11 @@ async function handleFileChange(uploadFile: any) {
         <el-icon style="font-size: 48px; color: #409eff; margin-bottom: 12px">
           <upload-filled />
         </el-icon>
-        <div style="font-size: 16px; color: #606266">
+        <div style="font-size: 16px; color: var(--el-text-color-regular)">
           拖拽专病表文件到此处，或
           <span style="color: #409eff; cursor: pointer">点击上传</span>
         </div>
-        <div style="font-size: 12px; color: #909399; margin-top: 8px">
+        <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px">
           支持 .xlsx / .xls 格式
         </div>
       </el-upload>
@@ -75,7 +77,7 @@ async function handleFileChange(uploadFile: any) {
         <el-icon class="is-loading" style="font-size: 24px">
           <loading />
         </el-icon>
-        <span style="margin-left: 8px; color: #606266">正在解析并导入，请稍候...</span>
+        <span style="margin-left: 8px; color: var(--el-text-color-regular)">正在解析并导入，请稍候...</span>
       </div>
     </el-card>
 

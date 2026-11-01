@@ -266,7 +266,7 @@ function getTypeColor(type: number): "primary" | "warning" {
 }
 
 .perm-code {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   font-family: monospace;
 }

@@ -207,7 +207,7 @@ const formulaDisplayText = computed(() => {
   <template v-else-if="question.type === 'multi_input'">
     <div style="display: flex; flex-direction: column; gap: 8px">
       <div v-for="f in optionsList" :key="f.value" style="display: flex; align-items: center; gap: 8px">
-        <span style="font-size: 13px; white-space: nowrap; color: #606266">{{ f.label }}：</span>
+        <span style="font-size: 13px; white-space: nowrap; color: var(--el-text-color-regular)">{{ f.label }}：</span>
         <el-input disabled placeholder="请输入" size="small" />
       </div>
     </div>
@@ -217,7 +217,7 @@ const formulaDisplayText = computed(() => {
   <template v-else-if="question.type === 'inline_input'">
     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
       <template v-for="f in optionsList" :key="f.value">
-        <span style="font-size: 13px; color: #606266">{{ f.label }}</span>
+        <span style="font-size: 13px; color: var(--el-text-color-regular)">{{ f.label }}</span>
         <el-input disabled placeholder="填写" size="small" style="width: 100px" />
       </template>
     </div>
@@ -235,7 +235,7 @@ const formulaDisplayText = computed(() => {
         {{ n }}
       </el-button>
     </div>
-    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #909399; margin-top: 4px">
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--el-text-color-secondary); margin-top: 4px">
       <span>极不推荐</span><span>极力推荐</span>
     </div>
   </template>
@@ -246,18 +246,18 @@ const formulaDisplayText = computed(() => {
       <table style="width: 100%; border-collapse: collapse; font-size: 13px">
         <thead>
           <tr>
-            <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa" />
-            <th v-for="c in matrixOpts.cols" :key="c.value" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; text-align: center">
+            <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)" />
+            <th v-for="c in matrixOpts.cols" :key="c.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); text-align: center">
               {{ c.label }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in matrixOpts.rows" :key="r.value">
-            <td style="border: 1px solid #ebeef5; padding: 8px; font-weight: 500">
+            <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; font-weight: 500">
               {{ r.label }}
             </td>
-            <td v-for="c in matrixOpts.cols" :key="c.value" style="border: 1px solid #ebeef5; padding: 8px; text-align: center">
+            <td v-for="c in matrixOpts.cols" :key="c.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center">
               <el-radio v-if="question.type === 'matrix_radio'" disabled :value="c.value" />
               <el-checkbox v-else-if="question.type === 'matrix_checkbox'" disabled :value="c.value" />
               <el-input v-else disabled size="small" placeholder="-" style="width: 80px" />
@@ -274,13 +274,13 @@ const formulaDisplayText = computed(() => {
       <table style="width: 100%; border-collapse: collapse; font-size: 13px">
         <thead>
           <tr>
-            <th style="border: 1px solid #ebeef5; padding: 6px 8px; background: #f5f7fa; text-align: left; min-width: 120px">
+            <th style="border: 1px solid var(--el-border-color-lighter); padding: 6px 8px; background: var(--el-fill-color-light); text-align: left; min-width: 120px">
               项目
             </th>
             <th
               v-for="col in matrixComplexOpts.columns"
               :key="col.key"
-              :style="{ border: '1px solid #ebeef5', padding: '6px 8px', background: '#f5f7fa', textAlign: 'center', minWidth: col.width || (col.type === 'freq' ? '220px' : '140px') }"
+              :style="{ border: '1px solid var(--el-border-color-lighter)', padding: '6px 8px', background: 'var(--el-fill-color-light)', textAlign: 'center', minWidth: col.width || (col.type === 'freq' ? '220px' : '140px') }"
             >
               {{ col.label || col.key }}
               <span v-if="col.showWhen" style="color: var(--el-color-warning); margin-left: 4px; font-size: 11px" title="条件显示">⓵</span>
@@ -289,23 +289,23 @@ const formulaDisplayText = computed(() => {
         </thead>
         <tbody>
           <tr v-for="r in matrixComplexOpts.rows" :key="r.value">
-            <td style="border: 1px solid #ebeef5; padding: 6px 8px; font-weight: 500; white-space: nowrap">
-              <span style="color: #909399; margin-right: 4px">{{ r.value }}</span>{{ r.label }}
+            <td style="border: 1px solid var(--el-border-color-lighter); padding: 6px 8px; font-weight: 500; white-space: nowrap">
+              <span style="color: var(--el-text-color-secondary); margin-right: 4px">{{ r.value }}</span>{{ r.label }}
             </td>
             <td
               v-for="col in matrixComplexOpts.columns"
               :key="col.key + r.value"
-              style="border: 1px solid #ebeef5; padding: 6px 8px; text-align: center"
+              style="border: 1px solid var(--el-border-color-lighter); padding: 6px 8px; text-align: center"
             >
               <!-- 单选 -->
               <div v-if="col.type === 'radio'" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center">
-                <span v-for="o in (col.options || [])" :key="o.value" style="font-size: 12px; color: #606266; display: inline-flex; align-items: center; gap: 2px">
+                <span v-for="o in (col.options || [])" :key="o.value" style="font-size: 12px; color: var(--el-text-color-regular); display: inline-flex; align-items: center; gap: 2px">
                   <el-radio disabled :value="o.value" />{{ o.label }}
                 </span>
               </div>
               <!-- 多选 -->
               <div v-else-if="col.type === 'checkbox'" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center">
-                <span v-for="o in (col.options || [])" :key="o.value" style="font-size: 12px; color: #606266; display: inline-flex; align-items: center; gap: 2px">
+                <span v-for="o in (col.options || [])" :key="o.value" style="font-size: 12px; color: var(--el-text-color-regular); display: inline-flex; align-items: center; gap: 2px">
                   <el-checkbox disabled :value="o.value" />{{ o.label }}
                 </span>
               </div>
@@ -313,14 +313,14 @@ const formulaDisplayText = computed(() => {
               <div v-else-if="col.type === 'freq'" style="display: flex; flex-direction: column; gap: 4px">
                 <div v-for="u in (col.units || [])" :key="u.value" style="display: flex; align-items: center; gap: 4px; justify-content: center">
                   <el-radio disabled :value="u.value" />
-                  <span style="font-size: 12px; color: #606266; min-width: 40px">{{ u.label }}</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-regular); min-width: 40px">{{ u.label }}</span>
                   <el-input disabled size="small" placeholder="-" style="width: 70px" />
                 </div>
               </div>
               <!-- 填空 -->
               <div v-else-if="col.type === 'input'" style="display: flex; align-items: center; gap: 4px; justify-content: center">
                 <el-input disabled size="small" placeholder="—" style="flex: 1; min-width: 60px" />
-                <span v-if="col.suffix" style="font-size: 12px; color: #909399; flex-shrink: 0">{{ col.suffix }}</span>
+                <span v-if="col.suffix" style="font-size: 12px; color: var(--el-text-color-secondary); flex-shrink: 0">{{ col.suffix }}</span>
               </div>
             </td>
           </tr>
@@ -335,18 +335,18 @@ const formulaDisplayText = computed(() => {
       <table style="width: 100%; border-collapse: collapse; font-size: 13px">
         <thead>
           <tr>
-            <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa" />
-            <th v-for="n in scaleRange" :key="n" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa; text-align: center">
+            <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)" />
+            <th v-for="n in scaleRange" :key="n" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light); text-align: center">
               {{ scaleOpts.scaleLabels[String(n)] || n }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in scaleOpts.rows" :key="r.value">
-            <td style="border: 1px solid #ebeef5; padding: 8px; font-weight: 500">
+            <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; font-weight: 500">
               {{ r.label }}
             </td>
-            <td v-for="n in scaleRange" :key="n" style="border: 1px solid #ebeef5; padding: 8px; text-align: center">
+            <td v-for="n in scaleRange" :key="n" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center">
               <el-radio disabled :value="String(n)" />
             </td>
           </tr>
@@ -361,20 +361,20 @@ const formulaDisplayText = computed(() => {
       <table style="width: 100%; border-collapse: collapse; font-size: 13px">
         <thead>
           <tr>
-            <th style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa">
+            <th style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)">
               #
             </th>
-            <th v-for="col in optionsList" :key="col.value" style="border: 1px solid #ebeef5; padding: 8px; background: #f5f7fa">
+            <th v-for="col in optionsList" :key="col.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px; background: var(--el-fill-color-light)">
               {{ col.label }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td style="border: 1px solid #ebeef5; padding: 8px; text-align: center">
+            <td style="border: 1px solid var(--el-border-color-lighter); padding: 8px; text-align: center">
               1
             </td>
-            <td v-for="col in optionsList" :key="col.value" style="border: 1px solid #ebeef5; padding: 8px">
+            <td v-for="col in optionsList" :key="col.value" style="border: 1px solid var(--el-border-color-lighter); padding: 8px">
               <el-select v-if="col.contentLimit === 'dropdown_select'" disabled size="small" placeholder="请选择" style="width: 100%">
                 <el-option v-for="opt in (col.dropdownOptions || [])" :key="opt" :label="opt" :value="opt" />
               </el-select>
@@ -392,8 +392,8 @@ const formulaDisplayText = computed(() => {
   <!-- 排序 -->
   <template v-else-if="question.type === 'sort'">
     <div style="display: flex; flex-direction: column; gap: 6px">
-      <div v-for="(opt, oi) in optionsList" :key="opt.value" style="padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; display: flex; align-items: center; gap: 8px; background: #fafafa">
-        <span style="color: #c0c4cc; cursor: default">⠿</span>
+      <div v-for="(opt, oi) in optionsList" :key="opt.value" style="padding: 8px 12px; border: 1px solid var(--el-border-color); border-radius: 6px; display: flex; align-items: center; gap: 8px; background: var(--el-fill-color-light)">
+        <span style="color: var(--el-text-color-placeholder); cursor: default">⠿</span>
         <span>{{ oi + 1 }}. {{ opt.label }}</span>
       </div>
     </div>
@@ -402,12 +402,12 @@ const formulaDisplayText = computed(() => {
   <!-- 图片选择 -->
   <template v-else-if="question.type === 'image_choice'">
     <div style="display: flex; gap: 12px; flex-wrap: wrap">
-      <div v-for="opt in optionsList" :key="opt.value" style="width: 120px; border: 1px solid #dcdfe6; border-radius: 8px; overflow: hidden; text-align: center; cursor: default">
+      <div v-for="opt in optionsList" :key="opt.value" style="width: 120px; border: 1px solid var(--el-border-color); border-radius: 8px; overflow: hidden; text-align: center; cursor: default">
         <img v-if="opt.imageUrl" :src="opt.imageUrl" style="width: 100%; height: 80px; object-fit: cover">
-        <div v-else style="width: 100%; height: 80px; background: #f5f7fa; display: flex; align-items: center; justify-content: center; color: #c0c4cc; font-size: 12px">
+        <div v-else style="width: 100%; height: 80px; background: var(--el-fill-color-light); display: flex; align-items: center; justify-content: center; color: var(--el-text-color-placeholder); font-size: 12px">
           无图片
         </div>
-        <div style="padding: 4px 6px; font-size: 12px; color: #606266">
+        <div style="padding: 4px 6px; font-size: 12px; color: var(--el-text-color-regular)">
           {{ opt.label }}
         </div>
       </div>
@@ -419,26 +419,26 @@ const formulaDisplayText = computed(() => {
     <el-button disabled size="small">
       选择文件
     </el-button>
-    <div style="font-size: 12px; color: #909399; margin-top: 4px">
+    <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 4px">
       {{ validation.accept ? `支持 ${validation.accept}，` : '' }}最大 {{ validation.maxSize ?? 10 }}MB
     </div>
   </template>
 
   <!-- 图片上传 -->
   <template v-else-if="question.type === 'image_upload'">
-    <div style="width: 80px; height: 80px; border: 1px dashed #dcdfe6; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #c0c4cc; cursor: default">
+    <div style="width: 80px; height: 80px; border: 1px dashed var(--el-border-color); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--el-text-color-placeholder); cursor: default">
       <el-icon :size="24">
         <Plus />
       </el-icon>
     </div>
-    <div style="font-size: 12px; color: #909399; margin-top: 4px">
+    <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 4px">
       最多 {{ validation.maxCount ?? 3 }} 张，每张最大 {{ validation.maxSize ?? 5 }}MB
     </div>
   </template>
 
   <!-- 文字描述 -->
   <template v-else-if="question.type === 'description'">
-    <div style="color: #606266; font-size: 14px; line-height: 1.6; white-space: pre-wrap">
+    <div style="color: var(--el-text-color-regular); font-size: 14px; line-height: 1.6; white-space: pre-wrap">
       {{ question.description || '(暂无描述内容)' }}
     </div>
   </template>
@@ -451,12 +451,12 @@ const formulaDisplayText = computed(() => {
   <!-- 图片展示 -->
   <template v-else-if="question.type === 'image_display'">
     <img v-if="imageDisplayOpts.imageUrl" :src="imageDisplayOpts.imageUrl" :alt="imageDisplayOpts.alt" style="max-width: 100%; border-radius: 4px">
-    <span v-else style="color: #909399; font-size: 13px">（未设置图片）</span>
+    <span v-else style="color: var(--el-text-color-secondary); font-size: 13px">（未设置图片）</span>
   </template>
 
   <!-- 电子签名 -->
   <template v-else-if="question.type === 'signature'">
-    <div style="border: 1.5px dashed var(--el-border-color); border-radius: 8px; height: 100px; display: flex; align-items: center; justify-content: center; background: #fafafa; color: #c0c4cc; font-size: 13px; gap: 6px">
+    <div style="border: 1.5px dashed var(--el-border-color); border-radius: 8px; height: 100px; display: flex; align-items: center; justify-content: center; background: var(--el-fill-color-light); color: var(--el-text-color-placeholder); font-size: 13px; gap: 6px">
       <el-icon><Edit /></el-icon>
       <span>签名区域（{{ validation.hint || '请在此处手写签名' }}）</span>
     </div>
@@ -481,7 +481,7 @@ const formulaDisplayText = computed(() => {
   <!-- 分页 -->
   <template v-else-if="question.type === 'page_break'">
     <el-divider content-position="center">
-      <span style="color: #909399; font-size: 12px">—— 分页 ——</span>
+      <span style="color: var(--el-text-color-secondary); font-size: 12px">—— 分页 ——</span>
     </el-divider>
   </template>
 
@@ -503,16 +503,16 @@ const formulaDisplayText = computed(() => {
   gap: 8px;
 }
 .formula-preview-unit {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
   white-space: nowrap;
 }
 .formula-preview-expr {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 .formula-preview-expr code {
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   padding: 1px 6px;
   border-radius: 3px;
   color: var(--el-color-primary);

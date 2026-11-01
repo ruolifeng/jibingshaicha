@@ -449,7 +449,7 @@ function needsValue(op: string): boolean {
 }
 .logic-qtitle {
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -464,18 +464,18 @@ function needsValue(op: string): boolean {
   margin-bottom: 8px;
 }
 .logic-section-desc {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 .logic-relation-row {
   display: flex;
   align-items: center;
   font-size: 13px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   margin-bottom: 8px;
 }
 .logic-cond-card {
-  background: #f9fafb;
+  background: var(--el-fill-color-lighter);
   border: 1px solid #f0f0f0;
   border-radius: 6px;
   padding: 8px 10px;
@@ -495,7 +495,7 @@ function needsValue(op: string): boolean {
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 10px;
-  background: #fafbfc;
+  background: var(--el-fill-color-lighter);
 }
 .logic-jump-head {
   display: flex;
@@ -516,10 +516,10 @@ function needsValue(op: string): boolean {
   padding-top: 8px;
   border-top: 1px dashed var(--el-border-color-lighter);
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 .logic-tips {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.8;
 }
@@ -527,6 +527,6 @@ function needsValue(op: string): boolean {
   margin: 0 0 4px;
 }
 .logic-tips b {
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 </style>

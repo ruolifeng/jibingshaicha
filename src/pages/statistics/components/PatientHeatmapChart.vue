@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import type { GeoJsonFeatureCollection } from "@@/utils/zigong-map"
 import type { PatientHeatmapData } from "../apis"
+import { useTheme } from "@@/composables/useTheme"
+import { getCssVar } from "@@/utils/css"
 import {
   buildMapSeriesData,
   findDistrictFeature,
@@ -32,6 +34,11 @@ let renderToken = 0
 
 const mapReady = ref(false)
 const mapError = ref("")
+const { activeThemeName } = useTheme()
+
+function themeTextSecondary() {
+  return getCssVar("--el-text-color-secondary").trim() || "#909399"
+}
 
 async function ensureCityGeo() {
   if (!cityGeo) {
@@ -139,7 +146,7 @@ async function renderChart() {
           text: isTownshipView ? "暂无该区县乡镇数据" : "暂无地图数据",
           left: "center",
           top: "middle",
-          textStyle: { color: "#909399", fontSize: 14, fontWeight: "normal" }
+          textStyle: { color: themeTextSecondary(), fontSize: 14, fontWeight: "normal" }
         }
       })
       return
@@ -194,7 +201,7 @@ async function renderChart() {
           subtext: "当前年度暂无患者分布数据，可点击区县查看下级",
           left: "center",
           top: 8,
-          subtextStyle: { fontSize: 12, color: "#909399" }
+          subtextStyle: { fontSize: 12, color: themeTextSecondary() }
         }
       })
     }
@@ -228,6 +235,10 @@ watch(() => props.loading, (val) => {
   if (!val) {
     nextTick(() => chart?.resize())
   }
+})
+
+watch(activeThemeName, () => {
+  nextTick(() => renderChart())
 })
 
 onMounted(() => {
@@ -289,8 +300,8 @@ onBeforeUnmount(() => {
   margin-top: 20px;
   padding: 18px 20px;
   border-radius: 12px;
-  background: #fafcff;
-  border: 1px solid #d9ecff;
+  background: var(--v3-tone-primary-surface);
+  border: 1px solid var(--v3-tone-primary-border);
   border-left: 4px solid #409eff;
 
   .heatmap-header {

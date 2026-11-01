@@ -155,13 +155,13 @@ async function handleDownload() {
           v-for="tpl in TEMPLATE_OPTIONS"
           :key="tpl.type"
           shadow="hover"
-          style="min-width: 200px; cursor: pointer; border: 1px solid #e4e7ed"
+          style="min-width: 200px; cursor: pointer; border: 1px solid var(--el-border-color-lighter)"
         >
           <div style="text-align: center; padding: 8px 0">
             <el-icon style="font-size: 32px; color: #67c23a; margin-bottom: 8px">
               <document />
             </el-icon>
-            <p style="font-size: 14px; color: #303133; margin: 4px 0 12px">
+            <p style="font-size: 14px; color: var(--el-text-color-primary); margin: 4px 0 12px">
               {{ tpl.label }}
             </p>
             <el-button

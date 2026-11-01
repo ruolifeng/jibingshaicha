@@ -499,10 +499,6 @@ function getNoticeRowClass({ row }: { row: any }) {
 </template>
 
 <style scoped lang="scss">
-:deep(.notice-overdue-row) {
-  --el-table-tr-bg-color: #fef0f0;
-}
-
 .notice-overdue-text {
   color: var(--el-color-danger);
   font-weight: 600;

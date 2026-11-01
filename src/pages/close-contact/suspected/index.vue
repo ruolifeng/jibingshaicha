@@ -398,7 +398,7 @@ async function handleSaveFollowupInput() {
         <el-timeline-item
           v-for="month in FOLLOWUP_MONTHS"
           :key="month"
-          :color="followupDetailRow[`followup${month}Result`] === '活动性肺结核' ? '#f56c6c' : followupDetailRow[`followup${month}Result`] ? '#67c23a' : '#909399'"
+          :color="followupDetailRow[`followup${month}Result`] === '活动性肺结核' ? '#f56c6c' : followupDetailRow[`followup${month}Result`] ? '#67c23a' : 'var(--el-text-color-secondary)'"
         >
           <div class="mb-2 flex items-center justify-between">
             <div>
