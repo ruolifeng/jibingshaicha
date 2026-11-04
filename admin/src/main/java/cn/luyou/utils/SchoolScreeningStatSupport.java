@@ -12,7 +12,7 @@ import java.util.List;
  *   <li>可疑症状：咳嗽/咯血/其他三列中，任一非空且非「未询问」→ 已做</li>
  *   <li>感染筛查：判定结果为 0/1/2（未感染/感染/无法判读）→ 已做</li>
  *   <li>胸部影像学：结果为 0/1/2/3 → 已做</li>
- *   <li>接受检查：三者任一已做</li>
+ *   <li>接受检查：「是否参加筛查」为「是」</li>
  *   <li>规范检查：按学校分类规则判定</li>
  * </ul>
  */
@@ -57,9 +57,12 @@ public final class SchoolScreeningStatSupport {
         }
     }
 
-    /** 三个检查方法中，任一项已做 → 接受检查 */
+    /** 「是否参加筛查」为「是」→ 计入接受检查人数 */
     public static boolean isAcceptedExamined(ScreeningSchool row) {
-        return isSymptomDone(row) || isInfectionDone(row) || isChestImagingDone(row);
+        if (row == null) {
+            return false;
+        }
+        return "是".equals(StrUtil.blankToDefault(row.getParticipatedScreening(), "").trim());
     }
 
     /** 按学校分类规则判定是否计入规范检查人数 */
@@ -84,8 +87,12 @@ public final class SchoolScreeningStatSupport {
      * 从表字段「类型/是否寄宿制」映射报表学校分类。
      */
     public static ReportCategory resolveReportCategory(ScreeningSchool row) {
-        String type = StrUtil.blankToDefault(row.getSchoolType(), "").trim();
-        String boarding = StrUtil.blankToDefault(row.getBoardingType(), "").trim();
+        if (row == null) {
+            return ReportCategory.STAFF_OTHER;
+        }
+        // 与列表展示一致：支持库内「3」「1=寄宿制」等码值，避免误入「其他（教职工）」或寄宿/非寄宿颠倒
+        String type = SchoolScreeningCodeSupport.toSchoolType(row.getSchoolType());
+        String boarding = SchoolScreeningCodeSupport.toBoardingType(row.getBoardingType());
 
         if (type.contains("教职工") || "其他".equals(type) || type.contains("培训") || type.contains("特殊教育")) {
             return ReportCategory.STAFF_OTHER;
@@ -203,5 +210,14 @@ public final class SchoolScreeningStatSupport {
         String normalized = ScreeningDiagnosisSupport.normalizeDiagnosis(row.getDiagnosisFirst());
         return "活动性肺结核".equals(normalized)
                 || (normalized != null && normalized.contains("活动性肺结核"));
+    }
+
+    /** 发现潜伏感染者（筛查结果码 3 / 3=潜伏感染者） */
+    public static boolean isLatentInfectionFound(ScreeningSchool row) {
+        if (row == null || StrUtil.isBlank(row.getDiagnosisFirst())) {
+            return false;
+        }
+        String diagnosis = SchoolScreeningCodeSupport.toDiagnosis(row.getDiagnosisFirst());
+        return ScreeningDiagnosisSupport.isLatentInfectionDiagnosis(diagnosis);
     }
 }

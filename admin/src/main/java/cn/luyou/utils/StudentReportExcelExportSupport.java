@@ -39,19 +39,21 @@ public final class StudentReportExcelExportSupport {
                     ? "新生入学体检结核病检查情况"
                     : yearLabel + "年新生入学体检结核病检查情况");
             titleCell.setCellStyle(titleStyle);
-            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 4));
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 5));
 
-            // 第 2 行：学校分类 / 入学新生人数 / 结核病检查情况 / 发现肺结核患者例数
+            // 第 2 行：学校分类 / 入学新生人数 / 结核病检查情况 / 发现肺结核患者例数 / 发现潜伏感染者人数
             Row groupRow = sheet.createRow(1);
             writeCell(groupRow, 0, "学校分类", headerStyle);
             writeCell(groupRow, 1, "入学新生人数", headerStyle);
             writeCell(groupRow, 2, "结核病检查情况", headerStyle);
             writeCell(groupRow, 3, "", headerStyle);
             writeCell(groupRow, 4, "发现肺结核患者例数", headerStyle);
+            writeCell(groupRow, 5, "发现潜伏感染者人数", headerStyle);
             sheet.addMergedRegion(new CellRangeAddress(1, 2, 0, 0));
             sheet.addMergedRegion(new CellRangeAddress(1, 2, 1, 1));
             sheet.addMergedRegion(new CellRangeAddress(1, 1, 2, 3));
             sheet.addMergedRegion(new CellRangeAddress(1, 2, 4, 4));
+            sheet.addMergedRegion(new CellRangeAddress(1, 2, 5, 5));
 
             // 第 3 行：接受检查人数 / 接受规范检查人数
             Row leafRow = sheet.createRow(2);
@@ -60,6 +62,7 @@ public final class StudentReportExcelExportSupport {
             writeCell(leafRow, 2, "接受检查人数", headerStyle);
             writeCell(leafRow, 3, "接受规范检查人数", headerStyle);
             writeCell(leafRow, 4, "", headerStyle);
+            writeCell(leafRow, 5, "", headerStyle);
 
             int rowIdx = 3;
             for (StudentReportStatisticsVO vo : rows) {
@@ -69,6 +72,7 @@ public final class StudentReportExcelExportSupport {
                 writeNumberCell(dataRow, 2, vo.getAcceptedExamCount(), bodyStyle);
                 writeNumberCell(dataRow, 3, vo.getStandardizedExamCount(), bodyStyle);
                 writeNumberCell(dataRow, 4, vo.getTbPatientCount(), bodyStyle);
+                writeNumberCell(dataRow, 5, vo.getLatentInfectionCount(), bodyStyle);
             }
 
             sheet.setColumnWidth(0, 22 * 256);
@@ -76,6 +80,7 @@ public final class StudentReportExcelExportSupport {
             sheet.setColumnWidth(2, 14 * 256);
             sheet.setColumnWidth(3, 18 * 256);
             sheet.setColumnWidth(4, 20 * 256);
+            sheet.setColumnWidth(5, 20 * 256);
 
             workbook.write(out);
         }

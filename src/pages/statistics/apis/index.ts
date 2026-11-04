@@ -106,6 +106,7 @@ export interface StudentReportStatisticsVO {
   acceptedExamCount?: number
   standardizedExamCount?: number
   tbPatientCount?: number
+  latentInfectionCount?: number
 }
 
 interface StudentReportParams extends StatParams {

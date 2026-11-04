@@ -110,6 +110,7 @@ public class StatisticsServiceImpl implements StatisticsService {
                             .filter(r -> SchoolScreeningStatSupport.isStandardizedExamined(r, category))
                             .count())
                     .tbPatientCount(list.stream().filter(SchoolScreeningStatSupport::isTbPatientFound).count())
+                    .latentInfectionCount(list.stream().filter(SchoolScreeningStatSupport::isLatentInfectionFound).count())
                     .build());
         }
         return result;
