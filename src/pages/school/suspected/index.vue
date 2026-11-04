@@ -166,6 +166,7 @@ onMounted(() => {
           <el-table-column prop="standardizedExamCount" label="接受规范检查人数" min-width="140" />
         </el-table-column>
         <el-table-column prop="tbPatientCount" label="发现肺结核患者例数" min-width="150" />
+        <el-table-column prop="latentInfectionCount" label="发现潜伏感染者人数" min-width="160" />
       </el-table>
     </el-card>
   </div>

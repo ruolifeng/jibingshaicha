@@ -29,4 +29,7 @@ public class StudentReportStatisticsVO {
 
     @ExcelProperty("发现肺结核患者例数")
     private Long tbPatientCount;
+
+    @ExcelProperty("发现潜伏感染者人数")
+    private Long latentInfectionCount;
 }
