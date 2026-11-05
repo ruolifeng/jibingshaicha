@@ -107,7 +107,8 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             "chestXrayMethod", "chestXrayResult",
             "tbHistory", "closeContactHistory", "suspiciousSymptoms", "symptomCough", "symptomHemoptysis",
             "symptomOther", "hasInfectionScreen", "screenResult",
-            "participatedScreening", "sputumCultureResult", "molecularBiologyResult"
+            "participatedScreening", "sputumCultureResult", "molecularBiologyResult",
+            "creatorUsername"
     );
 
     private static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
@@ -1390,6 +1391,9 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             case "molecularBiologyResult" -> wrapper.select(ScreeningSchool::getMolecularBiologyResult)
                     .isNotNull(ScreeningSchool::getMolecularBiologyResult).ne(ScreeningSchool::getMolecularBiologyResult, "")
                     .groupBy(ScreeningSchool::getMolecularBiologyResult);
+            case "creatorUsername" -> wrapper.select(ScreeningSchool::getCreatorUsername)
+                    .isNotNull(ScreeningSchool::getCreatorUsername).ne(ScreeningSchool::getCreatorUsername, "")
+                    .groupBy(ScreeningSchool::getCreatorUsername);
             default -> throw new ServiceException(StatusEnum.PARAM_INVALID, "不支持的筛选字段: " + field);
         }
     }
@@ -1423,6 +1427,7 @@ public class ScreeningSchoolServiceImpl extends ServiceImpl<ScreeningSchoolMappe
             case "screenResult" -> row.getScreenResult();
             case "sputumCultureResult" -> row.getSputumCultureResult();
             case "molecularBiologyResult" -> row.getMolecularBiologyResult();
+            case "creatorUsername" -> row.getCreatorUsername();
             default -> null;
         };
     }
