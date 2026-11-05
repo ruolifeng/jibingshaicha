@@ -76,8 +76,9 @@ public class StatisticsServiceImpl implements StatisticsService {
 
     @Override
     public List<StudentReportStatisticsVO> getStudentReportStatistics(
-            String year, String district, List<String> schoolCategories, List<Long> filterDeptIds) {
-        List<ScreeningSchool> records = queryRecords(year, district, filterDeptIds);
+            String year, String district, List<String> schoolCategories, List<Long> filterDeptIds,
+            String creatorUsername) {
+        List<ScreeningSchool> records = queryRecords(year, district, filterDeptIds, creatorUsername);
 
         Map<ReportCategory, List<ScreeningSchool>> grouped = new LinkedHashMap<>();
         for (ReportCategory category : ReportCategory.ordered()) {
@@ -474,9 +475,16 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     private List<ScreeningSchool> queryRecords(String year, String district, List<Long> filterDeptIds) {
+        return queryRecords(year, district, filterDeptIds, null);
+    }
+
+    private List<ScreeningSchool> queryRecords(
+            String year, String district, List<Long> filterDeptIds, String creatorUsername) {
         LambdaQueryWrapper<ScreeningSchool> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StrUtil.isNotBlank(year), ScreeningSchool::getYear, year)
-               .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district);
+               .eq(StrUtil.isNotBlank(district), ScreeningSchool::getDistrict, district)
+               // 学生报表录入用户来自下拉精确选择，用 eq 避免用户名互相包含时误匹配
+               .eq(StrUtil.isNotBlank(creatorUsername), ScreeningSchool::getCreatorUsername, creatorUsername);
         screeningScopeHelper.applyDepartmentScope(
                 wrapper, ScreeningSchool::getDepartmentId, ScreeningSchool::getId, "school");
         departmentFilterSupport.applyDepartmentIdFilter(
