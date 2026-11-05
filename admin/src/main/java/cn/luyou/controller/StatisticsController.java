@@ -72,10 +72,11 @@ public class StatisticsController {
             @RequestParam(required = false) String year,
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String schoolCategories,
-            @RequestParam(required = false) String departmentIds) {
+            @RequestParam(required = false) String departmentIds,
+            @RequestParam(required = false) String creatorUsername) {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         return ResultRes.success(statisticsService.getStudentReportStatistics(
-                year, district, parseSchoolCategories(schoolCategories), filterDeptIds));
+                year, district, parseSchoolCategories(schoolCategories), filterDeptIds, creatorUsername));
     }
 
     @Operation(summary = "区县统计表")
@@ -141,10 +142,11 @@ public class StatisticsController {
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String schoolCategories,
             @RequestParam(required = false) String departmentIds,
+            @RequestParam(required = false) String creatorUsername,
             HttpServletResponse response) throws IOException {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         List<StudentReportStatisticsVO> data = statisticsService.getStudentReportStatistics(
-                year, district, parseSchoolCategories(schoolCategories), filterDeptIds);
+                year, district, parseSchoolCategories(schoolCategories), filterDeptIds, creatorUsername);
         setExcelResponse(response, "学生统计报表");
         StudentReportExcelExportSupport.write(response.getOutputStream(), year, data);
     }

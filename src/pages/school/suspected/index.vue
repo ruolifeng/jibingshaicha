@@ -2,6 +2,7 @@
 import ScopedDepartmentMultiSelect from "@@/components/ScopedDepartmentMultiSelect.vue"
 import { downloadBlob } from "@@/utils/download"
 import { buildStatYearOptions, getCurrentStatYear } from "@@/utils/stat-year"
+import { getScreeningSchoolColumnDistinctApi } from "@/pages/school/screening/apis"
 import {
   exportStudentReportStatisticsApi,
   getDistrictOptionsApi,
@@ -14,11 +15,13 @@ defineOptions({ name: "SchoolSuspected" })
 const filterForm = reactive({
   year: String(getCurrentStatYear()),
   district: "",
-  departmentIds: [] as string[]
+  departmentIds: [] as string[],
+  creatorUsername: ""
 })
 
 const yearOptions = buildStatYearOptions()
 const districtOptions = ref<string[]>([])
+const creatorOptions = ref<string[]>([])
 const showDepartmentFilter = ref(false)
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -28,6 +31,14 @@ async function loadDistrictOptions() {
   try {
     const { data } = await getDistrictOptionsApi(filterForm.departmentIds)
     districtOptions.value = data || []
+  } catch { /* ignore */ }
+}
+
+async function loadCreatorOptions() {
+  if (creatorOptions.value.length) return
+  try {
+    const { data } = await getScreeningSchoolColumnDistinctApi("creatorUsername")
+    creatorOptions.value = data || []
   } catch { /* ignore */ }
 }
 
@@ -42,7 +53,8 @@ async function fetchData() {
       year: filterForm.year,
       district: filterForm.district,
       departmentIds: filterForm.departmentIds,
-      schoolCategories: schoolCategories.value
+      schoolCategories: schoolCategories.value,
+      ...(filterForm.creatorUsername ? { creatorUsername: filterForm.creatorUsername } : {})
     })
     tableData.value = data || []
   } catch { /* handled */ } finally {
@@ -59,6 +71,7 @@ function handleReset() {
   filterForm.year = String(getCurrentStatYear())
   filterForm.district = ""
   filterForm.departmentIds = []
+  filterForm.creatorUsername = ""
   schoolCategories.value = [...STUDENT_REPORT_SCHOOL_CATEGORIES]
   handleSearch()
 }
@@ -81,7 +94,8 @@ async function handleExport() {
       year: filterForm.year,
       district: filterForm.district,
       departmentIds: filterForm.departmentIds,
-      schoolCategories: schoolCategories.value
+      schoolCategories: schoolCategories.value,
+      ...(filterForm.creatorUsername ? { creatorUsername: filterForm.creatorUsername } : {})
     })
     downloadBlob(data as unknown as Blob, `学生统计报表_${filterForm.year || "全部"}.xlsx`)
     ElMessage.success("导出成功")
@@ -106,6 +120,18 @@ onMounted(() => {
             @visibility-change="showDepartmentFilter = $event"
             @change="handleDepartmentChange"
           />
+        </el-form-item>
+        <el-form-item label="录入用户">
+          <el-select
+            v-model="filterForm.creatorUsername"
+            filterable
+            clearable
+            placeholder="请选择录入用户"
+            style="width: 180px"
+            @visible-change="(v: boolean) => v && loadCreatorOptions()"
+          >
+            <el-option v-for="item in creatorOptions" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="年份">
           <el-select v-model="filterForm.year" placeholder="选择年份" clearable style="width: 120px">

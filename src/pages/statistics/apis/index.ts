@@ -112,6 +112,8 @@ export interface StudentReportStatisticsVO {
 interface StudentReportParams extends StatParams {
   /** 学校分类（多选）；空则全部 */
   schoolCategories?: string[]
+  /** 录入用户（精确匹配） */
+  creatorUsername?: string
 }
 
 function withStudentReportParams(params: StudentReportParams) {

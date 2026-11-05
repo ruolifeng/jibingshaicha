@@ -17,9 +17,11 @@ public interface StatisticsService {
      * 新生入学体检结核病检查情况（学生报表）。
      *
      * @param schoolCategories 学校分类标签（可多选）；空则返回全部五类
+     * @param creatorUsername  录入用户（精确匹配）；空则不过滤
      */
     List<StudentReportStatisticsVO> getStudentReportStatistics(
-            String year, String district, List<String> schoolCategories, List<Long> filterDeptIds);
+            String year, String district, List<String> schoolCategories, List<Long> filterDeptIds,
+            String creatorUsername);
 
     /** 获取筛查数据中所有存在的区县列表（去重排序），用于前端筛选下拉框 */
     List<String> getDistrictOptions(List<Long> filterDeptIds);
