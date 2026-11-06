@@ -440,6 +440,9 @@ const printData = ref<Record<string, any> | null>(null)
 
 const createFormRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
+  gender: [{ required: true, message: "请选择性别", trigger: "change" }],
+  birthDate: [{ required: true, message: "请选择出生日期", trigger: "change" }],
+  age: [{ required: true, message: "请填写年龄", trigger: "change" }],
   idNumber: [idCardRule(false)],
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
@@ -811,7 +814,7 @@ async function handleEditSave() {
   }
   savingEdit.value = true
   try {
-    // 基本信息只读，不提交；仅保存筛查、推介原因及可选的诊断/追踪过程
+    // 基本信息默认只读；三级及以上可改性别/出生日期/年龄。其余保存筛查、推介原因及可选的诊断/追踪过程
     const payload: Record<string, any> = {
       screenDate: editForm.screenDate,
       screenMethod: editForm.screenMethod,
@@ -820,6 +823,11 @@ async function handleEditSave() {
       chestXrayResult: resolveReferralChestXrayResultForSave(editForm.chestXrayResult, editForm.chestXrayRemark),
       recommendReason: editForm.recommendReason,
       epidemicRemark: editForm.epidemicRemark
+    }
+    if (isLevel3OrAboveRole()) {
+      payload.gender = editForm.gender
+      payload.birthDate = editForm.birthDate
+      payload.age = editForm.age
     }
     if (canEditDiagnosis.value) {
       payload.diagnosisResult = editForm.diagnosisResult
@@ -1517,7 +1525,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="性别">
+            <el-form-item label="性别" prop="gender">
               <el-select v-model="createForm.gender" style="width: 100%">
                 <el-option label="男" value="男" />
                 <el-option label="女" value="女" />
@@ -1525,12 +1533,12 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="出生日期">
+            <el-form-item label="出生日期" prop="birthDate">
               <el-date-picker v-model="createForm.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="年龄">
+            <el-form-item label="年龄" prop="age">
               <el-input-number v-model="createForm.age" :min="0" :max="150" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -1959,7 +1967,7 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="性别">
-              <el-select v-model="editForm.gender" disabled style="width: 100%">
+              <el-select v-model="editForm.gender" :disabled="!isLevel3OrAboveRole()" style="width: 100%">
                 <el-option label="男" value="男" />
                 <el-option label="女" value="女" />
               </el-select>
@@ -1967,12 +1975,24 @@ const RECOMMEND_STATUS_MAP: Record<number, { label: string, type: string }> = {
           </el-col>
           <el-col :span="12">
             <el-form-item label="出生日期">
-              <el-date-picker v-model="editForm.birthDate" type="date" value-format="YYYY-MM-DD" disabled style="width: 100%" />
+              <el-date-picker
+                v-model="editForm.birthDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                :disabled="!isLevel3OrAboveRole()"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="年龄">
-              <el-input-number v-model="editForm.age" :min="0" :max="150" disabled style="width: 100%" />
+              <el-input-number
+                v-model="editForm.age"
+                :min="0"
+                :max="150"
+                :disabled="!isLevel3OrAboveRole()"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
