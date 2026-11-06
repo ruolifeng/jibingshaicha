@@ -52,6 +52,9 @@ const form = reactive(createEmptyForm())
 
 const formRules = {
   name: [{ required: true, message: "请输入姓名", trigger: "blur" }],
+  gender: [{ required: true, message: "请选择性别", trigger: "change" }],
+  birthDate: [{ required: true, message: "请选择出生日期", trigger: "change" }],
+  age: [{ required: true, message: "请填写年龄", trigger: "change" }],
   idNumber: [idCardRule(false)],
   phone: [phoneRule(true)],
   currentAddress: [{ required: true, message: "请填写现住址", trigger: "blur" }],
@@ -250,7 +253,7 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="性别">
+          <el-form-item label="性别" prop="gender">
             <el-select v-model="form.gender" style="width: 100%">
               <el-option label="男" value="男" />
               <el-option label="女" value="女" />
@@ -258,12 +261,12 @@ async function handleSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="出生日期">
+          <el-form-item label="出生日期" prop="birthDate">
             <el-date-picker v-model="form.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="年龄">
+          <el-form-item label="年龄" prop="age">
             <el-input-number v-model="form.age" :min="0" :max="150" style="width: 100%" />
           </el-form-item>
         </el-col>
