@@ -107,6 +107,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       { path: "population", redirect: to => resolvePopulationLegacyRedirect(to), meta: { hidden: true } },
       { path: "school/screening", redirect: { name: "ScreeningStudent", query: { view: "screening" } }, meta: { hidden: true } },
       { path: "school/suspected", redirect: { name: "ScreeningStudent", query: { view: "suspected" } }, meta: { hidden: true } },
+      { path: "school/non-freshman", redirect: { name: "ScreeningStudent", query: { view: "nonFreshman" } }, meta: { hidden: true } },
       { path: "key-population/screening", redirect: { name: "ScreeningKeyPopulation", query: { view: "screening" } }, meta: { hidden: true } },
       { path: "key-population/suspected", redirect: { name: "ScreeningKeyPopulation", query: { view: "suspected" } }, meta: { hidden: true } },
       { path: "regular/screening", redirect: { name: "ScreeningRegular", query: { view: "screening" } }, meta: { hidden: true } },
@@ -298,6 +299,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     children: [
       { path: "screening", component: () => import("@/pages/school/screening/index.vue"), name: "SchoolScreening", meta: { hidden: true, title: "筛查管理", permission: "school:screening" } },
       { path: "suspected", component: () => import("@/pages/school/suspected/index.vue"), name: "SchoolSuspected", meta: { hidden: true, title: "学生报表统计", permission: "school:suspected" } },
+      { path: "non-freshman", component: () => import("@/pages/school/non-freshman/index.vue"), name: "SchoolNonFreshman", meta: { hidden: true, title: "非新生统计", permission: "school:suspected" } },
       { path: "latent", component: () => import("@/pages/school/latent/index.vue"), name: "SchoolLatent", meta: { hidden: true, title: "潜伏感染", permission: "school:latent" } },
       { path: "patient", component: () => import("@/pages/school/patient/index.vue"), name: "SchoolPatient", meta: { hidden: true, title: "患者管理", permission: "school:patient" } },
       { path: "patient/history", component: () => import("@/pages/school/patient/history.vue"), name: "SchoolPatientHistory", meta: { hidden: true, title: "历史患者", permission: "school:history" } }

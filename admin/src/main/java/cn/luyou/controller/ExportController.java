@@ -856,7 +856,10 @@ public class ExportController {
             "取药地点", "取药时间", "健康教育及培训", "下次随访时间", "评估医生签名", "备注", "状态", "填写时间"
     );
 
-    /** 后续随访导出列（不含附件；同一患者多条记录各占一行） */
+    /**
+     * 后续随访导出列（不含附件；同一患者多条记录各占一行）。
+     * 「第几次」与页面随访记录一致：已完成首次随访为 1，后续随访依次为 2、3…
+     */
     private static final List<String> FOLLOW_UP_VISIT_EXPORT_HEADERS = List.of(
             "数据来源", "姓名", "性别", "证件号", "联系电话", "病原学结果", "诊断结果", "服药管理单位",
             "第几次", "随访时间", "治疗月序", "督导人员", "随访方式", "症状及体征", "症状-其它",
@@ -1062,6 +1065,13 @@ public class ExportController {
         List<Long> patientIds = patients.stream().map(Patient::getId).toList();
         Map<Long, Notice> noticeMap = loadLatestNoticeMap(patientIds, "patient");
 
+        // 与页面「随访记录」一致：已完成首次随访作为第 1 次一并导出
+        Map<Long, FirstVisit> firstVisitMap = new HashMap<>();
+        firstVisitMapper.selectList(new LambdaQueryWrapper<FirstVisit>()
+                        .in(FirstVisit::getPatientId, patientIds)
+                        .orderByDesc(FirstVisit::getId))
+                .forEach(v -> firstVisitMap.putIfAbsent(v.getPatientId(), v));
+
         Map<Long, List<FollowUpVisit>> visitMap = new HashMap<>();
         followUpVisitMapper.selectList(new LambdaQueryWrapper<FollowUpVisit>()
                         .in(FollowUpVisit::getPatientId, patientIds)
@@ -1073,8 +1083,13 @@ public class ExportController {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Patient p : patients) {
             Notice notice = noticeMap.get(p.getId());
-            List<FollowUpVisit> visits = visitMap.getOrDefault(p.getId(), List.of());
-            if (visits.isEmpty()) {
+            FirstVisit firstVisit = firstVisitMap.get(p.getId());
+            boolean hasCompletedFirst = firstVisit != null && Integer.valueOf(1).equals(firstVisit.getStatus());
+            // 与页面随访记录一致：草稿不参与「第几次」编号与导出
+            List<FollowUpVisit> visits = visitMap.getOrDefault(p.getId(), List.of()).stream()
+                    .filter(v -> !Integer.valueOf(0).equals(v.getStatus()))
+                    .toList();
+            if (!hasCompletedFirst && visits.isEmpty()) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 putPatientBasicColumns(row, p, notice);
                 FOLLOW_UP_VISIT_EXPORT_HEADERS.stream()
@@ -1084,8 +1099,12 @@ public class ExportController {
                 rows.add(row);
                 continue;
             }
+            int displaySeq = 1;
+            if (hasCompletedFirst) {
+                rows.add(buildFirstVisitAsFollowUpExportRow(p, firstVisit, notice, displaySeq++));
+            }
             for (FollowUpVisit v : visits) {
-                rows.add(buildFollowUpExportRow(p, v, notice));
+                rows.add(buildFollowUpExportRow(p, v, notice, displaySeq++));
             }
         }
         log.info("[导出] 后续随访 {} 条", rows.size());
@@ -1867,10 +1886,57 @@ public class ExportController {
         }
     }
 
-    private Map<String, Object> buildFollowUpExportRow(Patient p, FollowUpVisit v, Notice notice) {
+    /**
+     * 将已完成首次随访映射为后续随访导出行（共用列填值，后续专有列留空）。
+     * 解决：仅有首次随访时，后续随访模块导出随访方式等字段为空。
+     */
+    private Map<String, Object> buildFirstVisitAsFollowUpExportRow(
+            Patient p, FirstVisit v, Notice notice, int displaySeq) {
         Map<String, Object> row = new LinkedHashMap<>();
         putPatientBasicColumns(row, p, notice);
-        row.put("第几次", v.getVisitSeq() != null ? v.getVisitSeq() : "");
+        row.put("第几次", displaySeq);
+        row.put("随访时间", formatDate(v.getVisitDate()));
+        row.put("治疗月序", "");
+        row.put("督导人员", nullToEmpty(v.getSupervisor()));
+        row.put("随访方式", formatFirstVisitMethod(v.getVisitMethod(), v.getVisitMethodOther()));
+        row.put("症状及体征", formatSymptomCodes(v.getSymptoms(), FIRST_VISIT_SYMPTOM_LABEL));
+        row.put("症状-其它", nullToEmpty(v.getOtherSymptoms()));
+        row.put("吸烟(支/天)", nullToEmpty(v.getSmokingAmount()));
+        row.put("饮酒(两/天)", nullToEmpty(v.getDrinkingAmount()));
+        row.put("化疗方案", nullToEmpty(v.getChemotherapy()));
+        row.put("用法", nullToEmpty(v.getMedicationUsage()));
+        row.put("药品剂型", nullToEmpty(v.getDrugForm()));
+        row.put("漏服药次数", "");
+        row.put("药物不良反应", "");
+        row.put("不良反应详情", "");
+        row.put("并发症/合并症", "");
+        row.put("并发症详情", "");
+        row.put("转诊科别", "");
+        row.put("转诊原因", "");
+        row.put("2周内随访结果", "");
+        row.put("处理意见", "");
+        row.put("下次随访时间", formatDate(v.getNextVisitDate()));
+        // 首次随访仅有「评估医生签名」字段，不填后续表的「随访医生签名」
+        row.put("随访医生签名", "");
+        row.put("是否停止治疗", "");
+        row.put("停止治疗时间", "");
+        row.put("停止治疗原因", "");
+        row.put("应访视次数", "");
+        row.put("实际访视次数", "");
+        row.put("应服药次数", "");
+        row.put("实际服药次数", "");
+        row.put("服药率(%)", "");
+        row.put("评估医生签名", nullToEmpty(v.getDoctorSignature()));
+        row.put("备注", nullToEmpty(v.getRemarks()));
+        row.put("状态", visitStatusLabel(v.getStatus()));
+        row.put("填写时间", formatDateTime(v.getCreateTime()));
+        return row;
+    }
+
+    private Map<String, Object> buildFollowUpExportRow(Patient p, FollowUpVisit v, Notice notice, int displaySeq) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        putPatientBasicColumns(row, p, notice);
+        row.put("第几次", displaySeq);
         row.put("随访时间", formatDate(v.getVisitDate()));
         row.put("治疗月序", v.getTreatmentMonth() != null ? v.getTreatmentMonth() : "");
         row.put("督导人员", formatFollowUpSupervisor(v.getSupervisor(), v.getSupervisorOther()));

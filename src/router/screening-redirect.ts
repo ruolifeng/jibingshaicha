@@ -43,7 +43,7 @@ export function resolvePopulationLegacyRedirect(to: RouteLocationGeneric) {
   const source = to.query.source as string
   const view = to.query.view as string
   const path = SOURCE_PATH_MAP[source] ?? resolveScreeningDefaultPath()
-  if (view === "screening" || view === "suspected" || view === "tbSymptomReferral") {
+  if (view === "screening" || view === "suspected" || view === "nonFreshman" || view === "tbSymptomReferral") {
     return { path, query: { view } }
   }
   return path

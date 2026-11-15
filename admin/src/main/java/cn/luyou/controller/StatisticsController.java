@@ -7,12 +7,14 @@ import cn.luyou.model.vo.DistrictStatisticsVO;
 import cn.luyou.model.vo.KeyPopulationTbSymptomReferralStatisticsVO;
 import cn.luyou.model.vo.PatientDistributionHeatmapVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
+import cn.luyou.model.vo.StudentNonFreshmanReportStatisticsVO;
 import cn.luyou.model.vo.StudentReportStatisticsVO;
 import cn.luyou.service.PatientService;
 import cn.luyou.service.StatisticsService;
 import cn.luyou.service.WorkbenchStatisticsService;
 import cn.luyou.utils.DepartmentFilterSupport;
 import cn.luyou.utils.KeyPopulationTbSymptomReferralExcelExportSupport;
+import cn.luyou.utils.StudentNonFreshmanReportExcelExportSupport;
 import cn.luyou.utils.StudentReportExcelExportSupport;
 import com.alibaba.excel.EasyExcel;
 import io.swagger.v3.oas.annotations.Operation;
@@ -76,7 +78,7 @@ public class StatisticsController {
             @RequestParam(required = false) String creatorUsername) {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         return ResultRes.success(statisticsService.getStudentReportStatistics(
-                year, district, parseSchoolCategories(schoolCategories), filterDeptIds, creatorUsername));
+                year, district, parseCsvLabels(schoolCategories), filterDeptIds, creatorUsername));
     }
 
     @Operation(summary = "区县统计表")
@@ -146,16 +148,45 @@ public class StatisticsController {
             HttpServletResponse response) throws IOException {
         List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
         List<StudentReportStatisticsVO> data = statisticsService.getStudentReportStatistics(
-                year, district, parseSchoolCategories(schoolCategories), filterDeptIds, creatorUsername);
+                year, district, parseCsvLabels(schoolCategories), filterDeptIds, creatorUsername);
         setExcelResponse(response, "学生统计报表");
         StudentReportExcelExportSupport.write(response.getOutputStream(), year, data);
     }
 
-    private List<String> parseSchoolCategories(String schoolCategories) {
-        if (StrUtil.isBlank(schoolCategories)) {
+    @Operation(summary = "学校人群 — 学生报表统计（非新生统计）")
+    @GetMapping("/student-non-freshman-report")
+    public ResultResponse<List<StudentNonFreshmanReportStatisticsVO>> studentNonFreshmanReportStatistics(
+            @RequestParam(required = false) String year,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String gradeCategories,
+            @RequestParam(required = false) String departmentIds,
+            @RequestParam(required = false) String creatorUsername) {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        return ResultRes.success(statisticsService.getStudentNonFreshmanReportStatistics(
+                year, district, parseCsvLabels(gradeCategories), filterDeptIds, creatorUsername));
+    }
+
+    @Operation(summary = "导出学校人群 — 学生报表统计（非新生统计）")
+    @GetMapping("/student-non-freshman-report/export")
+    public void exportStudentNonFreshmanReport(
+            @RequestParam(required = false) String year,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String gradeCategories,
+            @RequestParam(required = false) String departmentIds,
+            @RequestParam(required = false) String creatorUsername,
+            HttpServletResponse response) throws IOException {
+        List<Long> filterDeptIds = departmentFilterSupport.resolveFilterDepartmentIds(departmentIds);
+        List<StudentNonFreshmanReportStatisticsVO> data = statisticsService.getStudentNonFreshmanReportStatistics(
+                year, district, parseCsvLabels(gradeCategories), filterDeptIds, creatorUsername);
+        setExcelResponse(response, "学生非新生统计报表");
+        StudentNonFreshmanReportExcelExportSupport.write(response.getOutputStream(), year, data);
+    }
+
+    private List<String> parseCsvLabels(String raw) {
+        if (StrUtil.isBlank(raw)) {
             return List.of();
         }
-        return Arrays.stream(schoolCategories.split(","))
+        return Arrays.stream(raw.split(","))
                 .map(String::trim)
                 .filter(StrUtil::isNotBlank)
                 .collect(Collectors.toList());

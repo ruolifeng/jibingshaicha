@@ -116,6 +116,94 @@ public final class SchoolScreeningStatSupport {
     }
 
     /**
+     * 非新生统计年级分类（对齐《学生统计-非新生统计报表》行序）。
+     * 以筛查表「年级」字段匹配：初二 / 初三 / 高二 / 高三。
+     */
+    public enum NonFreshmanGradeCategory {
+        JUNIOR_2("初中初二", "初二"),
+        JUNIOR_3("初中初三", "初三"),
+        SENIOR_2("高中高二", "高二"),
+        SENIOR_3("高中高三", "高三");
+
+        private final String label;
+        private final String gradeToken;
+
+        NonFreshmanGradeCategory(String label, String gradeToken) {
+            this.label = label;
+            this.gradeToken = gradeToken;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public String gradeToken() {
+            return gradeToken;
+        }
+
+        public static List<NonFreshmanGradeCategory> ordered() {
+            return Arrays.asList(values());
+        }
+
+        public static NonFreshmanGradeCategory fromLabel(String label) {
+            if (StrUtil.isBlank(label)) {
+                return null;
+            }
+            String trimmed = label.trim();
+            for (NonFreshmanGradeCategory c : values()) {
+                if (c.label.equals(trimmed)) {
+                    return c;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * 年级字段是否属于本分类。
+         * 支持：初二 / 初二年级 / 初中初二等；避免 contains 把「初三补初二」误判为初二。
+         */
+        public boolean matchesGrade(String gradeName) {
+            if (StrUtil.isBlank(gradeName)) {
+                return false;
+            }
+            String trimmed = gradeName.trim();
+            if (label.equals(trimmed) || gradeToken.equals(trimmed)) {
+                return true;
+            }
+            if (("初中" + gradeToken).equals(trimmed) || ("高中" + gradeToken).equals(trimmed)) {
+                return true;
+            }
+            String normalized = trimmed
+                    .replace("年级", "")
+                    .replace("级", "")
+                    .replace("班", "")
+                    .trim();
+            return gradeToken.equals(normalized) || label.equals(normalized);
+        }
+    }
+
+    /** 按年级字段映射非新生统计分类；无法识别则返回 null */
+    public static NonFreshmanGradeCategory resolveNonFreshmanGradeCategory(ScreeningSchool row) {
+        if (row == null || StrUtil.isBlank(row.getGradeName())) {
+            return null;
+        }
+        for (NonFreshmanGradeCategory category : NonFreshmanGradeCategory.ordered()) {
+            if (category.matchesGrade(row.getGradeName())) {
+                return category;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 非新生规范检查：与初中/高中新生口径相同——
+     * 同时做过可疑症状 + 感染筛查；感染判定为 1 时还须胸部影像学已做。
+     */
+    public static boolean isNonFreshmanStandardizedExamined(ScreeningSchool row) {
+        return isJuniorSeniorStandardized(row);
+    }
+
+    /**
      * 初中&高中：同时做过可疑症状 + 感染筛查；
      * 若感染判定为 1（感染），还须胸部影像学已做。
      */
