@@ -146,6 +146,60 @@ export function exportStudentReportStatisticsApi(params: StudentReportParams) {
   })
 }
 
+/** 非新生统计年级分类（对齐《学生统计-非新生统计报表》） */
+export const STUDENT_NON_FRESHMAN_GRADE_CATEGORIES = [
+  "初中初二",
+  "初中初三",
+  "高中高二",
+  "高中高三"
+] as const
+
+export interface StudentNonFreshmanReportStatisticsVO {
+  gradeCategory?: string
+  shouldDetectCount?: number
+  acceptedExamCount?: number
+  standardizedExamCount?: number
+  tbPatientCount?: number
+  latentInfectionCount?: number
+}
+
+interface StudentNonFreshmanReportParams extends StatParams {
+  /** 年级分类（多选）；空则全部 */
+  gradeCategories?: string[]
+  /** 录入用户（精确匹配） */
+  creatorUsername?: string
+}
+
+function withStudentNonFreshmanReportParams(params: StudentNonFreshmanReportParams) {
+  const { gradeCategories, departmentIds, ...rest } = params
+  return withDepartmentIds(
+    {
+      ...rest,
+      ...(gradeCategories?.length ? { gradeCategories: gradeCategories.join(",") } : {})
+    },
+    departmentIds
+  )
+}
+
+/** 学校人群 — 学生报表统计（非新生统计） */
+export function getStudentNonFreshmanReportStatisticsApi(params: StudentNonFreshmanReportParams) {
+  return request<ApiResponseData<StudentNonFreshmanReportStatisticsVO[]>>({
+    url: "statistics/student-non-freshman-report",
+    method: "get",
+    params: withStudentNonFreshmanReportParams(params)
+  })
+}
+
+/** 导出非新生统计 Excel（可按年级分类筛选） */
+export function exportStudentNonFreshmanReportStatisticsApi(params: StudentNonFreshmanReportParams) {
+  return request<Blob>({
+    url: "statistics/student-non-freshman-report/export",
+    method: "get",
+    params: withStudentNonFreshmanReportParams(params),
+    responseType: "blob"
+  })
+}
+
 /** 导出区县统计 Excel */
 export function exportDistrictStatisticsApi(params: StatParams) {
   return request<Blob>({

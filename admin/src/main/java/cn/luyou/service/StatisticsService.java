@@ -3,6 +3,7 @@ package cn.luyou.service;
 import cn.luyou.model.vo.DistrictStatisticsVO;
 import cn.luyou.model.vo.KeyPopulationTbSymptomReferralStatisticsVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
+import cn.luyou.model.vo.StudentNonFreshmanReportStatisticsVO;
 import cn.luyou.model.vo.StudentReportStatisticsVO;
 
 import java.util.List;
@@ -21,6 +22,16 @@ public interface StatisticsService {
      */
     List<StudentReportStatisticsVO> getStudentReportStatistics(
             String year, String district, List<String> schoolCategories, List<Long> filterDeptIds,
+            String creatorUsername);
+
+    /**
+     * 学校人群 — 学生报表统计（非新生统计），按年级分类汇总。
+     *
+     * @param gradeCategories 年级分类标签（可多选）；空则返回全部四类
+     * @param creatorUsername 录入用户（精确匹配）；空则不过滤
+     */
+    List<StudentNonFreshmanReportStatisticsVO> getStudentNonFreshmanReportStatistics(
+            String year, String district, List<String> gradeCategories, List<Long> filterDeptIds,
             String creatorUsername);
 
     /** 获取筛查数据中所有存在的区县列表（去重排序），用于前端筛选下拉框 */

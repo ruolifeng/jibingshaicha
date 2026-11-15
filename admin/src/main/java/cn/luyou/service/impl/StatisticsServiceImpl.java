@@ -13,7 +13,9 @@ import cn.luyou.model.ScreeningSchool;
 import cn.luyou.model.vo.DistrictStatisticsVO;
 import cn.luyou.model.vo.KeyPopulationTbSymptomReferralStatisticsVO;
 import cn.luyou.model.vo.SchoolStatisticsVO;
+import cn.luyou.model.vo.StudentNonFreshmanReportStatisticsVO;
 import cn.luyou.model.vo.StudentReportStatisticsVO;
+import cn.luyou.utils.SchoolScreeningStatSupport.NonFreshmanGradeCategory;
 import cn.luyou.utils.SchoolScreeningStatSupport.ReportCategory;
 import cn.luyou.service.DepartmentService;
 import cn.luyou.service.StatisticsService;
@@ -109,6 +111,52 @@ public class StatisticsServiceImpl implements StatisticsService {
                     .acceptedExamCount(list.stream().filter(SchoolScreeningStatSupport::isAcceptedExamined).count())
                     .standardizedExamCount(list.stream()
                             .filter(r -> SchoolScreeningStatSupport.isStandardizedExamined(r, category))
+                            .count())
+                    .tbPatientCount(list.stream().filter(SchoolScreeningStatSupport::isTbPatientFound).count())
+                    .latentInfectionCount(list.stream().filter(SchoolScreeningStatSupport::isLatentInfectionFound).count())
+                    .build());
+        }
+        return result;
+    }
+
+    @Override
+    public List<StudentNonFreshmanReportStatisticsVO> getStudentNonFreshmanReportStatistics(
+            String year, String district, List<String> gradeCategories, List<Long> filterDeptIds,
+            String creatorUsername) {
+        List<ScreeningSchool> records = queryRecords(year, district, filterDeptIds, creatorUsername);
+
+        Map<NonFreshmanGradeCategory, List<ScreeningSchool>> grouped = new LinkedHashMap<>();
+        for (NonFreshmanGradeCategory category : NonFreshmanGradeCategory.ordered()) {
+            grouped.put(category, new ArrayList<>());
+        }
+        for (ScreeningSchool row : records) {
+            NonFreshmanGradeCategory category = SchoolScreeningStatSupport.resolveNonFreshmanGradeCategory(row);
+            if (category == null) {
+                continue;
+            }
+            grouped.computeIfAbsent(category, k -> new ArrayList<>()).add(row);
+        }
+
+        Set<String> categoryFilter = null;
+        if (gradeCategories != null && !gradeCategories.isEmpty()) {
+            categoryFilter = gradeCategories.stream()
+                    .filter(StrUtil::isNotBlank)
+                    .map(String::trim)
+                    .collect(Collectors.toCollection(HashSet::new));
+        }
+
+        List<StudentNonFreshmanReportStatisticsVO> result = new ArrayList<>();
+        for (NonFreshmanGradeCategory category : NonFreshmanGradeCategory.ordered()) {
+            if (categoryFilter != null && !categoryFilter.contains(category.label())) {
+                continue;
+            }
+            List<ScreeningSchool> list = grouped.getOrDefault(category, List.of());
+            result.add(StudentNonFreshmanReportStatisticsVO.builder()
+                    .gradeCategory(category.label())
+                    .shouldDetectCount((long) list.size())
+                    .acceptedExamCount(list.stream().filter(SchoolScreeningStatSupport::isAcceptedExamined).count())
+                    .standardizedExamCount(list.stream()
+                            .filter(SchoolScreeningStatSupport::isNonFreshmanStandardizedExamined)
                             .count())
                     .tbPatientCount(list.stream().filter(SchoolScreeningStatSupport::isTbPatientFound).count())
                     .latentInfectionCount(list.stream().filter(SchoolScreeningStatSupport::isLatentInfectionFound).count())

@@ -2,7 +2,7 @@
 import type { Component } from "vue"
 import { useUserStore } from "@/pinia/stores/user"
 
-type ViewTab = "screening" | "suspected" | "tbSymptomReferral"
+type ViewTab = "screening" | "suspected" | "nonFreshman" | "tbSymptomReferral"
 type SourceTab = "school" | "keyPopulation" | "regular"
 
 const props = defineProps<{
@@ -16,9 +16,14 @@ const userStore = useUserStore()
 const PERM_MAP: Record<SourceTab, {
   screening: string
   suspected: string
+  nonFreshman?: string
   tbSymptomReferral?: string
 }> = {
-  school: { screening: "school:screening", suspected: "school:suspected" },
+  school: {
+    screening: "school:screening",
+    suspected: "school:suspected",
+    nonFreshman: "school:suspected"
+  },
   keyPopulation: {
     screening: "keyPopulation:screening",
     suspected: "keyPopulation:suspected",
@@ -37,6 +42,9 @@ function canAccessView(view: ViewTab) {
   const perms = PERM_MAP[props.source]
   if (view === "screening") return userStore.hasPermission(perms.screening)
   if (view === "suspected") return userStore.hasPermission(perms.suspected)
+  if (view === "nonFreshman") {
+    return !!perms.nonFreshman && userStore.hasPermission(perms.nonFreshman)
+  }
   if (view === "tbSymptomReferral") {
     return !!perms.tbSymptomReferral && userStore.hasPermission(perms.tbSymptomReferral)
   }
@@ -47,6 +55,7 @@ const visibleViews = computed(() => {
   const views: ViewTab[] = []
   if (canAccessView("screening")) views.push("screening")
   if (canAccessView("suspected")) views.push("suspected")
+  if (canAccessView("nonFreshman")) views.push("nonFreshman")
   if (canAccessView("tbSymptomReferral")) views.push("tbSymptomReferral")
   return views
 })
@@ -63,6 +72,7 @@ watch(visibleViews, () => ensureActiveView(), { immediate: true })
 const COMPONENT_MAP: Record<string, Component> = {
   "school-screening": defineAsyncComponent(() => import("@/pages/school/screening/index.vue")),
   "school-suspected": defineAsyncComponent(() => import("@/pages/school/suspected/index.vue")),
+  "school-nonFreshman": defineAsyncComponent(() => import("@/pages/school/non-freshman/index.vue")),
   "keyPopulation-screening": defineAsyncComponent(() => import("@/pages/key-population/screening/index.vue")),
   "keyPopulation-suspected": defineAsyncComponent(() => import("@/pages/key-population/suspected/index.vue")),
   "keyPopulation-tbSymptomReferral": defineAsyncComponent(() => import("@/pages/key-population/tb-symptom-referral/index.vue")),
@@ -75,7 +85,7 @@ const componentKey = computed(() => `${props.source}-${viewTab.value}`)
 
 function syncFromQuery() {
   const view = route.query.view as string
-  if (view === "screening" || view === "suspected" || view === "tbSymptomReferral") {
+  if (view === "screening" || view === "suspected" || view === "nonFreshman" || view === "tbSymptomReferral") {
     viewTab.value = view
   }
   ensureActiveView()
@@ -96,6 +106,7 @@ watch(() => route.query.view, syncFromQuery)
     <el-tabs v-model="viewTab" type="border-card" class="view-tabs">
       <el-tab-pane v-if="canAccessView('screening')" label="筛查数据" name="screening" />
       <el-tab-pane v-if="canAccessView('suspected')" :label="suspectedTabLabel" name="suspected" />
+      <el-tab-pane v-if="canAccessView('nonFreshman')" label="非新生统计" name="nonFreshman" />
       <el-tab-pane
         v-if="canAccessView('tbSymptomReferral')"
         label="结核症状筛查推介"
@@ -105,7 +116,7 @@ watch(() => route.query.view, syncFromQuery)
 
     <el-empty v-if="!visibleViews.length" description="暂无可用权限" />
 
-    <keep-alive v-if="visibleViews.length" :max="3">
+    <keep-alive v-if="visibleViews.length" :max="4">
       <component :is="activeComponent" :key="componentKey" class="source-panel" />
     </keep-alive>
   </div>
